@@ -308,6 +308,33 @@ def _mouse_ptt_lines(cfg: dict) -> list[str]:
     return lines
 
 
+def _lock_watch_lines(cfg: dict) -> list[str]:
+    """Lock-watch state from the daemon's lock_watch status surface (the
+    same control-socket query the hotkey/mouse-PTT lines use): which
+    logind session is watched and how it was resolved, or the sleep-only
+    mode when no graphical session exists at all."""
+    if not (cfg.get("general", {}) or {}).get("pause_when_locked", True):
+        return ["  lock watch: disabled (general.pause_when_locked = false)"]
+    from . import control
+    from .lockmon import VIA_DISPLAY
+    try:
+        if not paths.socket_path().exists():
+            raise FileNotFoundError("no control socket")
+        status = control.request("status")
+    except Exception:  # noqa: BLE001 - daemon down / older daemon / timeout
+        return ["  lock watch: unknown (daemon down)"]
+    lw = status.get("lock_watch")
+    if not lw:
+        return ["  lock watch: unknown (older daemon)"]
+    if lw.get("mode") == "session" and lw.get("session"):
+        sid = str(lw["session"]).rsplit("/", 1)[-1]
+        via = VIA_DISPLAY.get(lw.get("via"), "?")
+        return [f"  lock watch: ok (watching session {sid} via {via})"]
+    if lw.get("mode") == "sleep-only":
+        return ["  lock watch: suspend-only (no graphical session)"]
+    return ["  lock watch: off"]
+
+
 def _update_lines(cfg: dict, *, check=None) -> list[str]:
     """Version/updates report: current vs latest, install method, and the
     copy-paste upgrade block. `check` is injectable (tests pass a stub);
@@ -561,6 +588,8 @@ def run() -> int:
           f"({'alive' if paths.socket_path().exists() else 'daemon not running'})")
     print("\n".join(_hotkey_grab_line()))
     for line in _mouse_ptt_lines(cfg):
+        print(line)
+    for line in _lock_watch_lines(cfg):
         print(line)
     if _gtk_available():
         print("settings app: GTK 4 + libadwaita OK (`sayit-ermano app`)")

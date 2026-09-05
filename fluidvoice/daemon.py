@@ -549,12 +549,20 @@ class Daemon:
         an active dictation is cancelled (see lockmon.py for the sources)."""
         if not self.cfg.get("general", {}).get("pause_when_locked", True):
             return  # feature disabled
-        from .lockmon import LockMonitor
+        from .lockmon import LockMonitor, VIA_DISPLAY
         mon = LockMonitor(on_change=self._on_locked, log=log)
         if not mon.start():
-            return  # already logged why (headless / no logind session)
+            return  # already logged why (dbus missing / logind absent)
         self._lockmon = mon
-        log("lock watch active (hotkeys pause while the screen is locked)")
+        st = mon.status()
+        if st.get("mode") == "session" and st.get("session"):
+            sid = str(st["session"]).rsplit("/", 1)[-1]
+            log(f"lock watch active (session {sid} via "
+                f"{VIA_DISPLAY.get(st.get('via'), '?')} - hotkeys pause "
+                f"while the screen is locked)")
+        else:  # sleep-only: no graphical session, suspend still gates
+            log("lock watch active (suspend-only: no graphical session - "
+                "hotkeys pause while suspended)")
 
     def _start_update_checker(self) -> None:
         """Best-effort update check (the tray/micmon contract): one GitHub
@@ -1202,6 +1210,13 @@ class Daemon:
                                           if self._mouse_ptt is not None
                                           else None),
                     "locked": self._locked,
+                    # lock watch surface (lockmon status: mode/via name the
+                    # watched session - the doctor lock line reads this)
+                    "lock_watch": (self._lockmon.status()
+                                   if self._lockmon is not None else
+                                   {"active": False, "mode": "off",
+                                    "session": None, "via": None,
+                                    "locked": self._locked}),
                     # session type + per-capability backends (wayland port
                     # v0.3; additive keys - JSON consumers unaffected)
                     "session": {"type": self._session.type,
