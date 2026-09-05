@@ -255,11 +255,27 @@ matrix + upstream changelog with its refresh loop).
   screensaver D-Bus name is owned there, verified live), Manager
   PrepareForSleep (suspend counts as locked),
   org.freedesktop/org.gnome ScreenSaver ActiveChanged where a DE owns
-  the names, plus a 5 s LockedHint reconcile poll. Without D-Bus, logind
-  or a resolvable session the watch is off with one WARN (headless boxes).
-  Live-verified: the monitor subscribes and reconciles against the real
-  logind session; the transition state machine is unit-pinned and the
-  lock flow has a documented manual check (below).
+  the names, plus a 5 s LockedHint reconcile poll. Session resolution:
+  validated `$XDG_SESSION_ID` → `GetSessionByPID(own pid)` → (the fix
+  for daemons under the systemd USER unit, which live in user.slice
+  with no session scope) `ListSessions` picking the same-UID active
+  graphical user session (active > online > FIFO, x11/wayland only —
+  `NoSessionForPID` is swallowed quietly); manager signals wire first
+  (PrepareForSleep + SessionRemoved/SessionNew), so no graphical
+  session at all = sleep-only mode (suspend still gates, start() True)
+  and a logout/login swap re-resolves the watched session. Without
+  D-Bus/logind the watch is off with one WARN. `status` exposes
+  `lock_watch` (mode/session/via) and doctor reports the watched
+  session. Live-verified on the daily-driver user-unit daemon
+  (2026-09-05, `systemctl --user` start): the old
+  `NoSessionForPID`/headless WARN pair is gone —
+  `lock watch: session _34 via ListSessions (active, x11, uid 1000)`,
+  doctor `lock watch: ok (watching session _34 via ListSessions)`, and
+  the real `loginctl lock-session`/`unlock-session` cycle logged
+  `screen locked - hotkeys paused` / `screen unlocked - hotkeys
+  resumed` with `lock_watch.locked` following; the transition state
+  machine is unit-pinned (mocked-bus ListSessions fallback included)
+  and the lock flow has a documented manual check (below).
 
 ---
 
@@ -472,7 +488,7 @@ c      catalog (v2 English / v3 multilingual, int8) with sha256-verified
 | Recorder / insertion / history / backends | stub or subprocess-mock tests |
 | Hotkey grab self-healing (error routing, retry state machine, warn cap, status/tooltip/notify/doctor surfaces) | fake-Display unit tests (no X server) + live X11 conflicting-holder recovery (blocked → WARN → release → re-take → F9 fires) |
 | Mouse push-to-talk (button parsing, XI gate, grab routing, hold-cycle state machine, daemon wiring, doctor lines) | fake-X unit tests (no X server) + live X11: arm/hold with native click passthrough/release-transcribe/Escape-cancel/blocked-arm recovery (`test_live_x11.py::TestMousePTTLive`, desktop-marked) |
-| Lock suppression (lockmon dedup/sources/session resolution, daemon gate: toggle ignored, recording cancelled, pending command cancelled, log-once, pause_when_locked flip) | unit state machine (handlers driven directly, no bus) + live monitor start/reconcile against the real logind session |
+| Lock suppression (lockmon dedup/sources/session resolution chain incl. the ListSessions fallback for user-slice daemons, sleep-only mode, re-resolve on session close, daemon gate: toggle ignored, recording cancelled, pending command cancelled, log-once, pause_when_locked flip, lock_watch status + doctor line) | unit state machine (handlers driven directly, no bus) + mocked-bus fallback/re-resolve/run tests + live monitor start/reconcile against the real logind session (both session-scoped and user-unit launches) |
 | Manual lock check (the live lock flow cannot be exercised by CI — locking the session locks the operator's desktop) | with a running daemon and `push_to_talk_button = "button8"`: 1) start a dictation, 2) lock the session (Super+L or `loginctl lock-session`) → log shows `screen locked - hotkeys paused`, the recording is cancelled ("Cancelled" notification), tray tooltip reads `… - paused (locked)`; 3) press the dictation hotkey while locked → nothing happens; 4) unlock → `screen unlocked - hotkeys resumed`, dictation works again |
 | End-to-end speech | JFK sample through GPU transcription (pytest `-m slow`) |
 | Live hardware loop | mic→GPU transcription via speaker playback; hotkey grab on X11; acoustic JFK transcription verified verbatim |

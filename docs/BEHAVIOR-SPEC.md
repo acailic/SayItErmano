@@ -282,7 +282,11 @@ Additional ported hotkey surfaces (beyond the primary key):
   ignored (logged once per transition), an active dictation is cancelled
   (discarded, not transcribed), and the tray tooltip notes
   `paused (locked)`; logind Lock/Unlock + LockedHint + PrepareForSleep +
-  screensaver fallback (fluidvoice/lockmon.py).
+  screensaver fallback (fluidvoice/lockmon.py). The logind session is
+  resolved via validated `$XDG_SESSION_ID` → own-PID lookup → a
+  ListSessions fallback (same-UID active graphical session), so the
+  watch works under both session-scoped launches and the systemd USER
+  unit; no graphical session at all degrades to suspend-only mode.
 
 ---
 

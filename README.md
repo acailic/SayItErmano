@@ -320,7 +320,7 @@ converts via ffmpeg since `whisper-cli` reliably reads WAV only.
 | 100% local transcription | ✅ (Parakeet/Nemotron/Whisper/Apple) | ✅ (faster-whisper/whisper.cpp/Parakeet TDT via ONNX; `backend = "parakeet"`) |
 | Toggle & hold (push-to-talk) modes | ✅ | ✅ toggle; hold for non-modifier keys (other keys pass through while held) |
 | Mouse-button push-to-talk | ✅ (PR #939) | ✅ spare button 6–255 (`recording.push_to_talk_button = "button8"`; clicks pass through while held; buttons 1–5 refused) |
-| Hotkeys pause while the screen is locked | ✅ | ✅ `general.pause_when_locked` (logind watch; active dictation cancels, tray notes `paused (locked)`) |
+| Hotkeys pause while the screen is locked | ✅ | ✅ `general.pause_when_locked` (logind watch, resolves the session under the systemd user unit too; active dictation cancels, tray notes `paused (locked)`) |
 | Filler-word removal + custom dictionary | ✅ | ✅ (same defaults) |
 | Spoken punctuation ("literal comma") | ✅ full rule table | ✅ ported (dot/slash/at-sign contexts included) |
 | AI polish with the original prompt | ✅ (local Fluid Intelligence or cloud) | ✅ (any OpenAI-compatible endpoint; no bundled local LLM yet) |
