@@ -776,3 +776,138 @@ class TestConfigValidation:
         # grab-time validated by HotkeyListener
         ok, _ = config_mod.coerce_setting("hotkey", "language_key", 42)
         assert not ok
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 - Settings UI (display-gated, test_gtkui.py pattern)
+# ---------------------------------------------------------------------------
+
+def _gtk_ready() -> bool:
+    try:
+        import gi
+        gi.require_version("Gtk", "4.0")
+        gi.require_version("Adw", "1")
+    except Exception:  # noqa: BLE001 - PyGObject/GTK4/Adw not installed
+        return False
+    import os
+    return bool(os.environ.get("DISPLAY")
+                or os.environ.get("WAYLAND_DISPLAY"))
+
+
+GTK_READY = _gtk_ready()
+
+
+@pytest.fixture()
+def loop():
+    from gi.repository import GLib
+    return GLib.MainLoop()
+
+
+@pytest.mark.skipif(not GTK_READY, reason="no GTK/display for settings UI")
+class TestSettingsUI:
+    @staticmethod
+    def _window(loop):
+        import gi
+        from gi.repository import GLib
+        from fluidvoice.gtkui.settings_window import SettingsWindow
+        from tests.test_gtkui import StubClient, pump
+        c = StubClient()
+        w = SettingsWindow(client=c)
+        w.present()
+        pump(loop)
+        return w, c
+
+    def test_rows_registered(self, loop):
+        w, _ = self._window(loop)
+        assert ("general", "language_whitelist") in w._rows
+        assert ("hotkey", "language_key") in w._rows
+        w.close()
+
+    def test_cycle_editor_add_and_collect(self, loop):
+        w, _ = self._window(loop)
+        w._add_cycle_lang("en")
+        w._add_cycle_lang("sl")
+        w._add_cycle_lang("auto")
+        assert w._collect()["general"]["language_cycle"] == ["en", "sl", "auto"]
+        w.close()
+
+    def test_cycle_editor_move_and_remove(self, loop):
+        w, _ = self._window(loop)
+        w._add_cycle_lang("en")
+        w._add_cycle_lang("sl")
+        w._add_cycle_lang("de")
+        # move "sl" (index 1) up -> first
+        w._move_cycle_lang(w._cycle_rows[1], -1)
+        assert w._collect_language_cycle() == ["sl", "en", "de"]
+        # remove the first
+        w._remove_cycle_lang(w._cycle_rows[0])
+        assert w._collect_language_cycle() == ["en", "de"]
+        w.close()
+
+    def test_cycle_editor_collects_lowercased_and_skips_empty(self, loop):
+        w, _ = self._window(loop)
+        w._add_cycle_lang("  SL ")
+        w._add_cycle_lang("")
+        assert w._collect_language_cycle() == ["sl"]
+        w.close()
+
+    def test_cycle_editor_flags_unknown_code(self, loop):
+        w, _ = self._window(loop)
+        w._add_cycle_lang("xx")
+        row = w._cycle_rows[0]["row"]
+        assert "error" in row.get_css_classes()
+        w._add_cycle_lang("auto")
+        assert "error" not in w._cycle_rows[1]["row"].get_css_classes()
+        w.close()
+
+    def test_cycle_loads_from_config(self, loop):
+        w, c = self._window(loop)
+        orig = c.get_config
+
+        def patched():
+            cfg, fd = orig()
+            cfg["general"]["language_cycle"] = ["auto", "sl"]
+            return cfg, fd
+
+        c.get_config = patched
+        w._load()
+        assert w._collect_language_cycle() == ["auto", "sl"]
+        w.close()
+
+    def test_empty_cycle_collects_as_off(self, loop):
+        # empty list is meaningful: removals round-trip through the save body
+        w, _ = self._window(loop)
+        assert w._collect()["general"]["language_cycle"] == []
+        w.close()
+
+    def test_whitelist_list_proxy(self, loop):
+        w, _ = self._window(loop)
+        proxy = w._rows[("general", "language_whitelist")]
+        proxy.set_value(["sl", "en"])
+        assert proxy.row.get_text() == "sl, en"
+        assert proxy.get_value() == ["sl", "en"]
+        assert w._collect()["general"]["language_whitelist"] == ["sl", "en"]
+        w.close()
+
+    def test_language_key_round_trips(self, loop):
+        w, c = self._window(loop)
+        orig = c.get_config
+
+        def patched():
+            cfg, fd = orig()
+            cfg["hotkey"]["language_key"] = "F7"
+            return cfg, fd
+
+        c.get_config = patched
+        w._load()
+        assert w._rows[("hotkey", "language_key")].get_text() == "F7"
+        w._rows[("hotkey", "language_key")].set_text("F8")
+        assert w._collect()["hotkey"]["language_key"] == "F8"
+        w.close()
+
+    def test_language_key_empty_is_skipped(self, loop):
+        # emptied field -> key omitted from the body (off, like paste_key)
+        w, _ = self._window(loop)
+        w._rows[("hotkey", "language_key")].set_text("")
+        assert "language_key" not in w._collect()["hotkey"]
+        w.close()
