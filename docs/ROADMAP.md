@@ -93,11 +93,15 @@ sources. Everything below is a known, classified gap — see
       flight loads and anything outside the cache root).
 
 ## Later
-- [ ] macOS-parity quick wins (design doc 2026-09-05 "macOS parity and
-      beyond", B-track): up to 3 dictation shortcuts with per-shortcut
-      prompt profile; activation mode "both" (tap toggles, hold talks);
-      dictionary spoken-formatting actions (trigger word → new line/
-      paragraph/tab); spoken slash/mention grammar ("slash fix", "at sign
+- [x] macOS-parity quick wins (design doc 2026-09-05 "macOS parity and
+      beyond", B-track) — DONE 2026-09-05/06: paste-last hotkey
+      (hotkey.paste_key, 0d500af); spoken slash/mention grammar (bc1ced3);
+      user-extensible spoken formatting actions + Settings editor
+      (7b1fc4a + 3411af3, processing.formatting_action_triggers); Stats
+      page with streak/time-saved/activity chart (48b32ac); up to 3
+      dictation shortcuts with per-shortcut prompt profile
+      (hotkey.extra_shortcuts, 3411af3); activation mode "both" (86fad3e).
+      Was: ("slash fix", "at sign
       John", "tag John"); stats page (streak, time-saved, 7/30-day chart);
       pill hover chips (prompt/mode/actions) — stretch.
 - [ ] Leapfrog menu (same doc, C/D tracks, evidence: reviews sweep): idle
