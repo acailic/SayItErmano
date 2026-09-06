@@ -11,6 +11,7 @@ Covers (per specs/3c8d6007_language-cycle-guard.md):
 from __future__ import annotations
 
 import copy
+import time
 
 import pytest
 
@@ -104,8 +105,359 @@ def quiet_ui(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Phase 2 - runtime precedence + wrong-language guard
+# Phase 3 - daemon runtime cycle (hotkey, announce, status, tray, CLI)
 # ---------------------------------------------------------------------------
+
+class _NoopRecorder:
+    def start(self, path):
+        pass
+
+    def stop(self):
+        return None
+
+    def cancel(self):
+        pass
+
+
+def make_daemon(cfg, backend=None, recorder=None):
+    backend = backend if backend is not None else FakeModelBackend()
+    d = dm.Daemon(cfg, recorder=recorder or _NoopRecorder(),
+                  backend_factory=lambda c: backend,
+                  use_hotkey=False, use_sounds=False)
+    d.backend = backend  # simulate a successful startup load
+    return d
+
+
+def wait_done(d, timeout=5.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if d._process_thread is None or not d._process_thread.is_alive():
+            return not d.busy
+        time.sleep(0.02)
+    return False
+
+
+class TestCycleStateMachine:
+    def _cfg(self, cycle=("auto", "en", "sl")):
+        cfg = copy.deepcopy(DEFAULTS)
+        cfg["general"]["language_cycle"] = list(cycle)
+        return cfg
+
+    def test_press_cycle_with_wraparound(self, cfg_fixture, quiet_ui):
+        d = make_daemon(self._cfg())
+        seq = [d._cycle_language()["language"] for _ in range(4)]
+        assert seq == ["auto", "en", "sl", "auto"]
+        assert d._cycle_index == 0  # wrapped
+
+    def test_initial_state_resolves_from_config(self, cfg_fixture, quiet_ui):
+        d = make_daemon(self._cfg())
+        assert d._cycle_index is None
+        lang, source = d._language_detail()
+        assert lang == "auto" and source == "general"
+        assert d._cycle_runtime() is None
+
+    def test_empty_list_press_is_noop(self, cfg_fixture, quiet_ui):
+        d = make_daemon(self._cfg(cycle=()))
+        out = d._cycle_language()
+        assert out == {"ok": False, "error": "empty cycle"}
+        assert d._cycle_index is None
+        assert len(quiet_ui["notify"]) == 1
+        title, body = quiet_ui["notify"][0]
+        assert "Language cycle is empty" in body
+
+    def test_empty_list_with_key_bound_still_off(self, cfg_fixture, quiet_ui):
+        # feature off even when the key IS bound
+        cfg = self._cfg(cycle=())
+        cfg["hotkey"]["language_key"] = "F7"
+        d = make_daemon(cfg)
+        assert d._cycle_language()["ok"] is False
+
+    def test_shrink_clamps_index(self, cfg_fixture, quiet_ui):
+        d = make_daemon(self._cfg())
+        d._cycle_language()  # index 0 (auto)
+        d._cycle_language()  # index 1 (en)
+        d._cycle_language()  # index 2 (sl)
+        d.cfg["general"]["language_cycle"] = ["de", "fr"]
+        # 2 % 2 = 0 -> first entry of the shrunk list
+        assert d._cycle_runtime() == "de"
+
+    def test_emptied_list_disengages(self, cfg_fixture, quiet_ui):
+        d = make_daemon(self._cfg())
+        d._cycle_language()
+        d.cfg["general"]["language_cycle"] = []
+        assert d._cycle_runtime() is None
+
+    def test_never_persisted(self, cfg_fixture, quiet_ui, monkeypatch):
+        import fluidvoice.config as config_mod
+        saved = []
+        monkeypatch.setattr(config_mod, "save_config",
+                            lambda c, path=None: saved.append(1))
+        d = make_daemon(self._cfg())
+        for _ in range(5):
+            d._cycle_language()
+        assert saved == []
+        assert d.cfg["general"]["language_cycle"] == ["auto", "en", "sl"]
+
+    def test_runtime_beats_model_override_in_daemon(self, cfg_fixture,
+                                                    quiet_ui):
+        cfg = self._cfg()
+        cfg["model"]["languages"] = {"small": "de"}
+        d = make_daemon(cfg)
+        d._cycle_language()  # auto
+        d._cycle_language()  # en
+        assert d._language_detail() == ("en", "cycle")
+
+    def test_locked_daemon_ignores_press(self, cfg_fixture, quiet_ui):
+        d = make_daemon(self._cfg())
+        d._locked = True
+        assert d._cycle_language() == {"ok": False, "error": "locked"}
+        assert d._cycle_index is None
+
+
+class TestAnnounce:
+    def test_pill_badge_when_preview_display_present(self, cfg_fixture,
+                                                     quiet_ui):
+        d = make_daemon(self._cfg_for_announce())
+        badges = []
+
+        class FakePill:
+            def set_badge(self, text):
+                badges.append(text)
+
+        d._preview = (None, FakePill())
+        d._cycle_language()  # auto
+        d._cycle_language()  # en
+        assert badges == ["lang: auto", "lang: en"]
+
+    def test_notify_fallback_display_show(self, cfg_fixture, quiet_ui):
+        d = make_daemon(self._cfg_for_announce())
+        shown = []
+
+        class FakeNotify:
+            def show(self, text):
+                shown.append(text)
+
+        d._preview = (None, FakeNotify())
+        d._cycle_language()
+        d._cycle_language()
+        assert shown == ["Language: auto", "Language: en"]
+
+    def test_fresh_notify_preview_when_no_display(self, cfg_fixture,
+                                                  quiet_ui, monkeypatch):
+        from fluidvoice import preview as preview_mod
+        shown = []
+
+        class FakeNotifyPreview:
+            def show(self, text):
+                shown.append(text)
+
+        monkeypatch.setattr(preview_mod, "NotifyPreview", FakeNotifyPreview)
+        d = make_daemon(self._cfg_for_announce())
+        d._preview = None
+        d._cycle_language()
+        d._cycle_language()
+        assert shown == ["Language: auto", "Language: en"]
+
+    def test_announce_failure_never_breaks_cycle(self, cfg_fixture, quiet_ui,
+                                                 monkeypatch, capsys):
+        from fluidvoice import preview as preview_mod
+
+        def boom():
+            raise RuntimeError("no notify-send")
+
+        monkeypatch.setattr(preview_mod, "NotifyPreview", boom)
+        d = make_daemon(self._cfg_for_announce())
+        d._preview = None
+        out = d._cycle_language()
+        assert out["ok"] is True and out["language"] == "auto"
+
+    @staticmethod
+    def _cfg_for_announce():
+        cfg = copy.deepcopy(DEFAULTS)
+        cfg["general"]["language_cycle"] = ["auto", "en"]
+        return cfg
+
+
+class TestDaemonWiring:
+    def test_status_language_block(self, cfg_fixture, quiet_ui):
+        cfg = copy.deepcopy(DEFAULTS)
+        cfg["general"]["language_cycle"] = ["auto", "en", "sl"]
+        cfg["general"]["language_whitelist"] = ["sl", "en"]
+        d = make_daemon(cfg)
+        resp = d.handle_request({"action": "status"})
+        lang = resp["language"]
+        assert lang["effective"] == "auto" and lang["source"] == "general"
+        assert lang["cycle"] == ["auto", "en", "sl"]
+        assert lang["cycle_engaged"] is False
+        assert lang["whitelist"] == ["sl", "en"]
+        d._cycle_language()
+        d._cycle_language()
+        lang = d.handle_request({"action": "status"})["language"]
+        assert lang == {"effective": "en", "source": "cycle",
+                        "cycle": ["auto", "en", "sl"],
+                        "cycle_engaged": True,
+                        "whitelist": ["sl", "en"]}
+
+    def test_cycle_language_socket_action(self, cfg_fixture, quiet_ui):
+        cfg = copy.deepcopy(DEFAULTS)
+        cfg["general"]["language_cycle"] = ["en", "sl"]
+        d = make_daemon(cfg)
+        resp = d.handle_request({"action": "cycle-language"})
+        assert resp == {"ok": True, "language": "en", "source": "cycle"}
+        resp = d.handle_request({"action": "cycle-language"})
+        assert resp == {"ok": True, "language": "sl", "source": "cycle"}
+
+    def test_cycle_language_action_locked(self, cfg_fixture, quiet_ui):
+        cfg = copy.deepcopy(DEFAULTS)
+        cfg["general"]["language_cycle"] = ["en"]
+        d = make_daemon(cfg)
+        d._locked = True
+        resp = d.handle_request({"action": "cycle-language"})
+        assert resp == {"ok": False, "error": "locked"}
+
+    def test_tray_tooltip_lang_when_engaged(self, cfg_fixture, quiet_ui):
+        cfg = copy.deepcopy(DEFAULTS)
+        cfg["general"]["language_cycle"] = ["auto", "en", "sl"]
+        d = make_daemon(cfg)
+        d._cycle_language()
+        d._cycle_language()
+        d._cycle_language()
+        assert "lang: sl" in d._tray_tooltip()
+
+    def test_tray_tooltip_no_lang_when_auto_and_disengaged(self, cfg_fixture,
+                                                           quiet_ui):
+        d = make_daemon(copy.deepcopy(DEFAULTS))
+        assert "lang:" not in d._tray_tooltip()
+
+    def test_tray_tooltip_lang_when_pinned_general(self, cfg_fixture,
+                                                   quiet_ui):
+        cfg = copy.deepcopy(DEFAULTS)
+        cfg["general"]["language"] = "de"
+        d = make_daemon(cfg)
+        assert "lang: de" in d._tray_tooltip()
+
+    def test_start_hotkey_grabs_language_key(self, cfg_fixture, quiet_ui,
+                                             monkeypatch):
+        import fluidvoice.hotkey as hotkey_mod
+        made = []
+
+        class FakeListener:
+            grabbed = True
+
+            def __init__(self, key, modifiers, mode, on_toggle=None,
+                         on_cancel=None, cancel_key=None, log=None, **kw):
+                self.key, self.on_toggle = key, on_toggle
+                self.hotkey_grabbed = True
+                self.summary = [f"language stub {key}"]
+                made.append(self)
+
+            def start(self):
+                pass
+
+            def stop(self):
+                self.stopped = True
+
+        monkeypatch.setattr(hotkey_mod, "HotkeyListener", FakeListener)
+        cfg = copy.deepcopy(DEFAULTS)
+        cfg["hotkey"]["language_key"] = "F7"
+        cfg["hotkey"]["key"] = "F9"
+        d = make_daemon(cfg)
+        error = d._start_hotkey()
+        assert error is None
+        listeners = [l for l in made if l.key == "F7"]
+        assert len(listeners) == 1
+        assert d._language_hotkey is listeners[0]
+        # the toggle callback routes to the cycle state machine
+        d.cfg["general"]["language_cycle"] = ["auto", "sl"]
+        out = listeners[0].on_toggle()
+        assert out == {"ok": True, "language": "auto", "source": "cycle"}
+
+    def test_restart_hotkey_stops_language_listener(self, cfg_fixture,
+                                                    quiet_ui, monkeypatch):
+        d = make_daemon(copy.deepcopy(DEFAULTS))
+        d.use_hotkey = True
+        stopped = []
+
+        class FakeListener:
+            def stop(self):
+                stopped.append("language")
+
+        d._language_hotkey = FakeListener()
+        monkeypatch.setattr(d, "_start_hotkey", lambda: None)
+        out = d.apply_config(["hotkey.language_key"])
+        assert stopped == ["language"]
+        assert d._language_hotkey is None
+        assert out == {"applied": ["hotkeys"], "errors": []}
+
+    def test_shutdown_stops_language_hotkey(self, cfg_fixture, quiet_ui):
+        d = make_daemon(copy.deepcopy(DEFAULTS))
+        stopped = []
+
+        class FakeListener:
+            def stop(self):
+                stopped.append(1)
+
+        d._language_hotkey = FakeListener()
+        d.shutdown()
+        assert stopped == [1]
+        assert d._language_hotkey is not None  # only stopped, not cleared
+
+    def test_process_passes_override_to_pipeline(self, cfg_fixture, quiet_ui,
+                                                 tmp_path):
+        cfg = copy.deepcopy(DEFAULTS)
+        cfg["general"]["language_cycle"] = ["auto", "en", "sl"]
+        from tests.test_daemon import StubRecorder
+        backend = FakeModelBackend(results=[
+            {"text": "hello world", "language": "en", "duration": 1.0}])
+        d = dm.Daemon(cfg, recorder=StubRecorder(),
+                      backend_factory=lambda c: backend,
+                      use_hotkey=False, use_sounds=False)
+        d.backend = backend
+        d._cycle_language()  # auto
+        d._cycle_language()  # en
+        d._cycle_language()  # sl
+        assert d.toggle() is True
+        assert d.toggle() is False
+        assert wait_done(d)
+        assert backend.calls and backend.calls[0][1] == "sl"
+
+    def test_preview_and_test_dictation_use_cycle(self, cfg_fixture, quiet_ui):
+        # the helper is the single resolution point: preview start and the
+        # onboarding probe both go through _language_detail()
+        cfg = copy.deepcopy(DEFAULTS)
+        cfg["general"]["language_cycle"] = ["en", "sl"]
+        d = make_daemon(cfg)
+        d._cycle_language()  # en
+        assert d._language_detail() == ("en", "cycle")
+
+
+class TestCliLanguageSubcommand:
+    def test_dispatch_sends_cycle_language_action(self, cfg_fixture,
+                                                  monkeypatch, capsys):
+        from fluidvoice import cli
+        sent = []
+
+        def fake_request(action, **kw):
+            sent.append(action)
+            return {"ok": True, "language": "en", "source": "cycle"}
+
+        import fluidvoice.control as control_mod
+        monkeypatch.setattr(control_mod, "request", fake_request)
+        rc = cli.main(["language"])
+        assert rc == 0
+        assert sent == ["cycle-language"]
+        assert "cycled -> en (cycle)" in capsys.readouterr().out
+
+    def test_dispatch_json_output(self, cfg_fixture, monkeypatch, capsys):
+        from fluidvoice import cli
+        import fluidvoice.control as control_mod
+        monkeypatch.setattr(control_mod, "request",
+                            lambda action, **kw: {"ok": False,
+                                                  "error": "empty cycle"})
+        rc = cli.main(["language", "--json"])
+        assert rc == 1
+        out = capsys.readouterr().out
+        assert '"error": "empty cycle"' in out
 
 class TestPrecedence:
     def test_runtime_beats_per_model(self):

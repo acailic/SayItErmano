@@ -363,8 +363,12 @@ class Daemon:
         self._command_timer: threading.Timer | None = None
         self._command_hotkey = None
         self._paste_hotkey = None
+        self._language_hotkey = None
         self._extra_hotkeys: list = []
         self._profile_override: str | None = None
+        # language cycle: RUNTIME daemon state (hotkey.language_key steps
+        # general.language_cycle); None = not engaged, never persisted
+        self._cycle_index: int | None = None
         self._watchdog: threading.Timer | None = None
         self._preview: Any = None
         self._closing_display: Any = None
@@ -765,6 +769,12 @@ class Daemon:
         if backend_unloaded and self._idle_threshold() > 0:
             idle_m = int((time.monotonic() - last_activity) // 60)
             tip += f" - model unloaded (idle {idle_m}m)"
+        try:
+            lang, source = self._language_detail()
+            if source == "cycle" or lang != "auto":
+                tip += f" — lang: {lang}"
+        except Exception:  # noqa: BLE001 - tooltip must never break the tray
+            pass
         return tip
 
     def _spawn_app(self, *args: str) -> None:
@@ -819,6 +829,8 @@ class Daemon:
             self._command_hotkey.stop()
         if self._paste_hotkey:
             self._paste_hotkey.stop()
+        if self._language_hotkey:
+            self._language_hotkey.stop()
         for hk in self._extra_hotkeys:
             hk.stop()
         self._extra_hotkeys = []
@@ -920,6 +932,21 @@ class Daemon:
                 self._paste_hotkey = None
                 log(f"WARN paste hotkey unavailable: {e}")
                 error = error or str(e)
+        language_key = (hk.get("language_key") or "").strip()
+        if language_key:
+            try:
+                self._language_hotkey = HotkeyListener(
+                    key=language_key, modifiers=[], mode="toggle",
+                    on_toggle=lambda *_: self._cycle_language(), log=log)
+                self._language_hotkey.start()
+                for line in self._language_hotkey.summary:
+                    log(line)
+                self._log_grab_state(self._language_hotkey, "language ",
+                                     language_key)
+            except HotkeyError as e:
+                self._language_hotkey = None
+                log(f"WARN language hotkey unavailable: {e}")
+                error = error or str(e)
         for i, spec in enumerate(hk.get("extra_shortcuts") or []):
             label = f"shortcut {i + 2} '{spec.get('key')}'"
             try:
@@ -974,7 +1001,8 @@ class Daemon:
         first). Raises on failure so the settings UI can surface it."""
         if not self.use_hotkey:
             return
-        for attr in ("_hotkey", "_rewrite_hotkey", "_command_hotkey"):
+        for attr in ("_hotkey", "_rewrite_hotkey", "_command_hotkey",
+                     "_language_hotkey"):
             listener = getattr(self, attr)
             if listener is not None:
                 try:
@@ -1378,6 +1406,8 @@ class Daemon:
         if action == "paste-last":
             ok, detail = self.paste_last()
             return {"ok": ok, "error": detail if not ok else None}
+        if action == "cycle-language":
+            return {"ok": True, **self._cycle_language()}
         if action == "insert-text":
             ok, detail = self.insert_text_action(str(req.get("text", "")))
             return {"ok": ok, "error": detail if not ok else None}
@@ -1432,7 +1462,10 @@ class Daemon:
                     "update_url": upd.get("url"),
                     # idle-unload policy + live state (doctor/tray read
                     # this; additive key - JSON consumers unaffected)
-                    "model_state": model_state}
+                    "model_state": model_state,
+                    # language cycle + guard state (doctor/CLI/GTK read
+                    # this; additive key - JSON consumers unaffected)
+                    "language": self._language_status()}
         if action == "shutdown":
             self._quit_gracefully()
             return {"ok": True}
@@ -1631,7 +1664,9 @@ class Daemon:
             else:
                 display = NotifyPreview()
                 actual = "notify"
-            language = backends.effective_language(self.cfg, self.backend)
+            # captures the language at take start (a mid-take cycle press
+            # re-resolves only the FINAL decode, in _process)
+            language = self._language_detail()[0]
             engine = None
             kind = None
             if rcfg.get("preview_segmented", True):
@@ -1829,7 +1864,7 @@ class Daemon:
                         "error": "audio was silent - is the mic muted?"}
             backend = self._ensure_backend()
             result = backend.transcribe(
-                Path(wav), backends.effective_language(self.cfg, backend)) or {}
+                Path(wav), self._language_detail()[0]) or {}
             return {"ok": True, "duration_s": round(duration, 1),
                     "text": result.get("text", "")}
         except Exception as e:
@@ -1891,6 +1926,83 @@ class Daemon:
             log(f"insert-text failed: {e}")
             return False, str(e)
 
+    # -- language cycle (hotkey.language_key / general.language_cycle) ------
+
+    def _cycle_list(self) -> list[str]:
+        """The ordered cycle list, read LIVE on every use so Settings edits
+        apply without a restart. Empty list = the feature is off even when
+        the key is bound."""
+        return list(((self.cfg.get("general", {}) or {})
+                     .get("language_cycle")) or []) \
+            if isinstance(self.cfg, dict) else []
+
+    def _cycle_runtime(self) -> str | None:
+        """The runtime cycle override for the next take: the cycle entry at
+        the engaged index (clamped modulo a shrunk list), or None when the
+        cycle is not engaged or the list was emptied underneath it."""
+        cycle = self._cycle_list()
+        if self._cycle_index is None or not cycle:
+            return None
+        return cycle[self._cycle_index % len(cycle)]
+
+    def _language_detail(self) -> tuple[str, str]:
+        """(effective language, source) for status/doctor/tooltip. The lazy
+        backend may be None; language_detail resolves via the config key."""
+        return backends.language_detail(self.cfg, self.backend,
+                                        self._cycle_runtime() or "")
+
+    def _cycle_language(self) -> dict:
+        """Language-cycle hotkey handler: engage at index 0 on the first
+        press, advance (with wrap-around) afterwards. The override is pure
+        runtime state - never written to config. A mid-take press announces
+        immediately; the final decode re-resolves at stop time (the preview
+        engine keeps the language it captured at take start)."""
+        if self._locked:
+            return {"ok": False, "error": "locked"}  # session locked
+        cycle = self._cycle_list()
+        if not cycle:
+            log("WARN language cycle: general.language_cycle is empty")
+            ui.notify("SayItErmano",
+                      "Language cycle is empty — set "
+                      "general.language_cycle in Settings",
+                      enabled=self.cfg["notifications"]["enabled"])
+            return {"ok": False, "error": "empty cycle"}
+        self._cycle_index = 0 if self._cycle_index is None \
+            else (self._cycle_index + 1) % len(cycle)
+        lang, source = self._language_detail()
+        log(f"language cycle -> {lang} ({source})")
+        self._announce_language(lang)
+        self._refresh_tray()
+        return {"ok": True, "language": lang, "source": source}
+
+    def _announce_language(self, lang: str) -> None:
+        """Eyes-free feedback on every cycle press: the live pill's badge
+        while recording, the notify-fallback display's show(), or a fresh
+        notify bubble. Never raises - an announcement must not break the
+        cycle."""
+        try:
+            display = self._preview[1] if self._preview else None
+            if display is not None:
+                if callable(getattr(display, "set_badge", None)):
+                    display.set_badge(f"lang: {lang}")
+                    return
+                if callable(getattr(display, "show", None)):
+                    display.show(f"Language: {lang}")
+                    return
+            from .preview import NotifyPreview
+            NotifyPreview().show(f"Language: {lang}")
+        except Exception as e:  # noqa: BLE001 - best-effort feedback only
+            log(f"WARN language announce failed: {e}")
+
+    def _language_status(self) -> dict:
+        """The additive \"language\" status block (CLI/GTK client/doctor)."""
+        lang, source = self._language_detail()
+        return {"effective": lang, "source": source,
+                "cycle": self._cycle_list(),
+                "cycle_engaged": self._cycle_runtime() is not None,
+                "whitelist": list(((self.cfg.get("general", {}) or {})
+                                   .get("language_whitelist")) or [])}
+
     # -- pipeline ------------------------------------------------------------
 
     def _ensure_backend(self):
@@ -1921,6 +2033,10 @@ class Daemon:
                 return
             pipeline = self._pipeline_factory(self.cfg, backend)
             pipeline._profile_override = self._profile_override
+            # sticky runtime cycle override (unlike the profile override,
+            # deliberately NOT cleared in the finally below: cycle state
+            # persists until cycled away or the daemon restarts)
+            pipeline._language_override = self._cycle_runtime()
             out = pipeline.run(wav, app_hint, mode=mode,
                                rewrite_context=rewrite_context) or {}
             self.last_result = out

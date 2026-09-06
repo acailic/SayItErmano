@@ -32,7 +32,8 @@ def main(argv: list[str] | None = None) -> int:
     for name, help_ in [("toggle", "start/stop a recording"),
                         ("cancel", "cancel the running recording (no transcription)"),
                         ("status", "daemon status"),
-                        ("paste-last", "re-type the most recent transcription")]:
+                        ("paste-last", "re-type the most recent transcription"),
+                        ("language", "cycle the dictation language (general.language_cycle)")]:
         p = sub.add_parser(name, help=help_)
         p.add_argument("--json", action="store_true", help="raw JSON output")
 
@@ -104,15 +105,21 @@ def main(argv: list[str] | None = None) -> int:
             _DAEMON_LOCK_FILE.unlink(missing_ok=True)
         return 0
 
-    if args.cmd in ("toggle", "cancel", "status", "paste-last"):
+    if args.cmd in ("toggle", "cancel", "status", "paste-last", "language"):
         from . import control
         try:
-            resp = control.request(args.cmd)
+            resp = control.request("cycle-language" if args.cmd == "language"
+                                   else args.cmd)
         except control.ControlError as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
         if args.json:
             print(json.dumps(resp))
+        elif args.cmd == "language":
+            if resp.get("ok"):
+                print(f"cycled -> {resp.get('language')} ({resp.get('source')})")
+            else:
+                print(f"language cycle: {resp.get('error')}")
         else:
             print(_describe(resp))
         return 0 if resp.get("ok") else 1
