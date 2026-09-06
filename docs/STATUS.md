@@ -338,6 +338,23 @@ matrix + upstream changelog with its refresh loop).
       Parakeet v2 (English-only) records but cannot enforce a code; the
       Settings → Models picker skips it. Divergence from upstream: flat
       dict vs per-store pickers.
+- [x] **Runtime language cycle + wrong-language guard** — DONE: upstream
+      promised runtime language switching in #506 (unshipped since
+      2026-04) and closed #100 with "Parakeet doesn't allow language
+      selection"; this ships the leapfrog. `hotkey.language_key` steps
+      `general.language_cycle` (ordered codes, may include `auto`) through
+      a RUNTIME daemon override — never persisted, sticky across takes
+      until cycled away or the daemon restarts; precedence per take:
+      cycle > `model.languages[model_key]` > `general.language`. Every
+      press announces (pill badge / notification) and the tray tooltip +
+      `status`/doctor report the effective source; `sayit-ermano
+      language` is the socket/wayland path. The guard: when the effective
+      language is `auto` and `general.language_whitelist` is set, a
+      detected language outside the list re-decodes ONCE with
+      `whitelist[0]` (faster-whisper + whisper-torch surface the detected
+      language; whisper.cpp does not under auto — silent skip, a noted
+      limitation; parakeet English-only — not applicable, same rationale
+      as upstream's #100 closure).
 
 ### Wayland parity (v0.3)
 - [x] **Shipped (2026-09)** — the daemon is genuinely useful on a Wayland

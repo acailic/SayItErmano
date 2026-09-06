@@ -180,8 +180,9 @@ def _model_state_lines(cfg: dict) -> list[str]:
 
 
 def _language_lines(cfg: dict) -> list[str]:
-    """Language resolution: general.language, per-model overrides, and the
-    effective language of the config's active model."""
+    """Language resolution: general.language, per-model overrides, the
+    effective language of the config's active model, the cycle + guard
+    state, and the effective source when the daemon is up."""
     from . import model_catalog
     general = str((cfg.get("general", {}) or {}).get("language") or "auto")
     overrides = (cfg.get("model", {}) or {}).get("languages") or {}
@@ -201,7 +202,53 @@ def _language_lines(cfg: dict) -> list[str]:
             lines.append(
                 f"  note: {key} is English-only - the language code is "
                 "recorded but not enforced")
+    # -- language cycle (hotkey.language_key steps general.language_cycle)
+    cycle = list((cfg.get("general", {}) or {}).get("language_cycle") or [])
+    bound = str((cfg.get("hotkey", {}) or {}).get("language_key") or "").strip()
+    if cycle:
+        key_txt = f"key {bound}" if bound else "no key bound - feature off"
+        lines.append(f"  cycle: [{', '.join(cycle)}] (general.language_cycle; "
+                     f"{key_txt})")
+    else:
+        lines.append("  cycle: none (general.language_cycle empty; feature "
+                     "off even when the key is bound)")
+    lang_block = _live_language_status()
+    if lang_block is not None:
+        lines.append(f"  runtime: {lang_block.get('effective')} "
+                     f"(source {lang_block.get('source')}; engaged "
+                     f"{str(bool(lang_block.get('cycle_engaged'))).lower()})")
+    else:
+        lines.append("  runtime: unknown (daemon down); the cycle engages "
+                     "at runtime and is never persisted")
+    # -- wrong-language guard
+    whitelist = list((cfg.get("general", {}) or {})
+                     .get("language_whitelist") or [])
+    if whitelist:
+        lines.append(f"  whitelist: [{', '.join(whitelist)}] "
+                     "(general.language_whitelist)")
+    else:
+        lines.append("  whitelist: off (empty)")
+    resolved = backends.resolved_backend_name(cfg)
+    guard = backends.LANGUAGE_GUARD.get(resolved or "") \
+        if resolved else None
+    if resolved and guard:
+        lines.append(f"  guard: {guard} (backend '{resolved}')")
+    else:
+        lines.append("  guard: no backend resolves (see backends above)")
     return lines
+
+
+def _live_language_status() -> dict | None:
+    """The daemon's language status block when one answers (the same
+    control-socket query the other daemon checks use; None when down)."""
+    from . import control
+    try:
+        if not paths.socket_path().exists():
+            raise FileNotFoundError("no control socket")
+        status = control.request("status")
+    except Exception:  # noqa: BLE001 - daemon down / older daemon / timeout
+        return None
+    return status.get("language") or None
 
 
 def _preview_lines(cfg: dict) -> list[str]:

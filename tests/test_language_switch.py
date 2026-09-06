@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import copy
 import time
+from pathlib import Path
 
 import pytest
 
@@ -911,3 +912,106 @@ class TestSettingsUI:
         w._rows[("hotkey", "language_key")].set_text("")
         assert "language_key" not in w._collect()["hotkey"]
         w.close()
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 - doctor language section
+# ---------------------------------------------------------------------------
+
+class TestDoctor:
+    @staticmethod
+    def _lines(cfg):
+        from fluidvoice.doctor import _language_lines
+        return _language_lines(cfg)
+
+    def _cfg(self, **general):
+        cfg = copy.deepcopy(DEFAULTS)
+        cfg["general"].update(general)
+        return cfg
+
+    def test_lines_include_cycle_whitelist_guard(self):
+        cfg = self._cfg(language_cycle=["auto", "sl"],
+                        language_whitelist=["sl", "en"])
+        cfg["hotkey"]["language_key"] = "F7"
+        lines = self._lines(cfg)
+        assert any("cycle: [auto, sl]" in ln and "key F7" in ln
+                   for ln in lines)
+        assert any("whitelist: [sl, en]" in ln for ln in lines)
+        assert any("guard:" in ln for ln in lines)
+        # daemon down in the isolated test env -> the static runtime line
+        assert any("runtime: unknown (daemon down)" in ln for ln in lines)
+
+    def test_empty_cycle_and_whitelist_state(self):
+        lines = self._lines(self._cfg())
+        assert any("cycle: none" in ln and "feature off" in ln
+                   for ln in lines)
+        assert any("whitelist: off (empty)" in ln for ln in lines)
+
+    def test_whispercpp_guard_limitation(self, monkeypatch):
+        monkeypatch.setattr(backends, "_import_ok", lambda m: False)
+        monkeypatch.setattr(backends, "preload_cuda_libs", lambda: False)
+        monkeypatch.setattr(backends, "_whispercpp_binary",
+                            lambda: "/usr/bin/whisper-cli")
+        cfg = self._cfg()
+        cfg["model"]["backend"] = "whisper.cpp"
+        cfg["model"]["whispercpp_model"] = "ggml-base.bin"
+        lines = self._lines(cfg)
+        assert any("guard:" in ln and "not surfaced under auto" in ln
+                   and "whisper.cpp" in ln for ln in lines)
+
+    def test_parakeet_guard_not_applicable(self, monkeypatch):
+        monkeypatch.setattr(backends, "_import_ok",
+                            lambda m: m == "onnxruntime")
+        monkeypatch.setattr(backends, "preload_cuda_libs", lambda: False)
+        cfg = self._cfg()
+        cfg["model"]["backend"] = "parakeet"
+        lines = self._lines(cfg)
+        assert any("guard:" in ln and "not applicable" in ln
+                   and "parakeet" in ln for ln in lines)
+
+    def test_faster_whisper_guard_active(self, monkeypatch):
+        monkeypatch.setattr(backends, "_import_ok",
+                            lambda m: m == "faster_whisper")
+        monkeypatch.setattr(backends, "preload_cuda_libs", lambda: True)
+        cfg = self._cfg()
+        cfg["model"]["backend"] = "faster-whisper"
+        lines = self._lines(cfg)
+        assert any("guard:" in ln and "whitelist guard active" in ln
+                   for ln in lines)
+
+    def test_no_backend_resolves(self, monkeypatch):
+        monkeypatch.setattr(backends, "_import_ok", lambda m: False)
+        monkeypatch.setattr(backends, "preload_cuda_libs", lambda: False)
+        monkeypatch.setattr(backends, "_whispercpp_binary", lambda: None)
+        lines = self._lines(self._cfg())
+        assert any("guard: no backend resolves" in ln for ln in lines)
+
+    def test_live_language_block_from_daemon(self, monkeypatch):
+        from fluidvoice import control as control_mod
+        from fluidvoice import doctor as doctor_mod
+
+        def fake_request(action, **kw):
+            assert action == "status"
+            return {"ok": True,
+                    "language": {"effective": "sl", "source": "cycle",
+                                 "cycle": ["auto", "sl"],
+                                 "cycle_engaged": True,
+                                 "whitelist": ["sl", "en"]}}
+
+        monkeypatch.setattr(control_mod, "request", fake_request)
+        monkeypatch.setattr(doctor_mod.paths, "socket_path",
+                            lambda: Path("/etc/hostname"))
+        lines = self._lines(self._cfg())
+        assert any("runtime: sl (source cycle; engaged true)" in ln
+                   for ln in lines)
+
+    def test_live_block_absent_for_old_daemon(self, monkeypatch):
+        # an older daemon answers status without the language block
+        from fluidvoice import control as control_mod
+        from fluidvoice import doctor as doctor_mod
+
+        monkeypatch.setattr(control_mod, "request", lambda a, **kw: {"ok": True})
+        monkeypatch.setattr(doctor_mod.paths, "socket_path",
+                            lambda: Path("/etc/hostname"))
+        lines = self._lines(self._cfg())
+        assert any("runtime: unknown (daemon down)" in ln for ln in lines)
