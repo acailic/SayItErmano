@@ -10,4 +10,4 @@ user-facing - repo, deb package, command, launcher, dirs and env-var
 overrides (SAYITERMANO_CONFIG, ...) - is SayItErmano.
 """
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
