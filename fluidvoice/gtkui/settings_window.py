@@ -1565,6 +1565,10 @@ class SettingsWindow(Adw.PreferencesWindow):
                                  "re-decode; all backends"))
         preview.add(self._spin("recording", "preview_segment_s",
                                "Segment window (s)", 1.0, 6.0, 0.5, digits=1))
+        preview.add(self._switch("recording", "overlay_chips",
+                                 "Hover action chips",
+                                 "hover the pill while recording for "
+                                 "copy/paste/cancel buttons (X11)"))
         preview.add(self._spin("recording", "preview_vad_silence_s",
                                "Stop after silence (s)", 0.0, 10.0, 0.5,
                                digits=1,

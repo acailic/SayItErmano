@@ -1448,11 +1448,17 @@ class Daemon:
                 # display/pill stack is unavailable.
                 accent = "rewrite" if self._rewrite_mode \
                     else "command" if self._command_mode else "dictate"
+                chips = {"copy_last": self._copy_last_transcript,
+                         "paste_last": lambda: self.paste_last(),
+                         "cancel": self.cancel}
+                if not rcfg.get("overlay_chips", True):
+                    chips = None
                 display = FluidOverlay(
                     raw_path=Path(raw_path),
                     bottom_offset=int(rcfg.get("preview_bottom_offset", 64)),
                     size=rcfg.get("preview_overlay_size", "medium"),
-                    mode=accent)
+                    mode=accent,
+                    actions=chips)
                 actual = "overlay" if display.using_overlay else "notify"
             else:
                 display = NotifyPreview()

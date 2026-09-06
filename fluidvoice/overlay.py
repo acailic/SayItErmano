@@ -54,6 +54,32 @@ TEXT_ALPHA = 230          # white @ 0.9
 BORDER_ALPHA_TOP = 76     # gloss: bright top fading to dim bottom
 BORDER_ALPHA_BOTTOM = 26
 SHIMMER_PERIOD = 1.05     # seconds per sweep (upstream CompositorShimmerSweep)
+
+# -- hover action chips (A2, upstream overlay controls parity) ------------------
+CHIP_STRIP = 44    # reserved above the pill while chips are shown
+CHIP_H = 32
+CHIP_GAP = 8       # chips row -> pill top
+CHIP_PAD_H = 14    # text padding inside a chip
+CHIP_FONT = 12
+
+# fixed action order; labels stay ASCII-safe for the bitmap fallback fonts
+CHIP_LABELS = {"copy_last": "Copy last", "paste_last": "Paste last",
+               "cancel": "Cancel"}
+
+
+def hit_chip(rects: dict, x: float, y: float) -> str | None:
+    """Name of the chip whose rect contains the pointer, else None."""
+    for name, (cx, cy, cw, ch) in rects.items():
+        if cx <= x < cx + cw and cy <= y < cy + ch:
+            return name
+    return None
+
+
+def edge_click(prev_mask: int, mask: int) -> bool:
+    """True when Button1 transitions released->pressed (a real click,
+    not a hold: auto-repeat never re-fires the press bit)."""
+    b1 = 1 << 8
+    return not (prev_mask & b1) and bool(mask & b1)
 PROCESSING_CAP = 15.0     # hard auto-close so a hung pipeline never strands it
 FADE_IN_FRAMES = 4        # ~130 ms at 30 fps: inside the 0.1 s "instant" band
 DONE_HOLD = 0.45          # peak-end beat: success frame lingers, then fades
@@ -806,9 +832,18 @@ class FluidOverlay:
                  bottom_offset: int = BOTTOM_OFFSET,
                  icon_path: str | Path | None = None,
                  size: str = DEFAULT_SIZE,
-                 mode: str = "dictate"):
+                 mode: str = "dictate",
+                 actions: dict | None = None):
         from .preview import NotifyPreview
         self.fallback = NotifyPreview()
+        self._actions = {k: v for k, v in (actions or {}).items()
+                         if k in CHIP_LABELS and callable(v)}
+        self._hovered = False          # pointer over the pill
+        self._hover_chip: str | None = None
+        self._hovered_prev = False
+        self._prev_mask = 0
+        self._chip_rects: dict = {}
+        self._chips_ok = False         # set when the shape ext is available
         self._d = None
         self._win = None
         self._renderer = None
@@ -849,6 +884,7 @@ class FluidOverlay:
                                       animations=self._anims)
         self._gc = self._scratch_gc()
         self._win_size = (0, 0)
+        self._probe_shape_ext()
 
     def _pick_visual(self):
         X = self._X
@@ -1009,6 +1045,10 @@ class FluidOverlay:
             self._levels.update(self._read_pcm_tail())
         self._phase += 1.0 / self.FPS
 
+        # -- hover chips (A2): poll the pointer; no grabs, no focus.
+        show_chips = (state == "recording" and self._actions
+                      and self._chips_ok and self._update_hover())
+
         elapsed = (time.monotonic() - self._state_since
                    if state == "processing" else None)
         conf = self._done_confidence if state == "done" else None
@@ -1021,17 +1061,190 @@ class FluidOverlay:
             self._levels.levels(), text, phase=self._phase,
             alpha=fade_alpha, mode=mode, state=state, badge=badge,
             elapsed=elapsed, confidence=conf)
+        if show_chips:
+            img, w, h = self._compose_chips(img, w, h)
         sig = (w, h, state, mode, text, badge,
                tuple(round(b, 1) for b in self._levels.levels()),
                round(self._phase % SHIMMER_PERIOD, 2),
-               None if elapsed is None else int(elapsed))
+               None if elapsed is None else int(elapsed),
+               self._hover_chip if show_chips else None)
         if sig == self._last_sig and self._fade_left <= 0:
             return
         self._last_sig = sig
 
         if self._win is None or self._win_size != (w, h):
             self._create_window(w, h)
+            self._apply_input_shape(show_chips)
+        elif self._hovered_prev != show_chips:
+            self._apply_input_shape(show_chips)
+        self._hovered_prev = show_chips
         self._blit(img, w, h, text)
+
+    # -- hover chips plumbing -------------------------------------------
+
+    def _probe_shape_ext(self) -> None:
+        """Chips need the X shape extension (input region): without it the
+        transparent strip above the pill would steal clicks from the app
+        underneath, so they stay off entirely."""
+        try:
+            d = self._d
+            if hasattr(d, "has_extension"):
+                ok = bool(d.has_extension("SHAPE"))
+            else:  # older python-xlib: QueryExtension reply's present flag
+                r = d.query_extension("SHAPE")
+                data = getattr(r, "_data", None) or {}
+                ok = bool(data.get("present") or getattr(r, "present", False))
+            self._chips_ok = ok
+        except Exception:
+            self._chips_ok = False
+
+    def _update_hover(self) -> bool:
+        """Poll the pointer once: hovered over the pill (or a chip), and
+        dispatch an edge-detected Button1 press on a chip as its action.
+        Returns True while chips should be shown."""
+        if self._win is None:
+            return False
+        try:
+            q = self._win.query_pointer()
+            # python-xlib versions differ on field exposure: resolved
+            # requests carry a _data dict; some expose attributes directly
+            data = getattr(q, "_data", None)
+            if not isinstance(data, dict):
+                data = {k: getattr(q, k) for k in
+                        ("same_screen", "win_x", "win_y", "mask")}
+            if not data.get("same_screen"):
+                self._hovered = False
+                self._hover_chip = None
+                return False
+            clicked = self._drain_button_events()
+            mask = int(data.get("mask") or 0)
+            x, y = data.get("win_x", -1), data.get("win_y", -1)
+            w, h = self._win_size
+        except Exception:
+            return self._hovered
+        # the whole window counts: the input shape (pill + chips strip)
+        # already confines where the pointer can meaningfully be
+        if not (0 <= x < w and 0 <= y < h):
+            self._hovered = False
+            self._hover_chip = None
+            self._prev_mask = mask
+            return False
+        self._hovered = True
+        self._hover_chip = hit_chip(self._chip_rects, x, y)
+        if self._hover_chip and (clicked or edge_click(self._prev_mask, mask)):
+            name, self._hover_chip = self._hover_chip, None
+            self._fire_action(name)
+        self._prev_mask = mask
+        return True
+
+    def _drain_button_events(self) -> bool:
+        """We select ButtonPress to CONSUME clicks over the pill; drain the
+        queue so the socket buffer never fills. Returns True when a real
+        ButtonPress was delivered - a 30 Hz poll can miss a ~10 ms click,
+        the event cannot be missed."""
+        clicked = False
+        try:
+            while self._d.pending_events():
+                ev = self._d.next_event()
+                if getattr(ev, "type", None) == self._X.ButtonPress:
+                    clicked = True
+        except Exception:
+            pass
+        return clicked
+
+    def _fire_action(self, name: str) -> None:
+        cb = self._actions.get(name)
+        if cb is None:
+            return
+
+        def _run():
+            try:
+                cb()
+            except Exception:
+                pass  # daemon-side actions log their own failures
+
+        threading.Thread(target=_run, name="fluidvoice-overlay-chip",
+                         daemon=True).start()
+
+    def _compose_chips(self, pill_img, pw: int, ph: int):
+        """Paste the pill frame under a row of action chips (pill stays
+        put: the window grows upward, bottom-anchored)."""
+        from PIL import Image, ImageDraw
+        font = _load_font(CHIP_FONT, bold=True)
+        names = [n for n in CHIP_LABELS if n in self._actions]
+        widths = {}
+        probe = ImageDraw.Draw(Image.new("RGBA", (4, 4)))
+        for n in names:
+            widths[n] = (CHIP_PAD_H * 2
+                         + int(probe.textlength(CHIP_LABELS[n], font=font)))
+        total = sum(widths.values()) + CHIP_GAP * max(0, len(names) - 1)
+        w = max(pw, total + 2 * CHIP_GAP)
+        h = CHIP_STRIP + ph
+        frame = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        frame.paste(pill_img, ((w - pw) // 2, CHIP_STRIP))
+        d = ImageDraw.Draw(frame)
+        accent = MODE_ACCENTS.get(self._mode, MODE_ACCENTS["dictate"])
+        x = (w - total) // 2
+        y = (CHIP_STRIP - CHIP_GAP - CHIP_H) // 2
+        self._chip_rects = {}
+        for n in names:
+            cw = widths[n]
+            hot = n == self._hover_chip
+            box = (x, y, x + cw - 1, y + CHIP_H - 1)
+            if hot:  # inverted: accent fill, dark text
+                d.rounded_rectangle(box, (CHIP_H - 4) // 2,
+                                    fill=(*accent, 245),
+                                    outline=(255, 255, 255, 90), width=1)
+                tcol = (17, 17, 17, 255)
+            else:    # dark chip, light text (pill family)
+                d.rounded_rectangle(box, (CHIP_H - 4) // 2,
+                                    fill=(24, 24, 24, 240),
+                                    outline=(*accent, 200), width=1)
+                tcol = (245, 245, 245, 235)
+            tw = probe.textlength(CHIP_LABELS[n], font=font)
+            d.text((x + (cw - tw) // 2, y + (CHIP_H - font.size) // 2 - 1),
+                   CHIP_LABELS[n], font=font, fill=tcol)
+            self._chip_rects[n] = (x, y, cw, CHIP_H)
+            x += cw + CHIP_GAP
+        return frame, w, h
+
+    def _apply_input_shape(self, chips: bool) -> None:
+        """Restrict pointer input to the pill (+ chips when shown) so the
+        transparent shadow margins and the hover strip never steal clicks."""
+        try:
+            from Xlib.ext import shape as xshape
+            w, h = self._win_size
+            from PIL import Image, ImageDraw
+            mask = Image.new("L", (w, h), 0)
+            d = ImageDraw.Draw(mask)
+            if chips:
+                d.rectangle((0, CHIP_STRIP, w - 1, h - 1), fill=255)
+                d.rectangle((0, 0, w - 1, CHIP_STRIP - CHIP_GAP - 1), fill=255)
+            else:
+                d.rectangle((0, 0, w - 1, h - 1), fill=255)
+            bm = mask.point(lambda v: 255 if v > 127 else 0).convert("1")
+            src_stride = (w + 7) // 8
+            dst_stride = (w + 31) // 32 * 4
+            raw = bm.tobytes("raw", "1")
+            packed = bytearray(dst_stride * h)
+            for yy in range(h):
+                row = raw[yy * src_stride:(yy + 1) * src_stride]
+                packed[yy * dst_stride:yy * dst_stride + len(row)] = row
+            pm = self._screen.root.create_pixmap(w, h, 1)
+            # XYBitmap put_image maps 1-bits -> foreground pixel: a depth-1
+            # shape must store 1 where input is allowed, so fg=1 bg=0
+            scratch1 = self._screen.root.create_pixmap(1, 1, 1)
+            gc1 = scratch1.create_gc(foreground=1, background=0)
+            scratch1.free()
+            pm.put_image(gc1, 0, 0, w, h, self._X.XYBitmap, 1, 0,
+                         bytes(packed))
+            self._win.shape_mask(xshape.SO.Set, xshape.SK.Input, 0, 0, pm)
+            pm.free()
+            self._d.flush()
+        except Exception:
+            if chips:
+                # cannot confine input: never show the strip
+                self._chips_ok = False
 
     def _blit(self, img, w: int, h: int, text: str | None) -> None:
         """Push one frame into the (existing, correctly sized) window."""
@@ -1077,7 +1290,7 @@ class FluidOverlay:
         x = (screen.width_in_pixels - w) // 2
         y = screen.height_in_pixels - h - self._bottom_offset
         kwargs = dict(override_redirect=True,
-                      event_mask=X.ExposureMask,
+                      event_mask=X.ExposureMask | X.ButtonPressMask,
                       background_pixel=0,
                       border_pixel=0)
         if self._depth == 32:

@@ -86,6 +86,7 @@ DEFAULTS: dict[str, Any] = {
         "preview_segmented": True,
         "preview_segment_s": 2.0,      # window length in seconds
         "preview_vad_silence_s": 2.0,  # 0 disables the auto-stop
+        "overlay_chips": True,   # hover action chips above the pill (X11)
         "pause_media": True,  # pause MPRIS players while dictating (resume after)
         # mouse push-to-talk: "button8"/"b8" (6-255; 1-5 refused - they would
         # break the desktop). Empty = off. Independent of hotkey.mode - the
@@ -423,7 +424,7 @@ _SAVE_WHITELIST: dict[str, list[str]] = {
                   "preview_interval", "preview_min_audio",
                   "preview_bottom_offset", "preview_overlay_size",
                   "preview_segmented", "preview_segment_s",
-                  "preview_vad_silence_s",
+                  "preview_vad_silence_s", "overlay_chips",
                   "pause_media", "push_to_talk_button",
                   "push_to_talk_modifiers"],
     "model": ["backend", "name", "device", "compute", "whispercpp_model",
@@ -567,6 +568,7 @@ SETTING_BOOLS = {("general", "copy_to_clipboard"), ("general", "tray_enabled"),
                  ("general", "pause_when_locked"),
                  ("recording", "pause_media"), ("recording", "preview_enabled"),
                  ("recording", "preview_segmented"),
+                 ("recording", "overlay_chips"),
                  ("recording", "skip_silent"),
                  ("recording", "spoken_send_enabled"),
                  ("processing", "remove_filler_words"),
@@ -602,7 +604,7 @@ ALLOWED_SETTINGS: dict[str, set] = {
                   "preview_min_audio", "preview_bottom_offset",
                   "preview_overlay_size", "pause_media",
                   "preview_segmented", "preview_segment_s",
-                  "preview_vad_silence_s",
+                  "preview_vad_silence_s", "overlay_chips",
                   "push_to_talk_button", "push_to_talk_modifiers"},
     "model": {"backend", "name", "device", "compute", "whispercpp_model",
               "eager_warmup", "languages"},
