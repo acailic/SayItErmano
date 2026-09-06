@@ -18,6 +18,18 @@ import pytest
 from fluidvoice import update
 from fluidvoice.config import DEFAULTS, load_config, save_config
 
+
+@pytest.fixture(autouse=True)
+def _pin_current_version(monkeypatch):
+    """The staged releases below (0.6.0, 0.7.0, ...) are "newer" relative to
+    a fictional current 0.5.0 - pin the current version in every module
+    that binds it (update, cli, doctor) so a package version bump can never
+    flip these expectations."""
+    from fluidvoice import cli, doctor, update
+    for mod in (cli, doctor, update):
+        monkeypatch.setattr(mod, "__version__", "0.5.0")
+
+
 REL06 = {
     "tag_name": "v0.6.0",
     "html_url": "https://github.com/acailic/SayItErmano/releases/tag/v0.6.0",
