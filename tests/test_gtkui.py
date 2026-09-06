@@ -507,6 +507,39 @@ class TestSettingsWindow:
         assert c.saved[-1]["recording"]["preview_enabled"] is False
         w.close()
 
+    def test_idle_unload_spinbutton_roundtrip(self, loop):
+        class CfgClient(StubClient):
+            def __init__(self):
+                super().__init__()
+                self._cfg = copy.deepcopy(DEFAULTS)
+
+            def get_config(self):
+                return copy.deepcopy(self._cfg), True
+
+        from fluidvoice.gtkui.settings_window import SettingsWindow
+        c = CfgClient()
+        w = SettingsWindow(client=c)
+        w.present()
+        pump(loop)
+        # default off: row 0, collect sends 0 seconds
+        assert w._idle_unload_row.get_value() == 0
+        assert w._collect()["model"]["idle_unload_s"] == 0
+        # 5 minutes -> 300 seconds, and the row marks the page dirty
+        w._idle_unload_row.set_value(5)
+        assert w._dirty is True
+        assert w._collect()["model"]["idle_unload_s"] == 300
+        # a config in seconds loads back as whole minutes
+        c._cfg["model"]["idle_unload_s"] = 300
+        w._load()
+        pump(loop)
+        assert w._idle_unload_row.get_value() == 5
+        # hand-edited sub-minute values (30-89 s) round up to 1 minute
+        c._cfg["model"]["idle_unload_s"] = 45
+        w._load()
+        pump(loop)
+        assert w._idle_unload_row.get_value() == 1
+        w.close()
+
     def test_per_app_rule_editing(self, loop):
         from fluidvoice.gtkui.settings_window import SettingsWindow
         c = StubClient()

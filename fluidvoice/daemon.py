@@ -8,6 +8,7 @@ Structure:
 """
 from __future__ import annotations
 
+import gc
 import os
 import signal
 import sys
@@ -343,6 +344,14 @@ class Daemon:
         self._preview: Any = None
         self._closing_display: Any = None
         self._tray: Any = None
+        # -- idle model unload (model.idle_unload_s; 0 = off, byte-identical
+        # to the pre-policy behavior) -------------------------------------
+        self._last_activity = time.monotonic()  # last take end / warmup
+        self._idle_unloaded_at: float | None = None
+        self._backend_load_lock = threading.Lock()  # serializes _ensure_backend
+        self._idle_thread: threading.Thread | None = None  # watcher when on
+        self._idle_stop = threading.Event()
+        self._start_warm_thread: threading.Thread | None = None  # run()'s warmup
         self._media = MediaController(log=log)
         self._micmon: Any = None  # input-device watcher (micmon.MicMonitor)
         self._mic_missing_logged = False  # warn-once latch for reselects
@@ -377,18 +386,26 @@ class Daemon:
                 pass  # warmup disabled (e.g. test isolation on small GPUs)
             else:
                 # Load the model in the background so the live preview works
-                # from the very first dictation (lazy otherwise).
-                backend_ref = self.backend
-
+                # from the very first dictation (lazy otherwise). NOTE: the
+                # snapshot lives INSIDE _warm (its frame dies with the
+                # thread) - a run()-level local would pin the backend for
+                # the daemon's whole lifetime and defeat idle unload.
                 def _warm():
+                    ref = self.backend
+                    if ref is None:
+                        return  # dropped before the thread ran; nothing to do
                     try:
-                        backend_ref.warmup()
+                        ref.warmup()
                         log("speech model loaded (preview ready)")
+                        self._touch_activity()
                     except Exception as e:
                         log(f"WARN model warmup failed: {e}")
 
-                threading.Thread(target=_warm, name="fluidvoice-warmup",
-                                 daemon=True).start()
+                self._start_warm_thread = threading.Thread(
+                    target=_warm, name="fluidvoice-warmup", daemon=True)
+                self._start_warm_thread.start()
+        # Idle unload watcher: only exists when model.idle_unload_s > 0.
+        self._start_idle_watch()
 
         if self.use_hotkey:
             self._start_hotkey()
@@ -710,6 +727,8 @@ class Daemon:
                 state = "Processing…"
             else:
                 state = "Ready"
+            backend_unloaded = self.backend is None
+            last_activity = self._last_activity
         hk = self.cfg["hotkey"].get("key", "")
         hint = f" — {hk} or click to dictate" if hk else ""
         tip = f"SayItErmano: {state}{hint}"
@@ -718,6 +737,9 @@ class Daemon:
             tip += " - hotkey blocked!"
         if self._locked:
             tip += " - paused (locked)"
+        if backend_unloaded and self._idle_threshold() > 0:
+            idle_m = int((time.monotonic() - last_activity) // 60)
+            tip += f" - model unloaded (idle {idle_m}m)"
         return tip
 
     def _spawn_app(self, *args: str) -> None:
@@ -740,6 +762,7 @@ class Daemon:
 
     def shutdown(self) -> None:
         log("shutting down")
+        self._stop_idle_watch()
         if self.recording:
             self.recorder.cancel()
             self.recording = False
@@ -1116,6 +1139,8 @@ class Daemon:
             _try("tray", self._apply_tray_setting)
         if "general.pause_when_locked" in changed:
             _try("lock pause", self._apply_lock_setting)
+        if "model.idle_unload_s" in changed:
+            _try("idle unload", self._apply_idle_unload_setting)
         return {"applied": applied, "errors": errors}
 
     # -- model warmup / hot-swap (native-app spec: select-model over socket) ----
@@ -1150,6 +1175,8 @@ class Daemon:
             from .config import save_config
             save_config(self.cfg)
             self.backend = backend  # hot-swap into the running daemon
+            self._idle_unloaded_at = None
+            self._touch_activity()
             self.warmup = {"running": False, "error": None, "model": name}
             log(f"model switched to {name} (hot-swapped)")
         except Exception as e:  # noqa: BLE001 - surfaced in the UI
@@ -1166,9 +1193,110 @@ class Daemon:
             backend = backends.load_backend(self.cfg)
             backend.warmup()
             self.backend = backend
+            self._idle_unloaded_at = None
+            self._touch_activity()
             self.warmup = {"running": False, "error": None, "model": model}
         except Exception as e:  # noqa: BLE001 - surfaced in the UI
             self.warmup = {"running": False, "error": str(e)[:300], "model": model}
+
+    # -- idle model unload (model.idle_unload_s) ------------------------------
+
+    def _idle_threshold(self) -> int:
+        """Current policy in seconds; 0 = never unload."""
+        try:
+            return int((self.cfg.get("model", {}) or {})
+                       .get("idle_unload_s", 0) or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    def _touch_activity(self) -> None:
+        """Record dictation activity (resets the idle clock). Called from
+        take start/stop, transcription end, successful warmups and policy
+        changes - deliberately NOT from status/preview/history reads."""
+        self._last_activity = time.monotonic()
+
+    def _maybe_idle_unload(self, now: float | None = None) -> None:
+        """Drop the loaded backend once no dictation activity happened for
+        model.idle_unload_s seconds. `now` is injectable for tests. Never
+        fires while recording/busy/warming up; the drop itself happens
+        outside self._lock (backend destructors can take ~100 ms), but
+        inside _backend_load_lock so a load can never land mid-drop."""
+        if now is None:
+            now = time.monotonic()
+        t = self._idle_threshold()
+        if t <= 0:
+            return
+        with self._backend_load_lock:
+            with self._lock:
+                if self.backend is None or self.recording or self.busy:
+                    return
+                if self.warmup.get("running"):
+                    return  # a model switch/download is in flight
+                warm = self._start_warm_thread
+                if warm is not None and warm.is_alive():
+                    return  # eager startup warmup still running
+                idle_s = now - self._last_activity
+                if idle_s < t:
+                    return
+                backend = self.backend
+                self.backend = None
+                self._idle_unloaded_at = now
+            try:
+                backend.close()
+            except Exception:  # noqa: BLE001 - teardown is best-effort
+                pass
+            del backend  # release before gc so cycles die here too
+            gc.collect()
+        log(f"model idle {int(idle_s // 60)}m >= {t}s - unloaded "
+            "(reloads on the next dictation)")
+        self._refresh_tray()
+
+    def _idle_watch_loop(self) -> None:
+        while not self._idle_stop.wait(
+                max(5.0, min(60.0, self._idle_threshold() / 4.0))):
+            try:
+                self._maybe_idle_unload()
+            except Exception as e:  # noqa: BLE001 - the watcher must survive
+                log(f"WARN idle-unload check failed: {e}")
+
+    def _start_idle_watch(self) -> None:
+        """Start the watcher thread iff the policy is on. With
+        idle_unload_s = 0 nothing runs - behavior is identical to the
+        pre-policy daemon."""
+        if self._idle_threshold() <= 0:
+            self._idle_thread = None
+            return
+        if self._idle_thread is not None and self._idle_thread.is_alive():
+            return
+        self._idle_stop = threading.Event()
+        self._idle_thread = threading.Thread(
+            target=self._idle_watch_loop, name="fluidvoice-idle-unload",
+            daemon=True)
+        self._idle_thread.start()
+
+    def _stop_idle_watch(self) -> None:
+        self._idle_stop.set()
+        thread = self._idle_thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=2)
+
+    def _apply_idle_unload_setting(self) -> None:
+        """model.idle_unload_s flipped live: restart (or stop) the watcher.
+        Setting the policy counts as activity, so a just-enabled window
+        never fires immediately."""
+        self._stop_idle_watch()
+        self._touch_activity()
+        self._start_idle_watch()
+
+    def _reload_backend_bg(self) -> None:
+        """Take-start reload after an idle unload (or a failed startup
+        load): the model loads while the user speaks; _process's
+        synchronous _ensure_backend remains the guaranteed - and
+        gracefully failing - path."""
+        try:
+            self._ensure_backend()
+        except Exception as e:  # noqa: BLE001 - logged, retried at stop
+            log(f"WARN background model reload failed: {e}")
 
     def delete_model(self, kind: str, name: str) -> dict:
         """Remove one cached model (Settings → Models pruning). The target
@@ -1234,6 +1362,12 @@ class Daemon:
                                        str(purpose) if purpose else None)
         if action == "status":
             upd = self._update_status()
+            with self._lock:
+                model_state = {
+                    "policy_s": self._idle_threshold(),
+                    "loaded": self.backend is not None,
+                    "idle_s": round(time.monotonic() - self._last_activity, 1),
+                }
             return {"ok": True, "recording": self.recording, "busy": self.busy,
                     "backend": self.backend.name if self.backend else None,
                     "version": __version__,
@@ -1270,7 +1404,10 @@ class Daemon:
                     # CLI/UI convenience surface
                     "update": upd,
                     "update_available": upd.get("update_available"),
-                    "update_url": upd.get("url")}
+                    "update_url": upd.get("url"),
+                    # idle-unload policy + live state (doctor/tray read
+                    # this; additive key - JSON consumers unaffected)
+                    "model_state": model_state}
         if action == "shutdown":
             self._quit_gracefully()
             return {"ok": True}
@@ -1407,6 +1544,12 @@ class Daemon:
             Path(tmp).unlink(missing_ok=True)
             return
         self.recording = True
+        self._touch_activity()
+        if self.backend is None:
+            # Take-start reload (after an idle unload, or a failed startup
+            # load): the model loads while the user speaks.
+            threading.Thread(target=self._reload_backend_bg,
+                             name="fluidvoice-reload", daemon=True).start()
         self._tray_recording(True)
         if self.cfg["recording"].get("pause_media", True):
             self._media.pause_if_playing()  # upstream: only what's playing
@@ -1579,6 +1722,7 @@ class Daemon:
                       self.use_sounds and self.cfg["sounds"]["enabled"])
         wav = self.recorder.stop()
         self.recording = False
+        self._touch_activity()
         self._tray_recording(False)
         self._media.resume()
         if wav is None or not Path(wav).exists() or Path(wav).stat().st_size < 200:
@@ -1725,9 +1869,16 @@ class Daemon:
     # -- pipeline ------------------------------------------------------------
 
     def _ensure_backend(self):
-        if self.backend is None:
-            self.backend = self._backend_factory(self.cfg)
-            log(f"speech backend: {self.backend.name}")
+        """Load the backend on demand (first take, take after an idle
+        unload, onboarding tryout). The load lock serializes concurrent
+        callers - the take-start background reload can race _process's
+        synchronous load without double-loading."""
+        with self._backend_load_lock:
+            if self.backend is None:
+                self.backend = self._backend_factory(self.cfg)
+                log(f"speech backend: {self.backend.name}")
+                self._idle_unloaded_at = None
+                self._touch_activity()
         return self.backend
 
     def _process(self, wav: Path, app_hint: str | None,
@@ -1750,6 +1901,7 @@ class Daemon:
             self.last_result = out
         finally:
             self.busy = False
+            self._touch_activity()
             self._profile_override = None
             display, self._closing_display = self._closing_display, None
             if display is not None:

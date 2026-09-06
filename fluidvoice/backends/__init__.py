@@ -153,6 +153,14 @@ class Backend:
     def warmup(self) -> None:  # optional model preload/download
         pass
 
+    def close(self) -> None:
+        """Optional teardown before the daemon drops its reference (idle
+        unload). The default no-op is right for every current backend:
+        CTranslate2/ONNX/torch weights free on refcount drop + gc, and
+        whisper.cpp runs a subprocess per transcription so it holds no
+        model memory in-process at all."""
+        pass
+
 
 def resolve_model_name(name: str) -> str:
     name = ALIASES.get(name.strip().lower(), name.strip().lower())

@@ -153,6 +153,32 @@ def _models_cache_lines(cfg: dict) -> list[str]:
     return lines
 
 
+def _model_state_lines(cfg: dict) -> list[str]:
+    """Idle-unload policy + live model state. The policy comes from the
+    config; the loaded/unloaded state and the idle age come from the
+    daemon's status surface (the same control-socket query the other
+    daemon-live lines use). Daemon down -> the config policy alone."""
+    from . import control
+    t = int((cfg.get("model", {}) or {}).get("idle_unload_s", 0) or 0)
+    try:
+        if not paths.socket_path().exists():
+            raise FileNotFoundError("no control socket")
+        status = control.request("status")
+    except Exception:  # noqa: BLE001 - daemon down / older daemon / timeout
+        return [f"  model: daemon down (policy from config: {t}s)"]
+    ms = status.get("model_state") if isinstance(status, dict) else None
+    if not isinstance(ms, dict):
+        return [f"  model: unknown (older daemon; policy from config: {t}s)"]
+    idle_m = int(float(ms.get("idle_s", 0) or 0) // 60)
+    loaded = bool(ms.get("loaded"))
+    if t <= 0:
+        if loaded:
+            return ["  model: loaded (idle unload off)"]
+        return ["  model: not loaded (lazy first use)"]
+    state = "loaded" if loaded else "unloaded"
+    return [f"  model: {state} (idle {idle_m}m; policy {t}s)"]
+
+
 def _language_lines(cfg: dict) -> list[str]:
     """Language resolution: general.language, per-model overrides, and the
     effective language of the config's active model."""
@@ -522,6 +548,8 @@ def run() -> int:
     print("\ndictionary learning:")
     print(_suggestions_line(cfg))
     for line in _models_cache_lines(cfg):
+        print(line)
+    for line in _model_state_lines(cfg):
         print(line)
 
     print("\ntools:")

@@ -325,6 +325,11 @@ class SettingsWindow(Adw.PreferencesWindow):
                 row.set_selected(idx)
             elif isinstance(row, Adw.SpinRow):
                 row.set_value(float(val))
+        # idle unload: config seconds -> UI whole minutes (0 = off); a
+        # hand-edited sub-minute value (30-89 s) rounds up to 1 minute
+        idle_s = int(self.cfg.get("model", {}).get("idle_unload_s", 0) or 0)
+        self._idle_unload_row.set_value(
+            0 if idle_s <= 0 else max(1, round(idle_s / 60)))
         for mod, tb in self._mod_toggles.items():
             tb.set_active(mod in (self.cfg.get("hotkey", {})
                                   .get("modifiers") or []))
@@ -385,6 +390,9 @@ class SettingsWindow(Adw.PreferencesWindow):
             self._collect_mic_priority()  # empty list is meaningful: removals
         body.setdefault("model", {})["languages"] = \
             self._collect_model_languages()  # empty dict is meaningful too
+        # idle unload: UI whole minutes -> config seconds (0 = off)
+        body.setdefault("model", {})["idle_unload_s"] = \
+            int(self._idle_unload_row.get_value()) * 60
         return body
 
     def save(self) -> bool:
@@ -498,6 +506,22 @@ class SettingsWindow(Adw.PreferencesWindow):
         warm.add(self.warmup_row)
         page.add(warm)
 
+        # Memory: idle model unload (model.idle_unload_s). Whole minutes in
+        # the UI (0 = off); the config stores seconds - see _load/_collect.
+        mem = Adw.PreferencesGroup(
+            title="Memory",
+            description="Free RAM/VRAM between dictations (applies live)")
+        adj = Gtk.Adjustment(value=0, lower=0, upper=1440, step_increment=1)
+        self._idle_unload_row = Adw.SpinRow(
+            title="Unload model after idle (minutes)",
+            subtitle="0 = keep the model loaded (fastest first word); "
+                     "higher frees RAM/VRAM after inactivity — the next "
+                     "dictation pays the model load time",
+            adjustment=adj, digits=0)
+        self._idle_unload_row.connect("notify::value", lambda *_: self._touch())
+        mem.add(self._idle_unload_row)
+        page.add(mem)
+
         engine = Adw.PreferencesGroup(title="Engine options",
                                       description="Changing these reloads the model")
         engine.add(self._combo(
@@ -571,6 +595,9 @@ class SettingsWindow(Adw.PreferencesWindow):
         else:
             self.warmup_spinner.stop()
             self.warmup_row.set_subtitle(f"active: {active or '—'}")
+        if not (st.get("model_state") or {}).get("loaded", True):
+            self.warmup_row.set_subtitle(
+                "unloaded (idle — reloads on the next dictation)")
         if st:  # about rows (daemon offline keeps the placeholder em-dash)
             self.about_backend_row.set_subtitle(st.get("backend") or "—")
             self.about_gpu_row.set_subtitle("yes" if st.get("cuda") else "no")

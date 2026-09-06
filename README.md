@@ -390,6 +390,7 @@ whispercpp_model = "ggml-base.bin"  # catalog name or path — download via Sett
 # backend = "parakeet"       # NVIDIA Parakeet TDT via ONNX Runtime (pip install '.[parakeet]')
 # name = "parakeet-tdt-0.6b-v2"     # or parakeet-tdt-0.6b-v3 (multilingual)
 device = "auto"             # auto | cuda | cpu
+# idle_unload_s = 0          # unload the model after N idle seconds (0 = never; 30..86400)
 
 [general]
 # Case-insensitive WM_CLASS substrings identifying terminals — spoken-send
@@ -427,6 +428,16 @@ verify_paste = true
 # terminals pass ctrl+v through to the app, they need ctrl+shift+v
 terminal_paste_key = "ctrl+shift+v"
 ```
+
+**Why is my first dictation slow after a break?** With `idle_unload_s`
+set (Settings → Models → Memory), the speech model is released after the
+idle window to free RAM — and VRAM on GPU machines — instead of staying
+pinned in memory forever. The first dictation afterwards pays the model
+load again (a few seconds; the load overlaps your speech), while the
+following ones are instant. Set it to `0` — the default — to keep the
+model always loaded, and check the live state any time with
+`sayit-ermano doctor` (it prints `model: loaded/unloaded (idle Xm;
+policy Ns)`).
 
 ## Development & testing
 

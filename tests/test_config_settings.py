@@ -510,3 +510,62 @@ class TestParityPackKeys:
             "processing": {"formatting_action_triggers":
                            {"nope": ["x"]}}})
         assert rejected == ["processing.formatting_action_triggers"]
+
+
+class TestIdleUnloadSetting:
+    """model.idle_unload_s: 0 (off, default) or 30..86400 seconds.
+    The plain SETTING_RANGES table cannot express "0 or >= 30", so this is
+    a custom coerce_setting branch (daemon-side live-apply in Phase 2)."""
+
+    def test_default_off(self, cfg):
+        assert cfg["model"]["idle_unload_s"] == 0
+
+    def test_documented_in_template(self):
+        assert "idle_unload_s" in TEMPLATE  # cheap doc-guard idiom
+
+    @pytest.mark.parametrize("value", [30, 60, 3600, 86400])
+    def test_accepts_valid(self, cfg, value):
+        changed, rejected = apply_settings(
+            cfg, {"model": {"idle_unload_s": value}})
+        assert rejected == [] and changed == ["model.idle_unload_s"]
+        assert cfg["model"]["idle_unload_s"] == value
+
+    @pytest.mark.parametrize("value", [29, 1, 5, 86401, -60, 0 - 1,
+                                       "abc", True, 30.5, None, []])
+    def test_rejects_invalid(self, cfg, value):
+        changed, rejected = apply_settings(
+            cfg, {"model": {"idle_unload_s": value}})
+        assert rejected == ["model.idle_unload_s"] and changed == []
+        assert cfg["model"]["idle_unload_s"] == 0  # untouched
+
+    def test_zero_is_a_real_change_when_turning_off(self, cfg):
+        cfg["model"]["idle_unload_s"] = 300
+        changed, rejected = apply_settings(
+            cfg, {"model": {"idle_unload_s": 0}})
+        assert rejected == [] and changed == ["model.idle_unload_s"]
+        assert cfg["model"]["idle_unload_s"] == 0
+
+    def test_no_change_reported_when_same_value(self, cfg):
+        cfg["model"]["idle_unload_s"] = 300
+        changed, rejected = apply_settings(
+            cfg, {"model": {"idle_unload_s": 300}})
+        assert rejected == [] and changed == []
+
+    def test_persisted_by_save_config(self, tmp_path, monkeypatch):
+        from fluidvoice import paths as p
+        monkeypatch.setattr(p, "config_file", lambda: tmp_path / "c.toml")
+        cfg = copy.deepcopy(DEFAULTS)
+        cfg["model"]["idle_unload_s"] = 300
+        save_config(cfg)
+        assert load_config(tmp_path / "c.toml")["model"]["idle_unload_s"] == 300
+
+    def test_not_restart_required_not_engine_key(self):
+        assert "model.idle_unload_s" not in RESTART_REQUIRED
+        from fluidvoice.config import ENGINE_KEYS
+        assert "model.idle_unload_s" not in ENGINE_KEYS
+
+    def test_coerce_direct(self):
+        assert coerce_setting("model", "idle_unload_s", 300) == (True, 300)
+        assert coerce_setting("model", "idle_unload_s", 0) == (True, 0)
+        assert coerce_setting("model", "idle_unload_s", True)[0] is False
+        assert coerce_setting("model", "idle_unload_s", 29)[0] is False

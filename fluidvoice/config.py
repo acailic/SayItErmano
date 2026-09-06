@@ -102,6 +102,10 @@ DEFAULTS: dict[str, Any] = {
         "compute": "auto",  # auto | float16 | int8
         "whispercpp_model": "",  # catalog name (ggml-base.bin...) or path to a ggml/gguf model for whisper.cpp
         "eager_warmup": True,  # load the model at daemon start (preview-ready)
+        # seconds with NO dictation activity before the loaded model is
+        # released (RAM/VRAM freed); 0 = never unload. 30..86400 when set.
+        # The first dictation after an unload pays the model load time.
+        "idle_unload_s": 0,
         # per-model language overrides: {model_key: code} across all
         # catalogs; missing key / "" inherits general.language, "auto"
         # forces detection for that model (read per-dictation, applies live)
@@ -290,6 +294,10 @@ whispercpp_model = ""
 # Per-model language overrides, e.g. languages = { small = "de", "ggml-base.en.bin" = "en" }
 # "auto" = always detect for that model; a missing key follows general.language
 languages = {}
+# Unload the speech model after this many idle seconds to free RAM/VRAM
+# (0 = keep it loaded forever; range 30..86400 when set). The next
+# dictation after an unload pays the model load time again.
+# idle_unload_s = 300
 
 [processing]
 remove_filler_words = true
@@ -428,7 +436,7 @@ _SAVE_WHITELIST: dict[str, list[str]] = {
                   "pause_media", "push_to_talk_button",
                   "push_to_talk_modifiers"],
     "model": ["backend", "name", "device", "compute", "whispercpp_model",
-              "eager_warmup", "languages"],
+              "eager_warmup", "idle_unload_s", "languages"],
     "processing": ["remove_filler_words", "filler_words", "punctuation_enabled",
                    "punctuation_prefix", "dictionary",
                    "formatting_action_triggers", "gaav_enabled",
@@ -607,7 +615,7 @@ ALLOWED_SETTINGS: dict[str, set] = {
                   "preview_vad_silence_s", "overlay_chips",
                   "push_to_talk_button", "push_to_talk_modifiers"},
     "model": {"backend", "name", "device", "compute", "whispercpp_model",
-              "eager_warmup", "languages"},
+              "eager_warmup", "idle_unload_s", "languages"},
     "processing": {"remove_filler_words", "filler_words",
                    "punctuation_enabled", "punctuation_prefix", "dictionary",
                    "formatting_action_triggers",
@@ -644,6 +652,11 @@ def coerce_setting(section: str, key: str, value: Any) -> tuple[bool, Any]:
         ok = isinstance(value, str) and bool(
             _re.fullmatch(r"auto|[a-z]{2,3}(-[A-Za-z0-9]{2,8})?", value.strip()))
         return (ok, value.strip() if ok else value)
+    if (section, key) == ("model", "idle_unload_s"):
+        # 0 (never unload) or 30..86400 s; bool is an int subclass - reject
+        ok = isinstance(value, int) and not isinstance(value, bool) \
+            and (value == 0 or 30 <= value <= 86400)
+        return (ok, value)
     if (section, key) == ("ai", "per_app_prompts"):
         return _coerce_per_app_prompts(value)
     if (section, key) == ("processing", "formatting_action_triggers"):
