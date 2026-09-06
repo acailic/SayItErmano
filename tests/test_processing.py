@@ -201,3 +201,15 @@ class TestPipelineOrder:
             {"triggers": ["fluid voice"], "replacement": "FluidVoice"}]
         out = post_process("um fluid voice literal period", cfg)
         assert out == "FluidVoice."
+
+
+class TestActionTriggersPipeline:
+    def test_post_process_reads_trigger_config(self):
+        from fluidvoice.processing import post_process
+        cfg = {"processing": {
+            "remove_filler_words": False,
+            "punctuation_enabled": True,
+            "formatting_action_triggers": {"new_line": ["nova vrstica"]},
+        }}
+        assert post_process("hello literal nova vrstica world", cfg) \
+            == "hello\nworld"

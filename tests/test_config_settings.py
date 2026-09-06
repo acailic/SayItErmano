@@ -471,3 +471,42 @@ class TestCommandSettings:
                                      "confirm_timeout_s": 60.0,
                                      "destructive_patterns": [],
                                      "context_window_s": 0.0}
+
+
+class TestParityPackKeys:
+    """B1/B3/B4 settings: hotkey.mode 'both', extra_shortcuts,
+    formatting_action_triggers."""
+
+    def test_mode_both_accepted(self, cfg):
+        changed, rejected = apply_settings(cfg, {"hotkey": {"mode": "both"}})
+        assert rejected == [] and cfg["hotkey"]["mode"] == "both"
+
+    def test_extra_shortcuts_valid_and_garbage(self, cfg):
+        ok = [{"key": "F8", "modifiers": ["ctrl"], "profile": "Terse"},
+              {"key": "button9"}]
+        changed, rejected = apply_settings(
+            cfg, {"hotkey": {"extra_shortcuts": ok}})
+        assert rejected == []
+        assert cfg["hotkey"]["extra_shortcuts"][1] == \
+            {"key": "button9", "modifiers": []}
+        changed, rejected = apply_settings(
+            cfg, {"hotkey": {"extra_shortcuts": [{"key": ""}]}})
+        assert rejected == ["hotkey.extra_shortcuts"]
+        changed, rejected = apply_settings(
+            cfg, {"hotkey": {"extra_shortcuts": [
+                {"key": "F7"}, {"key": "F8"}, {"key": "F9"}]}})
+        assert rejected == ["hotkey.extra_shortcuts"]  # max 2 extras
+
+    def test_formatting_action_triggers_roundtrip(self, cfg):
+        changed, rejected = apply_settings(cfg, {
+            "processing": {"formatting_action_triggers":
+                           {"new_line": ["nova vrstica", "naslednja vrstica"],
+                            "space": ["presledek"]}}})
+        assert rejected == []
+        assert cfg["processing"]["formatting_action_triggers"] == {
+            "new_line": ["nova vrstica", "naslednja vrstica"],
+            "space": ["presledek"]}
+        changed, rejected = apply_settings(cfg, {
+            "processing": {"formatting_action_triggers":
+                           {"nope": ["x"]}}})
+        assert rejected == ["processing.formatting_action_triggers"]

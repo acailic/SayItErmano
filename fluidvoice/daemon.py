@@ -117,11 +117,25 @@ class DictationPipeline:
         polisher = self.polisher or AIClient(self.cfg).polish
         instructions = match_app_prompt(
             self.cfg["ai"].get("per_app_prompts", []), app_hint)
+        override_prompt = None
+        if getattr(self, "_profile_override", None):
+            _profile = self._profile_override
+            from .ai.profiles import load_profiles
+            override_prompt = load_profiles().get(_profile)
+            if override_prompt:
+                log(f"polish uses profile '{_profile}'")
+            else:
+                log(f"WARN shortcut profile '{_profile}' not "
+                    "found; using the base prompt")
         try:
             if instructions and self.polisher is None:
-                prompt = system_prompt_for(base_prompt_for(self.cfg),
-                                           instructions)
+                prompt = system_prompt_for(
+                    override_prompt or base_prompt_for(self.cfg), instructions)
                 return polisher(text, system_prompt=prompt), True
+            if override_prompt:
+                # new path (profiled shortcuts): the override always rides
+                # along, injected polishers included
+                return polisher(text, system_prompt=override_prompt), True
             return polisher(text), True
         except AIError as e:
             self.log(f"AI polish failed ({e}); using raw transcription")
@@ -323,6 +337,8 @@ class Daemon:
         self._command_timer: threading.Timer | None = None
         self._command_hotkey = None
         self._paste_hotkey = None
+        self._extra_hotkeys: list = []
+        self._profile_override: str | None = None
         self._watchdog: threading.Timer | None = None
         self._preview: Any = None
         self._closing_display: Any = None
@@ -755,6 +771,9 @@ class Daemon:
             self._command_hotkey.stop()
         if self._paste_hotkey:
             self._paste_hotkey.stop()
+        for hk in self._extra_hotkeys:
+            hk.stop()
+        self._extra_hotkeys = []
         if self._srv:
             try:
                 self._srv.close()
@@ -852,6 +871,24 @@ class Daemon:
             except HotkeyError as e:
                 self._paste_hotkey = None
                 log(f"WARN paste hotkey unavailable: {e}")
+                error = error or str(e)
+        for i, spec in enumerate(hk.get("extra_shortcuts") or []):
+            label = f"shortcut {i + 2} '{spec.get('key')}'"
+            try:
+                listener = HotkeyListener(
+                    key=spec.get("key", ""),
+                    modifiers=spec.get("modifiers", []),
+                    mode="toggle",
+                    on_toggle=lambda p=spec.get("profile", ""):
+                        self._toggle_with_profile(p),
+                    log=log)
+                listener.start()
+                for line in listener.summary:
+                    log(line)
+                self._log_grab_state(listener, "extra ", spec.get("key", ""))
+                self._extra_hotkeys.append(listener)
+            except HotkeyError as e:
+                log(f"WARN {label} unavailable: {e}")
                 error = error or str(e)
         return error
 
@@ -1571,6 +1608,7 @@ class Daemon:
             self._media.resume()
             self._rewrite_mode = False
             self._command_mode = False
+            self._profile_override = None
         log("cancelled")
         ui.notify("SayItErmano", "Cancelled", enabled=self.cfg["notifications"]["enabled"])
 
@@ -1625,6 +1663,17 @@ class Daemon:
             Path(tmp).unlink(missing_ok=True)
             with self._lock:
                 self.busy = False
+
+    def _toggle_with_profile(self, profile: str) -> None:
+        """Extra-shortcut toggle (B1): a take STARTED by a profiled
+        shortcut polishes with that named prompt profile (upstream
+        per-shortcut AI-prompt picker). The override clears when the
+        take finishes or is cancelled."""
+        if not self.recording:
+            self._profile_override = profile or None
+            if self._profile_override:
+                log(f"take starts with prompt profile '{self._profile_override}'")
+        self.toggle()
 
     def _on_paste_hotkey(self) -> None:
         ok, detail = self.paste_last()
@@ -1689,11 +1738,13 @@ class Daemon:
                 wav.unlink(missing_ok=True)
                 return
             pipeline = self._pipeline_factory(self.cfg, backend)
+            pipeline._profile_override = self._profile_override
             out = pipeline.run(wav, app_hint, mode=mode,
                                rewrite_context=rewrite_context) or {}
             self.last_result = out
         finally:
             self.busy = False
+            self._profile_override = None
             display, self._closing_display = self._closing_display, None
             if display is not None:
                 if mode == "command":

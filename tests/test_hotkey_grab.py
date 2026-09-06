@@ -421,3 +421,86 @@ class TestDoctorHotkeyGrabLine:
                             lambda: Path("/nonexistent/fluidvoice.sock"))
         doctor.run()
         assert "hotkey grab:" in capsys.readouterr().out
+
+
+class TestBothActivationMode:
+    """B3: 'both' mode (upstream Automatic) - quick tap toggles, held key
+    talks. Driven against a stub display; no X server needed."""
+
+    class FakeRoot:
+        def grab_key(self, *a, **k):
+            pass
+
+        def ungrab_key(self, *a, **k):
+            pass
+
+    class FakeDisplay:
+        def __init__(self, still_down):
+            self.root = TestBothActivationMode.FakeRoot()
+            self._still_down = still_down
+            self.calls = 0
+
+        def screen(self):
+            class S:
+                root = self.root
+            return S()
+
+        def ungrab_keyboard(self, *a):
+            pass
+
+        def sync(self):
+            pass
+
+        def query_keymap(self):
+            self.calls += 1
+            km = bytearray(32)
+            if self._still_down(self.calls):
+                km[66 // 8] |= 1 << (66 % 8)  # keycode 66 bit
+            return bytes(km)
+
+        def pending_events(self):
+            return 0
+
+        def next_event(self):
+            raise RuntimeError("no events")
+
+    @staticmethod
+    def make_listener(events):
+        from fluidvoice.hotkey import HotkeyListener
+        lst = HotkeyListener(key="F9", modifiers=[], mode="both",
+                             on_toggle=lambda: events.append("toggle"),
+                             on_cancel=lambda: events.append("cancel"),
+                             cancel_key="Escape", log=lambda m: None)
+        lst._grab = lambda *a, **k: None
+        lst._settle_grabs = lambda *a, **k: None
+        lst._escape_keycode = 9
+        return lst
+
+    def test_quick_tap_toggles_once(self):
+        events = []
+        lst = self.make_listener(events)
+        d = self.FakeDisplay(lambda n: n > 1)  # released almost immediately
+        lst._both_cycle(d, 66)
+        assert events == ["toggle"]
+
+    def test_held_key_talks_then_stops(self):
+        events = []
+        lst = self.make_listener(events)
+        # down for ~40 polls (decision window + hold), then released
+        d = self.FakeDisplay(lambda n: n <= 40)
+        lst._both_cycle(d, 66)
+        assert events == ["toggle", "toggle"]  # start ... stop+transcribe
+
+    def test_escape_during_decision_cancels(self):
+        events = []
+        lst = self.make_listener(events)
+        d = self.FakeDisplay(lambda n: True)
+
+        class Ev:
+            type = 2  # X.KeyPress
+            detail = 9  # escape keycode
+
+        d.pending_events = lambda: True
+        d.next_event = lambda: Ev()
+        lst._both_cycle(d, 66)
+        assert events == ["cancel"]

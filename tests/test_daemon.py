@@ -980,3 +980,72 @@ class TestInsertTextAction:
         d = self._daemon(cfg)
         resp = d.handle_request({"action": "insert-text", "text": "x"})
         assert resp["ok"] is False and "no display" in resp["error"]
+
+
+class TestExtraShortcutProfiles:
+    """B1: takes started by a profiled extra shortcut polish with that
+    named prompt profile (upstream per-shortcut AI-prompt picker)."""
+
+    @staticmethod
+    def make(cfg, recorder, polisher):
+        backend = StubBackend("raw words here")
+        d = dm.Daemon(cfg, recorder=recorder,
+                      backend_factory=lambda c: backend,
+                      use_hotkey=False, use_sounds=False)
+        d.backend = backend
+        d.polisher = polisher
+        return d
+
+    def test_toggle_with_profile_sets_override_when_starting(self, cfg,
+                                                             quiet_ui):
+        d = self.make(cfg, StubRecorder(), lambda t, system_prompt=None: t)
+        d.recording = False
+        d._toggle_with_profile("Terse notes")
+        assert d._profile_override == "Terse notes"
+        assert d.recording is True
+        # stopping via any shortcut must NOT clear it mid-take
+        d._toggle_with_profile("Other")
+        assert d.recording is False
+        assert d._profile_override == "Terse notes"
+
+    def test_polish_uses_profile_prompt(self, cfg, quiet_ui, tmp_path):
+        from fluidvoice.ai import profiles
+        # isolated XDG (conftest) keeps this out of the live sidecar
+        profiles.save_named("TestProf", "TERSITY: be brief.")
+        seen = {}
+
+        def polisher(text, system_prompt=None):
+            seen["prompt"] = system_prompt
+            return "polished"
+
+        cfg["ai"]["enabled"] = True
+        pipe = dm.DictationPipeline(
+            cfg, StubBackend("raw words"), polisher=polisher)
+        pipe._profile_override = "TestProf"  # set by the daemon at handoff
+        text, ai = pipe._polish("raw words")
+        assert ai is True and text == "polished"
+        assert seen["prompt"] == "TERSITY: be brief."
+
+    def test_polish_missing_profile_falls_back_to_base(self, cfg, quiet_ui):
+        seen = {}
+
+        def polisher(text, system_prompt=None):
+            seen["prompt"] = system_prompt
+            return "polished"
+
+        cfg["ai"]["enabled"] = True
+        pipe = dm.DictationPipeline(
+            cfg, StubBackend("raw words"), polisher=polisher)
+        pipe._profile_override = "Does Not Exist"
+        text, ai = pipe._polish("raw words")
+        assert ai is True
+        # no per-app instructions: the default polisher path, prompt None
+        assert "prompt" not in seen or seen["prompt"] is None
+
+    def test_cancel_clears_override(self, cfg, quiet_ui):
+        d = self.make(cfg, StubRecorder(), lambda t, system_prompt=None: t)
+        d.recording = True
+        d._watchdog = threading.Timer(999.0, d._auto_stop)
+        d._profile_override = "Terse notes"
+        d.cancel()
+        assert d._profile_override is None
