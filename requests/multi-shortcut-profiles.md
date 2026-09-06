@@ -1,0 +1,16 @@
+Multi-shortcut dictation with per-shortcut prompt profiles (B1, macOS parity: upstream supports multiple primary shortcuts - one with AI ON, one raw; v1.5.12/v1.6.1). Today SayItErmano has ONE dictation hotkey (hotkey.key + modifiers in config.py) plus single-purpose feature keys (paste_key, command_key, rewrite_key) - see config.py hotkey section and hotkey.py's grab machinery (self-heal per-combo BadAccess retry, grab-health surfacing). Prompt profiles (named presets of the base prompt) shipped with the settings depth pack; planner verifies the exact store/config section. The gap: a user cannot bind e.g. Right_Control = profile "raw", F9 = profile "email-polish", F10 = profile "code" without opening Settings.
+
+Scope:
+1) Config: hotkey.shortcuts = list of up to 3 entries {key, modifiers, profile} (profile = "" means the base prompt as today). Backward compatible: when shortcuts is empty/absent, the legacy single hotkey.key entry governs (its behavior unchanged, no profile). Validation: max 3, unique key+modifiers combos, keys follow the same keysym rules as hotkey.key (modifier-only keys allowed in toggle mode only - reuse existing validation).
+2) Hotkey listener: register/unregister each shortcut through the EXISTING self-heal grab loop and grab-health reporting (per-combo state, tray tooltip suffix, doctor lines) - never a parallel mechanism. Pressing any bound shortcut starts a dictation with that entry's profile; while recording, the same combo stops it (mirroring today's toggle semantics); hold mode per-entry follows hotkey.mode as today.
+3) Profile plumbing: the take's effective base prompt = the pressed shortcut's profile if set, else the base prompt (planner verifies how the base prompt + profiles reach the processing/ai path today and threads the override through the same point).
+4) Settings: Hotkey page gains shortcut rows (key capture widget as used for existing keys, modifiers checkboxes, profile dropdown incl. "Base prompt"), add/remove up to 3, doctor line per shortcut incl. grab health and bound profile.
+5) Tests: config coercion/migration (legacy shape -> empty shortcuts keeps working), per-shortcut grab registration + self-heal retry covers all combos, effective-profile selection (fake processing path asserts the prompt), uniqueness/validation rejections, doctor lines.
+
+Where: fluidvoice/config.py, fluidvoice/hotkey.py, fluidvoice/daemon.py (profile override wiring), fluidvoice/doctor.py, fluidvoice/gtkui/settings_window.py, tests/test_multi_shortcut.py (new).
+
+Done means: a phased plan under specs/ where each phase leaves `.venv/bin/python -m pytest -q tests --ignore=tests/integration` green; on X11 live smoke two shortcuts with different profiles produce takes whose post-processing differs per profile (or raw vs profiled), legacy single-shortcut config behaves byte-identically (existing suite unchanged), doctor lists every shortcut with grab health.
+
+Out of scope: per-shortcut activation modes (all follow hotkey.mode), per-shortcut language (separate request), wayland DE-shortcut automation for the extra keys (document the bindable commands only), more than 3 shortcuts.
+
+Deliverable constraint: the planning phase produces a plan document under specs/ only - planning never edits implementation, config, docs, or test files (the builder phase owns all code changes).
