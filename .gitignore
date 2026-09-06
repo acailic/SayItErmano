@@ -17,3 +17,4 @@ adws/adw_data/sssf.db*
 
 # uv run artifact from the factory drivers
 uv.lock
+.omc/
