@@ -16,9 +16,27 @@ DEFAULT_FILLERS = [
     "hmm", "hm", "mm", "mmm", "erm", "urm", "ugh",
 ]
 
+# Single source of truth for language codes: the Settings picker AND the
+# new-key validation (general.language_cycle / general.language_whitelist)
+# both read it. general.language itself keeps its permissive regex grammar
+# (a saved out-of-table code stays legal there, as it always was).
+KNOWN_LANGUAGES: list[str] = [
+    "en", "de", "es", "fr", "it", "nl", "pl", "pt", "ru", "uk",
+    "sl", "sr", "hr", "bs", "cs", "sk", "sv", "da", "fi", "no",
+    "hu", "ro", "bg", "el", "tr", "zh", "ja", "ko", "ar", "hi",
+]
+
 DEFAULTS: dict[str, Any] = {
     "general": {
         "language": "auto",  # whisper language code or "auto"
+        # ordered codes the cycle hotkey steps through (may include "auto");
+        # empty = the cycle feature is off even when hotkey.language_key
+        # is bound. Read live by the daemon; the cycle STATE is runtime-only
+        # and never persisted.
+        "language_cycle": [],
+        # wrong-language guard: when auto-detection lands outside these
+        # codes, one re-decode with the first entry. Empty = off.
+        "language_whitelist": [],
         "copy_to_clipboard": False,  # upstream copyTranscriptionToClipboard
         "tray_enabled": True,  # panel/tray icon while the daemon runs
         # case-insensitive WM_CLASS substrings: spoken-send never presses
@@ -49,6 +67,10 @@ DEFAULTS: dict[str, Any] = {
         "rewrite_key": "",  # optional keysym for Rewrite mode (needs [ai])
         "command_key": "",  # optional keysym for Command mode (needs [ai])
         "paste_key": "",  # optional keysym: re-type the last transcription
+        # optional keysym: cycles the runtime language override through
+        # general.language_cycle ("" = off; the cycle state itself is
+        # never persisted)
+        "language_key": "",
         # up to 2 EXTRA dictation shortcuts (3 total with the primary),
         # each optionally bound to a named prompt profile (ai/profiles):
         # extra_shortcuts = [{key = "F8", profile = "Terse notes"}]
@@ -219,6 +241,14 @@ TEMPLATE = """\
 [general]
 # Whisper language code ("auto" detects, or "en", "de", ...)
 language = "auto"
+# Ordered language codes the cycle hotkey steps through, e.g.
+# ["auto", "en", "sl"] - may include "auto"; empty = cycle key off.
+# The cycle override is RUNTIME daemon state and never persisted.
+language_cycle = []
+# Wrong-language guard: when language = "auto" detects a language NOT in
+# this list, the take is re-decoded once with the first entry, e.g.
+# ["sl", "en"]. Empty = off.
+language_whitelist = []
 # Also copy every transcription to the clipboard
 copy_to_clipboard = false
 # Case-insensitive WM_CLASS substrings identifying terminals. In these apps
@@ -245,6 +275,9 @@ modifiers = []
 mode = "toggle"
 # Optional extra key that cancels a running recording (keysym name, "" = off)
 cancel_key = ""
+# Optional keysym that cycles the language at runtime (steps through
+# general.language_cycle; the cycle state is never persisted)
+language_key = ""
 # Wayland push-to-talk via evdev (privileged: needs the input group +
 # python-evdev). wayland_evdev_device matches /dev/input device names
 # by substring; wayland_evdev_key is an ecodes KEY_* name.
@@ -419,10 +452,11 @@ def write_template(path: Path | None = None) -> Path:
 # ---------------------------------------------------------------------------
 
 _SAVE_WHITELIST: dict[str, list[str]] = {
-    "general": ["language", "copy_to_clipboard", "tray_enabled",
+    "general": ["language", "language_cycle", "language_whitelist",
+                "copy_to_clipboard", "tray_enabled",
                 "terminal_apps", "pause_when_locked"],
     "hotkey": ["key", "modifiers", "mode", "cancel_key", "rewrite_key", "paste_key",
-                  "extra_shortcuts",
+                  "extra_shortcuts", "language_key",
                 "command_key", "wayland_evdev", "wayland_evdev_device",
                 "wayland_evdev_key"],
     "recording": ["command", "device", "mic_priority", "max_seconds",
@@ -536,6 +570,7 @@ SETTING_RANGES: dict[tuple[str, str], Any] = {
     ("hotkey", "rewrite_key"): ("str", 64),
     ("hotkey", "paste_key"): ("str", 64),
     ("hotkey", "command_key"): ("str", 64),
+    ("hotkey", "language_key"): ("str", 64),
     ("hotkey", "wayland_evdev_device"): ("str", 128),
     ("hotkey", "wayland_evdev_key"): ("str", 64),
     ("command", "max_turns"): ("int", (1, 20)),
@@ -598,10 +633,11 @@ SETTING_LISTS = (("processing", "filler_words"), ("processing", "dictionary"),
                  ("hotkey", "modifiers"), ("recording", "mic_priority"),
                  ("recording", "push_to_talk_modifiers"))
 ALLOWED_SETTINGS: dict[str, set] = {
-    "general": {"language", "copy_to_clipboard", "tray_enabled",
+    "general": {"language", "language_cycle", "language_whitelist",
+                "copy_to_clipboard", "tray_enabled",
                 "terminal_apps", "pause_when_locked"},
     "hotkey": {"key", "modifiers", "mode", "cancel_key", "rewrite_key", "paste_key",
-                 "extra_shortcuts",
+                 "extra_shortcuts", "language_key",
                "command_key", "wayland_evdev", "wayland_evdev_device",
                "wayland_evdev_key"},
     "recording": {"command", "device", "mic_priority", "max_seconds",
@@ -652,6 +688,10 @@ def coerce_setting(section: str, key: str, value: Any) -> tuple[bool, Any]:
         ok = isinstance(value, str) and bool(
             _re.fullmatch(r"auto|[a-z]{2,3}(-[A-Za-z0-9]{2,8})?", value.strip()))
         return (ok, value.strip() if ok else value)
+    if (section, key) == ("general", "language_cycle"):
+        return _coerce_language_cycle(value)
+    if (section, key) == ("general", "language_whitelist"):
+        return _coerce_language_whitelist(value)
     if (section, key) == ("model", "idle_unload_s"):
         # 0 (never unload) or 30..86400 s; bool is an int subclass - reject
         ok = isinstance(value, int) and not isinstance(value, bool) \
@@ -801,6 +841,54 @@ def _coerce_action_triggers(value: Any) -> tuple[bool, Any]:
             aliases.append(a.strip())
         if aliases:
             cleaned[k] = aliases
+    return (True, cleaned)
+
+
+def _coerce_language_cycle(value: Any) -> tuple[bool, Any]:
+    """general.language_cycle: ORDERED codes the cycle hotkey steps through
+    (the order IS the feature). Entries are stripped + lowercased, each must
+    be "auto" or a KNOWN_LANGUAGES code (case-insensitive); duplicates
+    (case-insensitive) keep the first occurrence; >8 entries or any
+    unknown/empty/non-str entry rejects the whole value."""
+    if not isinstance(value, list):
+        return (False, value)
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw in value:
+        if not isinstance(raw, str):
+            return (False, value)
+        code = raw.strip().lower()
+        if not code or (code != "auto" and code not in KNOWN_LANGUAGES):
+            return (False, value)
+        if code in seen:
+            continue
+        seen.add(code)
+        cleaned.append(code)
+    if len(cleaned) > 8:
+        return (False, value)
+    return (True, cleaned)
+
+
+def _coerce_language_whitelist(value: Any) -> tuple[bool, Any]:
+    """general.language_whitelist: codes the wrong-language guard accepts
+    from auto-detection. "auto" is rejected (it means "no constraint");
+    otherwise the same shape as language_cycle with a cap of 16."""
+    if not isinstance(value, list):
+        return (False, value)
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw in value:
+        if not isinstance(raw, str):
+            return (False, value)
+        code = raw.strip().lower()
+        if not code or code == "auto" or code not in KNOWN_LANGUAGES:
+            return (False, value)
+        if code in seen:
+            continue
+        seen.add(code)
+        cleaned.append(code)
+    if len(cleaned) > 16:
+        return (False, value)
     return (True, cleaned)
 
 

@@ -15,7 +15,7 @@ from gi.repository import Adw, Gdk, GLib, Gtk
 
 from .. import __version__ as APP_VERSION
 from .. import backends, model_catalog, model_download
-from ..config import DEFAULTS
+from ..config import DEFAULTS, KNOWN_LANGUAGES as LANGUAGES
 from .client import Client, ClientError
 
 # GDK keyval name -> friendly keysym the config expects (where they differ)
@@ -24,11 +24,10 @@ _KEY_REMAP = {"Control_L": "Left_Control", "Control_R": "Right_Control",
               "Shift_L": "Left_Shift", "Shift_R": "Right_Shift",
               "Super_L": "Left_Super", "Super_R": "Right_Super"}
 
-# Whisper language codes offered in the picker (validation accepts any code;
-# a saved code not in this list is appended as an extra option on load)
-LANGUAGES = ["en", "de", "es", "fr", "it", "nl", "pl", "pt", "ru", "uk",
-             "sl", "sr", "hr", "bs", "cs", "sk", "sv", "da", "fi", "no",
-             "hu", "ro", "bg", "el", "tr", "zh", "ja", "ko", "ar", "hi"]
+# Whisper language codes come from config.KNOWN_LANGUAGES (single source
+# of truth shared with the cycle/whitelist validation; validation accepts
+# any code grammar for general.language - a saved code not in this list is
+# appended as an extra option on load)
 
 
 class _SwitchProxy:
