@@ -580,3 +580,56 @@ class TestMotionScienceTiming:
         d, _ = r.render([BAR_MIN_H] * BAR_COUNT, None, state="processing",
                         phase=0.3, elapsed=4.6)
         assert c.tobytes() != d.tobytes()
+
+
+class TestHoverChips:
+    """A2: hover action chips - hit-testing, click edge detection, and the
+    composed frame (pill stays put, chips row above)."""
+
+    def test_hit_chip(self):
+        from fluidvoice.overlay import hit_chip
+        rects = {"copy_last": (10, 2, 80, 30), "cancel": (98, 2, 60, 30)}
+        assert hit_chip(rects, 50, 20) == "copy_last"
+        assert hit_chip(rects, 120, 10) == "cancel"
+        assert hit_chip(rects, 5, 20) is None      # left of the row
+        assert hit_chip(rects, 50, 40) is None     # below (pill area)
+        assert hit_chip(rects, 10, 32) is None     # on the bottom edge
+
+    def test_edge_click_only_on_press_transition(self):
+        from fluidvoice.overlay import edge_click
+        B1 = 1 << 8
+        assert edge_click(0, B1) is True           # press
+        assert edge_click(B1, B1) is False         # held (no re-fire)
+        assert edge_click(B1, 0) is False          # release
+        assert edge_click(0, 0) is False
+        assert edge_click(0, B1 | 1) is True       # modifier rides along
+
+    def test_compose_chips_frame_geometry(self):
+        from fluidvoice.overlay import CHIP_LABELS, CHIP_STRIP, FluidOverlay
+        r = PillRenderer(size="medium")
+        pill_img, (pw, ph) = r.render([0.5] * 8, "hello world",
+                                      state="recording")
+        ov = FluidOverlay.__new__(FluidOverlay)  # no X11 in unit tests
+        ov._actions = {n: lambda: None for n in CHIP_LABELS}
+        ov._hover_chip = "copy_last"
+        ov._mode = "dictate"
+        frame, w, h = FluidOverlay._compose_chips(ov, pill_img, pw, ph)
+        assert h == CHIP_STRIP + ph               # pill stays bottom-anchored
+        assert w >= pw
+        x0 = (w - pw) // 2
+        region = frame.crop((x0, CHIP_STRIP, x0 + pw, CHIP_STRIP + ph))
+        assert region.tobytes() == pill_img.tobytes()
+        top = frame.crop((0, 0, w, CHIP_STRIP - 8))
+        assert top.getextrema()[3][1] > 0         # some alpha present
+        for name, (cx, cy, cw, ch) in ov._chip_rects.items():
+            assert 0 <= cy and cy + ch <= CHIP_STRIP - 4
+            assert cx >= 0 and cx + cw <= w
+
+    def test_unknown_actions_ignored_at_init(self):
+        from fluidvoice.overlay import CHIP_LABELS, FluidOverlay
+        ov = FluidOverlay.__new__(FluidOverlay)
+        ov._actions = {k: v for k, v in
+                       {"copy_last": lambda: None, "bogus": lambda: None,
+                        "cancel": None}.items()
+                       if k in CHIP_LABELS and callable(v)}
+        assert sorted(ov._actions) == ["copy_last"]
