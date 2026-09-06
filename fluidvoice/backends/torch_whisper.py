@@ -10,6 +10,9 @@ from . import (ALIASES, cuda_available, effective_language,
 
 class TorchWhisperBackend:
     name = "whisper-torch"
+    # wrong-language guard: this backend surfaces the detected language
+    # (result["language"]) under auto, so the whitelist guard can retry
+    surfaces_detected_language = True
 
     def __init__(self, cfg: dict):
         import whisper  # noqa: openai-whisper

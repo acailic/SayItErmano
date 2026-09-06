@@ -12,6 +12,10 @@ from . import _whispercpp_binary, effective_language
 
 class WhisperCppBackend:
     name = "whisper.cpp"
+    # wrong-language guard: under auto the binary only prints the detected
+    # language to verbose output we do not parse -> the guard skips
+    # silently (documented limitation; see backends.LANGUAGE_GUARD)
+    surfaces_detected_language = False
 
     def __init__(self, cfg: dict):
         self.binary = _whispercpp_binary()

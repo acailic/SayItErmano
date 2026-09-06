@@ -203,6 +203,9 @@ class TdtGreedyDecoder:
 
 class ParakeetOnnxBackend:
     name = "parakeet"
+    # wrong-language guard: not applicable - the English-only v2 model
+    # has no language selection at all (upstream #100 closure rationale)
+    surfaces_detected_language = False
 
     def __init__(self, cfg: dict, _sessions: Any | None = None):
         mcfg = cfg.get("model", {})

@@ -210,20 +210,77 @@ def config_model_key(cfg) -> str | None:
         return None
 
 
-def effective_language(cfg, backend=None) -> str:
-    """Language for one transcription. A model.languages override for the
-    live backend's key wins (checked first), then the config-derived key;
-    ""/missing = inherit; the override may be "auto" (force detection).
-    Otherwise general.language ("auto" default)."""
+def effective_language(cfg, backend=None, runtime: str = "") -> str:
+    """Language for one transcription. A non-empty `runtime` override
+    (the daemon's cycle state; may be "auto") wins immediately. A
+    model.languages override for the live backend's key is checked next,
+    then the config-derived key; ""/missing = inherit; the override may be
+    "auto" (force detection). Otherwise general.language ("auto"
+    default)."""
+    return language_detail(cfg, backend=backend, runtime=runtime)[0]
+
+
+def language_detail(cfg, backend=None, runtime: str = "") -> tuple[str, str]:
+    """(language, source) for one take: source ∈ {"cycle", "model",
+    "general"} - the doctor/status surface reads it to name where the
+    effective language came from. Same precedence as
+    effective_language."""
+    if isinstance(runtime, str) and runtime:
+        return runtime, "cycle"
     overrides = ((cfg.get("model", {}) or {}).get("languages") or {}) \
         if isinstance(cfg, dict) else {}
     for key in (backend_model_key(backend), config_model_key(cfg)):
         if key:
             override = str(overrides.get(key, "") or "")
             if override:
-                return override
+                return override, "model"
     general = (cfg.get("general", {}) or {}) if isinstance(cfg, dict) else {}
-    return str(general.get("language") or "auto")
+    return str(general.get("language") or "auto"), "general"
+
+
+# Wrong-language guard applicability per backend, without instantiating
+# one (doctor + tests read this; the pipeline gate itself checks the
+# backend class attribute `surfaces_detected_language`).
+LANGUAGE_GUARD: dict[str, str] = {
+    "faster-whisper": "language hint + detected language - whitelist "
+                      "guard active",
+    "whisper-torch": "language hint + detected language - whitelist "
+                     "guard active",
+    "whisper.cpp": "language hint only - detected language not surfaced "
+                  "under auto; guard skipped (limitation)",
+    "parakeet": "no language selection (English-only models) - guard not "
+                "applicable (upstream #100 rationale)",
+}
+
+
+def resolved_backend_name(cfg: dict) -> str | None:
+    """Which backend load_backend WOULD pick, using only cheap probes
+    (imports/binary lookups - never an instantiation): doctor's guard-
+    applicability line and tests use it. An explicit non-auto backend
+    returns itself when its probe passes, else None; "auto" follows
+    load_backend's fallback order and returns the first resolving name
+    or None."""
+    wanted = str(((cfg.get("model", {}) or {}).get("backend")) or "auto")
+    if wanted == "auto":
+        if _import_ok("faster_whisper") and preload_cuda_libs():
+            return "faster-whisper"
+        if _import_ok("whisper") and cuda_available():
+            return "whisper-torch"
+        if _import_ok("faster_whisper"):
+            return "faster-whisper"
+        if _whispercpp_binary() and (cfg.get("model", {})
+                                     .get("whispercpp_model")):
+            return "whisper.cpp"
+        return None
+    if wanted == "faster-whisper":
+        return wanted if _import_ok("faster_whisper") else None
+    if wanted in ("whisper-torch", "torch", "openai-whisper"):
+        return "whisper-torch" if _import_ok("whisper") else None
+    if wanted in ("whisper.cpp", "whispercpp"):
+        return "whisper.cpp" if _whispercpp_binary() else None
+    if wanted in ("parakeet", "parakeet-onnx"):
+        return "parakeet" if _import_ok("onnxruntime") else None
+    return None
 
 
 def load_backend(cfg: dict) -> Backend:

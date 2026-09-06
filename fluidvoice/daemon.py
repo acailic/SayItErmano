@@ -106,8 +106,33 @@ class DictationPipeline:
         return duration <= 4.0 and is_silent(str(wav))
 
     def _transcribe(self, wav: Path) -> dict:
-        return self.backend.transcribe(
-            wav, language=backends.effective_language(self.cfg, self.backend))
+        # runtime cycle override (set by Daemon._process via attribute
+        # injection, mirroring _profile_override) > effective_language
+        override = getattr(self, "_language_override", None)
+        lang = override if override else backends.effective_language(
+            self.cfg, self.backend)
+        result = self.backend.transcribe(wav, language=lang)
+        # wrong-language guard (final decode only - preview partials never
+        # re-decode): when the resolved language for the take is "auto",
+        # the backend surfaces its detected language, and detection landed
+        # outside general.language_whitelist, re-decode ONCE with the first
+        # whitelist entry and log it. Detected language unavailable
+        # (whisper.cpp under auto) or a backend without language selection
+        # (parakeet): silent skip.
+        whitelist = list(((self.cfg.get("general", {}) or {})
+                          .get("language_whitelist")) or []) \
+            if isinstance(self.cfg, dict) else []
+        detected = str(result.get("language") or "").strip().lower() or None
+        if (whitelist and lang == "auto" and detected
+                and getattr(self.backend, "surfaces_detected_language", False)
+                and detected.split("-")[0] not in
+                    {w.split("-")[0] for w in whitelist}):
+            retry = whitelist[0]
+            self.log(f"language guard: detected={detected} outside "
+                     f"whitelist [{', '.join(whitelist)}]; "
+                     f"re-decoding as {retry}")
+            result = self.backend.transcribe(wav, language=retry)
+        return result
 
     def _polish(self, text: str, app_hint: str | None = None) -> tuple[str, bool]:
         """Returns (text, ai_used) - falls back to the raw text on AI errors.

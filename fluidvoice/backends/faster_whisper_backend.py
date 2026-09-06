@@ -13,6 +13,9 @@ from . import (FW_MODEL_REPOS, cuda_available, effective_language,
 
 class FasterWhisperBackend:
     name = "faster-whisper"
+    # wrong-language guard: this backend surfaces the detected language
+    # (info.language) under auto, so the whitelist guard can retry
+    surfaces_detected_language = True
 
     def __init__(self, cfg: dict):
         preload_cuda_libs()  # must run before ctranslate2 loads its CUDA libs
