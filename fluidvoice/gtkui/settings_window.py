@@ -61,6 +61,64 @@ class _ListProxy:
                 if v.strip()]
 
 
+class _ExtraShortcutsProxy:
+    """Two (key EntryRow, profile ComboRow) pairs backing the
+    hotkey.extra_shortcuts list (B1). Index 0 of the combo is '(none)'."""
+
+    def __init__(self, pairs):
+        self.pairs = pairs
+        model = pairs[0][1].get_model()
+        self.names = [model.get_string(i) for i in range(model.get_n_items())]
+
+    def set_value(self, value) -> None:
+        value = list(value or [])
+        for i, (key_row, combo) in enumerate(self.pairs):
+            spec = value[i] if i < len(value) else {}
+            key_row.set_text(spec.get("key", ""))
+            name = spec.get("profile", "")
+            idx = self.names.index(name) if name in self.names else 0
+            combo.set_selected(idx)
+
+    def get_value(self) -> list:
+        out = []
+        for key_row, combo in self.pairs:
+            key = key_row.get_text().strip()
+            if not key:
+                continue
+            idx = combo.get_selected()
+            name = self.names[idx] if 0 <= idx < len(self.names) else ""
+            entry = {"key": key}
+            if name and name != "(none)":
+                entry["profile"] = name
+            out.append(entry)
+        return out[:2]
+
+
+class _ActionTriggersProxy:
+    """Four EntryRows (one per action) backing the dict-valued
+    processing.formatting_action_triggers; aliases are comma-separated."""
+
+    _ACTIONS = ("new_line", "new_paragraph", "tab", "space")
+
+    def __init__(self, rows: dict):
+        self.rows = rows  # action -> Adw.EntryRow
+
+    def set_value(self, value) -> None:
+        value = value or {}
+        for action in self._ACTIONS:
+            aliases = value.get(action) or []
+            self.rows[action].set_text(", ".join(aliases))
+
+    def get_value(self) -> dict:
+        out = {}
+        for action in self._ACTIONS:
+            aliases = [v.strip() for v in self.rows[action].get_text()
+                       .split(",") if v.strip()]
+            if aliases:
+                out[action] = aliases
+        return out
+
+
 class _TextProxy:
     """TextBuffer-backed multi-line string for the field registry (the
     base-prompt editor). Empty is a MEANINGFUL value ("use the built-in
@@ -1398,9 +1456,11 @@ class SettingsWindow(Adw.PreferencesWindow):
         hk.add(self._entry("hotkey", "key", "Dictation key — e.g. Right_Control, F9",
                            capture=True))
         hk.add(self._combo("hotkey", "mode", "Mode",
-                           [("toggle", "toggle"), ("hold", "hold")],
-                           subtitle="tap to start/stop · modifier-only keys "
-                                    "need toggle"))
+                           [("toggle", "toggle"), ("hold", "hold"),
+                            ("both", "both")],
+                           subtitle="tap to start/stop · hold = push-to-talk · "
+                                    "both: quick tap toggles, holding talks · "
+                                    "modifier-only keys need toggle"))
         hk.add(self._entry("hotkey", "cancel_key", "Cancel key — discards a take",
                            capture=True))
         hk.add(self._entry("hotkey", "rewrite_key", "Rewrite key (optional, needs AI)",
@@ -1410,6 +1470,30 @@ class SettingsWindow(Adw.PreferencesWindow):
         hk.add(self._entry("hotkey", "paste_key",
                            "Paste-last key (optional) — re-types last text",
                            capture=True))
+
+        # B1: up to two extra dictation shortcuts, each optionally bound
+        # to a named prompt profile (the primary hotkey stays above)
+        extra_pairs = []
+        from ..ai.profiles import load_profiles
+        profile_names = ["(none)"] + sorted(load_profiles())
+        for i in (2, 3):
+            key_row = Adw.EntryRow(
+                title=f"Extra dictation shortcut {i} (optional)")
+            key_row.connect("changed", lambda *_: self._touch())
+            btn = Gtk.Button(icon_name="media-record-symbolic",
+                             css_classes=["flat"], tooltip_text="Press a key…")
+            btn.connect("clicked", self._start_capture, key_row)
+            key_row.add_suffix(btn)
+            hk.add(key_row)
+            combo = Adw.ComboRow(
+                title=f"Shortcut {i} prompt profile",
+                subtitle="polishes takes started by this shortcut")
+            combo.set_model(Gtk.StringList(strings=profile_names))
+            combo.connect("notify::selected", lambda *_: self._touch())
+            hk.add(combo)
+            extra_pairs.append((key_row, combo))
+        self._rows[("hotkey", "extra_shortcuts")] = \
+            _ExtraShortcutsProxy(extra_pairs)
         mods = Adw.ActionRow(title="Extra modifiers",
                              subtitle="held in addition to the dictation key")
         for mod in ("ctrl", "alt", "shift", "super"):
@@ -1495,6 +1579,27 @@ class SettingsWindow(Adw.PreferencesWindow):
         fillers = Adw.EntryRow(title="Filler words (comma-separated)")
         fillers.connect("changed", lambda *_: self._touch())
         self._rows[("processing", "filler_words")] = _ListProxy(fillers)
+
+        actions_g = Adw.PreferencesGroup(
+            title="Spoken formatting triggers",
+            description="Extra phrases that trigger formatting actions "
+                        "(on top of the built-ins; still needs the prefix)")
+        trig_rows = {}
+        for action, title in (("new_line", "New line"),
+                              ("new_paragraph", "New paragraph"),
+                              ("tab", "Tab"),
+                              ("space", "Space")):
+            row = Adw.EntryRow(title=f"{title} — extra trigger phrases")
+            row.connect("changed", lambda *_: self._touch())
+            trig_rows[action] = row
+            actions_g.add(row)
+        actions_g.add(Adw.ActionRow(
+            title="Example",
+            subtitle="nova vrstica, naslednja vrstica — then say "
+                     "“literal nova vrstica” to start a new line"))
+        polish.add(actions_g)
+        self._rows[("processing", "formatting_action_triggers")] = \
+            _ActionTriggersProxy(trig_rows)
         polish.add(fillers)
         polish.add(self._switch("processing", "punctuation_enabled",
                                 "Spoken punctuation", '"literal comma" → ,'))

@@ -37,9 +37,11 @@ DEFAULTS: dict[str, Any] = {
         # Right_Shift, Super_R...) work in "toggle" mode only.
         "key": "Right_Control",
         "modifiers": [],  # any of: ctrl, alt, shift, super
-        # toggle | hold (hold needs a non-modifier key; keys typed during a
-        # hold pass through to the focused app natively - the keyboard is
-        # freed for the duration; swallowed only if freeing it fails)
+        # toggle | hold | both (hold/both need a non-modifier key; keys
+        # typed during a hold pass through to the focused app natively -
+        # the keyboard is freed for the duration; swallowed only if freeing
+        # it fails). "both" = upstream Automatic: a quick tap toggles, a
+        # held key talks (250 ms disambiguation window).
         "mode": "toggle",
         # macOS parity: Escape cancels an in-progress dictation (discards,
         # nothing typed). Grabbed ONLY while recording; "none" disables.
@@ -47,6 +49,10 @@ DEFAULTS: dict[str, Any] = {
         "rewrite_key": "",  # optional keysym for Rewrite mode (needs [ai])
         "command_key": "",  # optional keysym for Command mode (needs [ai])
         "paste_key": "",  # optional keysym: re-type the last transcription
+        # up to 2 EXTRA dictation shortcuts (3 total with the primary),
+        # each optionally bound to a named prompt profile (ai/profiles):
+        # extra_shortcuts = [{key = "F8", profile = "Terse notes"}]
+        "extra_shortcuts": [],
         # Wayland (no global grabs): optional physical push-to-talk read
         # straight from /dev/input (PRIVILEGED: needs the input group and
         # python-evdev, `pip install 'sayit-ermano[wayland]'`). Off by
@@ -105,6 +111,10 @@ DEFAULTS: dict[str, Any] = {
         "filler_words": list(DEFAULT_FILLERS),
         "punctuation_enabled": True,
         "punctuation_prefix": "literal",  # spoken prefix, e.g. "literal comma"
+        # extra spoken formatting-action trigger aliases (B4): action name
+        # -> aliases, on top of the built-ins. Example:
+        # formatting_action_triggers = {new_line = ["nova vrstica"]}
+        "formatting_action_triggers": {},
         "dictionary": [],  # [{ triggers = ["miro board"], replacement = "Miro board" }]
         # GAAV: casual/search-field formatting of the final text
         "gaav_enabled": False,
@@ -403,6 +413,7 @@ _SAVE_WHITELIST: dict[str, list[str]] = {
     "general": ["language", "copy_to_clipboard", "tray_enabled",
                 "terminal_apps", "pause_when_locked"],
     "hotkey": ["key", "modifiers", "mode", "cancel_key", "rewrite_key", "paste_key",
+                  "extra_shortcuts",
                 "command_key", "wayland_evdev", "wayland_evdev_device",
                 "wayland_evdev_key"],
     "recording": ["command", "device", "mic_priority", "max_seconds",
@@ -418,7 +429,8 @@ _SAVE_WHITELIST: dict[str, list[str]] = {
     "model": ["backend", "name", "device", "compute", "whispercpp_model",
               "eager_warmup", "languages"],
     "processing": ["remove_filler_words", "filler_words", "punctuation_enabled",
-                   "punctuation_prefix", "dictionary", "gaav_enabled",
+                   "punctuation_prefix", "dictionary",
+                   "formatting_action_triggers", "gaav_enabled",
                    "gaav_lowercase_first", "gaav_remove_trailing_period",
                    "slash_mention_squeeze"],
     "ai": ["enabled", "base_url", "model", "api_key", "api_key_env", "temperature",
@@ -541,7 +553,7 @@ SETTING_RANGES: dict[tuple[str, str], Any] = {
 SETTING_ENUMS: dict[tuple[str, str], set] = {
     ("recording", "preview_mode"): {"auto", "notify", "overlay"},
     ("recording", "preview_overlay_size"): {"pill", "small", "medium", "large"},
-    ("hotkey", "mode"): {"toggle", "hold"},
+    ("hotkey", "mode"): {"toggle", "hold", "both"},
     ("model", "backend"): {"auto", "faster-whisper", "whisper-torch",
                            "whisper.cpp", "parakeet"},
     ("model", "device"): {"auto", "cuda", "cpu"},
@@ -579,6 +591,7 @@ ALLOWED_SETTINGS: dict[str, set] = {
     "general": {"language", "copy_to_clipboard", "tray_enabled",
                 "terminal_apps", "pause_when_locked"},
     "hotkey": {"key", "modifiers", "mode", "cancel_key", "rewrite_key", "paste_key",
+                 "extra_shortcuts",
                "command_key", "wayland_evdev", "wayland_evdev_device",
                "wayland_evdev_key"},
     "recording": {"command", "device", "mic_priority", "max_seconds",
@@ -595,6 +608,7 @@ ALLOWED_SETTINGS: dict[str, set] = {
               "eager_warmup", "languages"},
     "processing": {"remove_filler_words", "filler_words",
                    "punctuation_enabled", "punctuation_prefix", "dictionary",
+                   "formatting_action_triggers",
                    "gaav_enabled", "gaav_lowercase_first",
                    "gaav_remove_trailing_period", "slash_mention_squeeze"},
     "ai": {"enabled", "base_url", "model", "api_key_env", "temperature",
@@ -630,6 +644,10 @@ def coerce_setting(section: str, key: str, value: Any) -> tuple[bool, Any]:
         return (ok, value.strip() if ok else value)
     if (section, key) == ("ai", "per_app_prompts"):
         return _coerce_per_app_prompts(value)
+    if (section, key) == ("processing", "formatting_action_triggers"):
+        return _coerce_action_triggers(value)
+    if (section, key) == ("hotkey", "extra_shortcuts"):
+        return _coerce_extra_shortcuts(value)
     if (section, key) == ("ai", "base_prompt"):
         # empty IS valid here (clearing the editor restores the built-in
         # prompt), unlike the str-range rule below which rejects ""
@@ -717,6 +735,57 @@ def _coerce_mic_priority(value: Any) -> tuple[bool, Any]:
         cleaned.append(pattern)
     if len(cleaned) > 20:
         return (False, value)
+    return (True, cleaned)
+
+
+def _coerce_extra_shortcuts(value: Any) -> tuple[bool, Any]:
+    """hotkey.extra_shortcuts: up to 2 entries of
+    {key, modifiers, profile} - additional dictation shortcuts with an
+    optional named prompt profile (upstream multiple-shortcuts parity)."""
+    if not isinstance(value, list) or len(value) > 2:
+        return (False, value)
+    cleaned = []
+    for item in value:
+        if not isinstance(item, dict):
+            return (False, value)
+        key = item.get("key")
+        if not isinstance(key, str) or not key.strip() or len(key) > 64:
+            return (False, value)
+        mods = item.get("modifiers", [])
+        if (not isinstance(mods, list)
+                or any(m not in ("ctrl", "alt", "shift", "super") for m in mods)):
+            return (False, value)
+        profile = item.get("profile", "")
+        if not isinstance(profile, str) or len(profile) > 64:
+            return (False, value)
+        entry = {"key": key.strip(), "modifiers": mods}
+        if profile.strip():
+            entry["profile"] = profile.strip()
+        cleaned.append(entry)
+    return (True, cleaned)
+
+
+def _coerce_action_triggers(value: Any) -> tuple[bool, Any]:
+    """processing.formatting_action_triggers: {action: [aliases]}.
+    Actions are the four upstream spoken formatting actions; aliases are
+    non-empty <=64-char strings, max 16 per action, 8 actions worth of
+    entries overall. Garbage entries reject the whole value (the Settings
+    editor shows per-action rows, so partial states should not save)."""
+    if not isinstance(value, dict) or len(value) > 8:
+        return (False, value)
+    actions = {"new_line", "new_paragraph", "tab", "space"}
+    cleaned: dict[str, list[str]] = {}
+    for raw_k, raw_v in value.items():
+        k = str(raw_k).strip()
+        if k not in actions or not isinstance(raw_v, list) or len(raw_v) > 16:
+            return (False, value)
+        aliases = []
+        for a in raw_v:
+            if not isinstance(a, str) or not a.strip() or len(a) > 64:
+                return (False, value)
+            aliases.append(a.strip())
+        if aliases:
+            cleaned[k] = aliases
     return (True, cleaned)
 
 

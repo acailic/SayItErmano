@@ -33,6 +33,7 @@
 from __future__ import annotations
 
 import threading
+import time
 
 from Xlib import X, XK
 from Xlib.display import Display
@@ -436,7 +437,7 @@ class HotkeyListener:
         d = self._display
         assert d is not None
         keysym = resolve_keysym(self.key)
-        if self.mode == "hold" and keysym in MODIFIER_ONLY_KEYSYMS:
+        if self.mode in ("hold", "both") and keysym in MODIFIER_ONLY_KEYSYMS:
             self.mode = "toggle"  # push-to-talk needs a non-modifier key
         try:
             while not self._stop_flag.is_set():
@@ -459,7 +460,9 @@ class HotkeyListener:
                     continue
                 if detail != self._keycode:
                     continue
-                if self.mode == "hold":
+                if self.mode == "both":
+                    self._both_cycle(d, detail)
+                elif self.mode == "hold":
                     self._hold_cycle(d, detail)
                 else:
                     self._safe(self.on_toggle)
@@ -534,17 +537,32 @@ class HotkeyListener:
         held hotkey's auto-repeat pairs reach the focused app like any
         other key. If the initial ungrab fails, keys keep being swallowed
         - the pre-passthrough behavior - but the hold still works."""
-        root = d.screen().root
         self._safe(self.on_toggle)  # start
+        self._free_keyboard(d, keycode)
+        aborted = self._hold_until_release(d, keycode)
+        if aborted:
+            self._safe(self.on_cancel)
+        else:
+            self._safe(self.on_toggle)  # stop and transcribe
+
+    def _free_keyboard(self, d: Display, keycode: int) -> None:
+        """Release the passive grab's full-keyboard activation so other
+        keys pass through to the focused app (best-effort)."""
+        try:
+            d.ungrab_keyboard(X.CurrentTime)
+            d.screen().root.ungrab_key(keycode, X.AnyModifier)
+            d.sync()
+        except Exception:
+            pass  # best-effort: worst case keys stay swallowed
+
+    def _hold_until_release(self, d: Display, keycode: int) -> bool:
+        """Arm the hold-time Escape grab, poll query_keymap() until the
+        hotkey's REAL release (auto-repeat never clears the bit), re-arm
+        the hotkey grab on the way out. Returns True when Escape aborted
+        the hold. See _hold_cycle for the passthrough rationale."""
+        root = d.screen().root
         aborted = False
         try:
-            # Free the keyboard: the passive grab's activation holds it.
-            try:
-                d.ungrab_keyboard(X.CurrentTime)
-                root.ungrab_key(keycode, X.AnyModifier)
-                d.sync()
-            except Exception:
-                pass  # best-effort: worst case keys stay swallowed
             # Escape still cancels: arm a passive grab for the hold only
             # (its press-activation delivers Escape to us; other keys are
             # untouched by a passive grab that has not fired).
@@ -591,10 +609,59 @@ class HotkeyListener:
                 d.ungrab_keyboard(X.CurrentTime)  # release escape activation
             except Exception:
                 pass
-        if aborted:
-            self._safe(self.on_cancel)
-        else:
-            self._safe(self.on_toggle)  # stop and transcribe
+        return aborted
+
+    # Upstream HotkeyActivationMode "Automatic": tap-vs-hold disambiguation
+    # window. A release inside the window is a toggle tap; a key still down
+    # at the deadline starts push-to-talk until release.
+    BOTH_TAP_S = 0.25
+
+    def _both_cycle(self, d: Display, keycode: int) -> None:
+        """'both' activation mode: a quick tap toggles dictation on/off,
+        holding the key talks (push-to-talk until release). Same native
+        passthrough + Escape-cancel semantics as hold mode; the keyboard
+        is freed for the decision window too, so a held key's repeats
+        reach the app either way."""
+        self._free_keyboard(d, keycode)
+        try:
+            deadline = time.monotonic() + self.BOTH_TAP_S
+            tap = False
+            aborted = False
+            while not self._stop_flag.is_set():
+                if not self._hotkey_still_down(d, keycode):
+                    tap = True
+                    break
+                if time.monotonic() >= deadline:
+                    break  # still down past the window -> hold
+                try:
+                    if d.pending_events():
+                        event = d.next_event()
+                        if classify_hold_event(
+                                getattr(event, "type", None),
+                                getattr(event, "detail", None),
+                                keycode,
+                                self._escape_keycode) == _HOLD_ABORT:
+                            aborted = True
+                            break
+                except Exception:
+                    break
+                self._stop_flag.wait(0.01)
+            if aborted:
+                self._safe(self.on_cancel)
+            elif tap:
+                self._safe(self.on_toggle)  # plain toggle tap
+            else:
+                self._safe(self.on_toggle)  # hold: start talking...
+                if self._hold_until_release(d, keycode):
+                    self._safe(self.on_cancel)
+                else:
+                    self._safe(self.on_toggle)  # ...stop and transcribe
+        finally:
+            try:
+                self._grab(keycode)  # re-arm after the decision window
+                self._settle_grabs(keycode)
+            except Exception:
+                pass
 
     def _safe(self, cb) -> None:
         if cb is None:
