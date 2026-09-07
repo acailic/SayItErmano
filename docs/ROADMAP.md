@@ -104,15 +104,17 @@ sources. Everything below is a known, classified gap — see
       Was: ("slash fix", "at sign
       John", "tag John"); stats page (streak, time-saved, 7/30-day chart);
       pill hover chips (prompt/mode/actions) — stretch.
-- [ ] Leapfrog menu (same doc, C/D tracks, evidence: reviews sweep): idle
-      model-unload / keep-warm policy (upstream's 3 GB RAM fight, #548/#854);
-      fast language switching + whisper language whitelist (upstream's
-      weakest area, #506/#100 — personally relevant); OpenAI-compatible
-      remote STT endpoint as a backend (LAN GPU boxes, upstream declined
-      the PR); AI refusal/derail guardrail (never type "I'm sorry…");
-      scriptable unix-socket API (upstream loopback-API parity without
-      TCP); AT-SPI caret-context smart typing; per-app behavior profiles;
-      diarization; n-best pick lists (blocked on backend alternates).
+- [ ] Leapfrog menu (same doc, C/D tracks, evidence: reviews sweep) — three
+      shipped: idle model-unload / keep-warm policy (`model.idle_unload_s`,
+      923001e); fast language switching + whisper language whitelist
+      (`hotkey.language_key` + `general.language_cycle`/`language_whitelist`,
+      d604db8…052df8a); OpenAI-compatible remote STT endpoint as a backend
+      (`model.remote_url`, `fluidvoice/backends/remote_stt.py` — LAN GPU
+      boxes, upstream declined the PR). Still open: AI refusal/derail
+      guardrail (never type "I'm sorry…"); scriptable unix-socket API
+      (upstream loopback-API parity without TCP); AT-SPI caret-context
+      smart typing; per-app behavior profiles; diarization; n-best pick
+      lists (blocked on backend alternates).
 - [x] Command mode (voice → terminal agent) with the upstream tool schema and
       destructive-command confirmation list — DONE (v2): tool schema ported
       into the strict-JSON `tool_calls` protocol with per-arg validation;

@@ -540,6 +540,67 @@ class TestSettingsWindow:
         assert w._idle_unload_row.get_value() == 1
         w.close()
 
+    def test_remote_stt_group(self, loop):
+        """Models page: Remote (OpenAI-compatible) rows, empty-URL-is-off
+        collect, password hygiene, timeout spin, backend combo."""
+        from fluidvoice.gtkui.settings_window import SettingsWindow
+
+        class CfgClient(StubClient):
+            def __init__(self):
+                super().__init__()
+                self._cfg = copy.deepcopy(DEFAULTS)
+
+            def get_config(self):
+                return copy.deepcopy(self._cfg), True
+
+        c = CfgClient()
+        w = SettingsWindow(client=c)
+        w.present()
+        pump(loop)
+        # rows registered + backend combo offers remote
+        assert ("model", "remote_url") in w._rows
+        assert ("model", "remote_model") in w._rows
+        assert ("model", "remote_api_key") in w._rows
+        assert ("model", "remote_timeout_s") in w._rows
+        assert "remote" in w._combo_values[("model", "backend")]
+        # unconfigured: empty URL still POSTs (off is a real value), the
+        # key is omitted when the password field is empty
+        body = w._collect()
+        assert body["model"]["remote_url"] == ""
+        assert "remote_api_key" not in body["model"]
+        assert body["model"]["remote_timeout_s"] == 30
+        # typing values -> they post
+        w._rows[("model", "remote_url")].set_text("http://lan:8000")
+        w._rows[("model", "remote_model")].set_text("whisper-large-v3")
+        w._rows[("model", "remote_api_key")].entry.set_text("sk-typed")
+        w._rows[("model", "remote_timeout_s")].set_value(45)
+        body = w._collect()
+        assert body["model"]["remote_url"] == "http://lan:8000"
+        assert body["model"]["remote_model"] == "whisper-large-v3"
+        assert body["model"]["remote_api_key"] == "sk-typed"
+        assert body["model"]["remote_timeout_s"] == 45
+        # a configured cfg loads back; the State row names the remote host
+        c._cfg["model"].update(remote_url="http://lan:8000",
+                                remote_model="whisper-large-v3")
+        w._load()
+        pump(loop)
+        assert w._rows[("model", "remote_url")].get_text() == "http://lan:8000"
+        assert "remote (whisper-large-v3 @ lan:8000)" in \
+            w.warmup_row.get_subtitle()
+        # masking: a stored key NEVER renders, whatever its type
+        c._cfg["model"]["remote_api_key"] = True  # masked bool (daemon up)
+        w._load()
+        pump(loop)
+        assert w._rows[("model", "remote_api_key")].get_text() == ""
+        assert "saved" in w._rows[("model", "remote_api_key")].row.get_subtitle()
+        c._cfg["model"]["remote_api_key"] = "sk-real-secret"  # file-only mode
+        w._load()
+        pump(loop)
+        assert w._rows[("model", "remote_api_key")].get_text() == ""
+        assert "sk-real-secret" not in w._rows[
+            ("model", "remote_api_key")].row.get_subtitle()
+        w.close()
+
     def test_per_app_rule_editing(self, loop):
         from fluidvoice.gtkui.settings_window import SettingsWindow
         c = StubClient()

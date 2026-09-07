@@ -6,6 +6,10 @@ Priority under "auto":
   3. whisper.cpp     (external binary + ggml/gguf model — catalog name or path)
   4. parakeet        (ONNX Runtime; explicit selection only in v1 — NOT in
                       "auto"; divergence from upstream, see docs/STATUS.md)
+  5. remote           (user-configured OpenAI-compatible POST
+                      /v1/audio/transcriptions endpoint — wins over every
+                      local choice while model.remote_url is set; local-first:
+                      empty URL = this backend never constructs)
 """
 from __future__ import annotations
 
@@ -189,12 +193,21 @@ def backend_model_key(backend) -> str | None:
     return None
 
 
+def remote_url_set(cfg) -> str:
+    """Normalized model.remote_url ('' = the remote backend is off)."""
+    m = (cfg.get("model", {}) or {}) if isinstance(cfg, dict) else {}
+    return str(m.get("remote_url") or "").strip()
+
+
 def config_model_key(cfg) -> str | None:
     """Config-derived model identity (the Daemon._active_model_name
     simplification): whisper.cpp -> basename(whispercpp_model);
     parakeet -> name or PARAKEET_DEFAULT_MODEL; else resolve_model_name
     ("auto" backend included). None when nothing resolves."""
     m = (cfg.get("model", {}) or {}) if isinstance(cfg, dict) else {}
+    remote = str(m.get("remote_model") or "").strip()
+    if remote_url_set(cfg) and remote:
+        return remote
     backend = str(m.get("backend", "auto"))
     if backend == "whisper.cpp":
         raw = str(m.get("whispercpp_model", "") or "").strip()
@@ -250,6 +263,9 @@ LANGUAGE_GUARD: dict[str, str] = {
                   "under auto; guard skipped (limitation)",
     "parakeet": "no language selection (English-only models) - guard not "
                 "applicable (upstream #100 rationale)",
+    "remote": "language hint sent with the request; detected language "
+              "not surfaced by the endpoint - guard not applicable "
+              "(batch backend)",
 }
 
 
@@ -260,6 +276,8 @@ def resolved_backend_name(cfg: dict) -> str | None:
     returns itself when its probe passes, else None; "auto" follows
     load_backend's fallback order and returns the first resolving name
     or None."""
+    if remote_url_set(cfg):
+        return "remote"
     wanted = str(((cfg.get("model", {}) or {}).get("backend")) or "auto")
     if wanted == "auto":
         if _import_ok("faster_whisper") and preload_cuda_libs():
@@ -280,10 +298,18 @@ def resolved_backend_name(cfg: dict) -> str | None:
         return "whisper.cpp" if _whispercpp_binary() else None
     if wanted in ("parakeet", "parakeet-onnx"):
         return "parakeet" if _import_ok("onnxruntime") else None
+    if wanted == "remote":
+        return "remote"  # reachability is a doctor concern, not a probe
     return None
 
 
 def load_backend(cfg: dict) -> Backend:
+    # remote wins over every local choice while a URL is configured -
+    # and nothing below runs otherwise (local-first: no probe, no import
+    # side effects; byte-identical code path to the pre-remote behavior)
+    if remote_url_set(cfg):
+        return RemoteSttBackend(cfg)
+
     from .faster_whisper_backend import FasterWhisperBackend
     from .torch_whisper import TorchWhisperBackend
     from .whisper_cpp import WhisperCppBackend
@@ -314,4 +340,11 @@ def load_backend(cfg: dict) -> Backend:
     if wanted in ("parakeet", "parakeet-onnx"):
         from .parakeet_onnx import ParakeetOnnxBackend
         return ParakeetOnnxBackend(cfg)
+    if wanted == "remote":
+        # explicit selection without a URL: let the constructor explain
+        return RemoteSttBackend(cfg)
     raise ValueError(f"unknown backend '{wanted}'")
+
+
+# stdlib-only module: safe to re-export for direct users (tests, doctor)
+from .remote_stt import RemoteSttError, RemoteSttBackend  # noqa: E402,F401

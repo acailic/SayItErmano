@@ -508,7 +508,8 @@ class TestPrecedence:
     def test_language_guard_map_keys(self):
         assert set(backends.LANGUAGE_GUARD) == {"faster-whisper",
                                                 "whisper-torch",
-                                                "whisper.cpp", "parakeet"}
+                                                "whisper.cpp", "parakeet",
+                                                "remote"}
 
     def test_resolved_backend_name_explicit(self):
         cfg = _cfg()

@@ -251,6 +251,46 @@ def _live_language_status() -> dict | None:
     return status.get("language") or None
 
 
+def _remote_stt_lines(cfg: dict) -> list[str]:
+    """Remote OpenAI-compatible STT backend (model.remote_url): config
+    state + a lightweight reachability probe. Informational only - never
+    flips the ok gate, never sends audio, never prints the API key."""
+    import urllib.error
+    import urllib.request
+    from urllib.parse import urlparse
+
+    m = cfg.get("model", {}) or {}
+    url = str(m.get("remote_url") or "").strip()
+    if not url:
+        return ["  not configured (model.remote_url) - local models only"]
+    lines = [f"  endpoint: {url}"]
+    timeout = m.get("remote_timeout_s", 30)
+    lines.append(f"  model: {m.get('remote_model') or '-'} · "
+                 f"timeout: {timeout}s · "
+                 f"key: {'set' if m.get('remote_api_key') else 'none'}")
+    parsed = urlparse(url)
+    probe = f"{parsed.scheme}://{parsed.netloc}/"
+    try:
+        with urllib.request.urlopen(probe, timeout=2.5) as resp:
+            code = resp.status
+        # ANY HTTP answer proves something is listening (404/405 are fine:
+        # the probe never POSTs audio, it just GETs the host root)
+        lines.append(f"  reachable (HTTP {code} from {probe} - POST "
+                     f"target: {_remote_endpoint(url)})")
+    except urllib.error.HTTPError as e:
+        lines.append(f"  reachable (HTTP {e.code} from {probe} - POST "
+                     f"target: {_remote_endpoint(url)})")
+    except Exception as e:  # noqa: BLE001 - URLError/timeout/parse
+        lines.append(f"  unreachable ({e})")
+    return lines
+
+
+def _remote_endpoint(url: str) -> str:
+    base = url.rstrip("/")
+    return base if base.endswith("/audio/transcriptions") \
+        else base + "/v1/audio/transcriptions"
+
+
 def _preview_lines(cfg: dict) -> list[str]:
     """Live-preview resolution: engine kind, window size, VAD auto-stop."""
     r = cfg.get("recording", {}) or {}
@@ -637,6 +677,10 @@ def run() -> int:
 
     print("\nparakeet:")
     for line in _parakeet_lines(cfg):
+        print(line)
+
+    print("\nremote STT:")
+    for line in _remote_stt_lines(cfg):
         print(line)
 
     print("\nlanguage resolution:")

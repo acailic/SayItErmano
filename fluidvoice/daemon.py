@@ -1218,6 +1218,13 @@ class Daemon:
 
     def _warmup_model(self, name: str) -> None:
         previous = self.cfg["model"].get("name", "auto")
+        # picking a local model turns the remote backend OFF: remote wins
+        # load_backend, so leaving remote_url set would silently keep
+        # dictating over HTTP. Failure below rolls the name back but the
+        # URL stays cleared (documented: the running remote instance
+        # keeps serving until restart).
+        if self.cfg["model"].get("remote_url"):
+            self.cfg["model"]["remote_url"] = ""
         try:
             cfg = dict(self.cfg)
             cfg["model"] = dict(self.cfg["model"], name=name)

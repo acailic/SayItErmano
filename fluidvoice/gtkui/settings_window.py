@@ -135,6 +135,31 @@ class _TextProxy:
         return self.buffer.get_text(start, end, False)
 
 
+class _PasswordProxy:
+    """Gtk.Entry (visibility=False) inside an Adw.ActionRow - the field
+    registry adapter for model.remote_api_key. Never RENDERS a stored
+    value (set_value only ever clears + annotates the row: the value may
+    be a masked bool from the daemon or a real secret in file-only mode);
+    _collect skips it while empty so the saved key carries over."""
+
+    def __init__(self, entry: Gtk.Entry, row: Adw.ActionRow):
+        self.entry = entry
+        self.row = row
+
+    def set_value(self, value) -> None:
+        # value True (masked, daemon up) or a non-empty string (file-only):
+        # show the "saved" hint, keep the field empty either way
+        if value:
+            self.entry.set_text("")
+            self.row.set_subtitle("key saved — type to replace")
+        else:
+            self.entry.set_text("")
+            self.row.set_subtitle("optional bearer token (never shown)")
+
+    def get_text(self) -> str:
+        return self.entry.get_text()
+
+
 class _InstructionRow(Adw.PreferencesRow):
     """A preferences-compatible row that hosts the instructions TextView."""
 
@@ -318,6 +343,8 @@ class SettingsWindow(Adw.PreferencesWindow):
                 row.set_value(val)
             elif isinstance(row, _TextProxy):
                 row.set_value(val)
+            elif isinstance(row, _PasswordProxy):
+                row.set_value(val)  # never renders a stored/masked key
             elif isinstance(row, Adw.EntryRow):
                 row.set_text("" if val is None else str(val))
             elif isinstance(row, Adw.ComboRow):
@@ -370,10 +397,15 @@ class SettingsWindow(Adw.PreferencesWindow):
                 val = row.get_value().strip()
                 if not val and (sec, key) != ("ai", "base_prompt"):
                     continue
-            elif isinstance(row, Adw.EntryRow):
+            elif isinstance(row, _PasswordProxy):
                 val = row.get_text().strip()
                 if not val:
-                    continue  # empty optional strings keep the saved value
+                    continue  # empty keeps the saved key (file carry-over)
+            elif isinstance(row, Adw.EntryRow):
+                val = row.get_text().strip()
+                if not val and (sec, key) != ("model", "remote_url"):
+                    continue  # empty optional strings keep the saved value;
+                    # remote_url is the exception: "" = remote OFF
             elif isinstance(row, Adw.ComboRow):
                 val = self._combo_values[(sec, key)][row.get_selected()]
             elif isinstance(row, Adw.SpinRow):
@@ -563,7 +595,7 @@ class SettingsWindow(Adw.PreferencesWindow):
             "model", "backend", "Backend",
             [("auto", "auto"), ("faster-whisper", "faster-whisper"),
              ("whisper-torch", "whisper-torch"), ("whisper.cpp", "whisper.cpp"),
-             ("parakeet", "parakeet")]))
+             ("parakeet", "parakeet"), ("remote", "remote")]))
         engine.add(self._combo(
             "model", "device", "Device",
             [("auto", "auto"), ("cuda", "cuda"), ("cpu", "cpu")]))
@@ -576,6 +608,34 @@ class SettingsWindow(Adw.PreferencesWindow):
                                 "Warm the model when the daemon starts "
                                 "(needs a daemon restart)"))
         page.add(engine)
+
+        # Remote OpenAI-compatible STT server: local-first — everything is
+        # off while the URL is empty; audio goes only to the URL you set.
+        remote = Adw.PreferencesGroup(
+            title="Remote (OpenAI-compatible)",
+            description="Dictation POSTs the recorded WAV to "
+                        "<url>/v1/audio/transcriptions — e.g. "
+                        "http://lan-box:8000 (vLLM / whisper.cpp server / "
+                        "NIM / DGX Spark). Empty URL = local models only; "
+                        "audio leaves this machine only toward this URL")
+        remote.add(self._entry("model", "remote_url", "Server URL"))
+        remote.add(self._entry("model", "remote_model", "Model name"))
+        key_row = Adw.ActionRow(
+            title="API key",
+            subtitle="optional bearer token (never shown)")
+        key_entry = Gtk.Entry(visibility=False, hexpand=True,
+                              valign=Gtk.Align.CENTER,
+                              input_purpose=Gtk.InputPurpose.PASSWORD)
+        key_entry.connect("changed", lambda *_: self._touch())
+        key_row.add_suffix(key_entry)
+        remote.add(key_row)
+        self._rows[("model", "remote_api_key")] = _PasswordProxy(key_entry,
+                                                                 key_row)
+        remote.add(self._spin("model", "remote_timeout_s", "Timeout (seconds)",
+                              5, 600, 1, digits=0,
+                              subtitle="per-request; retry once on transient "
+                                       "network errors"))
+        page.add(remote)
 
         self.lang_overrides_group = Adw.PreferencesGroup(
             title="Per-model language",
@@ -629,7 +689,17 @@ class SettingsWindow(Adw.PreferencesWindow):
             self.warmup_row.set_subtitle(f"error: {warm['error']}")
         else:
             self.warmup_spinner.stop()
-            self.warmup_row.set_subtitle(f"active: {active or '—'}")
+            rurl = str((self.cfg.get("model", {}) or {})
+                       .get("remote_url") or "").strip()
+            if rurl:
+                from urllib.parse import urlparse
+                rmodel = str((self.cfg.get("model", {}) or {})
+                             .get("remote_model") or "-")
+                host = urlparse(rurl).netloc or rurl
+                self.warmup_row.set_subtitle(
+                    f"active: remote ({rmodel} @ {host})")
+            else:
+                self.warmup_row.set_subtitle(f"active: {active or '—'}")
         if not (st.get("model_state") or {}).get("loaded", True):
             self.warmup_row.set_subtitle(
                 "unloaded (idle — reloads on the next dictation)")

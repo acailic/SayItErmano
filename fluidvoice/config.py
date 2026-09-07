@@ -132,6 +132,13 @@ DEFAULTS: dict[str, Any] = {
         # catalogs; missing key / "" inherits general.language, "auto"
         # forces detection for that model (read per-dictation, applies live)
         "languages": {},
+        # Remote OpenAI-compatible STT server (local-first: OFF unless a
+        # URL is set). The recorded WAV is POSTed as multipart to
+        # <remote_url>/v1/audio/transcriptions (LAN vLLM/whisper.cpp/NIM...)
+        "remote_url": "",  # empty = local models only; http(s)://host[:port]
+        "remote_model": "whisper-large-v3",  # name sent in the form
+        "remote_api_key": "",  # optional bearer token (masked, never logged)
+        "remote_timeout_s": 30,  # per-request timeout (5..600)
     },
     "processing": {
         "remove_filler_words": True,
@@ -327,6 +334,13 @@ whispercpp_model = ""
 # Per-model language overrides, e.g. languages = { small = "de", "ggml-base.en.bin" = "en" }
 # "auto" = always detect for that model; a missing key follows general.language
 languages = {}
+# Remote STT server (OpenAI-compatible /v1/audio/transcriptions) - local-first:
+# nothing leaves this machine while remote_url is empty. Point it at a LAN
+# GPU box (vLLM/whisper.cpp server/NIM/DGX Spark) or any compatible cloud.
+# remote_url = "http://192.168.1.50:8000"
+# remote_model = "whisper-large-v3"
+# remote_api_key = ""            # optional bearer; masked everywhere
+# remote_timeout_s = 30
 # Unload the speech model after this many idle seconds to free RAM/VRAM
 # (0 = keep it loaded forever; range 30..86400 when set). The next
 # dictation after an unload pays the model load time again.
@@ -470,7 +484,9 @@ _SAVE_WHITELIST: dict[str, list[str]] = {
                   "pause_media", "push_to_talk_button",
                   "push_to_talk_modifiers"],
     "model": ["backend", "name", "device", "compute", "whispercpp_model",
-              "eager_warmup", "idle_unload_s", "languages"],
+              "eager_warmup", "idle_unload_s", "languages",
+              "remote_url", "remote_model", "remote_api_key",
+              "remote_timeout_s"],
     "processing": ["remove_filler_words", "filler_words", "punctuation_enabled",
                    "punctuation_prefix", "dictionary",
                    "formatting_action_triggers", "gaav_enabled",
@@ -496,7 +512,10 @@ _SAVE_WHITELIST: dict[str, list[str]] = {
 # must actually clear the file instead of carrying the old value over.
 _EMPTY_IS_MEANINGFUL = {("ai", "base_prompt"),
                          # an empty button spec turns mouse PTT off
-                         ("recording", "push_to_talk_button")}
+                         ("recording", "push_to_talk_button"),
+                         # an empty remote URL turns the remote STT backend
+                         # off - clearing it in the UI must persist "off"
+                         ("model", "remote_url")}
 
 
 def _toml_value(value: Any) -> str:
@@ -582,6 +601,8 @@ SETTING_RANGES: dict[tuple[str, str], Any] = {
     ("recording", "max_seconds"): ("float", (1, 86400)),
     ("recording", "spoken_send_phrase"): ("str", 64),
     ("model", "whispercpp_model"): ("str", 4096),
+    ("model", "remote_model"): ("str", 256),
+    ("model", "remote_timeout_s"): ("float", (5.0, 600.0)),
     ("processing", "punctuation_prefix"): ("str", 32),
     ("ai", "base_url"): ("str", 2048),
     ("ai", "model"): ("str", 256),
@@ -599,7 +620,7 @@ SETTING_ENUMS: dict[tuple[str, str], set] = {
     ("recording", "preview_overlay_size"): {"pill", "small", "medium", "large"},
     ("hotkey", "mode"): {"toggle", "hold", "both"},
     ("model", "backend"): {"auto", "faster-whisper", "whisper-torch",
-                           "whisper.cpp", "parakeet"},
+                           "whisper.cpp", "parakeet", "remote"},
     ("model", "device"): {"auto", "cuda", "cpu"},
     ("model", "compute"): {"auto", "float16", "int8"},
     ("insertion", "mode"): {"auto", "typed", "paste"},
@@ -651,7 +672,9 @@ ALLOWED_SETTINGS: dict[str, set] = {
                   "preview_vad_silence_s", "overlay_chips",
                   "push_to_talk_button", "push_to_talk_modifiers"},
     "model": {"backend", "name", "device", "compute", "whispercpp_model",
-              "eager_warmup", "idle_unload_s", "languages"},
+              "eager_warmup", "idle_unload_s", "languages",
+              "remote_url", "remote_model", "remote_api_key",
+              "remote_timeout_s"},
     "processing": {"remove_filler_words", "filler_words",
                    "punctuation_enabled", "punctuation_prefix", "dictionary",
                    "formatting_action_triggers",
@@ -672,7 +695,9 @@ ALLOWED_SETTINGS: dict[str, set] = {
 }
 RESTART_REQUIRED = {"model.eager_warmup"}
 ENGINE_KEYS = {"model.backend", "model.name", "model.device",
-               "model.compute", "model.whispercpp_model"}
+               "model.compute", "model.whispercpp_model",
+               "model.remote_url", "model.remote_model",
+               "model.remote_api_key", "model.remote_timeout_s"}
 
 
 def coerce_setting(section: str, key: str, value: Any) -> tuple[bool, Any]:
@@ -709,6 +734,12 @@ def coerce_setting(section: str, key: str, value: Any) -> tuple[bool, Any]:
         return (isinstance(value, str) and len(value) <= 8000, value)
     if (section, key) == ("recording", "push_to_talk_button"):
         return _coerce_button_spec(value)
+    if (section, key) == ("model", "remote_url"):
+        return _coerce_remote_url(value)
+    if (section, key) == ("model", "remote_api_key"):
+        # any string incl. "" (clearing is done by editing the file or
+        # setting remote_url empty); never logged, masked in socket reads
+        return (isinstance(value, str) and len(value) <= 4096, value)
     rule = SETTING_RANGES.get((section, key))
     if rule:
         kind, bound = rule
@@ -751,6 +782,24 @@ def coerce_setting(section: str, key: str, value: Any) -> tuple[bool, Any]:
                     return (False, value)
         return (True, value)
     return (False, value)  # unknown key -> reject
+
+
+def _coerce_remote_url(value: Any) -> tuple[bool, Any]:
+    """model.remote_url: "" (off) or an http(s) URL with a non-empty
+    host. Stripped first; embedded whitespace, other schemes, missing
+    hosts and >2048-char values reject the whole setting."""
+    if not isinstance(value, str):
+        return (False, value)
+    url = value.strip()
+    if url == "":
+        return (True, "")
+    if len(url) > 2048 or any(ch.isspace() for ch in url):
+        return (False, value)
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return (False, value)
+    return (True, url)
 
 
 def _coerce_button_spec(value: Any) -> tuple[bool, Any]:
@@ -1021,4 +1070,6 @@ def mask_secrets(cfg: dict) -> dict:
     safe = copy.deepcopy(cfg)
     key = safe.get("ai", {}).get("api_key", "")
     safe.setdefault("ai", {})["api_key"] = bool(key)
+    key = safe.get("model", {}).get("remote_api_key", "")
+    safe.setdefault("model", {})["remote_api_key"] = bool(key)
     return safe
