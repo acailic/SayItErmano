@@ -323,8 +323,10 @@ matrix + upstream changelog with its refresh loop).
 ## 🚧 Left (see ROADMAP.md for details and upstream references)
 
 ### Near term — daily-driver polish (v0.2)
-- [ ] **Rewrite/Write mode** — selection capture, edit prompts (already
-      ported verbatim), dedicated hotkey.
+- [x] **Rewrite/Write mode** — DONE (the Done-section entry above): the
+      `hotkey.rewrite_key` capture → verbatim upstream edit prompts →
+      retype loop, X11 selection capture + the Wayland tool-based path,
+      confidence badge. This bullet predates the implementation.
 - [x] **Hold-mode key passthrough** — DONE: keys typed during a push-to-talk
       hold reach the focused app as REAL events (the XGrabKey activation is
       released for the hold's duration; release detected via auto-repeat-proof
@@ -475,7 +477,11 @@ c      catalog (v2 English / v3 multilingual, int8) with sha256-verified
       `tool_calls` wire format and persistent chat sessions across daemon
       restarts stay upstream-only — see the C1-C6 divergences.)
 - [ ] GAAV + continuous-dictation formatting (needs caret text via AT-SPI).
-- [ ] Slash-command/mention literal formatting + terminal autocomplete spacing.
+- [x] Slash-command/mention literal formatting + terminal autocomplete
+      spacing — DONE: literal squeeze (`processing.slash_mention_squeeze`)
+      AND the spoken forms (`slash fix`/`at sign`/`tag`, bc1ced3);
+      terminal trailing space `insertion.terminal_autocomplete_space`
+      keyed on the shared `general.terminal_apps` list.
 - [x] **Insertion hardening** — DONE: paste verify-then-restore (selection
       ownership + read observation before the clipboard restore, unverified
       pastes fall back to typed insertion with a notification),
@@ -490,8 +496,12 @@ c      catalog (v2 English / v3 multilingual, int8) with sha256-verified
       monitoring (3 s diff poll) with vanished-device auto-switch (bluez
       pattern example in README); never mid-take, auto never overridden.
       MPRIS media pause shipped earlier.
-- [ ] Updater; local OpenAI-style HTTP API;
-      packaging (AUR/nix/deb/pipx).
+- [x] Updater + packaging (deb / AUR / pipx / one-shot installer) — DONE:
+      update check + `sayit-ermano update` assisted upgrade (v0.6.0),
+      deb releases, AUR and pipx install paths (README). Still open from
+      this line: a nix flake; the local scriptable API landed as the
+      **unix-socket routes** (`transcribe` through the warm model +
+      `history` query — TCP/HTTP stays a locked non-goal).
 
 ### Non-goals
 - Cohere Transcribe (CoreML-only artifacts, no Linux runtime).

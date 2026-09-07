@@ -1511,6 +1511,11 @@ class Daemon:
         if action == "mics":
             from .tray import list_microphones
             return {"ok": True, "mics": list_microphones()}
+        if action == "transcribe":
+            return self._api_transcribe(str(req.get("path") or ""),
+                                        bool(req.get("process", False)))
+        if action == "history":
+            return self._api_history(req)
         return {"ok": False, "error": f"unknown action {action!r}"}
 
     def _set_config(self, body: dict) -> dict:
@@ -1937,6 +1942,82 @@ class Daemon:
             log("first run detected - opened the setup page")
         except Exception as e:
             log(f"WARN onboarding open failed: {e}")
+
+    # -- scriptable unix-socket API (C1) --------------------------------------
+
+    _API_MAX_BYTES = 200 * 1024 * 1024  # v1 is not chunked; reject, don't OOM
+
+    def _api_transcribe(self, raw_path: str, process: bool) -> dict:
+        """`transcribe {path, process?}`: a file -> text through the warm
+        daemon backend (no second model load). Refuses while a take is
+        running or the pipeline is busy - GPU work must not interleave."""
+        import shutil as _shutil
+
+        from .audio_utils import AudioFormatError, ensure_wav
+        path = Path(raw_path).expanduser()
+        if not raw_path:
+            return {"ok": False, "error": "path is required"}
+        if not path.is_file():
+            return {"ok": False, "error": f"file not found: {path}"}
+        size = path.stat().st_size
+        if size > self._API_MAX_BYTES:
+            return {"ok": False,
+                    "error": f"file too large ({size / 1e6:.0f} MB; v1 is "
+                             "not chunked - shrink or split it first)"}
+        with self._lock:
+            if self.recording:
+                return {"ok": False, "error": "busy (recording)"}
+            if self.busy:
+                return {"ok": False, "error": "busy"}
+            self.busy = True
+        try:
+            audio, converted_dir = path, None
+            try:
+                audio = ensure_wav(
+                    path, force=getattr(self.backend, "name", "")
+                    == "whisper.cpp")
+            except AudioFormatError as e:
+                return {"ok": False, "error": str(e)}
+            if audio != path:
+                converted_dir = audio.parent
+            try:
+                result = self._ensure_backend().transcribe(
+                    audio, self._language_detail()[0]) or {}
+            finally:
+                if converted_dir is not None:
+                    _shutil.rmtree(converted_dir, ignore_errors=True)
+            text = str(result.get("text") or "")
+            if process:
+                text = post_process(text, self.cfg)
+            return {"ok": True, "path": str(path), "text": text,
+                    "language": result.get("language"),
+                    "duration_s": result.get("duration")}
+        except Exception as e:  # noqa: BLE001 - API errors are payloads
+            return {"ok": False, "error": str(e)}
+        finally:
+            with self._lock:
+                self.busy = False
+
+    def _api_history(self, req: dict) -> dict:
+        """`history {limit?, since_ts?}`: recent stored rows verbatim."""
+        try:
+            limit = max(1, min(200, int(req.get("limit", 10))))
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "limit must be an integer"}
+        since = req.get("since_ts")
+        try:
+            since = float(since) if since is not None else None
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "since_ts must be a number"}
+        if since is not None:
+            # the file is capped and small; read_all keeps since_ts honest
+            # where tail()'s 128 KB window could silently truncate
+            entries = [e for e in history_mod.read_all()
+                       if float(e.get("ts") or 0) >= since]
+        else:
+            entries = history_mod.tail(limit)
+        entries = entries[-limit:]
+        return {"ok": True, "count": len(entries), "entries": entries}
 
     def test_dictation(self, seconds: float = 3.0) -> dict:
         """Onboarding tryout (upstream's real-dictation step): record a few

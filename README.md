@@ -405,6 +405,30 @@ sayit-ermano update --dismiss   # stop the notification for this release
 install (`~/.local/share/sayit-ermano`) coexist — the two-daemon hotkey
 fight this project's lock file guards against at runtime.
 
+### Scripting the daemon (unix socket)
+
+The control socket (JSON lines, filesystem-scoped to your runtime dir —
+no TCP by design) is a scriptable API. Beyond `toggle`/`status`/
+`set-config`/`select-model`, two routes exist for on-device agents:
+
+```python
+from fluidvoice import control
+# transcribe a file through the daemon's WARM model (no reload)
+r = control.request("transcribe", path="/tmp/note.wav", process=True)
+print(r["text"])
+# query stored dictations (chronological, newest last)
+h = control.request("history", limit=5, since_ts=1788800000.0)
+```
+
+```bash
+echo '{"action": "transcribe", "path": "/tmp/note.wav"}' \
+  | socat - UNIX-CONNECT:/run/user/$(id -u)/sayit-ermano.sock
+```
+
+`transcribe` refuses while a dictation is running (the GPU stays
+dedicated to your take) and rejects files over 200 MB (v1 does not
+chunk); `process: true` runs the standard filler/punctuation chain.
+
 Disable the checks entirely:
 
 ```toml

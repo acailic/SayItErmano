@@ -112,10 +112,12 @@ sources. Everything below is a known, classified gap — see
       (`model.remote_url`, `fluidvoice/backends/remote_stt.py` — LAN GPU
       boxes, upstream declined the PR); AI refusal/derail guardrail
       (`ai.refusal_guard`, `fluidvoice/processing/refusal.py` — refusals
-      fall back to the raw transcript). Still open: scriptable unix-socket
-      API (upstream loopback-API parity without TCP); AT-SPI caret-context
-      smart typing; per-app behavior profiles; diarization; n-best pick
-      lists (blocked on backend alternates).
+      fall back to the raw transcript); scriptable unix-socket API
+      (upstream loopback-API parity without TCP: `transcribe` through
+      the warm model + `history` query routes on the control socket).
+      Still open: AT-SPI caret-context smart typing; per-app behavior
+      profiles; diarization; n-best pick lists (blocked on backend
+      alternates).
 - [x] Command mode (voice → terminal agent) with the upstream tool schema and
       destructive-command confirmation list — DONE (v2): tool schema ported
       into the strict-JSON `tool_calls` protocol with per-arg validation;
