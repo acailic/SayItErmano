@@ -171,7 +171,11 @@ class SegmentedPreviewEngine:
                  sample_rate: int = 16000, interval: float = 1.2,
                  min_audio: float = 1.0, char_limit: int = 160,
                  segment_s: float = 2.0, vad_silence_s: float = 2.0,
-                 on_silence: Callable[[], None] | None = None):
+                 on_silence: Callable[[], None] | None = None,
+                 send_phrase: str = "",
+                 send_countdown_s: float = 0.0,
+                 on_send_countdown: Callable[[], None] | None = None,
+                 on_send_resume: Callable[[], None] | None = None):
         self.raw_path = raw_path
         self.transcriber = transcriber
         self.on_text = on_text
@@ -182,6 +186,19 @@ class SegmentedPreviewEngine:
         self.segment_s = segment_s
         self.vad_silence_s = vad_silence_s
         self.on_silence = on_silence
+        # spoken-send quiet countdown (B7): 0.5 s of trailing quiet while
+        # the rolling text ends with the phrase arms the daemon-side
+        # countdown; resumed speech cancels it (see daemon._on_send_*)
+        self.send_phrase = (send_phrase or "").strip()
+        self.send_countdown_s = float(send_countdown_s or 0.0)
+        self.on_send_countdown = on_send_countdown
+        self.on_send_resume = on_send_resume
+        self._send_armed = False
+        # audio position where the rolling text last ENDED with the phrase;
+        # the tail decode degrades once speech stops (its window slides
+        # into silence and drops the final words), so the arm must accept
+        # a recently-seen phrase instead of a currently-visible one
+        self._phrase_seen_s: float | None = None
         self.hop_s = segment_s / 2.0
         self._stop = threading.Event()
         self._busy = False
@@ -242,6 +259,11 @@ class SegmentedPreviewEngine:
         if not text or text == self.last_text:
             return
         self.last_text = text
+        if self._send_armed:
+            return  # keep the countdown notice on the pill until it resolves
+        self._show(text)
+
+    def _show(self, text: str) -> None:
         shown = text if len(text) <= self.char_limit \
             else "…" + text[-self.char_limit:]
         try:
@@ -272,9 +294,47 @@ class SegmentedPreviewEngine:
 
     def _tick(self, raw: bytes, audio_s: float) -> None:
         bps = self.sample_rate * 2
+        # -- spoken-send quiet countdown (B7): shares the VAD's tail DSP.
+        # Arm once when the user went quiet (>= 0.5 s) right after the
+        # send phrase; cancel the moment speech resumes. The daemon owns
+        # the actual countdown timer and the stop.
+        send_on = (self.send_phrase and self.send_countdown_s > 0
+                   and self.on_send_countdown is not None
+                   and not self._silence_fired and any(self.committed))
+        if send_on:
+            from .processing.extra_formats import parse_spoken_send
+            if parse_spoken_send(self.last_text,
+                                 self.send_phrase).should_send:
+                self._phrase_seen_s = audio_s
+            tail_raw = raw[int(max(0.0, audio_s - 1.1)
+                               * self.sample_rate) * 2:]
+            quiet = trailing_silence_s(tail_raw, self.sample_rate)
+            if not self._send_armed and quiet >= 0.5 \
+                    and self._phrase_seen_s is not None:
+                self._send_armed = True
+                try:
+                    self.on_send_countdown()
+                except Exception:
+                    pass
+            elif quiet < 0.5:
+                # active speech: cancels a running countdown AND
+                # invalidates a phrase seen earlier (words followed it -
+                # it no longer ends the dictation)
+                if self._send_armed:
+                    self._send_armed = False
+                    try:
+                        self.on_send_resume()
+                    except Exception:
+                        pass
+                self._phrase_seen_s = None
+
         # -- VAD early-stop: cheap DSP on the tail, at most one trigger ever.
+        # Suppressed while the send countdown is armed: the countdown is
+        # the take's finisher then (a late arm after tick lag would
+        # otherwise let the plain VAD fire mid-countdown).
         if (self.on_silence is not None and self.vad_silence_s > 0
-                and not self._silence_fired and any(self.committed)):
+                and not self._silence_fired and not self._send_armed
+                and any(self.committed)):
             lookback = self.vad_silence_s + 0.6
             tail_raw = raw[int(max(0.0, audio_s - lookback)
                                * self.sample_rate) * 2:]

@@ -242,6 +242,189 @@ class TestVad:
         assert trailing_silence_s(pcm(1.0) + fricative(0.6)) < 0.02
 
 
+class TestSendCountdown:
+    """B7 spoken-send quiet countdown: phrase + >=0.5 s quiet arms the
+    daemon callback (once); resumed speech cancels and re-arms; emission is
+    suppressed while armed; the plain VAD path is untouched."""
+
+    def make_engine(self, raw, texts, armed, resumed, *, phrase="send it",
+                    shown=None, vad_fired=None):
+        def fake(wav, ctx):
+            return texts(len(wav) / BPS)
+
+        kwargs = dict(interval=0.4, min_audio=0.5, segment_s=2.0,
+                      vad_silence_s=2.0,
+                      on_silence=(lambda: vad_fired.append(1))
+                      if vad_fired is not None else None,
+                      send_phrase=phrase, send_countdown_s=1.2,
+                      on_send_countdown=lambda: armed.append(1),
+                      on_send_resume=lambda: resumed.append(1))
+        return SegmentedPreviewEngine(raw, fake, shown or (lambda t: None),
+                                      **kwargs)
+
+    def drive_quiet(self, eng, raw, speech_s=3.0, quiet_s=1.4, step=0.4):
+        data = pcm(speech_s)
+        raw.write_bytes(data)
+        t = speech_s
+        while t <= speech_s + quiet_s + 1e-9:
+            eng._tick(data, len(data) / BPS)
+            t += step
+            if t <= speech_s + quiet_s:
+                data += silence(step)
+                raw.write_bytes(data)
+        return data
+
+    def test_arms_on_phrase_plus_quiet(self, tmp_path):
+        raw = tmp_path / "c1.raw"
+        raw.write_bytes(pcm(0.2))
+        armed, resumed = [], []
+        eng = self.make_engine(
+            raw, lambda s: "please send it" if s > 1.5 else "", armed, resumed)
+        self.drive_quiet(eng, raw)
+        assert len(armed) == 1 and resumed == []
+        assert eng._send_armed
+
+    def test_no_arm_without_the_phrase(self, tmp_path):
+        raw = tmp_path / "c2.raw"
+        raw.write_bytes(pcm(0.2))
+        armed = []
+        eng = self.make_engine(
+            raw, lambda s: "keep talking" if s > 1.5 else "", armed, [])
+        self.drive_quiet(eng, raw)
+        assert armed == []
+
+    def test_no_arm_on_all_silence_take(self, tmp_path):
+        raw = tmp_path / "c3.raw"
+        raw.write_bytes(silence(0.2))
+        armed = []
+        eng = self.make_engine(raw, lambda s: "", armed, [])
+        data = silence(6.0)
+        raw.write_bytes(data)
+        for t in (i * 0.5 + 0.5 for i in range(12)):
+            eng._tick(data, t)
+        assert armed == []
+
+    def test_literal_escape_does_not_arm(self, tmp_path):
+        raw = tmp_path / "c4.raw"
+        raw.write_bytes(pcm(0.2))
+        armed = []
+        eng = self.make_engine(
+            raw, lambda s: "write literal send it" if s > 1.5 else "",
+            armed, [])
+        self.drive_quiet(eng, raw)
+        assert armed == []
+
+    def test_speech_resume_cancels_and_rearms(self, tmp_path):
+        raw = tmp_path / "c5.raw"
+        raw.write_bytes(pcm(0.2))
+        armed, resumed = [], []
+        eng = self.make_engine(
+            raw, lambda s: "one send it" if s > 1.5 else "", armed, resumed)
+        data = self.drive_quiet(eng, raw)          # arm
+        assert len(armed) == 1
+        data += pcm(0.8)                           # speak again
+        raw.write_bytes(data)
+        eng._tick(data, len(data) / BPS)
+        assert len(resumed) == 1 and not eng._send_armed
+        data += silence(1.0)                       # quiet again -> re-arm
+        raw.write_bytes(data)
+        eng._tick(data, len(data) / BPS)
+        eng._tick(data, len(data) / BPS)
+        assert len(armed) == 2
+
+    def test_emission_suppressed_while_armed(self, tmp_path):
+        raw = tmp_path / "c6.raw"
+        raw.write_bytes(pcm(0.2))
+        shown: list[str] = []
+        armed: list[int] = []
+        eng = self.make_engine(
+            raw, lambda s: "first words send it" if s > 1.5 else "",
+            armed, [], shown=shown.append)
+        self.drive_quiet(eng, raw)                 # arm; later emissions skip
+        count_at_arm = len(shown)
+        assert armed and count_at_arm >= 1         # text flowed before arming
+        # more ticks while armed -> no further pill updates
+        data = raw.read_bytes()
+        eng._tick(data, len(data) / BPS)
+        eng._tick(data, len(data) / BPS)
+        assert len(shown) == count_at_arm
+
+    def test_vad_still_fires_when_phrase_absent(self, tmp_path):
+        raw = tmp_path / "c7.raw"
+        raw.write_bytes(pcm(0.2))
+        armed, vad_fired = [], []
+        eng = self.make_engine(
+            raw, lambda s: "no phrase here" if s > 1.5 else "", armed, [],
+            vad_fired=vad_fired)
+        self.drive_quiet(eng, raw, quiet_s=3.0)    # past the VAD threshold
+        assert armed == [] and len(vad_fired) == 1
+
+    def test_armed_countdown_suppresses_vad(self, tmp_path):
+        # phrase present: the countdown is the finisher, the plain VAD
+        # must not fire mid-countdown even past its own threshold
+        raw = tmp_path / "c8.raw"
+        raw.write_bytes(pcm(0.2))
+        armed, vad_fired = [], []
+        eng = self.make_engine(
+            raw, lambda s: "words send it" if s > 1.5 else "", armed, [],
+            vad_fired=vad_fired)
+        self.drive_quiet(eng, raw, quiet_s=3.2)    # well past VAD 2.0 s
+        assert len(armed) == 1
+        assert vad_fired == []                     # suppressed while armed
+        assert eng._send_armed                     # daemon timer takes over
+
+    def test_arms_when_tail_decode_drops_the_phrase(self, tmp_path):
+        # live-smoke regression: once speech stops, the tail window slides
+        # into silence and its decode DROPS the final words - the arm must
+        # fire from the phrase that WAS the end of the text, before the
+        # degraded re-decode can overwrite it
+        raw = tmp_path / "c9.raw"
+        raw.write_bytes(pcm(0.2))
+        armed = []
+
+        def fake(wav, ctx):
+            # decodes made after the recording went quiet (file past the
+            # speech) degrade and lose the final words
+            return ("finish with send it"
+                    if raw.stat().st_size < int(7.4 * BPS)
+                    else "finish with")
+
+        eng = SegmentedPreviewEngine(
+            raw, fake, lambda t: None, interval=0.4, min_audio=0.5,
+            segment_s=2.0, vad_silence_s=2.0,
+            send_phrase="send it", send_countdown_s=1.2,
+            on_send_countdown=lambda: armed.append(1),
+            on_send_resume=lambda: None)
+        self.drive_quiet(eng, raw, speech_s=3.0, quiet_s=1.6)
+        assert len(armed) == 1
+        assert "finish with" == eng.last_text \
+            or eng.last_text.endswith("send it")
+
+    def test_stale_phrase_does_not_arm(self, tmp_path):
+        # speech AFTER the phrase invalidates it: the stamp clears on the
+        # next active-speech tick, so going quiet later does not finish
+        raw = tmp_path / "c10.raw"
+        raw.write_bytes(pcm(0.2))
+        armed = []
+        eng = self.make_engine(
+            raw, lambda s: "later words", armed, [])
+        # simulate: the phrase was the end of the text at 4.0 s...
+        eng.committed = ["please", "send it"]
+        eng.last_text = "please send it"
+        eng._phrase_seen_s = 4.0
+        # ...the user kept talking (fresh speech in the last 1.1 s)...
+        data = pcm(8.0)
+        raw.write_bytes(data)
+        eng._tick(data, 8.0)
+        assert eng._phrase_seen_s is None and armed == []
+        # ...and going quiet afterwards must not arm
+        data += silence(1.2)
+        raw.write_bytes(data)
+        eng._tick(data, 9.2)
+        eng._tick(data, 9.2)
+        assert armed == []
+
+
 class TestThreadedEngine:
     def test_end_to_end_growing_file(self, tmp_path):
         raw = tmp_path / "live.raw"

@@ -102,6 +102,19 @@ def _formatting_lines(cfg: dict) -> list[str]:
     ]
 
 
+def _spoken_send_lines(cfg: dict) -> list[str]:
+    """Spoken-send resolution incl. the quiet countdown (B7)."""
+    r = cfg.get("recording", {}) or {}
+    if not r.get("spoken_send_enabled"):
+        return ["  spoken-send: off (recording.spoken_send_enabled)"]
+    cd = float(r.get("spoken_send_countdown_s", 0.0) or 0.0)
+    cd_line = ("  quiet countdown: off (spoken_send_countdown_s = 0)" if cd <= 0
+               else f"  quiet countdown: {cd:g} s - phrase + 0.5 s quiet "
+                    f"finishes the take by itself (speak to cancel)")
+    return [f"  spoken-send: phrase '{r.get('spoken_send_phrase', 'send it')}'"
+            f" + {r.get('spoken_send_key', 'enter')}", cd_line]
+
+
 def _ai_polish_lines(cfg: dict) -> list[str]:
     """AI polish state incl. the refusal guardrail (informational only)."""
     ai = cfg.get("ai", {}) or {}
@@ -708,6 +721,10 @@ def run() -> int:
 
     print("\nchat/terminal formatting:")
     for line in _formatting_lines(cfg):
+        print(line)
+
+    print("\nspoken-send:")
+    for line in _spoken_send_lines(cfg):
         print(line)
 
     print("\ncommand mode:")

@@ -95,6 +95,10 @@ DEFAULTS: dict[str, Any] = {
         "spoken_send_enabled": False,
         "spoken_send_phrase": "send it",
         "spoken_send_key": "enter",  # enter | shift+enter | ctrl+enter
+        # quiet countdown after the phrase (B7): 0.5 s of silence with the
+        # phrase at the end arms a countdown of this many seconds, then the
+        # dictation finishes by itself (speak again to cancel); 0 = off
+        "spoken_send_countdown_s": 1.2,
         # Live transcription preview while recording
         "preview_enabled": True,
         "preview_mode": "auto",   # auto (pill, falls back) | overlay | notify
@@ -322,6 +326,11 @@ first_pcm_timeout = 2.0
 push_to_talk_button = ""
 # Extra modifiers to require for the button, e.g. ["ctrl"]
 push_to_talk_modifiers = []
+# Spoken-send quiet countdown: after the send phrase ends the dictation
+# and you go quiet (0.5 s), a countdown of this many seconds finishes
+# the take by itself (speak again to cancel); 0 = off. Needs
+# spoken_send_enabled (Settings -> Recording).
+# spoken_send_countdown_s = 1.2
 
 [model]
 # auto | faster-whisper | whisper-torch | whisper.cpp | parakeet
@@ -484,7 +493,8 @@ _SAVE_WHITELIST: dict[str, list[str]] = {
     "recording": ["command", "device", "mic_priority", "max_seconds",
                   "skip_silent",
                   "first_pcm_timeout", "spoken_send_enabled", "spoken_send_phrase",
-                  "spoken_send_key", "preview_enabled", "preview_mode",
+                  "spoken_send_key", "spoken_send_countdown_s",
+                  "preview_enabled", "preview_mode",
                   "preview_interval", "preview_min_audio",
                   "preview_bottom_offset", "preview_overlay_size",
                   "preview_segmented", "preview_segment_s",
@@ -675,6 +685,7 @@ ALLOWED_SETTINGS: dict[str, set] = {
                   "skip_silent",
                   "first_pcm_timeout", "spoken_send_enabled",
                   "spoken_send_phrase", "spoken_send_key",
+                  "spoken_send_countdown_s",
                   "preview_enabled", "preview_mode", "preview_interval",
                   "preview_min_audio", "preview_bottom_offset",
                   "preview_overlay_size", "pause_media",
@@ -733,6 +744,13 @@ def coerce_setting(section: str, key: str, value: Any) -> tuple[bool, Any]:
         ok = isinstance(value, int) and not isinstance(value, bool) \
             and (value == 0 or 30 <= value <= 86400)
         return (ok, value)
+    if (section, key) == ("recording", "spoken_send_countdown_s"):
+        # 0 (feature off) or 0.3..5.0 s of countdown after quiet + phrase
+        try:
+            f = float(value)
+        except (TypeError, ValueError):
+            return (False, value)
+        return (f == 0 or 0.3 <= f <= 5.0, f)
     if (section, key) == ("ai", "per_app_prompts"):
         return _coerce_per_app_prompts(value)
     if (section, key) == ("processing", "formatting_action_triggers"):

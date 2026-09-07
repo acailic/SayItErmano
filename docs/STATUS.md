@@ -96,6 +96,12 @@ matrix + upstream changelog with its refresh loop).
   (context block, follow-up history, temperature 0.7), types the result.
 - **Spoken-send**: trailing "send it" strips and presses Enter afterwards
   ("literal send it" escape honored); configurable phrase/key-combo.
+  **Quiet countdown** (B7 parity, `recording.spoken_send_countdown_s`,
+  default 1.2, 0 = off): 0.5 s of silence with the phrase at the end of
+  the rolling preview arms a countdown — the pill shows "⏎ sending…",
+  speech resumes cancel it, expiry finishes the take by itself (no hotkey
+  press) and Enter is pressed by the existing spoken-send path; the plain
+  VAD auto-stop (2 s) stays as the no-phrase path and backstop.
 - **GAAV mode**: optional lowercase-first + trailing-period strip for
   search-box/casual dictation.
 - **Mic priority list + input-device monitoring** (`recording.mic_priority`):

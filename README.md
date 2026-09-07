@@ -457,6 +457,10 @@ mic_priority = ["bluez", "usb-cam"]  # fallback order when the chosen mic vanish
 # Mouse push-to-talk: hold a spare button to dictate (always hold-style,
 # independent of hotkey.mode). Thumb buttons are usually 8/9; 1–5 refused.
 push_to_talk_button = "button8"  # "" = off
+# Spoken-send quiet countdown: 0.5 s of silence after saying the send
+# phrase finishes the dictation by itself (speak again to cancel) — no
+# hotkey press needed. 0 = off; needs spoken-send enabled in Settings.
+spoken_send_countdown_s = 1.2
 
 [general]
 # Ignore hotkeys + cancel active dictation while the session is locked

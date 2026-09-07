@@ -386,6 +386,7 @@ class Daemon:
         self._cycle_index: int | None = None
         self._watchdog: threading.Timer | None = None
         self._preview: Any = None
+        self._send_countdown_timer: threading.Timer | None = None
         self._closing_display: Any = None
         self._tray: Any = None
         # -- idle model unload (model.idle_unload_s; 0 = off, byte-identical
@@ -1695,14 +1696,29 @@ class Daemon:
                 made = preview_transcriber(self.cfg, self.backend, language)
                 if made is not None:
                     transcriber, bname = made
+                    # track the last shown text so the send-countdown
+                    # notice can be swapped out again on resume
+                    shown = {"text": ""}
+
+                    def _show(text: str, _d=display, _s=shown) -> None:
+                        _s["text"] = text
+                        _d.show(text)
+
                     engine = SegmentedPreviewEngine(
-                        Path(raw_path), transcriber, display.show,
+                        Path(raw_path), transcriber, _show,
                         interval=float(rcfg.get("preview_interval", 1.2)),
                         min_audio=float(rcfg.get("preview_min_audio", 1.0)),
                         segment_s=float(rcfg.get("preview_segment_s", 2.0)),
                         vad_silence_s=float(
                             rcfg.get("preview_vad_silence_s", 2.0)),
-                        on_silence=self._vad_auto_stop)
+                        on_silence=self._vad_auto_stop,
+                        send_phrase=(
+                            str(rcfg.get("spoken_send_phrase", "send it"))
+                            if rcfg.get("spoken_send_enabled") else ""),
+                        send_countdown_s=float(
+                            rcfg.get("spoken_send_countdown_s", 0.0) or 0.0),
+                        on_send_countdown=self._on_send_countdown,
+                        on_send_resume=self._on_send_resume)
                     kind = f"segmented/{bname}"
             if engine is None:
                 model = getattr(self.backend, "_model", None)
@@ -1725,6 +1741,7 @@ class Daemon:
 
     def _stop_preview(self, finishing: bool = False) -> None:
         preview, self._preview = self._preview, None
+        self._cancel_send_countdown()
         if preview is None:
             return
         engine, display = preview
@@ -1749,10 +1766,73 @@ class Daemon:
         # Trailing-silence VAD (segmented preview thread): same finish path
         # as the max-duration watchdog, just a different reason. Re-check
         # under the lock - the user may have stopped the take just now.
+        self._cancel_send_countdown()
         with self._lock:
             if not self.recording:
                 return
             log("trailing silence detected, stopping")
+            self._stop_recording_locked()
+
+    # -- spoken-send quiet countdown (B7) -----------------------------------
+
+    def _on_send_countdown(self) -> None:
+        """Preview engine armed: phrase said + 0.5 s quiet. Show the notice
+        (the engine pauses text emission while armed) and start the timer
+        that finishes the take unless the user speaks again."""
+        countdown = float(self.cfg["recording"].get(
+            "spoken_send_countdown_s", 0.0) or 0.0)
+        if countdown <= 0:
+            return
+        self._cancel_send_countdown()
+        log("spoken-send quiet countdown armed "
+            f"({countdown:.1f} s - speak to cancel)")
+        display = self._preview[1] if self._preview else None
+        if display is not None:
+            try:
+                display.show("⏎ sending… (speak to cancel)")
+            except Exception:
+                pass
+        holder: dict[str, threading.Timer] = {}
+
+        def _fire() -> None:
+            self._send_countdown_stop(holder["t"])
+
+        timer = threading.Timer(countdown, _fire)
+        holder["t"] = timer
+        self._send_countdown_timer = timer
+        timer.start()
+
+    def _on_send_resume(self) -> None:
+        """Speech resumed inside the countdown window: back to recording."""
+        self._cancel_send_countdown()
+        log("spoken-send countdown cancelled (speech resumed)")
+        display = self._preview[1] if self._preview else None
+        engine = self._preview[0] if self._preview else None
+        last = getattr(engine, "last_text", "") if engine else ""
+        if display is not None and last:
+            try:
+                display.show(last[-getattr(engine, "char_limit", 160):]
+                             if len(last) > getattr(engine, "char_limit", 160)
+                             else last)
+            except Exception:
+                pass
+
+    def _cancel_send_countdown(self) -> None:
+        timer, self._send_countdown_timer = \
+            getattr(self, "_send_countdown_timer", None), None
+        if timer is not None:
+            timer.cancel()
+
+    def _send_countdown_stop(self, timer: threading.Timer) -> None:
+        # Identity check first: a stale timer from an earlier take must
+        # never stop the current one.
+        if timer is not getattr(self, "_send_countdown_timer", None):
+            return
+        self._cancel_send_countdown()
+        with self._lock:
+            if not self.recording:
+                return
+            log("spoken-send quiet countdown elapsed, stopping")
             self._stop_recording_locked()
 
     def _close_closing_display(self) -> None:

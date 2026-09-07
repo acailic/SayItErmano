@@ -1845,6 +1845,12 @@ class SettingsWindow(Adw.PreferencesWindow):
                                  [("enter", "enter"),
                                   ("shift+enter", "shift+enter"),
                                   ("ctrl+enter", "ctrl+enter")]))
+        send.add_row(self._spin("recording", "spoken_send_countdown_s",
+                                "Quiet countdown (s)", 0.0, 5.0, 0.1,
+                                digits=1,
+                                subtitle="phrase + 0.5 s quiet finishes "
+                                         "the take by itself (speak to "
+                                         "cancel); 0 = off"))
         polish.add(send)
         page.add(polish)
 
