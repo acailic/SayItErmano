@@ -257,6 +257,12 @@ With Ollama: `ollama pull qwen3:8b`. No key needed for local endpoints; for clou
 providers set `api_key_env = "SAYITERMANO_API_KEY"` and export the variable
 (keys are never written to disk by the tooling).
 
+**Refusal guardrail** (`ai.refusal_guard`, default on): a polish reply that
+reads as a model refusal — "I'm sorry, I can't assist with that." — is never
+typed into your document; the raw transcript is used instead and a
+notification explains why. Opt out with `refusal_guard = false` if you want
+the model's reply verbatim (English patterns only in v1).
+
 ### Command mode (voice → terminal agent)
 
 Set `command_key` under `[hotkey]` to a spare keysym (e.g. `F10`); like the

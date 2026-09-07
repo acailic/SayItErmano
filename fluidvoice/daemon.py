@@ -30,6 +30,7 @@ from .media import MediaController
 from .micmon import match_priority as micmon_match_priority
 from .processing import post_process
 from .processing.per_app import match_app_prompt, system_prompt_for
+from .processing.refusal import is_refusal
 from .processing.slash import squeeze_slash_mentions
 from .recorder import Recorder, RecorderError
 
@@ -157,15 +158,25 @@ class DictationPipeline:
             if instructions and self.polisher is None:
                 prompt = system_prompt_for(
                     override_prompt or base_prompt_for(self.cfg), instructions)
-                return polisher(text, system_prompt=prompt), True
-            if override_prompt:
+                polished = polisher(text, system_prompt=prompt)
+            elif override_prompt:
                 # new path (profiled shortcuts): the override always rides
                 # along, injected polishers included
-                return polisher(text, system_prompt=override_prompt), True
-            return polisher(text), True
+                polished = polisher(text, system_prompt=override_prompt)
+            else:
+                polished = polisher(text)
         except AIError as e:
             self.log(f"AI polish failed ({e}); using raw transcription")
             return text, False
+        # refusal guardrail (D5): a reply that reads as an LLM refusal
+        # never reaches the doc - the raw transcript is typed instead
+        if self.cfg["ai"].get("refusal_guard", True) \
+                and is_refusal(polished):
+            self.log("AI polish refused (guardrail); using raw transcription")
+            self.notify("SayItErmano",
+                        "AI polish refused — typed the raw transcript")
+            return text, False
+        return polished, True
 
     def _rewrite(self, instruction: str, context: str | None, raw: str,
                  duration: float, wav: Path,
@@ -174,6 +185,10 @@ class DictationPipeline:
         try:
             rewriter = self.rewriter or rewrite_mod.run_rewrite
             rewritten = rewriter(instruction, context)
+            if is_refusal(rewritten):
+                # same failure path as a transport error: nothing typed,
+                # the user is told why
+                raise rewrite_mod.RewriteError("the model refused")
         except rewrite_mod.RewriteError as e:
             self.log(f"rewrite failed: {e}")
             self.notify("SayItErmano", f"Rewrite failed: {e}")

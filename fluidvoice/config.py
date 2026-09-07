@@ -173,6 +173,10 @@ DEFAULTS: dict[str, Any] = {
         # custom base prompt for AI polish (empty = the built-in dictation
         # prompt; Settings → AI can save named presets of it)
         "base_prompt": "",
+        # refusal guardrail (D5): a polish reply that reads as an LLM
+        # refusal ("I'm sorry, I can't assist...") never reaches the doc -
+        # the raw transcript is typed instead, with a notification
+        "refusal_guard": True,
     },
     "insertion": {
         "mode": "typed",  # typed | paste | auto (typed, falls back to paste)
@@ -377,6 +381,10 @@ max_retries = 3
 # Custom base prompt for AI polish (empty = built-in). Settings → AI can
 # save named presets of it (prompt profiles).
 # base_prompt = ""
+# Refusal guardrail: a polish reply that reads as a model refusal is
+# dropped (raw transcript typed instead + a notification). false = trust
+# the model blindly.
+# refusal_guard = true
 
 [insertion]
 # typed: simulate keystrokes (xdotool type)
@@ -493,7 +501,8 @@ _SAVE_WHITELIST: dict[str, list[str]] = {
                    "gaav_lowercase_first", "gaav_remove_trailing_period",
                    "slash_mention_squeeze"],
     "ai": ["enabled", "base_url", "model", "api_key", "api_key_env", "temperature",
-           "timeout_seconds", "max_retries", "per_app_prompts", "base_prompt"],
+           "timeout_seconds", "max_retries", "per_app_prompts", "base_prompt",
+           "refusal_guard"],
     "insertion": ["mode", "type_delay_ms", "paste_threshold_chars",
                   "terminal_autocomplete_space", "verify_paste",
                   "terminal_paste_key", "wayland_tool"],
@@ -641,7 +650,8 @@ SETTING_BOOLS = {("general", "copy_to_clipboard"), ("general", "tray_enabled"),
                  ("processing", "gaav_lowercase_first"),
                  ("processing", "gaav_remove_trailing_period"),
                  ("processing", "slash_mention_squeeze"),
-                 ("ai", "enabled"), ("sounds", "enabled"),
+                 ("ai", "enabled"), ("ai", "refusal_guard"),
+                 ("sounds", "enabled"),
                  ("notifications", "enabled"),
                  ("updates", "check"), ("updates", "notify"),
                  ("history", "save"), ("history", "save_audio"),
@@ -681,7 +691,8 @@ ALLOWED_SETTINGS: dict[str, set] = {
                    "gaav_enabled", "gaav_lowercase_first",
                    "gaav_remove_trailing_period", "slash_mention_squeeze"},
     "ai": {"enabled", "base_url", "model", "api_key_env", "temperature",
-           "timeout_seconds", "max_retries", "per_app_prompts", "base_prompt"},
+           "timeout_seconds", "max_retries", "per_app_prompts", "base_prompt",
+           "refusal_guard"},
     "insertion": {"mode", "type_delay_ms", "paste_threshold_chars",
                   "terminal_autocomplete_space", "verify_paste",
                   "terminal_paste_key", "wayland_tool"},

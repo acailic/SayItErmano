@@ -1126,6 +1126,11 @@ class SettingsWindow(Adw.PreferencesWindow):
                            digits=1))
         grp.add(self._spin("ai", "timeout_seconds", "Timeout (s)", 1, 3600, 5))
         grp.add(self._spin("ai", "max_retries", "Max retries", 0, 10, 1))
+        grp.add(self._switch("ai", "refusal_guard", "Refusal guard",
+                             subtitle="a reply that reads as a model refusal "
+                                      "(\"I'm sorry, I can't assist…\") is "
+                                      "never typed — the raw transcript is "
+                                      "used instead"))
         test_row = Adw.ActionRow(title="Test connection")
         test_btn = Gtk.Button(label="Test", css_classes=["suggested-action"])
         test_btn.set_valign(Gtk.Align.CENTER)

@@ -283,6 +283,7 @@ matrix + upstream changelog with its refresh loop).
 
 | Divergence | Why |
 |---|---|
+| AI refusal guardrail (`ai.refusal_guard`, `fluidvoice/processing/refusal.py`): a polish/rewrite reply that reads as an LLM refusal is never typed — the raw transcript is used instead, with a notification; rewrite refusals surface as ordinary rewrite failures | upstream has no guard and its closed model once pasted "I'm sorry, I can't assist with that." into a document (research insight 9); port addition. English patterns only in v1; a dictation that verbatim opens like a refusal falls back to raw text (never data loss, always explained) |
 | Remote OpenAI-compatible STT backend (`model.remote_url`, `fluidvoice/backends/remote_stt.py`): while a URL is configured, each dictation POSTs the recorded WAV to `<url>/v1/audio/transcriptions` (any vLLM/whisper.cpp-server/NIM/DGX-Spark/cloud endpoint) and that backend wins over every local choice; Settings → Models → Remote edits it | upstream declined the community's opt-in PR in favor of a native protocol (research insight 12) — LAN GPU boxes are a real upstream user ask, so this is a deliberate differentiator; local-first: an empty URL means the backend never constructs and no network happens (test-enforced), no live preview/VAD for remote takes in v1 |
 | 429/5xx HTTP responses are retried (upstream never retries HTTP errors) | resilience for rate-limited local/remote endpoints |
 | Thinking-only model answers fall back to the raw transcript (upstream types the raw content) | never type `<think>` junk |

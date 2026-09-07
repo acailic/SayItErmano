@@ -102,6 +102,21 @@ def _formatting_lines(cfg: dict) -> list[str]:
     ]
 
 
+def _ai_polish_lines(cfg: dict) -> list[str]:
+    """AI polish state incl. the refusal guardrail (informational only)."""
+    ai = cfg.get("ai", {}) or {}
+    if not ai.get("enabled"):
+        return ["  ai: disabled - raw transcripts typed as-is"]
+    from urllib.parse import urlparse
+    host = urlparse(str(ai.get("base_url") or "")).netloc or "unknown host"
+    lines = [f"  ai: enabled (model {ai.get('model') or '-'}, {host})"]
+    guard = ai.get("refusal_guard", True)
+    lines.append("  refusal guard: on (ai.refusal_guard) - a refusing "
+                 "reply falls back to the raw transcript" if guard else
+                 "  refusal guard: OFF (ai.refusal_guard = false)")
+    return lines
+
+
 def _command_mode_lines(cfg: dict) -> list[str]:
     """Command mode v2 resolution: AI readiness, tool registry size,
     the destructive-pattern counts (built-in port + user additions), and
@@ -697,6 +712,10 @@ def run() -> int:
 
     print("\ncommand mode:")
     for line in _command_mode_lines(cfg):
+        print(line)
+
+    print("\nai polish:")
+    for line in _ai_polish_lines(cfg):
         print(line)
 
     print("\ninsertion hardening:")

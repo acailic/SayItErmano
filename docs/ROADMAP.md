@@ -104,15 +104,16 @@ sources. Everything below is a known, classified gap — see
       Was: ("slash fix", "at sign
       John", "tag John"); stats page (streak, time-saved, 7/30-day chart);
       pill hover chips (prompt/mode/actions) — stretch.
-- [ ] Leapfrog menu (same doc, C/D tracks, evidence: reviews sweep) — three
+- [ ] Leapfrog menu (same doc, C/D tracks, evidence: reviews sweep) — four
       shipped: idle model-unload / keep-warm policy (`model.idle_unload_s`,
       923001e); fast language switching + whisper language whitelist
       (`hotkey.language_key` + `general.language_cycle`/`language_whitelist`,
       d604db8…052df8a); OpenAI-compatible remote STT endpoint as a backend
       (`model.remote_url`, `fluidvoice/backends/remote_stt.py` — LAN GPU
-      boxes, upstream declined the PR). Still open: AI refusal/derail
-      guardrail (never type "I'm sorry…"); scriptable unix-socket API
-      (upstream loopback-API parity without TCP); AT-SPI caret-context
+      boxes, upstream declined the PR); AI refusal/derail guardrail
+      (`ai.refusal_guard`, `fluidvoice/processing/refusal.py` — refusals
+      fall back to the raw transcript). Still open: scriptable unix-socket
+      API (upstream loopback-API parity without TCP); AT-SPI caret-context
       smart typing; per-app behavior profiles; diarization; n-best pick
       lists (blocked on backend alternates).
 - [x] Command mode (voice → terminal agent) with the upstream tool schema and
