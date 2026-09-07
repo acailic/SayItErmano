@@ -1,5 +1,12 @@
 # Plan: Remote OpenAI-compatible STT backend (`remote_url`)
 
+> **SUPERSEDED by specs/32addb7e_remote-stt-backend.md** (written before the
+> language-cycle/guard work landed; 32addb7e re-verifies every seam and was
+> the one built — SHIPPED in e2b49ce). Kept for history; do not build from
+> this file.
+
+## Context & verified facts (read before building)
+
 ## Context & verified facts (read before building)
 
 Source request: docs/research/2026-09-05-fluidvoice-reviews.md insight 12 — upstream
