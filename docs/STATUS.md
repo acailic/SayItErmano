@@ -420,7 +420,10 @@ matrix + upstream changelog with its refresh loop).
 - [ ] **Live smoke checklist** (run per compositor, priority GNOME-Wayland
       then sway; note results here as they land — unit coverage is
       complete in `tests/test_wayland_capabilities.py`, these are the
-      live-verification items):
+      live-verification items). *Blocked on this dev machine (noted
+      2026-09-08): no Wayland compositor installed (GNOME runs X11 here)
+      and no sudo to add one; needs a real Wayland session — sway or a
+      GNOME-Wayland login — to execute.*
       1. Baseline, no tools installed: daemon starts in the foreground
          AND under the installed systemd user unit (the unit bakes
          `Environment=DISPLAY` — confirm `XDG_SESSION_TYPE`/
