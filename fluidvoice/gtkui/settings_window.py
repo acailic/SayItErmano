@@ -177,9 +177,9 @@ class _InstructionRow(Adw.PreferencesRow):
 
 class SettingsWindow(Adw.PreferencesWindow):
     def __init__(self, application=None, client=None):
-        load_style()
         super().__init__(application=application, title="Settings",
                          default_width=680, default_height=680)
+        load_style()  # after super(): display is open, icons resolve
         self.c = client or Client()
         self.cfg: dict = {}
         self._from_daemon = False

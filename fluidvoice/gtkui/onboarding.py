@@ -50,9 +50,9 @@ class _CheckRow(Gtk.ListBoxRow):
 
 class OnboardingWindow(Adw.ApplicationWindow):
     def __init__(self, application=None, client=None):
-        load_style()
         super().__init__(application=application, title="Welcome to SayItErmano",
                          default_width=560, default_height=640)
+        load_style()  # after super(): display is open, icons resolve
         self.c = client or Client()
 
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)

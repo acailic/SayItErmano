@@ -1129,6 +1129,48 @@ class TestUiPolish:
         style.load_style()
         assert style._loaded is True
 
+    def test_window_construction_registers_bundled_icons(self):
+        """Fresh-process tripwire: a window built WITHOUT the app shell
+        (tests, screenshot drivers, embedding) must still make the
+        fluidvoice-* tab icons resolvable. do_activate never runs in such
+        processes, and without the system deb's hicolor copies the
+        settings tabs would render missing-image placeholders (the
+        2026-09-08 screenshot bug)."""
+        import os
+        import subprocess
+        import sys
+        code = (
+            "import sys; sys.path.insert(0, 'tests')\n"
+            "import gi\n"
+            "gi.require_version('Gtk', '4.0')\n"
+            "gi.require_version('Adw', '1')\n"
+            "from gi.repository import Adw, Gdk, GLib, Gtk\n"
+            "Adw.init()\n"
+            "from test_gtkui import StubClient\n"
+            "from fluidvoice.gtkui.main_window import HistoryWindow\n"
+            "from fluidvoice.gtkui.onboarding import OnboardingWindow\n"
+            "from fluidvoice.gtkui.settings_window import SettingsWindow\n"
+            "wins = [HistoryWindow(client=StubClient()),\n"
+            "        OnboardingWindow(client=StubClient()),\n"
+            "        SettingsWindow(client=StubClient())]\n"
+            "for w in wins:\n"
+            "    w.present()\n"
+            "loop = GLib.MainLoop()\n"
+            "GLib.timeout_add(300, loop.quit)\n"
+            "loop.run()\n"
+            "theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())\n"
+            "names = [f'fluidvoice-{n}-symbolic' for n in "
+            "('general', 'models', 'polish', 'dictation', 'history', 'about')]\n"
+            "missing = [n for n in names if not theme.has_icon(n)]\n"
+            "print('MISSING ' + ','.join(missing) if missing else 'OK')\n"
+        )
+        env = dict(os.environ)
+        r = subprocess.run([sys.executable, "-c", code], capture_output=True,
+                           text=True, timeout=60, env=env, cwd=os.getcwd())
+        assert r.returncode == 0, r.stderr
+        assert r.stdout.strip().endswith("OK"), \
+            f"unresolved icons: {r.stdout.strip()}"
+
     def test_onboarding_checklist_rows(self, loop):
         from fluidvoice.gtkui.onboarding import OnboardingWindow
         w = OnboardingWindow(client=StubClient())
