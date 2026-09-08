@@ -12,13 +12,19 @@
 <p align="center">
   <a href="https://github.com/acailic/SayItErmano/releases"><img src="https://img.shields.io/github/v/release/acailic/SayItErmano?color=blue&label=release" alt="latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/acailic/SayItErmano?color=blue" alt="license GPL-3.0"></a>
-  <img src="https://img.shields.io/badge/tests-558%20passing-brightgreen" alt="558 automated tests">
+  <img src="https://img.shields.io/badge/tests-1759%20passing-brightgreen" alt="1759 automated tests">
   <img src="https://img.shields.io/badge/platform-Linux%20%C2%B7%20X11%20%C2%B7%20Wayland%20%C2%B7%20GTK%204-blue" alt="Linux · X11 · Wayland · GTK 4">
   <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
 </p>
 
 <p align="center">
   <img src="docs/screenshots/demo.gif" width="740" alt="animated demo: press Right Ctrl, the pill shows a live waveform and streaming transcription, then the polished sentence is typed into the chat app">
+</p>
+
+<p align="center">
+  <a href="https://youtu.be/HWyjH-VCBAw" title="Watch the demo on YouTube">
+    <img src="docs/screenshots/demo-video-thumbnail.png" width="560" alt="SayItErmano demo video — watch on YouTube: a real end-to-end dictation with the live pill, language cycling and spoken-send"></a><br>
+  <sub><a href="https://youtu.be/HWyjH-VCBAw">▶ Watch the one-minute demo video</a> — real end-to-end run: hotkey → live pill → typed text → language cycle → spoken-send.</sub>
 </p>
 
 > [!NOTE]
@@ -38,6 +44,20 @@
 > and takes over its config, history and models.
 
 ## What's new
+
+**[v0.7.0](https://github.com/acailic/SayItErmano/releases/tag/v0.7.0)** — the
+languages + endpoints + guardrails release: a **runtime language-cycle hotkey**
+with a wrong-language whitelist guard, an optional **OpenAI-compatible remote
+STT backend** (`model.remote_url` — point dictation at a LAN vLLM/whisper.cpp
+box; off by default, nothing leaves your machine otherwise), an **AI refusal
+guardrail** (a refusing polish model never types into your document), a
+**spoken-send quiet countdown**, **vocabulary boosting** (`model.hotwords`),
+an **MCP server** (`sayit-ermano mcp`) and a scriptable unix-socket API, plus
+a mid-take stall watchdog.
+
+**[v0.6.0](https://github.com/acailic/SayItErmano/releases/tag/v0.6.0)** —
+Wayland session support, segmented streaming preview on every backend with
+VAD auto-stop, and command mode v2.
 
 **[v0.4.0](https://github.com/acailic/SayItErmano/releases/tag/v0.4.0)** — the
 SayItErmano identity: repo, .deb package, command, launcher and tray entry all
