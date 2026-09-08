@@ -41,7 +41,7 @@ from .style import load_style
 
 
 class SettingsWindow(
-    Adw.PreferencesWindow,
+    Adw.ApplicationWindow,
     GeneralPageMixin,
     ModelsPageMixin,
     AIPageMixin,
@@ -56,8 +56,8 @@ class SettingsWindow(
         super().__init__(
             application=application,
             title="Settings",
-            default_width=680,
-            default_height=680,
+            default_width=840,
+            default_height=700,
         )
         load_style()  # after super(): display is open, icons resolve
         self.c = client or Client()
@@ -87,6 +87,7 @@ class SettingsWindow(
         self._model_lang_values_map: dict[str, list] = {}  # name -> values
         self._suppress_touch = False  # programmatic combo rebuilds
 
+        self._build_chrome()
         self._build_general()
         self._build_models()
         self._build_ai()
@@ -94,6 +95,7 @@ class SettingsWindow(
         self._build_wayland()
         self._build_history_page()
         self._build_about()
+        self._select_first_page()
 
         self.install_action("settings.save", None, lambda w, _n, _p: w.save())
         Adw.StyleManager.get_default().connect(
@@ -110,6 +112,102 @@ class SettingsWindow(
         self.connect("close-request", self._on_close_request)
 
         self._load()
+
+    # -- sidebar navigation (audit C5b/2: NavigationSplitView replaces the
+    #    PreferencesWindow bottom tab switcher - one page at a time, the
+    #    standard GNOME settings pattern; collapses to push navigation on
+    #    narrow windows) ------------------------------------------------------
+
+    def _build_chrome(self) -> None:
+        self._page_stack = Gtk.Stack(
+            transition_type=Gtk.StackTransitionType.CROSSFADE,
+            vexpand=True,
+            hexpand=True,
+        )
+        self._sidebar_rows: dict[str, Gtk.ListBoxRow] = {}
+        self._sidebar = Gtk.ListBox(css_classes=["navigation-sidebar"])
+        self._sidebar.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self._sidebar.connect("row-activated", self._on_sidebar_activated)
+        sidebar_scroll = Gtk.ScrolledWindow()
+        sidebar_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sidebar_scroll.set_child(self._sidebar)
+        sidebar_header = Adw.HeaderBar(
+            title_widget=Adw.WindowTitle(title="Settings"),
+            show_back_button=False,
+        )
+        sidebar_toolbar = Adw.ToolbarView()
+        sidebar_toolbar.add_top_bar(sidebar_header)
+        sidebar_toolbar.set_content(sidebar_scroll)
+        sidebar_page = Adw.NavigationPage(title="Settings", child=sidebar_toolbar)
+
+        self._content_title = Adw.WindowTitle(title="Settings")
+        content_header = Adw.HeaderBar(title_widget=self._content_title)
+        content_toolbar = Adw.ToolbarView()
+        content_toolbar.add_top_bar(content_header)
+        content_toolbar.set_content(self._page_stack)
+        content_page = Adw.NavigationPage(title="", child=content_toolbar)
+
+        self._split = Adw.NavigationSplitView(
+            sidebar=sidebar_page, content=content_page
+        )
+        self._toast_overlay = Adw.ToastOverlay(child=self._split)
+        self.set_content(self._toast_overlay)
+
+    def _add_page(self, page: Adw.PreferencesPage) -> None:
+        """Register a built page: content stack + one sidebar row."""
+        self._page_stack.add_named(page, page.get_name())
+        hbox = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL,
+            spacing=10,
+            margin_top=6,
+            margin_bottom=6,
+            margin_start=8,
+            margin_end=8,
+        )
+        hbox.append(Gtk.Image(icon_name=page.get_icon_name()))
+        hbox.append(Gtk.Label(label=page.get_title(), halign=Gtk.Align.START))
+        row = Gtk.ListBoxRow(child=hbox)
+        self._sidebar_rows[page.get_name()] = row
+        self._sidebar.append(row)
+
+    def _select_first_page(self) -> None:
+        first = self._sidebar.get_first_child()
+        if first is not None:
+            self._sidebar.select_row(first)
+            self._show_selected_page(first)
+
+    def _on_sidebar_activated(self, _list, row) -> None:
+        self._show_selected_page(row)
+        self._split.set_show_content(True)  # collapsed: push the page
+
+    def _show_selected_page(self, row) -> None:
+        for name, r in self._sidebar_rows.items():
+            if r is row:
+                self._page_stack.set_visible_child_name(name)
+                self._content_title.set_title(
+                    next(
+                        (
+                            p.get_title()
+                            for p in self._iter_pages()
+                            if p.get_name() == name
+                        ),
+                        "Settings",
+                    )
+                )
+                break
+
+    def _iter_pages(self):
+        child = self._page_stack.get_first_child()
+        while child is not None:
+            yield child
+            child = child.get_next_sibling()
+
+    def _show_page(self, name: str) -> None:
+        """Programmatic page select (tests, drivers)."""
+        row = self._sidebar_rows.get(name)
+        if row is not None:
+            self._sidebar.select_row(row)
+            self._show_selected_page(row)
 
     def _save_group(self) -> Adw.PreferencesGroup:
         grp = Adw.PreferencesGroup()
@@ -359,7 +457,7 @@ class SettingsWindow(
         return True
 
     def toast(self, text: str, timeout: int = 5) -> None:
-        super().add_toast(Adw.Toast(title=text, timeout=timeout))
+        self._toast_overlay.add_toast(Adw.Toast(title=text, timeout=timeout))
 
     def _on_close_request(self, *_args) -> bool:
         if not self._dirty:

@@ -181,7 +181,7 @@ class ModelsPageMixin:
         self._disk_rows: list[Adw.ActionRow] = []
         page.add(self.disk_group)
         page.add(self._save_group())
-        self.add(page)
+        self._add_page(page)
 
     def _refresh_models(self) -> None:
         for row in self._model_rows:

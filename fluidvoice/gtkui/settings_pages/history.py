@@ -51,7 +51,7 @@ class HistoryPageMixin:
         grp.add(browse)
         page.add(grp)
         page.add(self._save_group())
-        self.add(page)
+        self._add_page(page)
 
     def _confirm_clear_history(self, _btn) -> None:
         def confirmed(dialog, response):

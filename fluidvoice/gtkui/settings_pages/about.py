@@ -36,7 +36,7 @@ class AboutPageMixin:
         about_btn_row.add_suffix(about_btn)
         grp.add(about_btn_row)
         page.add(grp)
-        self.add(page)
+        self._add_page(page)
 
     def _show_about_dialog(self, *_args) -> None:
         dlg = Adw.AboutDialog(

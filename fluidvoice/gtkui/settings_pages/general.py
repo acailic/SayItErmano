@@ -76,7 +76,7 @@ class GeneralPageMixin:
         page.add(wgrp)
 
         page.add(self._save_group())
-        self.add(page)
+        self._add_page(page)
 
     def _load_language_cycle(self, codes: list) -> None:
         for ref in list(self._cycle_rows):

@@ -430,7 +430,7 @@ class DictationPageMixin:
         )
         page.add(ins)
         page.add(self._save_group())
-        self.add(page)
+        self._add_page(page)
 
     def _fill_mics(self) -> None:
         values: list[tuple[str, str]] = [("Auto (system default)", "")]

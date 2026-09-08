@@ -152,7 +152,7 @@ class AIPageMixin:
         )
         page.add(cmd)
         page.add(self._save_group())
-        self.add(page)
+        self._add_page(page)
 
     def _update_provider_logo(self) -> None:
         """Show the macOS-style provider logo matching the AI base URL."""
