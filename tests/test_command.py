@@ -246,6 +246,28 @@ class TestDestructiveClassification:
     def test_negatives(self, cmd):
         assert cm.is_destructive_command(cmd) is False
 
+    @pytest.mark.parametrize("cmd", [
+        # upstream #861 bypass classes: find-based deletion never matched
+        # the prefix list
+        "find /tmp -name x -delete",
+        "find . -type f -delete",
+        "/usr/bin/find ~ -name '*.log' -delete",
+        "find . -exec rm {} +",
+        "find / -name core -exec rm -f {} \\;",
+        "find . -exec sudo chmod 000 {} \\;",
+        "FIND . -DELETE",
+    ])
+    def test_find_bypass_classes_match(self, cmd):
+        assert cm.is_destructive_command(cmd) is True
+
+    @pytest.mark.parametrize("cmd", [
+        "echo execute the plan",        # ' -exec ' needs the space, not 'execute'
+        "echo delete this file later",  # plain word, no ' -delete' flag form
+        "cat find.txt",
+    ])
+    def test_find_rules_no_false_positives(self, cmd):
+        assert cm.is_destructive_command(cmd) is False
+
     def test_user_patterns_ci_substring(self):
         assert cm.is_destructive_command(
             "git push origin main", ["git push"]) is True
@@ -256,10 +278,11 @@ class TestDestructiveClassification:
         assert cm.is_destructive_command("ls", None) is False
 
     def test_builtin_counts(self):
-        # doctor reports 28 built-in rules (19 prefixes + 9 patterns);
+        # doctor reports the built-in rule count; 19 prefixes + 11
+        # patterns (9 upstream + 2 for the #861 find bypass classes);
         # the anywhere 'rm -' rule rides on top of them
         assert len(cm.DESTRUCTIVE_PREFIXES) == 19
-        assert len(cm.DESTRUCTIVE_PATTERNS) == 9
+        assert len(cm.DESTRUCTIVE_PATTERNS) == 11
 
     def test_parsed_call_carries_destructive_flag(self):
         r = cm.parse_reply(reply(("rm -rf /tmp/junk", "clean")))
@@ -738,6 +761,19 @@ class TestRunShell:
         assert out.success is False
         assert out.exit_code == -1
         assert "timed out" in out.error
+
+    def test_timeout_kills_descendants_holding_pipes(self):
+        # upstream #930: a background child inheriting stdout kept the
+        # pipe read alive far past the timeout; the whole process group
+        # must die instead (bounded wall time proves it)
+        import time as _time
+        t0 = _time.monotonic()
+        out = cm.run_shell("echo started; (sleep 30; echo late) &",
+                           cwd=None, timeout=0.5)
+        elapsed = _time.monotonic() - t0
+        assert out.success is False and "timed out" in out.error
+        assert "started" in out.output          # partial output collected
+        assert elapsed < 10.0                    # pre-fix this hangs ~30 s
 
     def test_output_clipping(self):
         long_text = "x" * 5000

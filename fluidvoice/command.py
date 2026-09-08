@@ -16,6 +16,7 @@ the codebase.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import time
@@ -196,6 +197,11 @@ DESTRUCTIVE_PATTERNS = [                 # piped/compound anywhere (:585-591)
     "; rm ", "; sudo ",
     "&& rm ", "&& sudo ",
     "xargs rm", "xargs -I",
+    # find-based deletion/exec (upstream #861 bypass classes): `find …
+    # -delete` and `find … -exec rm` deleted files while never matching
+    # the prefix list; the leading space keeps "-exec"/"-delete" from
+    # hitting words like "execute"
+    " -delete", " -exec ",
 ]
 
 
@@ -316,7 +322,12 @@ def working_dir(cfg: dict) -> Path:
 def run_shell(command: str, cwd: Path | None = None,
               timeout: float = 60.0) -> CommandOutcome:
     """`bash -c` (falls back to `sh -c`) with a timeout. TimeoutExpired /
-    OSError become failure outcomes, never exceptions."""
+    OSError become failure outcomes, never exceptions. The shell runs in
+    its own process group and timeout kills the WHOLE group (upstream
+    #930: a background descendant holding stdout/stderr kept the pipe
+    read - and the user's turn - alive far past the timeout)."""
+    import signal
+
     shell = "/bin/bash" if Path("/bin/bash").exists() else "/bin/sh"
     started = time.monotonic()
 
@@ -324,23 +335,27 @@ def run_shell(command: str, cwd: Path | None = None,
         return int((time.monotonic() - started) * 1000)
 
     try:
-        proc = subprocess.run([shell, "-c", command],
-                              cwd=str(cwd) if cwd else None,
-                              capture_output=True, text=True, timeout=timeout)
-        output = (proc.stdout or "") + (proc.stderr or "")
+        proc = subprocess.Popen(
+            [shell, "-c", command],
+            cwd=str(cwd) if cwd else None,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            start_new_session=True)
+        try:
+            out, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            try:  # kill the group: the shell AND its descendants
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError, OSError):
+                proc.kill()  # already gone or not ours to signal
+            out, err = proc.communicate(timeout=5)
+            return CommandOutcome(
+                command=command, success=False, exit_code=-1,
+                output=(out or "") + (err or ""),
+                error=f"timed out after {timeout}s", duration_ms=_ms())
         return CommandOutcome(command=command,
                               success=proc.returncode == 0,
-                              exit_code=proc.returncode, output=output,
-                              duration_ms=_ms())
-    except subprocess.TimeoutExpired as e:
-        partial = ""
-        for chunk in (e.stdout, e.stderr):
-            if chunk:
-                partial += chunk.decode(errors="replace") \
-                    if isinstance(chunk, bytes) else str(chunk)
-        return CommandOutcome(command=command, success=False, exit_code=-1,
-                              output=partial,
-                              error=f"timed out after {timeout}s",
+                              exit_code=proc.returncode,
+                              output=(out or "") + (err or ""),
                               duration_ms=_ms())
     except OSError as e:
         return CommandOutcome(command=command, success=False, exit_code=-1,
