@@ -14,11 +14,37 @@ class ControlError(RuntimeError):
     pass
 
 
+def _probe_live(path: Path) -> bool:
+    """True when a daemon ANSWERS at path (read-only status probe)."""
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(1.0)
+            s.connect(str(path))
+            s.sendall(b'{"action": "status"}\n')
+            buf = b""
+            while b"\n" not in buf:
+                chunk = s.recv(65536)
+                if not chunk:
+                    break
+                buf += chunk
+        return buf.strip().startswith(b"{")
+    except OSError:
+        return False
+
+
 def serve(handler: Callable[[dict], dict], path: Path | None = None,
           ready: threading.Event | None = None) -> socket.socket:
     """Start a background thread serving JSON-line requests. Returns the socket."""
     path = path or paths.socket_path()
     path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() and _probe_live(path):
+        # never steal a socket a LIVE daemon is answering: sandboxed
+        # second instances (isolated XDG_CONFIG_HOME, shared runtime dir)
+        # would otherwise unlink the production daemon's control channel
+        raise ControlError(
+            f"another sayit-ermano daemon is answering at {path} - "
+            "refusing to steal its control socket (point "
+            "SAYITERMANO_SOCKET elsewhere for a second instance)")
     path.unlink(missing_ok=True)
     srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     srv.bind(str(path))

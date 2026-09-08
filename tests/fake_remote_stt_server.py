@@ -180,18 +180,19 @@ def main(argv: list[str] | None = None) -> int:
 
     srv = FakeRemoteSttServer(mode=args.mode, verbose=args.verbose,
                              port=args.port).start()
-    print(f"fake STT server listening on {srv.url} (mode {args.mode})")
+    print(f"fake STT server listening on {srv.url} (mode {args.mode})",
+          flush=True)
     body = RESPONSES.get(args.mode, RESPONSES["default"])[1]
     try:
-        print(f'transcribes to: {json.loads(body)["text"]!r}')
+        print(f'transcribes to: {json.loads(body)["text"]!r}', flush=True)
     except ValueError:  # http500/http401/bad_json: no JSON payload to quote
-        print(f"responds with: {body!r}")
-    print("ready-to-paste config:")
+        print(f"responds with: {body!r}", flush=True)
+    print("ready-to-paste config:", flush=True)
     print(f'  [model]')
     print(f'  remote_url = "{srv.url}"')
     print("  remote_model = \"whisper-large-v3\"   # any string; echoed in the "
           "request log")
-    print("Ctrl-C to stop")
+    print("Ctrl-C to stop", flush=True)
     try:
         threading.Event().wait()
     except KeyboardInterrupt:

@@ -629,7 +629,11 @@ def _evdev_ptt_lines(cfg: dict) -> list[str]:
 
 
 def run() -> int:
+    import fluidvoice
     print(f"SayItErmano v{__version__} doctor\n")
+    # cwd shadowing trap: running from a checkout imports THAT tree while
+    # the installed one may differ - say which code answered
+    print(f"module: {Path(fluidvoice.__file__).parent}")
     ok = True
 
     try:

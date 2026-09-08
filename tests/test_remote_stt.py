@@ -438,3 +438,33 @@ class TestDaemonWarmupClearsRemote:
         assert d.cfg["model"]["remote_url"] == ""  # cleared in place
         assert d.backend.name == "faster-whisper"  # local hot-swapped in
         assert saved and saved[0]["model"]["remote_url"] == ""  # persisted
+
+
+class TestStandaloneServer:
+    def test_error_mode_banner_does_not_crash(self):
+        """D4 (audit): the standalone main() banner crashed on non-JSON
+        modes (http500/http401) - the unit tests only used the in-process
+        server. Run the real CLI and expect a listening line + a refusal."""
+        import subprocess
+        import sys
+        import urllib.request
+        import urllib.error
+        proc = subprocess.Popen(
+            [sys.executable, str(Path(__file__).parent /
+                                 "fake_remote_stt_server.py"),
+             "0", "--mode", "http500"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        try:
+            line = proc.stdout.readline()
+            assert "listening on" in line and "http500" in line
+            assert "transcribes to" not in line   # old crash point
+            url = line.split("listening on ")[1].strip().split(" ")[0]
+            try:
+                urllib.request.urlopen(
+                    urllib.request.Request(url + "/v1/audio/transcriptions",
+                                           data=b"x"), timeout=3)
+            except urllib.error.HTTPError as e:
+                assert e.code == 500
+        finally:
+            proc.terminate()
+            proc.wait(timeout=5)

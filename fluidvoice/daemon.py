@@ -742,6 +742,11 @@ class Daemon:
         device = self.cfg["recording"].get("device", "")
         if not device:
             return
+        if device.endswith(".monitor"):
+            # explicit monitor tap (routing/testing): invisible to the
+            # monitor-excluding source list BY DESIGN - trust the setting,
+            # never warn or auto-switch away from it
+            return
         if device in names:
             self._mic_missing_logged = False  # reset the warn-once latch
             return
