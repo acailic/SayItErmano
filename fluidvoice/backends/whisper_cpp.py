@@ -1,7 +1,6 @@
 """whisper.cpp backend - uses an external whisper-cli binary + ggml/gguf model."""
 from __future__ import annotations
 
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Any

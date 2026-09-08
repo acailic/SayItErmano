@@ -18,9 +18,9 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from . import __version__, backends, control, insertion, ui
+from . import __version__, backends, control, insertion, paths, ui
 from . import history as history_mod
-from . import paths, session as session_mod
+from . import session as session_mod
 from . import update as update_mod
 from .ai.client import AIClient, AIError
 from .ai.prompts import base_prompt_for
@@ -545,8 +545,8 @@ class Daemon:
         mics = [{"kind": "check", "label": "Auto (system default)",
                  "checked": not device,
                  "action": lambda: self._set_device("")}]
-        from .tray import list_microphones
         from .micmon import sort_by_priority
+        from .tray import list_microphones
         mic_names = self.cfg["recording"].get("mic_priority") or []
         for m in sort_by_priority(list_microphones(), mic_names):
             mics.append({"kind": "check", "label": m["description"],
@@ -640,7 +640,7 @@ class Daemon:
         an active dictation is cancelled (see lockmon.py for the sources)."""
         if not self.cfg.get("general", {}).get("pause_when_locked", True):
             return  # feature disabled
-        from .lockmon import LockMonitor, VIA_DISPLAY
+        from .lockmon import VIA_DISPLAY, LockMonitor
         mon = LockMonitor(on_change=self._on_locked, log=log)
         if not mon.start():
             return  # already logged why (dbus missing / logind absent)
@@ -1539,8 +1539,7 @@ class Daemon:
     def _set_config(self, body: dict) -> dict:
         """Validated settings merge over the socket (native-app spec):
         validate -> save -> hot-apply what the daemon can take live."""
-        from .config import (RESTART_REQUIRED, ENGINE_KEYS, apply_settings,
-                             save_config)
+        from .config import ENGINE_KEYS, RESTART_REQUIRED, apply_settings, save_config
         changed, rejected = apply_settings(self.cfg, body)
         if changed:
             try:
@@ -1694,10 +1693,13 @@ class Daemon:
             return
         try:
             from .overlay import FluidOverlay
-            from .preview import (NotifyPreview, PreviewEngine,
-                                  SegmentedPreviewEngine,
-                                  faster_whisper_transcriber,
-                                  preview_transcriber)
+            from .preview import (
+                NotifyPreview,
+                PreviewEngine,
+                SegmentedPreviewEngine,
+                faster_whisper_transcriber,
+                preview_transcriber,
+            )
             mode = rcfg.get("preview_mode", "auto")
             if mode in ("auto", "overlay"):
                 # FluidOverlay itself falls back to notifications when the

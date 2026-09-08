@@ -35,7 +35,7 @@ from __future__ import annotations
 import threading
 import time
 
-from Xlib import X, XK
+from Xlib import XK, X
 from Xlib.display import Display
 from Xlib.ext import xinput as _xi_ext
 

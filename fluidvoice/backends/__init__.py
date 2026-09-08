@@ -131,6 +131,7 @@ def backend_status() -> dict[str, str]:
     if _import_ok("onnxruntime"):
         try:
             import onnxruntime as ort
+
             from .. import model_catalog
             provs = [p for p in ("CUDAExecutionProvider",
                                  "CPUExecutionProvider")
@@ -347,4 +348,4 @@ def load_backend(cfg: dict) -> Backend:
 
 
 # stdlib-only module: safe to re-export for direct users (tests, doctor)
-from .remote_stt import RemoteSttError, RemoteSttBackend  # noqa: E402,F401
+from .remote_stt import RemoteSttBackend, RemoteSttError  # noqa: E402,F401

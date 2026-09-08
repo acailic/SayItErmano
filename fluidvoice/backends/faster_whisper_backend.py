@@ -7,8 +7,13 @@ import wave
 from pathlib import Path
 from typing import Any
 
-from . import (FW_MODEL_REPOS, cuda_available, effective_language,
-               preload_cuda_libs, resolve_model_name)
+from . import (
+    FW_MODEL_REPOS,
+    cuda_available,
+    effective_language,
+    preload_cuda_libs,
+    resolve_model_name,
+)
 
 
 class FasterWhisperBackend:
@@ -19,7 +24,7 @@ class FasterWhisperBackend:
 
     def __init__(self, cfg: dict):
         preload_cuda_libs()  # must run before ctranslate2 loads its CUDA libs
-        from faster_whisper import WhisperModel  # noqa: deferred import
+        from faster_whisper import WhisperModel  # deferred import
 
         self._WhisperModel = WhisperModel
         mcfg = cfg["model"]

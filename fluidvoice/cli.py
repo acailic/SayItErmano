@@ -9,7 +9,8 @@ import sys
 import time
 from pathlib import Path
 
-from . import __version__, doctor as doctor_mod, paths
+from . import __version__, paths
+from . import doctor as doctor_mod
 from .config import load_config, write_template
 
 # Above this size we warn: v1 has no chunked uploads, so huge inputs are slow.
@@ -326,6 +327,7 @@ def _acquire_daemon_lock():
     systemd unit - at login both fire. First instance holds an flock on
     ~/.config/sayit-ermano/daemon.lock; the second exits immediately."""
     import fcntl
+
     from .paths import config_dir
     global _DAEMON_LOCK_FILE
     path = config_dir() / "daemon.lock"

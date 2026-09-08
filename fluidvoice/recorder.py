@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import shutil
 import signal
-import threading
 import subprocess
+import threading
 import time
 from pathlib import Path
 

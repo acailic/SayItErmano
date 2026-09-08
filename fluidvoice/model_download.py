@@ -11,7 +11,11 @@ import urllib.request
 from pathlib import Path
 from typing import Callable
 
-from . import __version__, model_catalog, paths  # noqa: F401 - paths re-exported for callers
+from . import (  # noqa: F401 - paths re-exported for callers
+    __version__,
+    model_catalog,
+    paths,
+)
 
 Progress = Callable[[int, "int | None"], None]
 CHUNK_BYTES = 64 * 1024

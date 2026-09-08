@@ -4,8 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from . import (ALIASES, cuda_available, effective_language,
-               resolve_model_name)
+from . import cuda_available, effective_language, resolve_model_name
 
 
 class TorchWhisperBackend:
@@ -15,7 +14,7 @@ class TorchWhisperBackend:
     surfaces_detected_language = True
 
     def __init__(self, cfg: dict):
-        import whisper  # noqa: openai-whisper
+        import whisper  # openai-whisper (deferred)
 
         self._whisper = whisper
         mcfg = cfg["model"]

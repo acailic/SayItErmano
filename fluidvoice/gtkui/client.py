@@ -10,9 +10,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from .. import control, history as history_mod
-from ..config import (RESTART_REQUIRED, apply_settings, load_config,
-                      mask_secrets, save_config)
+from .. import control
+from .. import history as history_mod
+from ..config import (
+    RESTART_REQUIRED,
+    apply_settings,
+    load_config,
+    mask_secrets,
+    save_config,
+)
 
 
 class ClientError(RuntimeError):

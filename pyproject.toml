@@ -53,3 +53,11 @@ include = ["fluidvoice*"]
 
 [tool.pytest.ini_options]
 markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')", "integration: real-subsystem tests (mic, GPU, daemon process, network)", "desktop: live-interactive-session tests (X grabs, screen pixels) - excluded from default runs"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+# Minimal, deliberately: the house style keeps broad try/excepts on
+# best-effort paths (preview, tray, doctor) - blind-except style rules
+# would flood. Import order + unused imports only, for now.
+select = ["I001", "F401"]

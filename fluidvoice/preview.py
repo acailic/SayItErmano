@@ -410,6 +410,7 @@ def preview_transcriber(cfg: dict, backend, language: str | None
 
     if name == "parakeet" and getattr(backend, "_decoder", None) is not None:
         import numpy as np
+
         from .backends.parakeet_onnx import SAMPLE_RATE, TAIL_PAD_S, detokenize
 
         def pk(wav: bytes, ctx: str | None) -> str:  # ctx unused: no prompt concept
@@ -434,9 +435,9 @@ def preview_transcriber(cfg: dict, backend, language: str | None
         if binary and model_path:  # constructor validated both already
 
             def wc(wav: bytes, ctx: str | None) -> str:  # no prompt flag: keep v1 simple
+                import os
                 import subprocess
                 import tempfile
-                import os
                 fd, tmp = tempfile.mkstemp(suffix=".wav")
                 try:
                     with os.fdopen(fd, "wb") as fh:

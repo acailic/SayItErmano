@@ -415,7 +415,7 @@ class PillRenderer:
 
     def _paint(self, im, levels, text, state, phase, radius, accent, label,
                badge=None, label_alpha=LABEL_ALPHA):
-        from PIL import Image, ImageDraw
+        from PIL import ImageDraw
         S = self.SS
         spec = self.spec
         processing = state == "processing"

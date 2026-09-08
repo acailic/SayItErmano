@@ -28,10 +28,10 @@ from typing import Sequence
 
 try:  # pragma: no cover - Xlib availability is probed, not unit-tested
     from Xlib import X, display
-    from Xlib.Xatom import ATOM as XA_ATOM
-    from Xlib.Xatom import INTEGER as XA_INTEGER
     from Xlib.protocol import event as xevent
     from Xlib.protocol import request as xrequest
+    from Xlib.Xatom import ATOM as XA_ATOM
+    from Xlib.Xatom import INTEGER as XA_INTEGER
 
     _XLIB_OK = True
 except Exception:  # noqa: BLE001 - degrade, never crash the import

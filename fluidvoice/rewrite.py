@@ -50,6 +50,7 @@ def capture_selection() -> str:
     (_capture_selection_wayland); the X11 path below is unchanged."""
     import subprocess
     import time
+
     from . import session as session_mod
     if session_mod.current().is_wayland:
         return _capture_selection_wayland()
@@ -74,9 +75,14 @@ def _capture_selection_wayland() -> str:
     import shutil
     import subprocess
     import time
-    from .insertion import (_key_cmd, _resolve_wayland_tool,
-                            _wl_clipboard_read, _wl_clipboard_snapshot,
-                            _wl_clipboard_write)
+
+    from .insertion import (
+        _key_cmd,
+        _resolve_wayland_tool,
+        _wl_clipboard_read,
+        _wl_clipboard_snapshot,
+        _wl_clipboard_write,
+    )
     if not (shutil.which("wl-copy") and shutil.which("wl-paste")):
         return ""
     tool, _reason = _resolve_wayland_tool({})

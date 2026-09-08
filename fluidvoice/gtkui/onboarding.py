@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from gi.repository import Adw, GLib, Gtk
 
-from .. import history as history_mod
 from .. import paths
 from .client import Client
 

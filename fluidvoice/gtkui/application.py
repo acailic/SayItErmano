@@ -27,7 +27,6 @@ def _register_bundled_icons() -> None:
     """
     try:
         import hashlib
-        import shutil
         import subprocess
         import tempfile
         from importlib import resources
