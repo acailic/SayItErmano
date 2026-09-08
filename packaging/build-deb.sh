@@ -27,7 +27,6 @@ mkdir -p "$STAGE/opt/$NAME"
 python3 -m venv --system-site-packages "$STAGE/opt/$NAME/venv"
 "$STAGE/opt/$NAME/venv/bin/pip" install -q --upgrade pip
 "$STAGE/opt/$NAME/venv/bin/pip" install -q --no-cache-dir .
-"$STAGE/opt/$NAME/venv/bin/pip" install -q --no-cache-dir pytest || true
 rm -rf "$STAGE/opt/$NAME/venv/share"  # docs/man from wheels
 
 # strip the pyc cache (rebuilt on first run) to shrink the package
@@ -149,7 +148,11 @@ chmod 755 "$STAGE/DEBIAN/postrm"
 # 6. Pack -------------------------------------------------------------------
 OUT="dist/${NAME}_${VERSION}-${PKGVER}_${ARCH}.deb"
 mkdir -p dist
-fakeroot dpkg-deb --build --root-owner-group "$STAGE" "$OUT" 2>/dev/null \
-    || dpkg-deb --build --root-owner-group "$STAGE" "$OUT"
+# xz (threaded, level 9 extreme) instead of this dpkg's zstd default: the
+# payload is native .so libraries that zstd compresses ~15% worse. xz debs
+# are the classic format - older apt/dpkg read them too.
+DEBFLAGS=(-Zxz -z9 -Sextreme --uniform-compression --threads-max="$(nproc)")
+fakeroot dpkg-deb --build --root-owner-group "${DEBFLAGS[@]}" "$STAGE" "$OUT" 2>/dev/null \
+    || dpkg-deb --build --root-owner-group "${DEBFLAGS[@]}" "$STAGE" "$OUT"
 echo "== built: $OUT ($(du -h "$OUT" | cut -f1)) =="
 echo "install with:  sudo apt install ./$OUT"
