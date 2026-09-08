@@ -10,7 +10,7 @@
 # run per session; disable per-user with `systemctl --user` or by removing
 # the autostart file).
 pkgname=sayit-ermano-bin
-pkgver=0.7.0
+pkgver=0.8.0
 pkgrel=1
 pkgdesc="Local voice dictation with AI polish (community Linux port of FluidVoice)"
 arch=('x86_64')
@@ -26,7 +26,7 @@ source_x86_64=("${pkgname}_${pkgver}.deb::${url}/releases/download/v${pkgver}/sa
 # Fill from the release page (the asset digest printed by `sayit-ermano
 # update` in v0.5.0+): `b2sum`/`sha256sum` of the downloaded asset. SKIP is
 # only acceptable while the recipe is unadopted.
-sha256sums_x86_64=('fff57021376d4f0ef3b477b6f1a9cdac121283da5586e1d14dcc6cacc03c96c1')
+sha256sums_x86_64=('f819a09e0789a44c04928bb01d18e78f6f96801ca93b499d3f6d409ea7c6d1d7')
 noextract=("${pkgname}_${pkgver}.deb")
 
 package() {
