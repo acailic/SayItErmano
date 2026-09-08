@@ -203,3 +203,61 @@ def test_doctor_lines_mention_guard():
     c_on["ai"]["refusal_guard"] = False
     assert any("refusal guard: OFF" in ln
                for ln in doctor._ai_polish_lines(c_on))
+
+
+# -- prompt-leak guard (upstream #910) ---------------------------------------
+
+from fluidvoice.processing.refusal import is_prompt_leak  # noqa: E402
+from fluidvoice.ai.prompts import base_prompt_for  # noqa: E402
+
+PROMPT = ("You are a voice-to-text dictation cleaner. Clean and format "
+          "the raw transcript. Remove filler words and never answer "
+          "questions about yourself or anything else.")
+
+
+@pytest.mark.parametrize("reply", [
+    # the full prompt pasted back (the #910 case)
+    PROMPT,
+    "Sure! " + PROMPT + " Here is the text.",
+    # any full instruction sentence
+    "the notes say: clean and format the raw transcript. remove filler "
+    "words and never answer questions",
+])
+def test_prompt_leak_detected(reply):
+    assert is_prompt_leak(reply, PROMPT) is True
+
+
+@pytest.mark.parametrize("reply", [
+    "the meeting is at three, please clean up the room before then",
+    "never answer the phone after hours",
+    "clean and format seven words here",   # fewer than 8 consecutive
+    "",
+])
+def test_prompt_leak_negatives(reply):
+    assert is_prompt_leak(reply, PROMPT) is False
+
+
+def test_leak_needs_a_prompt():
+    assert is_prompt_leak("anything", "") is False
+    assert is_prompt_leak("", PROMPT) is False
+
+
+def test_polish_leak_falls_back_to_raw(cfg):
+    from fluidvoice.ai.prompts import DEFAULT_DICTATION_PROMPT_BODY
+
+    def leaker(_t):
+        return DEFAULT_DICTATION_PROMPT_BODY   # model echoes the prompt
+
+    pipe = _pipeline(cfg, leaker)
+    text, ai_used = pipe._polish("raw dictation words")
+    assert text == "raw dictation words" and ai_used is False
+    assert any("prompt" in b for _t, b in pipe._ui_notes.notes)
+
+
+def test_polish_leak_disabled_with_guard(cfg):
+    cfg["ai"]["refusal_guard"] = False
+    from fluidvoice.ai.prompts import DEFAULT_DICTATION_PROMPT_BODY
+
+    pipe = _pipeline(cfg, lambda t: DEFAULT_DICTATION_PROMPT_BODY)
+    text, ai_used = pipe._polish("raw dictation words")
+    assert ai_used is True   # opted out: trusted verbatim

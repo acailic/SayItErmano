@@ -90,6 +90,10 @@ DEFAULTS: dict[str, Any] = {
         "max_seconds": 300,
         "skip_silent": False,  # skip obviously-silent recordings <= 4s
         "first_pcm_timeout": 2.0,  # fail fast if the mic sends no audio (0 = off)
+        # mid-take stall watchdog (upstream #852): a frozen capture stream
+        # (device glitch/route change) cancels the take with a clear error
+        # instead of recording air until max_seconds; 0 = off
+        "stall_timeout_s": 8.0,
         "sample_rate": 16000,
         # Spoken-send: a trailing phrase strips and presses Enter after typing
         "spoken_send_enabled": False,
@@ -319,6 +323,9 @@ max_seconds = 300
 skip_silent = false
 # Stop early when the microphone sends no audio at all (muted/wrong device)
 first_pcm_timeout = 2.0
+# Cancel the take when the capture stream freezes mid-dictation for this
+# many seconds (device glitch/route change) - 0 = off
+stall_timeout_s = 8.0
 # Mouse push-to-talk: hold this button to dictate (always hold-style,
 # independent of hotkey.mode). "button8"/"b8"/"8" - buttons 6-255 only;
 # 1-5 (click/scroll) are refused, they would break the desktop. Thumb
@@ -492,7 +499,8 @@ _SAVE_WHITELIST: dict[str, list[str]] = {
                 "wayland_evdev_key"],
     "recording": ["command", "device", "mic_priority", "max_seconds",
                   "skip_silent",
-                  "first_pcm_timeout", "spoken_send_enabled", "spoken_send_phrase",
+                  "first_pcm_timeout", "stall_timeout_s",
+                  "spoken_send_enabled", "spoken_send_phrase",
                   "spoken_send_key", "spoken_send_countdown_s",
                   "preview_enabled", "preview_mode",
                   "preview_interval", "preview_min_audio",
@@ -598,6 +606,7 @@ def save_config(cfg: dict, path: Path | None = None) -> Path:
 # (section, key) -> ("float"|"int", (lo, hi)) | ("str", max_len)
 SETTING_RANGES: dict[tuple[str, str], Any] = {
     ("recording", "first_pcm_timeout"): ("float", (0.0, 60.0)),
+    ("recording", "stall_timeout_s"): ("float", (0.0, 300.0)),
     ("recording", "preview_interval"): ("float", (0.3, 10.0)),
     ("recording", "preview_min_audio"): ("float", (0.3, 10.0)),
     ("recording", "preview_bottom_offset"): ("int", (0, 400)),
@@ -683,7 +692,8 @@ ALLOWED_SETTINGS: dict[str, set] = {
                "wayland_evdev_key"},
     "recording": {"command", "device", "mic_priority", "max_seconds",
                   "skip_silent",
-                  "first_pcm_timeout", "spoken_send_enabled",
+                  "first_pcm_timeout", "stall_timeout_s",
+                  "spoken_send_enabled",
                   "spoken_send_phrase", "spoken_send_key",
                   "spoken_send_countdown_s",
                   "preview_enabled", "preview_mode", "preview_interval",

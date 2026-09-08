@@ -30,7 +30,7 @@ from .media import MediaController
 from .micmon import match_priority as micmon_match_priority
 from .processing import post_process
 from .processing.per_app import match_app_prompt, system_prompt_for
-from .processing.refusal import is_refusal
+from .processing.refusal import is_prompt_leak, is_refusal
 from .processing.slash import squeeze_slash_mentions
 from .recorder import Recorder, RecorderError
 
@@ -159,23 +159,36 @@ class DictationPipeline:
                 prompt = system_prompt_for(
                     override_prompt or base_prompt_for(self.cfg), instructions)
                 polished = polisher(text, system_prompt=prompt)
+                prompt_used = prompt
             elif override_prompt:
                 # new path (profiled shortcuts): the override always rides
                 # along, injected polishers included
                 polished = polisher(text, system_prompt=override_prompt)
+                prompt_used = override_prompt
             else:
                 polished = polisher(text)
+                prompt_used = base_prompt_for(self.cfg)
         except AIError as e:
             self.log(f"AI polish failed ({e}); using raw transcription")
             return text, False
         # refusal guardrail (D5): a reply that reads as an LLM refusal
         # never reaches the doc - the raw transcript is typed instead
-        if self.cfg["ai"].get("refusal_guard", True) \
-                and is_refusal(polished):
-            self.log("AI polish refused (guardrail); using raw transcription")
-            self.notify("SayItErmano",
-                        "AI polish refused — typed the raw transcript")
-            return text, False
+        if self.cfg["ai"].get("refusal_guard", True):
+            if is_refusal(polished):
+                self.log("AI polish refused (guardrail); "
+                         "using raw transcription")
+                self.notify("SayItErmano",
+                            "AI polish refused — typed the raw transcript")
+                return text, False
+            if is_prompt_leak(polished, prompt_used or ""):
+                # upstream #910: the model pasted its system prompt into
+                # the document - same fallback, same guarantee
+                self.log("AI polish leaked its system prompt (guardrail); "
+                         "using raw transcription")
+                self.notify("SayItErmano",
+                            "AI polish echoed its prompt — typed the raw "
+                            "transcript")
+                return text, False
         return polished, True
 
     def _rewrite(self, instruction: str, context: str | None, raw: str,
@@ -1655,6 +1668,15 @@ class Daemon:
             t = threading.Timer(pcm_timeout, self._check_first_pcm, args=(Path(tmp),))
             t.daemon = True
             t.start()
+        # mid-take stall watchdog (upstream #852): frozen capture stream
+        # cancels the take with a clear error
+        stall_s = float(self.cfg["recording"].get("stall_timeout_s", 8.0)
+                        or 0.0)
+        raw = getattr(self.recorder, "raw_path", None)
+        if stall_s > 0 and raw is not None:
+            threading.Thread(target=self._stall_monitor,
+                             args=(Path(raw), stall_s),
+                             name="fluidvoice-stall", daemon=True).start()
 
     def _start_preview(self, raw_path) -> None:
         """Live transcription preview while recording (best-effort).
@@ -1915,19 +1937,58 @@ class Daemon:
         with self._lock:
             if not self.recording:
                 return
-            if self._watchdog:
-                self._watchdog.cancel()
-                self._watchdog = None
-            self._stop_preview()
-            self.recorder.cancel()
-            self.recording = False
-            self._tray_recording(False)
-            self._media.resume()
-            self._rewrite_mode = False
-            self._command_mode = False
-            self._profile_override = None
+            self._cancel_locked()
         log("cancelled")
         ui.notify("SayItErmano", "Cancelled", enabled=self.cfg["notifications"]["enabled"])
+
+    def _cancel_locked(self) -> None:
+        """Cancel-the-take body (caller holds self._lock): no transcription,
+        media resumed, mode flags cleared."""
+        if self._watchdog:
+            self._watchdog.cancel()
+            self._watchdog = None
+        self._stop_preview()
+        self.recorder.cancel()
+        self.recording = False
+        self._tray_recording(False)
+        self._media.resume()
+        self._rewrite_mode = False
+        self._command_mode = False
+        self._profile_override = None
+
+    _STALL_CHECK_S = 2.0
+
+    def _stall_monitor(self, raw_path: Path, timeout_s: float) -> None:
+        """Mid-take stream-stall watchdog (upstream #852): the capture file
+        must keep growing while recording; frozen for timeout_s means the
+        source died (PipeWire glitch, device vanished) - cancel the take
+        with a clear error instead of recording air until max_seconds."""
+        check = self._STALL_CHECK_S
+        last, frozen = -1, 0.0
+        while True:
+            time.sleep(check)
+            with self._lock:
+                if not self.recording:
+                    return
+            try:
+                size = raw_path.stat().st_size
+            except OSError:
+                size = last  # vanished mid-take: treat as frozen
+            if size != last:
+                last, frozen = size, 0.0
+                continue
+            frozen += check
+            if frozen >= timeout_s:
+                with self._lock:
+                    if not self.recording:
+                        return
+                    log(f"audio stream stalled ({timeout_s:.0f}s without "
+                        "new data) - cancelling")
+                    self._cancel_locked()
+                ui.notify("SayItErmano",
+                          "Audio stream stalled — dictation cancelled",
+                          enabled=self.cfg["notifications"]["enabled"])
+                return
 
     def _maybe_first_run_onboard(self) -> None:
         """Open onboarding once on first launch (macOS parity: the app opens

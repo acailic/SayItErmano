@@ -69,3 +69,22 @@ def is_refusal(text: str) -> bool:
     head = norm[:_SORRY_HEAD]
     full = norm[:_HEAD]
     return bool(_SORRY_LEAD.search(head) and _REFUSE_VERB.search(full))
+
+
+def is_prompt_leak(reply: str, system_prompt: str, window: int = 8) -> bool:
+    """True when the reply echoes a run of consecutive system-prompt words
+    (upstream #910: the model pasted the entire system prompt into the
+    user's document instead of the cleaned transcript). An 8-word
+    consecutive shingle from the prompt appearing verbatim in the reply is
+    a leak - natural dictation never reproduces instruction sentences."""
+    prompt = _normalize(system_prompt)
+    reply_n = _normalize(reply)
+    if not prompt or not reply_n:
+        return False
+    words = prompt.split()
+    if len(words) < window:
+        return False
+    for i in range(len(words) - window + 1):
+        if " ".join(words[i:i + window]) in reply_n:
+            return True
+    return False
