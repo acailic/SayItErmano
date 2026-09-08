@@ -1,6 +1,7 @@
-# Maintainer: upstream does NOT publish to the AUR (project rule: manual
-# releases only). This recipe is maintained here for whoever wants to adopt
-# it — see packaging/aur/README.md for the bump/adopt/lint workflow.
+# Maintainer: acailic <https://aur.archlinux.org> — published via
+# packaging/aur/publish.sh (one command; needs an AUR SSH key).
+# Manual releases only: bump pkgver + sha256 per release, then run the
+# script. See packaging/aur/README.md for the full workflow.
 #
 # -bin package: repackages the official release .deb asset (source = release
 # asset, not git). The deb ships /opt/sayit-ermano (bundled venv), /usr/bin

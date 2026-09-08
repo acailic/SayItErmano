@@ -185,9 +185,11 @@ restarts the daemon and cleans up duplicate installs.)
 
 ### Arch Linux (AUR)
 
-An AUR recipe is maintained in [`packaging/aur/`](packaging/aur/)
-(`sayit-ermano-bin`, built from the release `.deb` asset) — community-
-adopted, **not published by us** (project rule: manual releases only).
+Published as [`sayit-ermano-bin`](https://aur.archlinux.org/packages/sayit-ermano-bin)
+(repackages the release `.deb`); the recipe and the one-command publish
+script live in [`packaging/aur/`](packaging/aur/). If the package page
+does not exist yet, the first push is still pending an AUR SSH key —
+`packaging/aur/publish.sh` finishes it.
 
 ### Requirements
 

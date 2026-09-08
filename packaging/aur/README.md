@@ -1,13 +1,14 @@
 # AUR recipe — `sayit-ermano-bin`
 
-A community recipe that repackages the official release `.deb` asset
-(built by [`packaging/build-deb.sh`](../build-deb.sh)) into an Arch
-package. **Upstream does not publish to the AUR** — the project rule is
-manual releases only, with no CI/publish automation — so this directory
-exists for whoever wants to adopt and maintain the package. Instructions
-below; nothing here runs automatically.
+Repackages the official release `.deb` asset (built by
+[`packaging/build-deb.sh`](../build-deb.sh)) into an Arch package,
+published by the maintainer via **`publish.sh`** (one command; needs an
+AUR account + SSH key registered at
+<https://aur.archlinux.org/account/>). The project rule stays *manual
+releases only* — no CI/publish automation; each release bumps the
+recipe and a human runs the script.
 
-## Adopting / bumping
+## Publishing (or updating after a release)
 
 1. Bump `pkgver` (and `pkgrel` after recipe-only changes).
 2. Update the `source_x86_64` URL: the deb asset of that release, e.g.
@@ -18,9 +19,12 @@ below; nothing here runs automatically.
 3. Fill `sha256sums_x86_64` from the release page digest — or run
    `updpkgsums`, or `makepkg -g >> PKGBUILD`. `SKIP` must not survive an
    actual submission.
-4. Regenerate the metadata: `makepkg --printsrcinfo > .SRCINFO`
-   (commit it — AUR's web upload consumes it).
-5. Lint when available: `namcap PKGBUILD` and `namcap <built .pkg.tar.*>`.
+4. Mirror the same values into `.SRCINFO` (no `makepkg` on the dev box —
+   hand-edit, or regenerate with `makepkg --printsrcinfo > .SRCINFO` on
+   an Arch box).
+5. `./publish.sh` — clones the AUR repo, copies `PKGBUILD` + `.SRCINFO`,
+   commits and pushes; no-op when already current.
+6. Lint when available: `namcap PKGBUILD` and `namcap <built .pkg.tar.*>`.
 
 ## Notes for reviewers/maintainers
 
