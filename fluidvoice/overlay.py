@@ -50,6 +50,7 @@ MAX_FRAME_BYTES = 800_000  # conservative XPutImage request cap
 BAR_ALPHA = 224           # accent @ 0.88 while recording
 BAR_FLAT_ALPHA = 82       # accent @ 0.32 while processing
 LABEL_ALPHA = 217         # accent @ 0.85
+TAIL_ALPHA = 132  # provisional live-tail ink (see _paint)
 TEXT_ALPHA = 230          # white @ 0.9
 BORDER_ALPHA_TOP = 76     # gloss: bright top fading to dim bottom
 BORDER_ALPHA_BOTTOM = 26
@@ -369,7 +370,8 @@ class PillRenderer:
                phase: float = 0.0, alpha: float = 1.0,
                mode: str = "dictate", state: str | None = None,
                badge: str | None = None, elapsed: float | None = None,
-               confidence: int | None = None):
+               confidence: int | None = None,
+               stable_chars: int | None = None):
         """One frame -> (RGBA image, (w, h)).
 
         `mode` picks the accent color (dictate/rewrite/command); `state`
@@ -406,7 +408,7 @@ class PillRenderer:
         frame = self._shadow_layer(ow, oh, radius)
         inner = Image.new("RGBA", (w * self.SS, h * self.SS), (0, 0, 0, 0))
         self._paint(inner, levels, text, state, phase, radius, accent, label,
-                    badge, label_alpha)
+                    badge, label_alpha, stable_chars)
         inner = inner.resize((w, h), Image.LANCZOS)
         frame.alpha_composite(inner, (self.MARGIN, self.MARGIN))
         if alpha < 1.0:
@@ -414,7 +416,7 @@ class PillRenderer:
         return frame, (ow, oh)
 
     def _paint(self, im, levels, text, state, phase, radius, accent, label,
-               badge=None, label_alpha=LABEL_ALPHA):
+               badge=None, label_alpha=LABEL_ALPHA, stable_chars=None):
         from PIL import ImageDraw
         S = self.SS
         spec = self.spec
@@ -452,9 +454,29 @@ class PillRenderer:
                    fill=(*accent, 255 if not processing else 200))
 
         ty = spec.pad_v * S
+        stable_left = None if stable_chars is None else int(stable_chars)
         for ln in lines:
-            d.text((spec.pad_h * S, ty), ln, font=self._text_font,
-                   fill=(255, 255, 255, TEXT_ALPHA))
+            if stable_left is None or stable_left >= len(ln):
+                d.text((spec.pad_h * S, ty), ln, font=self._text_font,
+                       fill=(255, 255, 255, TEXT_ALPHA))
+                if stable_left is not None:
+                    stable_left -= len(ln) + 1  # +1 joined space
+            elif stable_left <= 0:
+                # uncommitted live tail: provisional ink until it commits
+                # (CHI'23 text-stability finding - readers read the
+                # volatile part differently when it LOOKS volatile)
+                d.text((spec.pad_h * S, ty), ln, font=self._text_font,
+                       fill=(255, 255, 255, TAIL_ALPHA))
+            else:
+                cut = ln.rfind(" ", 0, max(0, min(stable_left, len(ln))))
+                cut = cut + 1 if cut > 0 else stable_left
+                d.text((spec.pad_h * S, ty), ln[:cut], font=self._text_font,
+                       fill=(255, 255, 255, TEXT_ALPHA))
+                d.text((spec.pad_h * S
+                        + d.textlength(ln[:cut], font=self._text_font), ty),
+                       ln[cut:], font=self._text_font,
+                       fill=(255, 255, 255, TAIL_ALPHA))
+                stable_left = 0
             ty += spec.line_h * S
 
     def _gloss_border(self, W, H, radius):
@@ -853,6 +875,7 @@ class FluidOverlay:
         self._mode = mode if mode in MODE_ACCENTS else "dictate"
         self._badge: str | None = None
         self._text: str | None = None
+        self._stable_chars: int | None = None
         self._state = "recording"
         self._state_since = time.monotonic()
         self._stop = threading.Event()
@@ -924,12 +947,16 @@ class FluidOverlay:
         if self._anims:
             self._fade_left = FADE_IN_FRAMES
 
-    def show(self, text: str) -> None:
+    def show(self, text: str, stable_chars: int | None = None) -> None:
         if self._d is None:
-            self.fallback.show(text)
+            try:
+                self.fallback.show(text)
+            except TypeError:
+                self.fallback.show(text, stable_chars)
             return
         with self._lock:
             self._text = text
+            self._stable_chars = stable_chars
             self._last_sig = None  # force redraw + possible resize
 
     def set_mode(self, mode: str) -> None:
@@ -1041,6 +1068,7 @@ class FluidOverlay:
             text = self._text
             mode = self._mode
             badge = self._badge
+            stable = self._stable_chars
         if state == "recording":
             self._levels.update(self._read_pcm_tail())
         self._phase += 1.0 / self.FPS
@@ -1060,7 +1088,7 @@ class FluidOverlay:
         img, (w, h) = self._renderer.render(
             self._levels.levels(), text, phase=self._phase,
             alpha=fade_alpha, mode=mode, state=state, badge=badge,
-            elapsed=elapsed, confidence=conf)
+            elapsed=elapsed, confidence=conf, stable_chars=stable)
         if show_chips:
             img, w, h = self._compose_chips(img, w, h)
         sig = (w, h, state, mode, text, badge,

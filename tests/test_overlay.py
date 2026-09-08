@@ -633,3 +633,19 @@ class TestHoverChips:
                         "cancel": None}.items()
                        if k in CHIP_LABELS and callable(v)}
         assert sorted(ov._actions) == ["copy_last"]
+
+
+class TestProvisionalTailInk:
+    def test_stable_chars_dim_the_tail(self):
+        from fluidvoice.overlay import PillRenderer
+        r = PillRenderer()
+        full = r.render([0.5] * 20, "stable words volatile tail",
+                        state="recording", stable_chars=13)
+        plain = r.render([0.5] * 20, "stable words volatile tail",
+                         state="recording", stable_chars=None)
+        img_f, _ = full
+        img_p, _ = plain
+        # same geometry, different ink: the provisional tail is dimmer
+        assert img_f.size == img_p.size
+        f_alpha = [p[3] for p in img_f.getdata() if p[3] > 0]
+        assert min(f_alpha) < 255  # dim tail pixels exist in the stable render

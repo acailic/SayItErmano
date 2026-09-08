@@ -19,7 +19,8 @@ from .ai.prompts import base_prompt_for
 from .audio_utils import duration_seconds, is_silent
 from .processing import post_process
 from .processing.per_app import match_app_prompt, system_prompt_for
-from .processing.refusal import is_prompt_leak, is_refusal
+from .processing.refusal import (is_overcorrection, is_prompt_leak,
+                                 is_refusal)
 from .processing.slash import squeeze_slash_mentions
 
 
@@ -180,6 +181,15 @@ class DictationPipeline:
                             "AI polish echoed its prompt — typed the raw "
                             "transcript")
                 return text, False
+            if is_overcorrection(polished, text):
+                # Ma et al. 2024: unconstrained LLM correction swaps
+                # correct words for synonyms - keep the raw transcript
+                self.log("AI polish over-corrected (guardrail); "
+                         "using raw transcription")
+                self.notify("SayItErmano",
+                            "AI polish rewrote your words — typed the raw "
+                            "transcript")
+                return text, False
         return polished, True
 
     def _rewrite(self, instruction: str, context: str | None, raw: str,
@@ -217,6 +227,20 @@ class DictationPipeline:
         self.log(f"command instruction ({len(instruction)} chars): {instruction[:120]}")
         return {"mode": "command", "text": instruction, "raw": raw,
                 "duration_s": round(duration, 2)}
+
+    def _log_hotword_hits(self, final_text: str) -> None:
+        """Per-take hotword hit-rate (BWER spirit, app-scale): how many
+        configured bias words actually landed in the transcript. Lets a
+        user see the list earning its keep - and notice when it is dead
+        weight (over-biasing risk grows with useless entries)."""
+        import re
+        hot = ((self.cfg.get("model", {}) or {}).get("hotwords")) or []
+        if not hot:
+            return
+        low = final_text.lower()
+        hits = sum(1 for w in hot if re.search(r"\b" + re.escape(w.lower())
+                                               + r"\b", low))
+        self.log(f"hotwords: {hits}/{len(hot)} in transcript")
 
     def _after_ai_formatting(self, text: str, app_hint: str | None = None) -> str:
         """Slash/mention squeeze + GAAV + spoken-send stripping (upstream
@@ -322,6 +346,7 @@ class DictationPipeline:
                 return self._command(text, raw, duration, wav)
             polished, ai_used = self._polish(text, app_hint=app_hint)
             polished = self._after_ai_formatting(polished, app_hint=app_hint)
+            self._log_hotword_hits(polished)
             strategy = self._insert(polished)
             if self._pending_send_key:
                 spec, self._pending_send_key = self._pending_send_key, None

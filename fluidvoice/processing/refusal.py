@@ -88,3 +88,57 @@ def is_prompt_leak(reply: str, system_prompt: str, window: int = 8) -> bool:
         if " ".join(words[i:i + window]) in reply_n:
             return True
     return False
+
+
+def is_overcorrection(polished: str, raw: str,
+                      max_bad_subs: int = 3) -> bool:
+    """True when the polish pass REPLACED spoken words with different
+    words (near-synonyms) instead of cleaning them - the over-correction
+    failure mode of LLM ASR error correction (Ma et al. 2024: unconstrained
+    LLM correction swaps correct words; gains on strong ASR are ~1%).
+    Substitutions count as bad only when BOTH words are alphabetic and
+    far apart (edit distance > 2), so filler removal (deletions), casing,
+    punctuation and number normalization ("five thirty" -> "5:30") pass.
+    Deletions/insertions are the cleaner's legitimate business."""
+    import difflib
+
+    def words(t: str) -> list[str]:
+        return [w.strip(".,!?;:()`'\"").lower()
+                for w in t.split() if w.strip()]
+
+    a, b = words(polished), words(raw)
+    if not a or not b:
+        return False
+    if len(a) - len(b) > max(4, len(b) // 2):
+        # hallucination-side blowup (much LONGER); a shorter result is
+        # legitimate cleaning (filler removal deletes words)
+        return True
+    bad = 0
+    for op, _i1, _i2, _j1, _j2 in difflib.SequenceMatcher(
+            None, b, a, autojunk=False).get_opcodes():
+        if op != "replace":
+            continue
+        for old, new in zip(_get(b, _i1, _i2), _get(a, _j1, _j2)):
+            if (old.isalpha() and new.isalpha() and len(old) > 2
+                    and len(new) > 2
+                    and _edit_distance(old, new) > 2):
+                bad += 1
+    limit = max(1, min(max_bad_subs, len(b) // 6))
+    return bad > limit
+
+
+def _get(seq, i1, i2):
+    return seq[i1:i2]
+
+
+def _edit_distance(x: str, y: str) -> int:
+    if abs(len(x) - len(y)) > 4:
+        return 99
+    prev = list(range(len(y) + 1))
+    for i, cx in enumerate(x, 1):
+        cur = [i]
+        for j, cy in enumerate(y, 1):
+            cur.append(min(prev[j] + 1, cur[-1] + 1,
+                           prev[j - 1] + (cx != cy)))
+        prev = cur
+    return prev[-1]

@@ -125,3 +125,47 @@ def test_doctor_line():
     c["model"]["hotwords"] = ["a", "b"]
     assert any("hotwords: 2" in ln
                for ln in doctor._models_cache_lines(c))
+
+
+def test_doctor_warns_past_twenty():
+    from fluidvoice import doctor
+    c = copy.deepcopy(DEFAULTS)
+    c["model"]["hotwords"] = [f"w{i}" for i in range(25)]
+    lines = "\n".join(doctor._models_cache_lines(c))
+    assert "hotwords: 25" in lines and "WARN" in lines
+    c["model"]["hotwords"] = ["a", "b"]
+    assert "WARN" not in "\n".join(doctor._models_cache_lines(c))
+
+
+def test_hotword_hit_rate_logged(tmp_path, monkeypatch):
+    from fluidvoice import daemon as dm
+
+    logs = []
+    cfg = copy.deepcopy(DEFAULTS)
+    cfg["model"]["hotwords"] = ["SayItErmano", "PipeWire", "unheard"]
+    monkeypatch.setattr(dm.ui, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(dm.ui, "play_sound", lambda *a, **k: None)
+    monkeypatch.setattr(dm.history_mod.paths, "history_file",
+                        lambda: tmp_path / "h.jsonl")
+
+    class B:
+        name = "stub"
+        surfaces_detected_language = False
+
+        def transcribe(self, wav, language=None):
+            return {"text": "using SayItErmano with pipewire today",
+                    "language": None, "duration": None, "segments": []}
+
+    pipe = dm.DictationPipeline(cfg, B(), inserter=lambda t, c: "typed",
+                                history_writer=lambda e, w: None,
+                                logger=logs.append)
+    import struct, wave
+    wav = tmp_path / "u.wav"
+    with wave.open(str(wav), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(16000)
+        wf.writeframes(b"".join(struct.pack("<h", 8000)
+                                for _ in range(16000)))
+    pipe.run(wav, None)
+    assert any("hotwords: 2/3" in m for m in logs)

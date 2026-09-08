@@ -759,3 +759,44 @@ class TestDaemonWiring:
         assert len(backend.calls) == 1
         decoded_s = backend.calls[0][1]
         assert decoded_s >= take_s - 0.05  # whole take, no 2 s truncation
+
+
+class TestProvisionalTail:
+    """CHI'23 stability finding: committed text renders full ink, the
+    volatile live tail is marked provisional (stable_chars offset) and
+    every tail rewrite is counted."""
+
+    def make_engine(self, raw, out):
+        def fake(wav, ctx):
+            return "tail words"
+
+        def on_text(shown, stable=0, _o=out):
+            _o.append((shown, stable))
+
+        return SegmentedPreviewEngine(
+            raw, fake, on_text, interval=0.4, min_audio=0.5,
+            segment_s=2.0, vad_silence_s=0.0)
+
+    def test_emit_passes_stable_offset(self, tmp_path):
+        raw = tmp_path / "pt.raw"
+        raw.write_bytes(pcm(0.2))
+        shown = []
+        eng = self.make_engine(raw, shown)
+        eng.committed = ["stable text here"]
+        eng.last_text = ""
+        eng._emit("stable text here", "fresh tail")
+        assert shown[-1][0].endswith("fresh tail")
+        assert shown[-1][1] == len("stable text here")  # stable offset
+
+    def test_tail_rewrites_counted(self, tmp_path):
+        raw = tmp_path / "pt2.raw"
+        raw.write_bytes(pcm(0.2))
+        shown = []
+        eng = self.make_engine(raw, shown)
+        eng.committed = ["fixed"]
+        eng.last_text = ""
+        eng._emit("fixed", "aaa")
+        eng._emit("fixed aaa", "bbb")     # tail rewritten
+        eng._emit("fixed aaa", "bbb")     # same tail: no count
+        eng._emit("fixed aaa bbb", "")    # commit: no tail, no count
+        assert eng.stats.get("tail_rewrites") == 1

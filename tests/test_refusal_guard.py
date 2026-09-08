@@ -261,3 +261,35 @@ def test_polish_leak_disabled_with_guard(cfg):
     pipe = _pipeline(cfg, lambda t: DEFAULT_DICTATION_PROMPT_BODY)
     text, ai_used = pipe._polish("raw dictation words")
     assert ai_used is True   # opted out: trusted verbatim
+
+
+# -- over-correction guard (Ma et al. 2024 failure mode) ---------------------
+
+from fluidvoice.processing.refusal import is_overcorrection  # noqa: E402
+
+
+@pytest.mark.parametrize("polished,raw,want", [
+    ("please renovate the building tomorrow",
+     "please remodel the house tomorrow", True),
+    ("the committee decided everything today",
+     "the board determined all today", True),
+    ("the quick brown house jumps", "the quick brown home jumps", False),
+    ("dinner at 5:30 pm", "dinner at five thirty pm", False),
+    ("Hello world.", "hello world ", False),
+    ("Meeting moved.", "um uh the meeting has been moved", False),
+])
+def test_overcorrection_matrix(polished, raw, want):
+    assert is_overcorrection(polished, raw) is want
+
+
+def test_polish_overcorrection_falls_back(cfg):
+    pipe = _pipeline(cfg, lambda t: "the committee decided everything today")
+    text, ai_used = pipe._polish("the board determined all today")
+    assert text == "the board determined all today" and ai_used is False
+    assert any("rewrote" in b for _t, b in pipe._ui_notes.notes)
+
+
+def test_polish_light_editing_still_used(cfg):
+    pipe = _pipeline(cfg, lambda t: "Dinner at 5:30 pm.")
+    text, ai_used = pipe._polish("um dinner at five thirty pm")
+    assert text == "Dinner at 5:30 pm." and ai_used is True

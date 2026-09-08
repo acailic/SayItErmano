@@ -518,7 +518,9 @@ push_to_talk_button = "button8"  # "" = off
 spoken_send_countdown_s = 1.2
 # Vocabulary biasing: words the decoder is steered toward (ADD, unlike the
 # dictionary's replacements) - names, jargon; changes reload the engine
-# hotwords = ["SayItErmano", "PipeWire"]
+# hotwords = ["SayItErmano", "PipeWire"]  # keep it short (<=20):
+                                          # long bias lists make the
+                                          # decoder hallucinate list words
 # Cancel the take if the mic stream freezes mid-dictation (0 = off)
 stall_timeout_s = 8.0
 

@@ -177,7 +177,13 @@ def _models_cache_lines(cfg: dict) -> list[str]:
                  f"{model_catalog.human_bytes(total)}")
     hw = (cfg.get("model", {}) or {}).get("hotwords") or []
     if hw:
-        lines.append(f"  hotwords: {len(hw)} vocabulary-biasing word(s)")
+        line = f"  hotwords: {len(hw)} vocabulary-biasing word(s)"
+        if len(hw) > 20:
+            # over-biasing literature (see research round 2 §4): long
+            # lists hallucinate bias words into normal speech
+            line += " - WARN >20: keep the list focused or the decoder "
+            line += "starts inventing these words"
+        lines.append(line)
     lines.append("  note: the legacy huggingface/hub cache "
                  f"({paths.cache_dir().parent / 'huggingface' / 'hub'}) "
                  "is not managed here")

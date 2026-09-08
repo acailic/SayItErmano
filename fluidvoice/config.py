@@ -369,7 +369,8 @@ languages = {}
 # Custom vocabulary biasing (words to ADD - names, jargon; the dictionary
 # is for replacements): fed to the decoder as hints. Changing this key
 # reloads the speech engine.
-# hotwords = ["SayItErmano", "PipeWire"]
+# hotwords = ["SayItErmano", "PipeWire"]  # <=20 focused words: long
+#                                          # lists over-bias the decoder
 # Unload the speech model after this many idle seconds to free RAM/VRAM
 # (0 = keep it loaded forever; range 30..86400 when set). The next
 # dictation after an unload pays the model load time again.

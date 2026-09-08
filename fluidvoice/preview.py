@@ -204,6 +204,7 @@ class SegmentedPreviewEngine:
         self._busy = False
         self._thread: threading.Thread | None = None
         self.last_text = ""
+        self._last_tail = ""
         self.committed: list[str] = []
         self._next_commit = 0          # even window index never decoded yet
         self._silence_fired = False
@@ -258,16 +259,32 @@ class SegmentedPreviewEngine:
             text = (committed + " " + join_tail(committed, tail)).strip()
         if not text or text == self.last_text:
             return
+        if tail and self._last_tail and tail != self._last_tail:
+            # live-tail flicker metric (CHI'23 text-stability finding):
+            # every re-decode that REWRITES an already-shown tail counts
+            # (the first appearance of a tail is not a rewrite)
+            self.stats["tail_rewrites"] = \
+                self.stats.get("tail_rewrites", 0) + 1
+        self._last_tail = tail
         self.last_text = text
         if self._send_armed:
             return  # keep the countdown notice on the pill until it resolves
-        self._show(text)
+        self._show(text, len(committed))
 
-    def _show(self, text: str) -> None:
+    def _show(self, text: str, stable_chars: int = 0) -> None:
         shown = text if len(text) <= self.char_limit \
             else "…" + text[-self.char_limit:]
+        if len(shown) < len(text):
+            # head-clipped: shift the stable prefix into the visible window
+            stable_chars = max(0, stable_chars - (len(text) - len(shown) + 1))
+        stable_chars = min(stable_chars, len(shown))
         try:
-            self.on_text(shown)
+            self.on_text(shown, stable_chars)
+        except TypeError:
+            try:  # displays with the legacy single-arg signature
+                self.on_text(shown)
+            except Exception:
+                pass
         except Exception:
             pass
 
