@@ -549,6 +549,7 @@ work; to see what moved upstream, run `scripts/upstream-diff.sh`.
 .venv/bin/python -m pytest tests -m "integration and not desktop"   # real subsystems, deterministic
 .venv/bin/python -m pytest tests -m desktop                          # live session (grabs, pixels)
 .venv/bin/python -m pytest tests -m "not desktop"                    # deterministic everything
+.venv/bin/python -m pytest -n auto tests --ignore=tests/integration  # parallel via pytest-xdist (~4-5x; skip -n for --pdb debugging)
 ```
 
 The test pyramid — **558 automated tests** at v0.4.0:
