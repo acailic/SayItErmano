@@ -154,9 +154,17 @@ chmod 755 "$BIN/sayit-ermano"
 sed "s|^Exec=/usr/bin/sayit-ermano|Exec=$BIN/sayit-ermano|" \
     "$STAGE/usr/share/applications/sayit-ermano.desktop" \
     > "$HOME/.local/share/applications/sayit-ermano.desktop"
-sed "s|^Exec=/usr/bin/sayit-ermano|Exec=$BIN/sayit-ermano|" \
-    "$STAGE/etc/xdg/autostart/sayit-ermano.desktop" \
-    > "$HOME/.config/autostart/sayit-ermano.desktop"
+# Single-path startup: when the user unit is (or will be) enabled the
+# unit owns startup - writing autostart too would race the hotkey grab
+# at every login. Only install autostart when the unit is missing/disabled.
+if ! systemctl --user is-enabled sayit-ermano.service >/dev/null 2>&1 \
+        || [ ! -e "$HOME/.config/systemd/user/sayit-ermano.service" ]; then
+    sed "s|^Exec=/usr/bin/sayit-ermano|Exec=$BIN/sayit-ermano|" \
+        "$STAGE/etc/xdg/autostart/sayit-ermano.desktop" \
+        > "$HOME/.config/autostart/sayit-ermano.desktop"
+else
+    rm -f "$HOME/.config/autostart/sayit-ermano.desktop"
+fi
 cp -a "$STAGE/usr/share/icons/hicolor/." "$HOME/.local/share/icons/hicolor/" 2>/dev/null || true
 command -v gtk-update-icon-cache >/dev/null 2>&1 \
     && gtk-update-icon-cache -q -t -f "$HOME/.local/share/icons/hicolor" 2>/dev/null || true

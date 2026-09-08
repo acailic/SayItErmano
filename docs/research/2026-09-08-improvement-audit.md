@@ -1,5 +1,15 @@
 # Improvement audit — 2026-09-08
 
+> **Status update (same day, second pass):** C1 (socket-steal refusal +
+> `SAYITERMANO_SOCKET`), C3 (`.monitor` escape), C4 (config meta-tests),
+> C6 (doctor module line), D1 (ruff, minimal ruleset), D4 (standalone
+> server smoke + banner flush), E1 (AUR recipe @0.7.0 + digest), E3
+> (installer autostart skip — live-verified), E6 (already existed:
+> `SAYITERMANO_NO_UPDATE=1`), E2 (`scripts/release.sh`), F4
+> (`docs/dev/e2e-sandbox.md`) — all SHIPPED. Open: C2 (moot — C1 covers
+> the class), C5 (monolith split), D2/D3 (xdist, gtkui speed), E4 (deb
+> slimming), E5 (CHANGELOG), plus the section-A feature items.
+
 Full sweep of improvement opportunities after shipping v0.7.0: product
 gaps, upstream signals, robustness/architecture, testing, distribution,
 UX. Each item carries its evidence. Quick wins marked ⚡.
