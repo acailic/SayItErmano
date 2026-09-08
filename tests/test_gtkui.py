@@ -52,6 +52,12 @@ class StubClient(Client):
                 "backend": "faster-whisper", "cuda": True,
                 "warmup": {"running": False, "error": None, "model": None}}
 
+    def mics(self):
+        # hermetic override: the inherited Client.mics() would query the
+        # control socket (the REAL daemon on a dev box) and fall back to
+        # `pactl`. No gtkui test asserts the device list, so pin it empty.
+        return []
+
     def daemon_alive(self):
         return True
 
@@ -208,13 +214,96 @@ ENTRIES = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Shared windows (audit D3). Constructing + presenting each window costs
+# 0.5-1 s of NATIVE GTK first-frame work (style/layout/render against the
+# real display), and ~50 tests each paying it made this file roughly half
+# the suite's wall time. The two windows below are built once per module
+# and handed to tests in a pristine state: per-class autouse resets
+# install a fresh StubClient and re-run the production reload paths
+# (SettingsWindow._load() — exactly what the Discard button runs — and
+# HistoryWindow._load_history() + _apply_status()), so every assertion
+# sees the same deterministic state a brand-new window would show. Tests
+# needing a different client swap `w.c` and reload; the next test's reset
+# wipes whatever they left behind. Windows whose CONSTRUCTION itself is
+# under test (e.g. action registration, env-dependent wayland rows, the
+# unknown-language combo refill) still build their own instance.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def settings_win():
+    from fluidvoice.gtkui.settings_window import SettingsWindow
+    w = SettingsWindow(client=StubClient())
+    w.present()
+    pump(GLib.MainLoop())
+    yield w
+    w._dirty = False  # never offer the discard dialog during teardown
+    w.close()
+
+
+def reset_settings(w, loop) -> StubClient:
+    """Pristine settings window: fresh stub client + full reload.
+    Returns the installed client. No main-loop pump needed: _load() is
+    synchronous, schedules no idles on this path, and the tests assert
+    stored row titles/subtitles/values, not laid-out geometry."""
+    w.c = StubClient()
+    w._load()
+    w._apply_about_update({})  # About -> Update row back to "checks disabled"
+    return w.c
+
+
+@pytest.fixture(scope="module")
+def hist_win():
+    from fluidvoice.gtkui import main_window as mw
+
+    class _GlibNoRecurring:
+        """Delegates to GLib except timer arming: HistoryWindow.__init__
+        starts a 2 s status poll and discards the source id, so a
+        long-lived shared instance would keep mutating status widgets
+        mid-test. Per-test windows never live 2 s, so no test can observe
+        the poll — blocking it keeps the shared window equivalent."""
+        def __getattr__(self, name):
+            return getattr(GLib, name)
+
+        @staticmethod
+        def timeout_add_seconds(*_args, **_kwargs):
+            return 0
+
+    real = mw.GLib
+    mw.GLib = _GlibNoRecurring()
+    try:
+        w = mw.HistoryWindow(client=StubClient(ENTRIES))
+    finally:
+        mw.GLib = real
+    w.present()
+    pump(GLib.MainLoop())
+    yield w
+    w.close()
+
+
+def reset_history(w, loop, entries=ENTRIES) -> StubClient:
+    """Pristine history window: fresh stub client + full reload (both
+    listboxes, count, today line, status banner, visible page). No
+    main-loop pump needed: the reload is synchronous and the tests assert
+    stored strings/row counts, not laid-out geometry."""
+    w.c = StubClient(entries)
+    w._query = ""
+    w._exporting = False
+    w._load_history()
+    w._apply_status(w.c.status())
+    w.view_stack.set_visible_child(
+        w.view_stack.get_child_by_name("transcripts"))
+    return w.c
+
+
 class TestHistoryWindow:
-    def test_populates_and_search_filters(self, loop):
-        from fluidvoice.gtkui.main_window import HistoryWindow
-        c = StubClient(ENTRIES)
-        w = HistoryWindow(client=c)
-        w.present()
-        pump(loop)
+    @pytest.fixture(autouse=True)
+    def _fresh(self, hist_win, loop):
+        reset_history(hist_win, loop)
+
+    def test_populates_and_search_filters(self, hist_win):
+        w = hist_win
         assert w._entries and len(w._entries) == 2
         w._query = "polished"
         w._load_history()
@@ -222,45 +311,37 @@ class TestHistoryWindow:
         w._query = "firefox"
         w._load_history()
         assert len(w._entries) == 1 and w._entries[0]["app"] == "firefox"
-        w.close()
 
-    def test_status_reflects_daemon(self, loop):
-        from fluidvoice.gtkui.main_window import HistoryWindow
-        w = HistoryWindow(client=StubClient(ENTRIES))
-        w.present()
-        pump(loop)
+    def test_status_reflects_daemon(self, hist_win):
+        w = hist_win
         w._apply_status({"recording": True, "busy": False,
                          "backend": "b", "cuda": False})
         assert w.state_lbl.get_text() == "recording"
         w._apply_status(None)
         assert w.down_banner.get_revealed() is True
-        w.close()
 
-    def test_today_line_renders(self, loop):
-        from fluidvoice.gtkui.main_window import HistoryWindow
-        w = HistoryWindow(client=StubClient(ENTRIES))
-        w.present()
-        pump(loop)
+    def test_today_line_renders(self, hist_win):
+        w = hist_win
         assert w.today_lbl.get_text() == "today: 2 dictations, 0:06 minutes, 9 words"
         w._load_history()  # refresh path updates it too
         assert w.today_lbl.get_text() == "today: 2 dictations, 0:06 minutes, 9 words"
-        w.close()
 
-    def test_today_line_survives_client_error(self, loop):
-        from fluidvoice.gtkui.main_window import HistoryWindow
+    def test_today_line_survives_client_error(self, hist_win):
+        w = hist_win
         c = StubClient(ENTRIES)
 
         def boom():
             raise RuntimeError("unreadable")
 
         c.today_stats = boom
-        w = HistoryWindow(client=c)
-        w.present()
-        pump(loop)
+        w.today_lbl.set_text("")  # the empty label a fresh window starts with
+        w.c = c
+        w.refresh()  # construction-time path: status + today line refresh
         assert w.today_lbl.get_text() == ""  # unset, not a crash
-        w.close()
 
     def test_export_action_registered(self, loop, monkeypatch):
+        # patches install_action on the CLASS -> must wrap this window's
+        # own construction; cannot reuse the shared instance
         from fluidvoice.gtkui import main_window as mw
         installed = {}
 
@@ -284,14 +365,12 @@ class TestHistoryWindow:
         assert label == "Export…" and action == "win.hist.export"
         w.close()
 
-    def test_export_smoke(self, loop, tmp_path):
-        from fluidvoice.gtkui.main_window import HistoryWindow
-        c = StubClient(ENTRIES)
-        w = HistoryWindow(client=c)
-        w.present()
-        pump(loop)
+    def test_export_smoke(self, hist_win, loop, tmp_path, monkeypatch):
+        w = hist_win
+        c = w.c  # fresh client installed by the reset
         enabled: list[tuple[str, bool]] = []
-        w.action_set_enabled = lambda name, on: enabled.append((name, on))
+        monkeypatch.setattr(w, "action_set_enabled",
+                            lambda name, on: enabled.append((name, on)))
         target = tmp_path / "h.zip"
         w._export_to(str(target))
         assert w._exporting is True  # busy until the idle callback runs
@@ -300,26 +379,24 @@ class TestHistoryWindow:
         assert c.exported_to == str(target)
         assert w._exporting is False
         assert enabled == [("hist.export", False), ("hist.export", True)]
-        w.close()
 
-    def test_export_failure_toasts_and_reenables(self, loop, tmp_path):
-        from fluidvoice.gtkui.main_window import HistoryWindow
+    def test_export_failure_toasts_and_reenables(self, hist_win, loop, tmp_path,
+                                                 monkeypatch):
+        w = hist_win
         c = StubClient(ENTRIES)
 
         def broken(path):
             raise OSError("no space")
 
         c.export_zip = broken
-        w = HistoryWindow(client=c)
-        w.present()
-        pump(loop)
+        w.c = c
         enabled: list[tuple[str, bool]] = []
-        w.action_set_enabled = lambda name, on: enabled.append((name, on))
+        monkeypatch.setattr(w, "action_set_enabled",
+                            lambda name, on: enabled.append((name, on)))
         w._export_to(str(tmp_path / "h.zip"))
         assert pump_until(loop, lambda: not w._exporting)
         assert w._exporting is False  # released even on failure
         assert enabled[-1] == ("hist.export", True)
-        w.close()
 
 
 COMMAND_ENTRIES = [
@@ -337,14 +414,9 @@ class TestCommandsView:
     """History window Commands page (v2): command rows, collapsible
     output, Copy, confirm-gated Re-run."""
 
-    def _window(self, loop, entries=None):
-        from fluidvoice.gtkui.main_window import HistoryWindow
-        c = StubClient(entries if entries is not None
-                       else ENTRIES + COMMAND_ENTRIES)
-        w = HistoryWindow(client=c)
-        w.present()
-        pump(loop)
-        return w, c
+    @pytest.fixture(autouse=True)
+    def _fresh(self, hist_win, loop):
+        reset_history(hist_win, loop, ENTRIES + COMMAND_ENTRIES)
 
     def _rows(self, w):
         rows = []
@@ -358,8 +430,8 @@ class TestCommandsView:
         w.view_stack.set_visible_child(
             w.view_stack.get_child_by_name("commands"))
 
-    def test_commands_page_lists_rows_excluding_dictations(self, loop):
-        w, c = self._window(loop)
+    def test_commands_page_lists_rows_excluding_dictations(self, hist_win):
+        w = hist_win
         rows = self._rows(w)
         assert len(rows) == 2                   # dictations excluded
         first = rows[0]
@@ -374,17 +446,15 @@ class TestCommandsView:
                 t_rows.append(r)
             r = r.get_next_sibling()
         assert len(t_rows) == len(ENTRIES) + len(COMMAND_ENTRIES)
-        w.close()
 
-    def test_count_label_follows_visible_page(self, loop):
-        w, c = self._window(loop)
+    def test_count_label_follows_visible_page(self, hist_win):
+        w = hist_win
         assert w.count_lbl.get_text().startswith(f"{len(ENTRIES) + 2}")
         self._show_commands(w)
         assert w.count_lbl.get_text() == "2 commands"
-        w.close()
 
-    def test_search_filters_command_rows(self, loop):
-        w, c = self._window(loop)
+    def test_search_filters_command_rows(self, hist_win):
+        w = hist_win
         w._query = "rm -rf"
         w._load_history()
         rows = self._rows(w)
@@ -392,10 +462,9 @@ class TestCommandsView:
         w._query = ""
         w._load_history()
         assert len(self._rows(w)) == 2
-        w.close()
 
-    def test_output_toggle_reveals_collapsible_output(self, loop):
-        w, c = self._window(loop)
+    def test_output_toggle_reveals_collapsible_output(self, hist_win):
+        w = hist_win
         row = self._rows(w)[0]
         assert row.output_revealer.get_reveal_child() is False
         row.output_btn.set_active(True)
@@ -404,9 +473,8 @@ class TestCommandsView:
         assert "total 0" in lbl.get_text()
         row.output_btn.set_active(False)
         assert row.output_revealer.get_reveal_child() is False
-        w.close()
 
-    def test_copy_puts_command_on_clipboard(self, loop, monkeypatch):
+    def test_copy_puts_command_on_clipboard(self, hist_win, monkeypatch):
         from fluidvoice.gtkui import main_window as mw
         copied = []
 
@@ -424,29 +492,29 @@ class TestCommandsView:
 
         monkeypatch.setattr(mw.Gdk, "Display", FakeDisplay)
         toasts = []
-        w, c = self._window(loop)
-        w._toast = lambda text: toasts.append(text)
+        w = hist_win
+        monkeypatch.setattr(w, "_toast", lambda text: toasts.append(text))
         row = self._rows(w)[1]
         row.copy_btn.emit("clicked")
         assert copied == ["rm -rf /tmp/x"]     # the command, not the label
         assert any("copied" in t.lower() for t in toasts)
-        w.close()
 
-    def test_rerun_calls_client_and_toasts(self, loop, monkeypatch):
+    def test_rerun_calls_client_and_toasts(self, hist_win, monkeypatch):
         toasts = []
-        w, c = self._window(loop)
-        w._toast = lambda text: toasts.append(text)
+        w = hist_win
+        c = w.c  # fresh client installed by the reset
+        monkeypatch.setattr(w, "_toast", lambda text: toasts.append(text))
         row = self._rows(w)[0]
         row.rerun_btn.emit("clicked")
         assert c.reruns == [("ls -la", "checking files")]
         assert any("confirm" in t.lower() for t in toasts)
-        w.close()
 
-    def test_rerun_failure_toasts_error(self, loop, monkeypatch):
+    def test_rerun_failure_toasts_error(self, hist_win, monkeypatch):
         from fluidvoice.gtkui.client import ClientError
         toasts = []
-        w, c = self._window(loop)
-        w._toast = lambda text: toasts.append(text)
+        w = hist_win
+        c = w.c
+        monkeypatch.setattr(w, "_toast", lambda text: toasts.append(text))
 
         def broken(command, purpose=None):
             raise ClientError("daemon not running")
@@ -456,15 +524,15 @@ class TestCommandsView:
         row.rerun_btn.emit("clicked")
         assert any("Re-run failed" in t for t in toasts)
         assert c.reruns == []
-        w.close()
 
 
 class TestSettingsWindow:
-    def test_loads_every_section(self, loop):
-        from fluidvoice.gtkui.settings_window import SettingsWindow
-        w = SettingsWindow(client=StubClient())
-        w.present()
-        pump(loop)
+    @pytest.fixture(autouse=True)
+    def _fresh(self, settings_win, loop):
+        reset_settings(settings_win, loop)
+
+    def test_loads_every_section(self, settings_win):
+        w = settings_win
         # every whitelisted settings family has a row registered
         fams = {sec for sec, _k in w._rows}
         assert {"general", "hotkey", "recording", "model", "processing",
@@ -484,14 +552,10 @@ class TestSettingsWindow:
         assert w.about_backend_row.get_subtitle() == "faster-whisper"
         assert w.about_gpu_row.get_title() == "GPU (CUDA)"
         assert w.about_gpu_row.get_subtitle() == "yes"
-        w.close()
 
-    def test_collect_roundtrip_and_save(self, loop):
-        from fluidvoice.gtkui.settings_window import SettingsWindow
-        c = StubClient()
-        w = SettingsWindow(client=c)
-        w.present()
-        pump(loop)
+    def test_collect_roundtrip_and_save(self, settings_win):
+        w = settings_win
+        c = w.c  # fresh client installed by the reset
         body = w._collect()
         assert body["general"]["language"] == "sl"  # from the stub cfg
         assert body["sounds"]["volume"] == 1.0
@@ -505,9 +569,8 @@ class TestSettingsWindow:
         w.save()
         assert c.saved and c.saved[-1]["sounds"]["enabled"] is False
         assert c.saved[-1]["recording"]["preview_enabled"] is False
-        w.close()
 
-    def test_idle_unload_spinbutton_roundtrip(self, loop):
+    def test_idle_unload_spinbutton_roundtrip(self, settings_win, loop):
         class CfgClient(StubClient):
             def __init__(self):
                 super().__init__()
@@ -516,10 +579,10 @@ class TestSettingsWindow:
             def get_config(self):
                 return copy.deepcopy(self._cfg), True
 
-        from fluidvoice.gtkui.settings_window import SettingsWindow
+        w = settings_win
         c = CfgClient()
-        w = SettingsWindow(client=c)
-        w.present()
+        w.c = c
+        w._load()
         pump(loop)
         # default off: row 0, collect sends 0 seconds
         assert w._idle_unload_row.get_value() == 0
@@ -538,13 +601,10 @@ class TestSettingsWindow:
         w._load()
         pump(loop)
         assert w._idle_unload_row.get_value() == 1
-        w.close()
 
-    def test_remote_stt_group(self, loop):
+    def test_remote_stt_group(self, settings_win, loop):
         """Models page: Remote (OpenAI-compatible) rows, empty-URL-is-off
         collect, password hygiene, timeout spin, backend combo."""
-        from fluidvoice.gtkui.settings_window import SettingsWindow
-
         class CfgClient(StubClient):
             def __init__(self):
                 super().__init__()
@@ -553,9 +613,10 @@ class TestSettingsWindow:
             def get_config(self):
                 return copy.deepcopy(self._cfg), True
 
+        w = settings_win
         c = CfgClient()
-        w = SettingsWindow(client=c)
-        w.present()
+        w.c = c
+        w._load()
         pump(loop)
         # rows registered + backend combo offers remote
         assert ("model", "remote_url") in w._rows
@@ -599,14 +660,9 @@ class TestSettingsWindow:
         assert w._rows[("model", "remote_api_key")].get_text() == ""
         assert "sk-real-secret" not in w._rows[
             ("model", "remote_api_key")].row.get_subtitle()
-        w.close()
 
-    def test_per_app_rule_editing(self, loop):
-        from fluidvoice.gtkui.settings_window import SettingsWindow
-        c = StubClient()
-        w = SettingsWindow(client=c)
-        w.present()
-        pump(loop)
+    def test_per_app_rule_editing(self, settings_win):
+        w = settings_win
         assert len(w._rule_rows) == 1  # loaded from cfg
         w._add_rule({"apps": ["firefox"], "instructions": "bullets"})
         w._rule_rows[0]["apps"].set_text("zed, code")
@@ -614,14 +670,9 @@ class TestSettingsWindow:
         rules = w._collect_rules()
         assert {"apps": ["zed", "code"], "instructions": "be terse"} in rules
         assert {"apps": ["firefox"], "instructions": "bullets"} in rules
-        w.close()
 
-    def test_dictionary_and_filler_editing(self, loop):
-        from fluidvoice.gtkui.settings_window import SettingsWindow
-        c = StubClient()
-        w = SettingsWindow(client=c)
-        w.present()
-        pump(loop)
+    def test_dictionary_and_filler_editing(self, settings_win):
+        w = settings_win
         # loaded from cfg
         assert len(w._dict_rows) == 1
         body = w._collect()
@@ -647,14 +698,10 @@ class TestSettingsWindow:
                 "replacement": "Miro board"} not in remaining
         assert remaining == [{"triggers": ["k8s"],
                               "replacement": "Kubernetes"}]
-        w.close()
 
-    def test_mic_priority_editor(self, loop):
-        from fluidvoice.gtkui.settings_window import SettingsWindow
-        c = StubClient()
-        w = SettingsWindow(client=c)
-        w.present()
-        pump(loop)
+    def test_mic_priority_editor(self, settings_win):
+        w = settings_win
+        c = w.c  # fresh client installed by the reset
         assert len(w._mic_prio_rows) == 2  # loaded from cfg
         assert w._collect()["recording"]["mic_priority"] == \
             ["bluez", "usb-cam"]
@@ -675,9 +722,11 @@ class TestSettingsWindow:
         w.save()
         assert c.saved[-1]["recording"]["mic_priority"] == \
             ["bluez", "usb-cam"]
-        w.close()
 
     def test_unknown_language_stays_selectable(self, loop):
+        # own window: the unknown-language combo REFILL (appending
+        # "zz (saved)") is never undone by a later _load, so it must not
+        # leak into the shared instance
         from fluidvoice.gtkui.settings_window import SettingsWindow
         c = StubClient()
         c.get_config = lambda: (dict(copy.deepcopy(DEFAULTS), general={
@@ -691,8 +740,9 @@ class TestSettingsWindow:
         w.close()
 
     def test_key_capture_maps_to_config_names(self):
-        from fluidvoice.gtkui.settings_window import _keyname
         from gi.repository import Gdk
+
+        from fluidvoice.gtkui.settings_window import _keyname
         assert _keyname(Gdk.keyval_from_name("Control_R")) == "Right_Control"
         assert _keyname(Gdk.keyval_from_name("F9")) == "F9"
         assert _keyname(Gdk.keyval_from_name("space")) == "space"
@@ -700,20 +750,15 @@ class TestSettingsWindow:
 
     # -- whisper.cpp GGUF group --------------------------------------------------
 
-    def test_gguf_group_rows_built(self, loop):
+    def test_gguf_group_rows_built(self, settings_win):
         from fluidvoice import model_catalog
-        from fluidvoice.gtkui.settings_window import SettingsWindow
-        w = SettingsWindow(client=StubClient())
-        w.present()
-        pump(loop)
+        w = settings_win
         assert len(model_catalog.GGUF_CATALOG) == 7
         assert len(w._gguf_rows) == 7
         assert {r.get_title() for r in w._gguf_rows} == set(model_catalog.GGUF_CATALOG)
-        w.close()
 
-    def test_active_gguf_marker(self, loop):
-        from fluidvoice import model_catalog
-        from fluidvoice.gtkui.settings_window import SettingsWindow
+    def test_active_gguf_marker(self, settings_win, loop):
+        w = settings_win
         c = StubClient()
 
         def gg_cfg():
@@ -723,8 +768,8 @@ class TestSettingsWindow:
             return cfg, True
 
         c.get_config = gg_cfg
-        w = SettingsWindow(client=c)
-        w.present()
+        w.c = c
+        w._load()
         pump(loop)
         assert w._active_gguf() == "ggml-small.bin"
 
@@ -740,12 +785,12 @@ class TestSettingsWindow:
         labels = [x.get_text() for x in walk(active_row)
                   if isinstance(x, Gtk.Label)]
         assert "Active" in labels
-        w.close()
 
-    def test_download_flow_uses_worker_and_polls(self, loop, monkeypatch):
+    def test_download_flow_uses_worker_and_polls(self, settings_win, loop,
+                                                 monkeypatch):
         from fluidvoice import model_catalog
         from fluidvoice.gtkui import settings_window as sw
-        from fluidvoice.gtkui.settings_window import SettingsWindow
+        w = settings_win
         downloaded = {"now": False}
         monkeypatch.setattr(sw.model_catalog, "gguf_downloaded",
                             lambda n: downloaded["now"])
@@ -760,9 +805,6 @@ class TestSettingsWindow:
             return model_catalog.gguf_path(name)
 
         monkeypatch.setattr(sw.model_download, "download_gguf", fake_download)
-        w = SettingsWindow(client=StubClient())
-        w.present()
-        pump(loop)
         w._download_gguf(None, "ggml-small.bin")
         assert pump_until(loop, lambda: w._gguf_dl["ggml-small.bin"].get("done"))
         st = w._gguf_dl["ggml-small.bin"]
@@ -781,78 +823,61 @@ class TestSettingsWindow:
         row = next(r for r in w._gguf_rows if r.get_title() == "ggml-small.bin")
         buttons = [x.get_label() for x in walk(row) if isinstance(x, Gtk.Button)]
         assert buttons == ["Use"]
-        w.close()
 
-    def test_download_failure_toasts(self, loop, monkeypatch):
+    def test_download_failure_toasts(self, settings_win, loop, monkeypatch):
         from fluidvoice.gtkui import settings_window as sw
-        from fluidvoice.gtkui.settings_window import SettingsWindow
+        w = settings_win
         monkeypatch.setattr(sw.model_catalog, "gguf_downloaded", lambda n: False)
 
         def broken(name, progress=None):
             raise OSError("net down")
 
         monkeypatch.setattr(sw.model_download, "download_gguf", broken)
-        w = SettingsWindow(client=StubClient())
-        w.present()
-        pump(loop)
         toasts: list[str] = []
         monkeypatch.setattr(w, "toast", lambda text, timeout=5: toasts.append(text))
         w._download_gguf(None, "ggml-base.bin")
         assert pump_until(loop, lambda: w._gguf_dl["ggml-base.bin"].get("error"))
         assert w._gguf_dl["ggml-base.bin"]["error"] == "net down"
         assert pump_until(loop, lambda: any("net down" in t for t in toasts))
-        w.close()
 
-    def test_use_gguf_posts_config(self, loop, monkeypatch):
+    def test_use_gguf_posts_config(self, settings_win, loop, monkeypatch):
         from fluidvoice.gtkui import settings_window as sw
-        from fluidvoice.gtkui.settings_window import SettingsWindow
+        w = settings_win
+        c = w.c  # fresh client installed by the reset
         monkeypatch.setattr(sw.model_catalog, "gguf_downloaded", lambda n: True)
-        c = StubClient()
-        w = SettingsWindow(client=c)
-        w.present()
-        pump(loop)
         w._use_gguf(None, "ggml-base.bin")
         assert c.saved[-1]["model"] == {
             "backend": "whisper.cpp", "whispercpp_model": "ggml-base.bin"}
         pump(loop, 1300)  # let the scheduled warmup poll run once and stop
-        w.close()
 
-    def test_use_gguf_rejected_toasts(self, loop, monkeypatch):
+    def test_use_gguf_rejected_toasts(self, settings_win, loop, monkeypatch):
         from fluidvoice.gtkui import settings_window as sw
-        from fluidvoice.gtkui.settings_window import SettingsWindow
+        w = settings_win
+        c = w.c  # fresh client installed by the reset
         monkeypatch.setattr(sw.model_catalog, "gguf_downloaded", lambda n: True)
-        c = StubClient()
 
         def reject(body):
             return {"ok": False, "changed": [], "rejected": ["model.backend"],
                     "restart_required": [], "errors": [], "note": ""}
 
         c.set_config = reject
-        w = SettingsWindow(client=c)
-        w.present()
-        pump(loop)
         toasts: list[str] = []
         monkeypatch.setattr(w, "toast", lambda text, timeout=5: toasts.append(text))
         w._use_gguf(None, "ggml-base.bin")
         assert any("model.backend" in t for t in toasts)
         assert c.saved == []
-        w.close()
 
     # -- Parakeet (ONNX) group ---------------------------------------------------
 
-    def test_parakeet_group_rows_built(self, loop):
+    def test_parakeet_group_rows_built(self, settings_win):
         from fluidvoice import model_catalog
-        from fluidvoice.gtkui.settings_window import SettingsWindow
-        w = SettingsWindow(client=StubClient())
-        w.present()
-        pump(loop)
+        w = settings_win
         assert len(w._parakeet_rows) == len(model_catalog.PARAKEET_CATALOG)
         assert {r.get_title() for r in w._parakeet_rows} == \
             set(model_catalog.PARAKEET_CATALOG)
-        w.close()
 
-    def test_active_parakeet_marker(self, loop):
-        from fluidvoice.gtkui.settings_window import SettingsWindow
+    def test_active_parakeet_marker(self, settings_win, loop):
+        w = settings_win
         c = StubClient()
 
         def pk_cfg():
@@ -862,8 +887,8 @@ class TestSettingsWindow:
             return cfg, True
 
         c.get_config = pk_cfg
-        w = SettingsWindow(client=c)
-        w.present()
+        w.c = c
+        w._load()
         pump(loop)
         assert w._active_parakeet() == "parakeet-tdt-0.6b-v2"
 
@@ -878,11 +903,10 @@ class TestSettingsWindow:
                    if r.get_title() == "parakeet-tdt-0.6b-v2")
         labels = [x.get_text() for x in walk(row) if isinstance(x, Gtk.Label)]
         assert "Active" in labels
-        w.close()
 
-    def test_parakeet_download_flow(self, loop, monkeypatch):
+    def test_parakeet_download_flow(self, settings_win, loop, monkeypatch):
         from fluidvoice.gtkui import settings_window as sw
-        from fluidvoice.gtkui.settings_window import SettingsWindow
+        w = settings_win
         downloaded = {"now": False}
         monkeypatch.setattr(sw.model_catalog, "parakeet_downloaded",
                             lambda n: downloaded["now"])
@@ -897,9 +921,6 @@ class TestSettingsWindow:
 
         monkeypatch.setattr(sw.model_download, "download_parakeet",
                             fake_download)
-        w = SettingsWindow(client=StubClient())
-        w.present()
-        pump(loop)
         w._download_parakeet(None, "parakeet-tdt-0.6b-v2")
         assert pump_until(
             loop, lambda: w._parakeet_dl["parakeet-tdt-0.6b-v2"].get("done"))
@@ -916,15 +937,14 @@ class TestSettingsWindow:
                 yield from walk(child)
                 child = child.get_next_sibling()
 
-        row = next(r for r in w._parakeet_rows
-                   if r.get_title() == "parakeet-tdt-0.6b-v2")
+        row = next(r for r in w._parakeet_rows if r.get_title() == "parakeet-tdt-0.6b-v2")
         buttons = [x.get_label() for x in walk(row) if isinstance(x, Gtk.Button)]
         assert buttons == ["Use"]
-        w.close()
 
-    def test_parakeet_download_failure_toasts(self, loop, monkeypatch):
+    def test_parakeet_download_failure_toasts(self, settings_win, loop,
+                                              monkeypatch):
         from fluidvoice.gtkui import settings_window as sw
-        from fluidvoice.gtkui.settings_window import SettingsWindow
+        w = settings_win
         monkeypatch.setattr(sw.model_catalog, "parakeet_downloaded",
                             lambda n: False)
 
@@ -932,9 +952,6 @@ class TestSettingsWindow:
             raise OSError("net down")
 
         monkeypatch.setattr(sw.model_download, "download_parakeet", broken)
-        w = SettingsWindow(client=StubClient())
-        w.present()
-        pump(loop)
         toasts: list[str] = []
         monkeypatch.setattr(w, "toast", lambda text, timeout=5: toasts.append(text))
         w._download_parakeet(None, "parakeet-tdt-0.6b-v2")
@@ -942,64 +959,55 @@ class TestSettingsWindow:
             loop, lambda: w._parakeet_dl["parakeet-tdt-0.6b-v2"].get("error"))
         assert w._parakeet_dl["parakeet-tdt-0.6b-v2"]["error"] == "net down"
         assert pump_until(loop, lambda: any("net down" in t for t in toasts))
-        w.close()
 
-    def test_use_parakeet_posts_config(self, loop, monkeypatch):
+    def test_use_parakeet_posts_config(self, settings_win, loop, monkeypatch):
         from fluidvoice.gtkui import settings_window as sw
-        from fluidvoice.gtkui.settings_window import SettingsWindow
+        w = settings_win
+        c = w.c  # fresh client installed by the reset
         monkeypatch.setattr(sw.model_catalog, "parakeet_downloaded",
                             lambda n: True)
-        c = StubClient()
-        w = SettingsWindow(client=c)
-        w.present()
-        pump(loop)
         w._use_parakeet(None, "parakeet-tdt-0.6b-v2")
         assert c.saved[-1]["model"] == {
             "backend": "parakeet", "name": "parakeet-tdt-0.6b-v2"}
         pump(loop, 1300)  # let the scheduled warmup poll run once and stop
-        w.close()
-
 
 class TestDictionarySuggestions:
     """Settings -> Dictation "Suggested words" group (dict_learn):
     suggest-only, threshold-2, permanent dismiss, Accept merges through
     the client's validated save path."""
 
-    def test_rows_render_with_count(self, loop):
-        from fluidvoice.gtkui.settings_window import SettingsWindow
-        c = StubClient()
+    @pytest.fixture(autouse=True)
+    def _fresh(self, settings_win, loop):
+        reset_settings(settings_win, loop)
+
+    def test_rows_render_with_count(self, settings_win):
+        w = settings_win
+        c = w.c  # fresh client installed by the reset
         c.suggestions = [
             {"heard": "flud voice", "corrected": "fluid voice", "count": 3},
             {"heard": "gnu plot", "corrected": "gnuplot", "count": 2},
         ]
-        w = SettingsWindow(client=c)
-        w.present()
-        pump(loop)
+        w._load()  # suggestion rows are (re)built on load
         assert w.suggest_group.get_visible() is True
         assert [r["row"].get_title() for r in w._suggest_rows] == [
             "flud voice → fluid voice", "gnu plot → gnuplot"]
         assert w._suggest_rows[0]["row"].get_subtitle() == "seen 3×"
-        w.close()
 
-    def test_group_hidden_when_nothing_pending(self, loop):
-        from fluidvoice.gtkui.settings_window import SettingsWindow
-        w = SettingsWindow(client=StubClient())  # StubClient: no suggestions
-        w.present()
-        pump(loop)
+    def test_group_hidden_when_nothing_pending(self, settings_win):
+        w = settings_win  # reset client: no suggestions
         assert w._suggest_rows == []
         assert w.suggest_group.get_visible() is False
-        w.close()
 
-    def test_accept_posts_merges_and_refreshes_editor(self, loop):
-        from fluidvoice.gtkui.settings_window import SettingsWindow
-        c = StubClient()
+    def test_accept_posts_merges_and_refreshes_editor(self, settings_win,
+                                                      monkeypatch):
+        w = settings_win
+        c = w.c  # fresh client installed by the reset
         c.suggestions = [
             {"heard": "flud voice", "corrected": "fluid voice", "count": 2}]
-        w = SettingsWindow(client=c)
-        w.present()
-        pump(loop)
+        w._load()
         toasts: list[str] = []
-        w.toast = lambda text, timeout=5: toasts.append(text)
+        monkeypatch.setattr(w, "toast",
+                            lambda text, timeout=5: toasts.append(text))
         w._on_suggestion_accept(None, w._suggest_rows[0])
         assert c.accepted == [("flud voice", "fluid voice")]
         # posted through the validated save path
@@ -1014,11 +1022,10 @@ class TestDictionarySuggestions:
         assert w._suggest_rows == []
         assert w.suggest_group.get_visible() is False
         assert "Added to dictionary" in toasts
-        w.close()
 
-    def test_accept_rejected_keeps_row(self, loop):
-        from fluidvoice.gtkui.settings_window import SettingsWindow
-        c = StubClient()
+    def test_accept_rejected_keeps_row(self, settings_win, monkeypatch):
+        w = settings_win
+        c = w.c  # fresh client installed by the reset
 
         def reject(heard, corrected):
             return {"ok": False, "dictionary": [], "changed": [],
@@ -1027,29 +1034,24 @@ class TestDictionarySuggestions:
         c.dict_suggestion_accept = reject
         c.suggestions = [
             {"heard": "flud voice", "corrected": "fluid voice", "count": 2}]
-        w = SettingsWindow(client=c)
-        w.present()
-        pump(loop)
+        w._load()
         toasts: list[str] = []
-        w.toast = lambda text, timeout=5: toasts.append(text)
+        monkeypatch.setattr(w, "toast",
+                            lambda text, timeout=5: toasts.append(text))
         w._on_suggestion_accept(None, w._suggest_rows[0])
         assert len(w._suggest_rows) == 1  # row stays on a rejected save
         assert any("Could not add" in t for t in toasts)
-        w.close()
 
-    def test_dismiss_removes_row_and_records_pair(self, loop):
-        from fluidvoice.gtkui.settings_window import SettingsWindow
-        c = StubClient()
+    def test_dismiss_removes_row_and_records_pair(self, settings_win):
+        w = settings_win
+        c = w.c  # fresh client installed by the reset
         c.suggestions = [
             {"heard": "gnu plot", "corrected": "gnuplot", "count": 2}]
-        w = SettingsWindow(client=c)
-        w.present()
-        pump(loop)
+        w._load()
         w._on_suggestion_dismiss(None, w._suggest_rows[0])
         assert c.dismissed == [("gnu plot", "gnuplot")]
         assert w._suggest_rows == []
         assert w.suggest_group.get_visible() is False
-        w.close()
 
 
 class TestOnboardingWindow:
@@ -1099,8 +1101,7 @@ class TestHistoryScience:
                 return row
         raise AssertionError("no entry rows")
 
-    def test_date_headers_group_renders(self, loop):
-        from fluidvoice.gtkui.main_window import HistoryWindow
+    def test_date_headers_group_renders(self, hist_win, loop):
         midnight = time.mktime(time.localtime(time.time())[:3]
                                + (0, 0, 0, 0, 0, -1))
         entries = [
@@ -1108,39 +1109,28 @@ class TestHistoryScience:
             {"ts": midnight - 3600, "text": "yesterdays words", "app": "zed"},
             {"ts": midnight - 7200, "text": "also yesterday", "app": "zed"},
         ]
-        w = HistoryWindow(client=StubClient(entries))
-        w.present()
-        pump(loop)
+        w = hist_win
+        reset_history(w, loop, entries)
         labels = self._labels(w)
         assert "Today" in labels
         assert "Yesterday" in labels
-        w.close()
 
-    def test_confidence_dots_render(self, loop):
-        from fluidvoice.gtkui.main_window import HistoryWindow
+    def test_confidence_dots_render(self, hist_win, loop):
         entries = [{"ts": time.time(), "text": "shaky words",
                     "confidence": 1}]
-        w = HistoryWindow(client=StubClient(entries))
-        w.present()
-        pump(loop)
+        w = hist_win
+        reset_history(w, loop, entries)
         assert "●●○" in self._labels(w)
-        w.close()
 
-    def test_no_dots_without_confidence(self, loop):
-        from fluidvoice.gtkui.main_window import HistoryWindow
-        w = HistoryWindow(client=StubClient(ENTRIES))
-        w.present()
-        pump(loop)
+    def test_no_dots_without_confidence(self, hist_win, loop):
+        w = hist_win
+        reset_history(w, loop)
         assert not any("●" in t for t in self._labels(w))
-        w.close()
 
-    def test_inline_edit_round_trip(self, loop):
-        from fluidvoice.gtkui.main_window import HistoryWindow
+    def test_inline_edit_round_trip(self, hist_win, loop):
         entries = [{"ts": 1234.5, "text": "original words"}]
-        c = StubClient(entries)
-        w = HistoryWindow(client=c)
-        w.present()
-        pump(loop)
+        w = hist_win
+        c = reset_history(w, loop, entries)
         row = self._first_entry_row(w)
         row._start_edit(None)
         assert row.editor is not None
@@ -1151,14 +1141,10 @@ class TestHistoryScience:
         assert row.entry["text"] == "edited words"
         assert "edited words" in self._labels(w)
         assert row.editor is None
-        w.close()
 
-    def test_edit_cancel_keeps_text(self, loop):
-        from fluidvoice.gtkui.main_window import HistoryWindow
-        c = StubClient([{"ts": 99.0, "text": "keep me"}])
-        w = HistoryWindow(client=c)
-        w.present()
-        pump(loop)
+    def test_edit_cancel_keeps_text(self, hist_win, loop):
+        w = hist_win
+        c = reset_history(w, loop, [{"ts": 99.0, "text": "keep me"}])
         row = self._first_entry_row(w)
         row._start_edit(None)
         view = row.editor.get_first_child()
@@ -1166,21 +1152,16 @@ class TestHistoryScience:
         row._end_edit(False, view)
         assert c.updated == []
         assert "keep me" in self._labels(w)
-        w.close()
 
-    def test_insert_at_cursor_uses_client(self, loop):
-        from fluidvoice.gtkui.main_window import HistoryWindow
-        c = StubClient([{"ts": 7.0, "text": "insert me"}])
-        w = HistoryWindow(client=c)
-        w.present()
-        pump(loop)
+    def test_insert_at_cursor_uses_client(self, hist_win, loop):
+        w = hist_win
+        c = reset_history(w, loop, [{"ts": 7.0, "text": "insert me"}])
         row = self._first_entry_row(w)
         w._on_insert_row(None, row)
         assert c.inserted == ["insert me"]
-        w.close()
 
-    def test_edit_failure_keeps_editor_open(self, loop):
-        from fluidvoice.gtkui.main_window import HistoryWindow
+    def test_edit_failure_keeps_editor_open(self, hist_win, loop):
+        w = hist_win
         c = StubClient([{"ts": 55.0, "text": "original"}])
 
         def fail_update(ts, text):
@@ -1188,9 +1169,8 @@ class TestHistoryScience:
             return False
 
         c.history_update_text = fail_update
-        w = HistoryWindow(client=c)
-        w.present()
-        pump(loop)
+        w.c = c
+        w._load_history()
         row = self._first_entry_row(w)
         row._start_edit(None)
         view = row.editor.get_first_child()
@@ -1199,7 +1179,6 @@ class TestHistoryScience:
         assert row.editor is not None      # editor stays open...
         assert not row.text_lbl.get_visible()  # ...with the user's text
         assert c.updated == [(55.0, "risky edit")]
-        w.close()
 
 
 class TestUpdateSurfacing:
@@ -1207,23 +1186,18 @@ class TestUpdateSurfacing:
     history-window status label, the Settings About row, and the single
     onboarding sentence."""
 
-    def test_status_row_hidden_without_update(self, loop):
-        from fluidvoice.gtkui.main_window import HistoryWindow
-        w = HistoryWindow(client=StubClient(ENTRIES))
-        w.present()
-        pump(loop)
+    def test_status_row_hidden_without_update(self, hist_win, loop):
+        w = hist_win
+        reset_history(w, loop)
         w._apply_status({"recording": False, "busy": False,
                          "backend": "b", "cuda": False})
         assert w.update_lbl.get_visible() is False
         w._apply_status(None)  # daemon down: still hidden
         assert w.update_lbl.get_visible() is False
-        w.close()
 
-    def test_status_row_shows_update_with_tooltip(self, loop):
-        from fluidvoice.gtkui.main_window import HistoryWindow
-        w = HistoryWindow(client=StubClient(ENTRIES))
-        w.present()
-        pump(loop)
+    def test_status_row_shows_update_with_tooltip(self, hist_win, loop):
+        w = hist_win
+        reset_history(w, loop)
         w._apply_status({"recording": False, "busy": False,
                          "backend": "b", "cuda": False,
                          "update_available": "0.6.0",
@@ -1238,13 +1212,10 @@ class TestUpdateSurfacing:
         w._apply_status({"recording": False, "busy": False,
                          "backend": "b", "cuda": False})
         assert w.update_lbl.get_visible() is False
-        w.close()
 
-    def test_settings_about_update_row_states(self, loop):
-        from fluidvoice.gtkui.settings_window import SettingsWindow
-        w = SettingsWindow(client=StubClient())
-        w.present()
-        pump(loop)
+    def test_settings_about_update_row_states(self, settings_win, loop):
+        w = settings_win
+        reset_settings(w, loop)  # pristine state for the shared window
         # StubClient status: no checker reported -> "checks disabled"
         assert w.about_update_row.get_subtitle() == "checks disabled"
         w._apply_about_update({"update_available": None, "update":
@@ -1258,7 +1229,6 @@ class TestUpdateSurfacing:
         w._apply_about_update({"update_available": None, "update":
                                {"enabled": True, "checked": False}})
         assert w.about_update_row.get_subtitle() == "checking…"
-        w.close()
 
     def test_onboarding_has_updates_sentence(self, loop):
         from fluidvoice.gtkui.onboarding import OnboardingWindow

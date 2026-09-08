@@ -51,6 +51,12 @@ include = ["fluidvoice*"]
 "fluidvoice" = ["assets/sfx/*", "assets/icon.png",
                 "assets/icons/*", "assets/icons/symbolic/actions/*.svg", "assets/providers/*"]
 
+# Parallel runs: pytest-xdist is part of the dev setup - run the suite with
+# `... -m pytest -n auto tests --ignore=tests/integration` for a ~4-5x
+# speedup (1759 tests: ~69 s serial -> ~15 s on 16 workers). Intentionally
+# NOT an addopts default: plain pytest stays single-process for debugging
+# (--pdb, breakpoints, -x); the GTK tests need no special scoping under
+# workers (each worker is its own process + XDG-isolated conftest).
 [tool.pytest.ini_options]
 markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')", "integration: real-subsystem tests (mic, GPU, daemon process, network)", "desktop: live-interactive-session tests (X grabs, screen pixels) - excluded from default runs"]
 
