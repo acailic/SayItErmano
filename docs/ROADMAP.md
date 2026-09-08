@@ -70,8 +70,19 @@ sources. Everything below is a known, classified gap — see
       clipboard-manager hygiene markers (see STATUS).
 
 ## v0.4 — model variety
-- [ ] Parakeet TDT v2/v3 on GPU via NeMo / ONNX Runtime — upstream's default
-      model and the highest-value Linux addition.
+- [x] Parakeet TDT v2/v3 on GPU via NeMo / ONNX Runtime — DONE (99c4afd):
+      `fluidvoice/backends/parakeet_onnx.py` runs both v2 (en) and v3
+      (25 European languages) through the sha256-pinned sherpa-onnx int8
+      exports with a pure-numpy log-mel featurizer and a greedy TDT
+      decoder — no NeMo/torchaudio. CUDA EP is auto-picked when the
+      installed onnxruntime wheel has it; the CPU wheel alone is already
+      dictation-grade (verified 2026-09-08 on this machine: v3 loads in
+      1.9 s, transcribes 7.4 s of audio in 0.45 s ≈ 16× realtime;
+      tests/integration/test_parakeet_real.py pins the v2 golden
+      transcript). Explicit backend selection (Settings → Models);
+      fp16/fp32 quality variants are a possible future upgrade (sherpa
+      ships a v2 fp16 tarball; the backend currently pins the int8
+      filenames).
 - [ ] Parakeet Realtime / Nemotron 3.5 streaming (NeMo/Riva) — the
       segmented preview already streams window-wise on every backend
       (2026-09-05); true streaming engines would tighten first-word latency
