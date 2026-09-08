@@ -572,12 +572,13 @@ work; to see what moved upstream, run `scripts/upstream-diff.sh`.
 .venv/bin/python -m pytest -n auto tests --ignore=tests/integration  # parallel via pytest-xdist (~4-5x; skip -n for --pdb debugging)
 ```
 
-The test pyramid — **558 automated tests** at v0.4.0:
+The test suite — **1759 automated tests** at v0.7.0 (`-n auto` runs it in
+~19 s):
 
-| Layer | What it exercises | Count |
-|---|---|---|
-| Unit | processing engines, AI client (mocked transport), daemon state machine (stubs), insertion command construction, config validation (apply_settings), overlay/pill painting, GTK app offscreen smoke tests | 527 |
-| E2E (slow) | real whisper model transcribing the JFK sample | 2 |
+| Layer | What it exercises |
+|---|---|
+| Unit + integration-style | processing engines, AI client (mocked transport), daemon + pipeline state machines (stubs), socket API, MCP server, remote-STT + refusal/countdown guards, insertion command construction, config validation + registration meta-tests, overlay/pill painting, GTK app offscreen smoke tests |
+| E2E (slow) | real whisper model transcribing the JFK sample |
 | Integration | real `pw-record` capture + raw→WAV, GPU transcription, streaming preview with the loaded model, a real daemon **subprocess** (socket control incl. get/set-config + select-model, toggle/cancel, clean shutdown), live X11 hotkey grab + overlay pixel proof, real CLI invocations (doctor/transcribe/history/config), live AI polish + rewrite against local Ollama (skipped when absent), .deb extract + relocated-venv import, one-shot installer DRY_RUN download | 29 |
 
 Integration tests run against your real PipeWire/X11/CUDA environment and are
