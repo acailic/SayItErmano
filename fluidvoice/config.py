@@ -147,6 +147,11 @@ DEFAULTS: dict[str, Any] = {
         "remote_model": "whisper-large-v3",  # name sent in the form
         "remote_api_key": "",  # optional bearer token (masked, never logged)
         "remote_timeout_s": 30,  # per-request timeout (5..600)
+        # custom vocabulary BOOSTING (upstream #916): words to bias the
+        # decoder toward (names, jargon) - NOT replacements; fed to
+        # faster-whisper as hotwords, to whisper-torch/preview as
+        # initial_prompt. Changing it reloads the speech engine.
+        "hotwords": [],
     },
     "processing": {
         "remove_filler_words": True,
@@ -361,6 +366,10 @@ languages = {}
 # remote_model = "whisper-large-v3"
 # remote_api_key = ""            # optional bearer; masked everywhere
 # remote_timeout_s = 30
+# Custom vocabulary biasing (words to ADD - names, jargon; the dictionary
+# is for replacements): fed to the decoder as hints. Changing this key
+# reloads the speech engine.
+# hotwords = ["SayItErmano", "PipeWire"]
 # Unload the speech model after this many idle seconds to free RAM/VRAM
 # (0 = keep it loaded forever; range 30..86400 when set). The next
 # dictation after an unload pays the model load time again.
@@ -510,7 +519,7 @@ _SAVE_WHITELIST: dict[str, list[str]] = {
                   "pause_media", "push_to_talk_button",
                   "push_to_talk_modifiers"],
     "model": ["backend", "name", "device", "compute", "whispercpp_model",
-              "eager_warmup", "idle_unload_s", "languages",
+              "eager_warmup", "idle_unload_s", "languages", "hotwords",
               "remote_url", "remote_model", "remote_api_key",
               "remote_timeout_s"],
     "processing": ["remove_filler_words", "filler_words", "punctuation_enabled",
@@ -703,7 +712,7 @@ ALLOWED_SETTINGS: dict[str, set] = {
                   "preview_vad_silence_s", "overlay_chips",
                   "push_to_talk_button", "push_to_talk_modifiers"},
     "model": {"backend", "name", "device", "compute", "whispercpp_model",
-              "eager_warmup", "idle_unload_s", "languages",
+              "eager_warmup", "idle_unload_s", "languages", "hotwords",
               "remote_url", "remote_model", "remote_api_key",
               "remote_timeout_s"},
     "processing": {"remove_filler_words", "filler_words",
@@ -727,7 +736,7 @@ ALLOWED_SETTINGS: dict[str, set] = {
 }
 RESTART_REQUIRED = {"model.eager_warmup"}
 ENGINE_KEYS = {"model.backend", "model.name", "model.device",
-               "model.compute", "model.whispercpp_model",
+               "model.compute", "model.whispercpp_model", "model.hotwords",
                "model.remote_url", "model.remote_model",
                "model.remote_api_key", "model.remote_timeout_s"}
 
@@ -775,6 +784,8 @@ def coerce_setting(section: str, key: str, value: Any) -> tuple[bool, Any]:
         return _coerce_button_spec(value)
     if (section, key) == ("model", "remote_url"):
         return _coerce_remote_url(value)
+    if (section, key) == ("model", "hotwords"):
+        return _coerce_hotwords(value)
     if (section, key) == ("model", "remote_api_key"):
         # any string incl. "" (clearing is done by editing the file or
         # setting remote_url empty); never logged, masked in socket reads
@@ -929,6 +940,30 @@ def _coerce_action_triggers(value: Any) -> tuple[bool, Any]:
             aliases.append(a.strip())
         if aliases:
             cleaned[k] = aliases
+    return (True, cleaned)
+
+
+def _coerce_hotwords(value: Any) -> tuple[bool, Any]:
+    """model.hotwords: vocabulary-biasing words (upstream #916 - words to
+    ADD, unlike the dictionary's replacements). Stripped, 1..64 chars
+    each, no duplicates, <=128 entries; any non-str/empty/too-long entry
+    rejects the whole value."""
+    if not isinstance(value, list):
+        return (False, value)
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw in value:
+        if not isinstance(raw, str):
+            return (False, value)
+        word = raw.strip()
+        if not word or len(word) > 64:
+            return (False, value)
+        if word.lower() in seen:
+            continue  # duplicates are dropped, not fatal
+        seen.add(word.lower())
+        cleaned.append(word)
+        if len(cleaned) > 128:
+            return (False, value)
     return (True, cleaned)
 
 

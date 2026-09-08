@@ -380,11 +380,19 @@ def preview_transcriber(cfg: dict, backend, language: str | None
     name = getattr(backend, "name", "?") if backend is not None else None
     model = getattr(backend, "_model", None)
     lang = None if language in (None, "", "auto") else language
+    hotwords = " ".join(
+        ((cfg.get("model", {}) or {}).get("hotwords")) or []) or None
+
+    def _prompt(ctx: str | None) -> str | None:
+        # vocabulary hints ride first, the rolling context after (#916)
+        if hotwords and ctx:
+            return hotwords + " " + ctx
+        return hotwords or ctx or None
 
     if name == "faster-whisper" and model is not None:
         def fw(wav: bytes, ctx: str | None) -> str:
             segments, _ = model.transcribe(
-                io.BytesIO(wav), language=lang, initial_prompt=ctx or None,
+                io.BytesIO(wav), language=lang, initial_prompt=_prompt(ctx),
                 beam_size=1, condition_on_previous_text=False,
                 without_timestamps=True)
             return " ".join(s.text.strip() for s in segments if s.text.strip())
@@ -393,7 +401,7 @@ def preview_transcriber(cfg: dict, backend, language: str | None
     if name == "whisper-torch" and model is not None:
         def tw(wav: bytes, ctx: str | None) -> str:
             result = model.transcribe(io.BytesIO(wav), language=lang,
-                                      initial_prompt=ctx or None,
+                                      initial_prompt=_prompt(ctx),
                                       beam_size=1,
                                       condition_on_previous_text=False)
             return " ".join(s.text.strip() for s in result.get("segments", [])

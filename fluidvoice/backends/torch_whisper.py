@@ -21,6 +21,9 @@ class TorchWhisperBackend:
         mcfg = cfg["model"]
         self.model_name = resolve_model_name(mcfg["name"])
         self.language = effective_language(cfg) or None
+        # custom vocabulary biasing (#916): openai-whisper has no hotwords
+        # param - the initial_prompt hint is the closest mechanism
+        self.hotwords = " ".join(mcfg.get("hotwords") or []) or None
         self.device = mcfg["device"]
         if self.device == "auto":
             self.device = "cuda" if cuda_available() else "cpu"
@@ -39,6 +42,7 @@ class TorchWhisperBackend:
         if lang == "auto":
             lang = None
         result = self._model.transcribe(str(wav_path), language=lang,
+                                        initial_prompt=self.hotwords,
                                         fp16=self.device == "cuda")
         segments = [{"start": round(s.get("start", 0.0), 3),
                      "end": round(s.get("end", 0.0), 3),

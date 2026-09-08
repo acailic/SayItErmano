@@ -175,6 +175,9 @@ def _models_cache_lines(cfg: dict) -> list[str]:
     lines.append(f"  total: {len(entries)} model"
                  f"{'' if len(entries) == 1 else 's'}, "
                  f"{model_catalog.human_bytes(total)}")
+    hw = (cfg.get("model", {}) or {}).get("hotwords") or []
+    if hw:
+        lines.append(f"  hotwords: {len(hw)} vocabulary-biasing word(s)")
     lines.append("  note: the legacy huggingface/hub cache "
                  f"({paths.cache_dir().parent / 'huggingface' / 'hub'}) "
                  "is not managed here")

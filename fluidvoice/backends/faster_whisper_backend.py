@@ -25,6 +25,8 @@ class FasterWhisperBackend:
         mcfg = cfg["model"]
         self.model_name = resolve_model_name(mcfg["name"])
         self.language = effective_language(cfg) or None
+        # custom vocabulary biasing (#916): fed to the decoder as hotwords
+        self.hotwords = " ".join(mcfg.get("hotwords") or []) or None
         device = mcfg["device"]
         compute = mcfg["compute"]
         if device == "auto":
@@ -87,6 +89,7 @@ class FasterWhisperBackend:
             lang = None
         segments, info = self._model.transcribe(
             str(wav_path), language=lang, vad_filter=False, beam_size=1,
+            hotwords=self.hotwords,
         )
         texts, segs = [], []
         for seg in segments:  # generator - consume once, reuse for text AND segments

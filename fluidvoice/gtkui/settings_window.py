@@ -637,6 +637,18 @@ class SettingsWindow(Adw.PreferencesWindow):
                                        "network errors"))
         page.add(remote)
 
+        hot = Adw.EntryRow(title="Hotwords (comma-separated)")
+        self._rows[("model", "hotwords")] = _ListProxy(hot)
+        hot.connect("changed", lambda *_: self._touch())
+        hot_group = Adw.PreferencesGroup(
+            title="Vocabulary boosting",
+            description="Words the decoder is biased toward (ADD, not "
+                        "replace) — fed as faster-whisper hotwords / "
+                        "whisper initial-prompt; changing them reloads "
+                        "the engine")
+        hot_group.add(hot)
+        page.add(hot_group)
+
         self.lang_overrides_group = Adw.PreferencesGroup(
             title="Per-model language",
             description="Overrides general.language per model - "
