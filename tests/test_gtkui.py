@@ -789,10 +789,11 @@ class TestSettingsWindow:
     def test_download_flow_uses_worker_and_polls(self, settings_win, loop,
                                                  monkeypatch):
         from fluidvoice import model_catalog
-        from fluidvoice.gtkui import settings_window as sw
+        from fluidvoice.gtkui import settings_window as sw  # noqa: F401 (w attr below)
+        from fluidvoice.gtkui.settings_pages import models as spm
         w = settings_win
         downloaded = {"now": False}
-        monkeypatch.setattr(sw.model_catalog, "gguf_downloaded",
+        monkeypatch.setattr(spm.model_catalog, "gguf_downloaded",
                             lambda n: downloaded["now"])
         calls: list[tuple[str, list]] = []
 
@@ -804,7 +805,7 @@ class TestSettingsWindow:
                 seen.append(progress(100, 100))
             return model_catalog.gguf_path(name)
 
-        monkeypatch.setattr(sw.model_download, "download_gguf", fake_download)
+        monkeypatch.setattr(spm.model_download, "download_gguf", fake_download)
         w._download_gguf(None, "ggml-small.bin")
         assert pump_until(loop, lambda: w._gguf_dl["ggml-small.bin"].get("done"))
         st = w._gguf_dl["ggml-small.bin"]
@@ -825,14 +826,15 @@ class TestSettingsWindow:
         assert buttons == ["Use"]
 
     def test_download_failure_toasts(self, settings_win, loop, monkeypatch):
-        from fluidvoice.gtkui import settings_window as sw
+        from fluidvoice.gtkui import settings_window as sw  # noqa: F401 (w attr below)
+        from fluidvoice.gtkui.settings_pages import models as spm
         w = settings_win
-        monkeypatch.setattr(sw.model_catalog, "gguf_downloaded", lambda n: False)
+        monkeypatch.setattr(spm.model_catalog, "gguf_downloaded", lambda n: False)
 
         def broken(name, progress=None):
             raise OSError("net down")
 
-        monkeypatch.setattr(sw.model_download, "download_gguf", broken)
+        monkeypatch.setattr(spm.model_download, "download_gguf", broken)
         toasts: list[str] = []
         monkeypatch.setattr(w, "toast", lambda text, timeout=5: toasts.append(text))
         w._download_gguf(None, "ggml-base.bin")
@@ -841,20 +843,22 @@ class TestSettingsWindow:
         assert pump_until(loop, lambda: any("net down" in t for t in toasts))
 
     def test_use_gguf_posts_config(self, settings_win, loop, monkeypatch):
-        from fluidvoice.gtkui import settings_window as sw
+        from fluidvoice.gtkui import settings_window as sw  # noqa: F401 (w attr below)
+        from fluidvoice.gtkui.settings_pages import models as spm
         w = settings_win
         c = w.c  # fresh client installed by the reset
-        monkeypatch.setattr(sw.model_catalog, "gguf_downloaded", lambda n: True)
+        monkeypatch.setattr(spm.model_catalog, "gguf_downloaded", lambda n: True)
         w._use_gguf(None, "ggml-base.bin")
         assert c.saved[-1]["model"] == {
             "backend": "whisper.cpp", "whispercpp_model": "ggml-base.bin"}
         pump(loop, 1300)  # let the scheduled warmup poll run once and stop
 
     def test_use_gguf_rejected_toasts(self, settings_win, loop, monkeypatch):
-        from fluidvoice.gtkui import settings_window as sw
+        from fluidvoice.gtkui import settings_window as sw  # noqa: F401 (w attr below)
+        from fluidvoice.gtkui.settings_pages import models as spm
         w = settings_win
         c = w.c  # fresh client installed by the reset
-        monkeypatch.setattr(sw.model_catalog, "gguf_downloaded", lambda n: True)
+        monkeypatch.setattr(spm.model_catalog, "gguf_downloaded", lambda n: True)
 
         def reject(body):
             return {"ok": False, "changed": [], "rejected": ["model.backend"],
@@ -905,10 +909,11 @@ class TestSettingsWindow:
         assert "Active" in labels
 
     def test_parakeet_download_flow(self, settings_win, loop, monkeypatch):
-        from fluidvoice.gtkui import settings_window as sw
+        from fluidvoice.gtkui import settings_window as sw  # noqa: F401 (w attr below)
+        from fluidvoice.gtkui.settings_pages import models as spm
         w = settings_win
         downloaded = {"now": False}
-        monkeypatch.setattr(sw.model_catalog, "parakeet_downloaded",
+        monkeypatch.setattr(spm.model_catalog, "parakeet_downloaded",
                             lambda n: downloaded["now"])
         calls: list[tuple[str, list]] = []
 
@@ -917,9 +922,9 @@ class TestSettingsWindow:
             if progress:
                 progress(50, 100)
                 progress(100, 100)
-            return sw.model_catalog.parakeet_model_dir(name)
+            return spm.model_catalog.parakeet_model_dir(name)
 
-        monkeypatch.setattr(sw.model_download, "download_parakeet",
+        monkeypatch.setattr(spm.model_download, "download_parakeet",
                             fake_download)
         w._download_parakeet(None, "parakeet-tdt-0.6b-v2")
         assert pump_until(
@@ -943,15 +948,16 @@ class TestSettingsWindow:
 
     def test_parakeet_download_failure_toasts(self, settings_win, loop,
                                               monkeypatch):
-        from fluidvoice.gtkui import settings_window as sw
+        from fluidvoice.gtkui import settings_window as sw  # noqa: F401 (w attr below)
+        from fluidvoice.gtkui.settings_pages import models as spm
         w = settings_win
-        monkeypatch.setattr(sw.model_catalog, "parakeet_downloaded",
+        monkeypatch.setattr(spm.model_catalog, "parakeet_downloaded",
                             lambda n: False)
 
         def broken(name, progress=None):
             raise OSError("net down")
 
-        monkeypatch.setattr(sw.model_download, "download_parakeet", broken)
+        monkeypatch.setattr(spm.model_download, "download_parakeet", broken)
         toasts: list[str] = []
         monkeypatch.setattr(w, "toast", lambda text, timeout=5: toasts.append(text))
         w._download_parakeet(None, "parakeet-tdt-0.6b-v2")
@@ -961,10 +967,11 @@ class TestSettingsWindow:
         assert pump_until(loop, lambda: any("net down" in t for t in toasts))
 
     def test_use_parakeet_posts_config(self, settings_win, loop, monkeypatch):
-        from fluidvoice.gtkui import settings_window as sw
+        from fluidvoice.gtkui import settings_window as sw  # noqa: F401 (w attr below)
+        from fluidvoice.gtkui.settings_pages import models as spm
         w = settings_win
         c = w.c  # fresh client installed by the reset
-        monkeypatch.setattr(sw.model_catalog, "parakeet_downloaded",
+        monkeypatch.setattr(spm.model_catalog, "parakeet_downloaded",
                             lambda n: True)
         w._use_parakeet(None, "parakeet-tdt-0.6b-v2")
         assert c.saved[-1]["model"] == {

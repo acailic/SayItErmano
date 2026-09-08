@@ -592,13 +592,14 @@ class TestModelLanguageRows:
     @pytest.fixture()
     def dl_state(self, monkeypatch):
         """Control which models appear downloaded."""
-        from fluidvoice.gtkui import settings_window as sw
+        from fluidvoice.gtkui import settings_window as sw  # noqa: F401
+        from fluidvoice.gtkui.settings_pages import models as spm
         state = {"fw": set(), "gguf": set(), "pk": set()}
-        monkeypatch.setattr(sw.model_catalog, "model_downloaded",
+        monkeypatch.setattr(spm.model_catalog, "model_downloaded",
                             lambda n: n in state["fw"])
-        monkeypatch.setattr(sw.model_catalog, "gguf_downloaded",
+        monkeypatch.setattr(spm.model_catalog, "gguf_downloaded",
                             lambda n: n in state["gguf"])
-        monkeypatch.setattr(sw.model_catalog, "parakeet_downloaded",
+        monkeypatch.setattr(spm.model_catalog, "parakeet_downloaded",
                             lambda n: n in state["pk"])
         return state
 
@@ -716,12 +717,13 @@ class TestDiskUsageRows:
             child = child.get_next_sibling()
 
     def _window(self, loop, c, entries=None, monkeypatch=None):
-        from fluidvoice.gtkui import settings_window as sw
+        from fluidvoice.gtkui import settings_window as sw  # noqa: F401
+        from fluidvoice.gtkui.settings_pages import models as spm
         from fluidvoice.gtkui.settings_window import SettingsWindow
         mp = monkeypatch
         fake = lambda: list(entries if entries is not None else self.ENTRIES)
         if mp is not None:
-            mp.setattr(sw.model_catalog, "cached_models", fake)
+            mp.setattr(spm.model_catalog, "cached_models", fake)
         w = SettingsWindow(client=c)
         w.present()
         _pump(loop)
