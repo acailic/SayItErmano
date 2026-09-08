@@ -102,6 +102,23 @@ matrix + upstream changelog with its refresh loop).
   speech resumes cancel it, expiry finishes the take by itself (no hotkey
   press) and Enter is pressed by the existing spoken-send path; the plain
   VAD auto-stop (2 s) stays as the no-phrase path and backstop.
+- **Vocabulary boosting** (`model.hotwords`, upstream request #916):
+  words to ADD (names, jargon) — the dictionary stays for replacements;
+  faster-whisper native `hotwords=`, whisper-torch + both preview
+  transcribers via `initial_prompt` (hints first, rolling context after).
+- **Mid-take stall watchdog** (`recording.stall_timeout_s`, default 8,
+  0 = off; upstream #852): a frozen capture stream cancels the take with
+  a clear error instead of recording air until max_seconds.
+- **MCP server** (`sayit-ermano mcp`, upstream request #927): stdio
+  JSON-RPC bridge exposing transcribe_file/history/status/toggle to
+  MCP-capable agents, forwarded over the existing unix control socket.
+- **Command-mode safety** (upstream #861/#930 ported): `find -delete` /
+  `find -exec` join the destructive strong-confirm patterns; run_shell
+  kills the whole process group on timeout so a background descendant
+  holding the pipes can't hang a turn.
+- **Prompt-leak guard** (upstream #910): a polish reply echoing its
+  system prompt (8-word shingle) falls back to the raw transcript —
+  rides `ai.refusal_guard`.
 - **GAAV mode**: optional lowercase-first + trailing-period strip for
   search-box/casual dictation.
 - **Mic priority list + input-device monitoring** (`recording.mic_priority`):
@@ -289,6 +306,7 @@ matrix + upstream changelog with its refresh loop).
 
 | Divergence | Why |
 |---|---|
+| MCP server bridge (`sayit-ermano mcp`, `fluidvoice/mcp_server.py`): stdio JSON-RPC tools for MCP agents, forwarded to the running daemon over the unix control socket (warm model, no TCP, no new dependency) | upstream users ask for agent access to the STT engine (#927, and their loopback API #715); our no-TCP scope beats both — filesystem-scoped trust boundary |
 | AI refusal guardrail (`ai.refusal_guard`, `fluidvoice/processing/refusal.py`): a polish/rewrite reply that reads as an LLM refusal is never typed — the raw transcript is used instead, with a notification; rewrite refusals surface as ordinary rewrite failures | upstream has no guard and its closed model once pasted "I'm sorry, I can't assist with that." into a document (research insight 9); port addition. English patterns only in v1; a dictation that verbatim opens like a refusal falls back to raw text (never data loss, always explained) |
 | Remote OpenAI-compatible STT backend (`model.remote_url`, `fluidvoice/backends/remote_stt.py`): while a URL is configured, each dictation POSTs the recorded WAV to `<url>/v1/audio/transcriptions` (any vLLM/whisper.cpp-server/NIM/DGX-Spark/cloud endpoint) and that backend wins over every local choice; Settings → Models → Remote edits it | upstream declined the community's opt-in PR in favor of a native protocol (research insight 12) — LAN GPU boxes are a real upstream user ask, so this is a deliberate differentiator; local-first: an empty URL means the backend never constructs and no network happens (test-enforced), no live preview/VAD for remote takes in v1 |
 | 429/5xx HTTP responses are retried (upstream never retries HTTP errors) | resilience for rate-limited local/remote endpoints |

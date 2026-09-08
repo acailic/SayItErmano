@@ -89,7 +89,8 @@ class FasterWhisperBackend:
             lang = None
         segments, info = self._model.transcribe(
             str(wav_path), language=lang, vad_filter=False, beam_size=1,
-            hotwords=self.hotwords,
+            # getattr: duck-typed constructions (tests) bypass __init__
+            hotwords=getattr(self, "hotwords", None),
         )
         texts, segs = [], []
         for seg in segments:  # generator - consume once, reuse for text AND segments

@@ -41,9 +41,11 @@ class TorchWhisperBackend:
         lang = language or self.language
         if lang == "auto":
             lang = None
-        result = self._model.transcribe(str(wav_path), language=lang,
-                                        initial_prompt=self.hotwords,
-                                        fp16=self.device == "cuda")
+        result = self._model.transcribe(
+            str(wav_path), language=lang,
+            # getattr: duck-typed constructions (tests) bypass __init__
+            initial_prompt=getattr(self, "hotwords", None),
+            fp16=self.device == "cuda")
         segments = [{"start": round(s.get("start", 0.0), 3),
                      "end": round(s.get("end", 0.0), 3),
                      "text": (s.get("text") or "").strip()}

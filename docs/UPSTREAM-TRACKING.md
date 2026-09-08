@@ -102,7 +102,7 @@ new that Linux doesn't have" a one-command answer.
 |---|---|---|
 | Overlay "custom cleanup styles" + streamlined dictation controls (6 commits) | ⏳ | our overlay exists; per-style labels/limits not ported |
 | Settings: split AI providers / cleanup styles; side-panel nav; simplified welcome | ✅ | native Settings window (Adw Preferences pages) covers the same knobs — v1.1 adds dictionary/filler editors + language picker; richer upstream provider profiles remain on the roadmap |
-| Honor "Send Custom Prompt Only" for dictation-shortcut prompt overrides | ⏳ | shortcut prompt overrides not ported at all yet |
+| Honor "Send Custom Prompt Only" for dictation-shortcut prompt overrides | ✅ | B1's per-shortcut prompt profiles ARE custom-prompt-only by construction: the profile replaces the base prompt (and any per-app instructions — composition rule pinned by test after their #918) |
 | File transcription: chunked API uploads, `.opus`/`.oga` input | ⏳ | `transcribe` accepts opus/oga + 10 more verified formats with ffmpeg fallback; `--json` exports timestamps/segments; **chunked API uploads still pending** |
 | Spoken-send commands, quiet-countdown completion, terminal blocklist | ✅ | spoken-send shipped in our `a1390f5`; terminal blocklist ✅ (Enter suppressed in `general.terminal_apps`, pill shows "⏎ skipped (terminal)"); quiet-countdown ✅ (`recording.spoken_send_countdown_s`: phrase + 0.5 s quiet arms a pill countdown, speech cancels, expiry finishes the take — rides the segmented engine's VAD tail detector) |
 | Incremental Parakeet preview finalization (experimental) | 🚧 | parakeet-specific; lands with v0.4 streaming work |

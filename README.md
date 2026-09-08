@@ -429,6 +429,17 @@ echo '{"action": "transcribe", "path": "/tmp/note.wav"}' \
 dedicated to your take) and rejects files over 200 MB (v1 does not
 chunk); `process: true` runs the standard filler/punctuation chain.
 
+**MCP agents** get the same powers over stdio — run `sayit-ermano mcp`
+(register it with any MCP client, e.g. Claude Desktop:
+
+```json
+{"mcpServers": {"sayit-ermano":
+    {"command": "sayit-ermano", "args": ["mcp"]}}}
+```
+
+) and the tools `transcribe_file` / `history` / `status` / `toggle` are
+forwarded to the running daemon — your warm model does the work.
+
 Disable the checks entirely:
 
 ```toml
@@ -485,6 +496,11 @@ push_to_talk_button = "button8"  # "" = off
 # phrase finishes the dictation by itself (speak again to cancel) — no
 # hotkey press needed. 0 = off; needs spoken-send enabled in Settings.
 spoken_send_countdown_s = 1.2
+# Vocabulary biasing: words the decoder is steered toward (ADD, unlike the
+# dictionary's replacements) - names, jargon; changes reload the engine
+# hotwords = ["SayItErmano", "PipeWire"]
+# Cancel the take if the mic stream freezes mid-dictation (0 = off)
+stall_timeout_s = 8.0
 
 [general]
 # Ignore hotkeys + cancel active dictation while the session is locked

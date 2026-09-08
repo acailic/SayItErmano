@@ -1026,6 +1026,33 @@ class TestExtraShortcutProfiles:
         assert ai is True and text == "polished"
         assert seen["prompt"] == "TERSITY: be brief."
 
+    def test_profile_override_wins_over_per_app_instructions(
+            self, cfg, quiet_ui, monkeypatch):
+        """#918 composition rule, pinned: a shortcut's prompt profile is
+        'custom prompt only' by construction - it replaces BOTH the base
+        prompt and any per-app instructions, never composes with them."""
+        from fluidvoice.ai import profiles as profiles_mod
+        monkeypatch.setattr(
+            profiles_mod, "load_profiles",
+            lambda path=None: {"Terse": "TERSITY: be brief."})
+        seen = {}
+
+        def polisher(text, system_prompt=None):
+            seen["prompt"] = system_prompt
+            return "polished"
+
+        cfg["ai"]["enabled"] = True
+        cfg["ai"]["per_app_prompts"] = [
+            {"apps": ["zed"], "instructions": "mention Zed"}]
+        pipe = dm.DictationPipeline(
+            cfg, StubBackend("raw words"), polisher=polisher)
+        pipe._profile_override = "Terse"
+        text, ai = pipe._polish("raw words", app_hint="zed")
+        assert ai is True
+        assert seen["prompt"] == "TERSITY: be brief."   # alone, no base,
+        # no per-app addendum
+        assert "mention Zed" not in (seen["prompt"] or "")
+
     def test_polish_missing_profile_falls_back_to_base(self, cfg, quiet_ui):
         seen = {}
 

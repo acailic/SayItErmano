@@ -55,6 +55,17 @@ later), #881 machine sync, #897 live translated captions, #920 MedASR,
 #949 "UI needs a rework" (fresh, watch where it goes), #942 monetization
 (their answer may shape the competitive landscape), #915 Windows parity.
 
+## Outcome (2026-09-08, same-day implementation batch)
+
+Shipped: **#861** find patterns, **#930** killpg, **#935** SECURITY.md,
+**#940** pinned (was already covered), **#918** semantics pinned + stale
+row fixed, **#910** prompt-leak guard, **#852** stall watchdog,
+**#916** hotwords vocabulary, **#927** MCP server, **#946** total
+speaking time (already covered by the Stats page), soak script
+(`scripts/soak.py`). Skipped with reason: **#886** pill word count (the
+overlay shows clipped text — the count would be wrong past 160 chars;
+revisit with an on_words callback if it matters).
+
 ## Suggested picks
 
 Quick wins: #861 find-patterns fix, #930 killpg fix, #935 SECURITY.md,

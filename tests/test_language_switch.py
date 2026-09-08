@@ -930,16 +930,21 @@ class TestDoctor:
         cfg["general"].update(general)
         return cfg
 
-    def test_lines_include_cycle_whitelist_guard(self):
+    def test_lines_include_cycle_whitelist_guard(self, monkeypatch):
+        from fluidvoice import doctor as doctor_mod
         cfg = self._cfg(language_cycle=["auto", "sl"],
                         language_whitelist=["sl", "en"])
         cfg["hotkey"]["language_key"] = "F7"
+        monkeypatch.setattr(doctor_mod, "_live_language_status",
+                            lambda: None)
         lines = self._lines(cfg)
         assert any("cycle: [auto, sl]" in ln and "key F7" in ln
                    for ln in lines)
         assert any("whitelist: [sl, en]" in ln for ln in lines)
         assert any("guard:" in ln for ln in lines)
-        # daemon down in the isolated test env -> the static runtime line
+        # _live_language_status pinned to None: the socket path is global
+        # to XDG_RUNTIME_DIR, so a LIVE daemon on this machine would leak
+        # into the test env (the audit's socket-collision finding)
         assert any("runtime: unknown (daemon down)" in ln for ln in lines)
 
     def test_empty_cycle_and_whitelist_state(self):

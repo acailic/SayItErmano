@@ -232,8 +232,8 @@ class TestDoctorCommandModeLines:
         cfg = copy.deepcopy(DEFAULTS)
         cfg["command"]["destructive_patterns"] = ["git push", "shutdown"]
         lines = doctor._command_mode_lines(cfg)
-        assert any("destructive patterns: 28 built-in + 2 user" in l
-                   for l in lines)
+        assert any("destructive patterns: 30 built-in + 2 user" in l
+                   for l in lines)  # 19 prefixes + 11 patterns (#861 +2)
 
     def test_context_window_default_and_disabled(self):
         import copy
