@@ -73,6 +73,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--onboard", action="store_true",
                    help="run the first-run onboarding flow")
     sub.add_parser("doctor", help="environment check")
+    sub.add_parser("mcp",
+                   help="run the MCP server on stdio (for MCP-capable "
+                        "agents; forwards to the running daemon)")
 
     p = sub.add_parser(
         "update",
@@ -238,6 +241,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "app":
         from .gtkui.application import run as run_app
         return run_app(["--open", args.open] + (["--onboard"] if args.onboard else []))
+
+    if args.cmd == "mcp":
+        from .mcp_server import serve
+        serve()
+        return 0
 
     if args.cmd == "doctor":
         return doctor_mod.run()
