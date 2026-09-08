@@ -11,6 +11,37 @@ Releases begin at v0.4.0 (the rebrand to SayItErmano); earlier v0.1–v0.3
 tags predate it and were deleted from the repository, so their notes are
 not reproduced here.
 
+## [v0.8.0] — MCP server, vocabulary boosting, polished app (2026-09-08)
+
+The integration + polish release.
+
+- **MCP server** (`sayit-ermano mcp`, upstream #927) — Model Context
+  Protocol bridge: drive dictation status/history/config from Claude or
+  any MCP client.
+- **Vocabulary boosting** (`model.hotwords`, upstream #916) — bias the
+  decoder toward your names and jargon (faster-whisper hotwords /
+  whisper initial-prompt).
+- **Guards** — prompt-leak detection (upstream #910: polish output that
+  echoes the system prompt is never typed), mid-take stall watchdog
+  (#852), AI over-correction guard (polish must not rewrite correct
+  words; order: refusal → leak → over-correction).
+- **Command-mode security** — two upstream bug classes fixed
+  (`find -delete`/`-exec` bypassing the destructive gate #861, descendant
+  process hang #930) + SECURITY.md.
+- **Preview** — provisional-tail rendering keeps the live preview
+  flicker-stable between segment commits.
+- **Native app** — settings navigate by sidebar (one section at a time,
+  collapsing to push-navigation on narrow windows); history/onboarding/
+  settings presentation pass (caption meta lines, pill tags, friendly app
+  names, theme-accent stats chart, checklist onboarding, reactive save
+  bar); bundled icons self-register on every construction path; the
+  settings codebase split per-page (`gtkui/settings_pages/`).
+- **Distribution** — deb slimmed 77 → 65 MB (xz -9e + pruned venv); the
+  one-shot installer no longer re-creates autostart when the systemd
+  unit exists; AUR publish pipeline (recipe + one-command script).
+
+Full notes: [v0.8.0](https://github.com/acailic/SayItErmano/releases/tag/v0.8.0).
+
 ## [v0.7.0] — language switching, remote STT, guardrails (2026-09-08)
 
 The languages + endpoints + guardrails release.

@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://github.com/acailic/SayItErmano/releases"><img src="https://img.shields.io/github/v/release/acailic/SayItErmano?color=blue&label=release" alt="latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/acailic/SayItErmano?color=blue" alt="license GPL-3.0"></a>
-  <img src="https://img.shields.io/badge/tests-1759%20passing-brightgreen" alt="1759 automated tests">
+  <img src="https://img.shields.io/badge/tests-1778%20passing-brightgreen" alt="1778 automated tests">
   <img src="https://img.shields.io/badge/platform-Linux%20%C2%B7%20X11%20%C2%B7%20Wayland%20%C2%B7%20GTK%204-blue" alt="Linux · X11 · Wayland · GTK 4">
   <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
 </p>
@@ -45,15 +45,24 @@
 
 ## What's new
 
+**[v0.8.0](https://github.com/acailic/SayItErmano/releases/tag/v0.8.0)** — the
+integration + polish release: an **MCP server** (`sayit-ermano mcp` — drive
+dictation from Claude/other MCP clients), **vocabulary boosting**
+(`model.hotwords` — bias the decoder toward your names/jargon), a
+**prompt-leak guard** and **mid-take stall watchdog**, two upstream
+command-mode bug classes fixed with a **security policy** (destructive-gate
+bypasses), an AI **over-correction guard**, a **flicker-stable provisional
+preview tail**, and a redesigned **native app**: settings now navigate by
+sidebar, the history/onboarding/settings windows got a full presentation
+pass, and the deb shrank 77 → 65 MB.
+
 **[v0.7.0](https://github.com/acailic/SayItErmano/releases/tag/v0.7.0)** — the
 languages + endpoints + guardrails release: a **runtime language-cycle hotkey**
 with a wrong-language whitelist guard, an optional **OpenAI-compatible remote
 STT backend** (`model.remote_url` — point dictation at a LAN vLLM/whisper.cpp
 box; off by default, nothing leaves your machine otherwise), an **AI refusal
 guardrail** (a refusing polish model never types into your document), a
-**spoken-send quiet countdown**, **vocabulary boosting** (`model.hotwords`),
-an **MCP server** (`sayit-ermano mcp`) and a scriptable unix-socket API, plus
-a mid-take stall watchdog.
+**spoken-send quiet countdown**, and a **scriptable unix-socket API**.
 
 **[v0.6.0](https://github.com/acailic/SayItErmano/releases/tag/v0.6.0)** —
 Wayland session support, segmented streaming preview on every backend with
@@ -576,7 +585,7 @@ work; to see what moved upstream, run `scripts/upstream-diff.sh`.
 .venv/bin/python -m pytest -n auto tests --ignore=tests/integration  # parallel via pytest-xdist (~4-5x; skip -n for --pdb debugging)
 ```
 
-The test suite — **1759 automated tests** at v0.7.0 (`-n auto` runs it in
+The test suite — **1778 automated tests** at v0.8.0 (`-n auto` runs it in
 ~19 s):
 
 | Layer | What it exercises |
