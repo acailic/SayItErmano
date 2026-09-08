@@ -8,6 +8,7 @@ degrade to a banner when it is down.
 """
 from __future__ import annotations
 
+import re
 import subprocess
 import time
 from datetime import datetime, timedelta
@@ -17,6 +18,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 from .. import history as history_mod
 from ..history import format_today
 from .client import Client
+from .style import load_style
 
 
 class AudioReplayer(Gtk.Box):
@@ -88,6 +90,31 @@ class AudioReplayer(Gtk.Box):
         return True
 
 
+def prettify_app(app: str) -> str:
+    """"org.gnome.TextEditor" -> "Text Editor", "google-chrome" -> "Google
+    Chrome": history stores raw app IDs, rows show a friendly name."""
+    take = app[:-8] if app.endswith(".desktop") else app
+    take = take.rsplit(".", 1)[-1]  # drop the reverse-DNS prefix
+    take = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", take)  # camelCase split
+    words = [w for w in re.split(r"[-_ ]+", take) if w]
+    return " ".join(w[:1].upper() + w[1:] for w in words) or app
+
+
+def _meta_label(text: str = "", css: list[str] | None = None,
+                tooltip: str | None = None) -> Gtk.Label:
+    """One metadata segment: caption-sized, dimmed by default."""
+    lbl = Gtk.Label(label=text, single_line_mode=True, ellipsize=True,
+                    css_classes=css or ["caption", "dim-label"])
+    if tooltip:
+        lbl.set_tooltip_text(tooltip)
+    return lbl
+
+
+def _sep() -> Gtk.Label:
+    return Gtk.Label(label="·", css_classes=["caption", "dim-label"],
+                     name="meta-separator")
+
+
 class HistoryEntryRow(Gtk.ListBoxRow):
     """One dictation: meta line, text, actions, optional audio replay,
     plus inline repair (edit + re-insert, research §4: correction must be
@@ -116,30 +143,30 @@ class HistoryEntryRow(Gtk.ListBoxRow):
             meta.append(Gtk.Image(icon_name=self.MODE_ICONS[mode],
                                   tooltip_text=mode.capitalize(),
                                   css_classes=["dim-label"]))
-        meta.append(Gtk.Label(
-            label=datetime.fromtimestamp(ts).strftime("%a %d %b, %H:%M"),
-            css_classes=["dim-label"]))
+        meta.append(_meta_label(
+            datetime.fromtimestamp(ts).strftime("%a %d %b, %H:%M")))
         if entry.get("duration_s"):
-            meta.append(Gtk.Label(
-                label=f"{float(entry['duration_s']):.1f} s",
-                css_classes=["dim-label"]))
+            meta.append(_sep())
+            meta.append(_meta_label(f"{float(entry['duration_s']):.1f} s"))
         if entry.get("app"):
-            meta.append(Gtk.Label(label=str(entry["app"]),
-                                  css_classes=["caption", "dim-label"]))
-        if entry.get("mode") and entry.get("mode") != "dictate":
-            meta.append(Gtk.Label(label=str(entry["mode"]),
-                                  css_classes=["caption", "dim-label"]))
-        if entry.get("ai"):
-            meta.append(Gtk.Label(label="AI polished",
-                                  css_classes=["caption", "accent"]))
+            meta.append(_sep())
+            meta.append(_meta_label(prettify_app(str(entry["app"])),
+                                    tooltip=str(entry["app"])))
+        meta.append(Gtk.Box(hexpand=True))  # spacer
         conf = entry.get("confidence")
         if conf in self.CONFIDENCE_DOTS:
-            meta.append(Gtk.Label(
-                label=self.CONFIDENCE_DOTS[conf],
-                tooltip_text=f"Recognition confidence: "
-                             f"{self.CONFIDENCE_WORD[conf]}",
-                css_classes=["dim-label"]))
-        meta.append(Gtk.Box(hexpand=True))  # spacer
+            meta.append(_meta_label(
+                self.CONFIDENCE_DOTS[conf],
+                tooltip=f"Recognition confidence: "
+                        f"{self.CONFIDENCE_WORD[conf]}"))
+        if entry.get("mode") and entry.get("mode") != "dictate":
+            meta.append(Gtk.Label(label=mode.capitalize(),
+                                  css_classes=["tag", "outline"],
+                                  tooltip_text="Dictation mode"))
+        if entry.get("ai"):
+            meta.append(Gtk.Label(label="AI polished",
+                                  css_classes=["tag", "accent"],
+                                  tooltip_text="Text after AI polish"))
         if on_insert is not None:
             ins_btn = Gtk.Button(icon_name="edit-paste-symbolic",
                                  css_classes=["flat"],
@@ -258,23 +285,21 @@ class CommandRow(Gtk.ListBoxRow):
 
         meta = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         ts = entry.get("ts") or 0
-        meta.append(Gtk.Label(
-            label=datetime.fromtimestamp(ts).strftime("%a %d %b, %H:%M"),
-            css_classes=["dim-label"]))
+        meta.append(_meta_label(
+            datetime.fromtimestamp(ts).strftime("%a %d %b, %H:%M")))
         success = bool(entry.get("success"))
         exit_code = entry.get("exit_code")
         if exit_code is not None:
             meta.append(Gtk.Label(
                 label=("\u2713 " if success else "\u2717 ")
                       + str(int(exit_code)),
-                css_classes=["success" if success else "error"]))
+                css_classes=["success" if success else "error", "caption"]))
         if entry.get("duration_ms"):
-            meta.append(Gtk.Label(
-                label=f"{float(entry['duration_ms']):.0f} ms",
-                css_classes=["dim-label"]))
+            meta.append(_sep())
+            meta.append(_meta_label(f"{float(entry['duration_ms']):.0f} ms"))
         if entry.get("destructive"):
             meta.append(Gtk.Label(label="\u26a0 destructive",
-                                  css_classes=["warning"]))
+                                  css_classes=["warning", "caption"]))
         meta.append(Gtk.Box(hexpand=True))  # spacer
 
         output = str(entry.get("output") or "")
@@ -315,6 +340,7 @@ class CommandRow(Gtk.ListBoxRow):
 
 class HistoryWindow(Adw.ApplicationWindow):
     def __init__(self, application=None, client=None):
+        load_style()
         super().__init__(application=application, title="SayItErmano",
                          default_width=760, default_height=640)
         self.c = client or Client()
@@ -356,30 +382,35 @@ class HistoryWindow(Adw.ApplicationWindow):
         self.down_banner.connect("button-clicked", lambda *_: self.refresh())
         vbox.append(self.down_banner)
 
-        status = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
+        status = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6,
                          margin_top=8, margin_bottom=4,
-                         margin_start=14, margin_end=14)
+                         margin_start=12, margin_end=12)
         self.state_dot = Gtk.Image(icon_name="object-select-symbolic",
                                    css_classes=["success"])
-        self.state_lbl = Gtk.Label(label="idle", css_classes=["heading"])
-        self.backend_lbl = Gtk.Label(css_classes=["dim-label"])
-        self.gpu_lbl = Gtk.Label(css_classes=["dim-label"])
-        self.model_lbl = Gtk.Label(css_classes=["dim-label"])
+        # state word stays plain-size: it doubles as the at-a-glance status
+        self.state_lbl = Gtk.Label(label="idle", css_classes=["caption"],
+                                   single_line_mode=True)
+        self.backend_lbl = _meta_label()
+        self.gpu_lbl = _meta_label()
+        self.model_lbl = _meta_label()
         self.warmup_spinner = Gtk.Spinner()
-        self.warmup_lbl = Gtk.Label(css_classes=["dim-label"])
-        self.today_lbl = Gtk.Label(css_classes=["dim-label"])
+        self.warmup_lbl = _meta_label()
+        self.today_lbl = _meta_label()
         # update check-and-assist surface (fluidvoice/update.py): hidden
         # until the daemon's status payload reports update_available
-        self.update_lbl = Gtk.Label(css_classes=["dim-label"], visible=False)
-        for w in (self.state_dot, self.state_lbl, self.backend_lbl,
-                  self.gpu_lbl, self.model_lbl, self.warmup_spinner,
-                  self.warmup_lbl, self.today_lbl, self.update_lbl):
+        self.update_lbl = Gtk.Label(css_classes=["caption", "dim-label"],
+                                    visible=False, ellipsize=True)
+        for w in (self.state_dot, self.state_lbl, _sep(), self.backend_lbl,
+                  self.gpu_lbl, self.model_lbl,
+                  self.warmup_spinner, self.warmup_lbl,
+                  Gtk.Box(hexpand=True),  # spacer
+                  self.today_lbl, self.update_lbl):
             status.append(w)
         vbox.append(status)
 
         self.search = Gtk.SearchEntry(placeholder_text="Search transcripts, commands, apps…",
-                                      margin_start=14, margin_end=14,
-                                      margin_bottom=8)
+                                      margin_start=12, margin_end=12,
+                                      margin_bottom=6)
         self.search.connect("changed", self._on_search_changed)
         vbox.append(self.search)
 
@@ -387,11 +418,14 @@ class HistoryWindow(Adw.ApplicationWindow):
         #    view with output + Copy + confirm-gated Re-run) ------------
         self.view_stack = Adw.ViewStack(vexpand=True)
         self.switcher = Adw.ViewSwitcher(stack=self.view_stack,
-                                        policy=Adw.ViewSwitcherPolicy.WIDE)
+                                        policy=Adw.ViewSwitcherPolicy.WIDE,
+                                        margin_start=12, margin_end=12)
         vbox.append(self.switcher)
 
         scroll = Gtk.ScrolledWindow(hexpand=True, vexpand=True)
-        self.listbox = Gtk.ListBox(css_classes=["boxed-list-separate"])
+        self.listbox = Gtk.ListBox(css_classes=["boxed-list-separate"],
+                                   margin_start=12, margin_end=12,
+                                   margin_top=2, margin_bottom=12)
         self.listbox.set_selection_mode(Gtk.SelectionMode.NONE)
         self.listbox.set_placeholder(Adw.StatusPage(
             title="No dictations yet",
@@ -402,7 +436,9 @@ class HistoryWindow(Adw.ApplicationWindow):
         self.view_stack.add_titled(scroll, "transcripts", "Transcripts")
 
         cmd_scroll = Gtk.ScrolledWindow(hexpand=True, vexpand=True)
-        self.cmd_listbox = Gtk.ListBox(css_classes=["boxed-list-separate"])
+        self.cmd_listbox = Gtk.ListBox(css_classes=["boxed-list-separate"],
+                                       margin_start=12, margin_end=12,
+                                       margin_top=2, margin_bottom=12)
         self.cmd_listbox.set_selection_mode(Gtk.SelectionMode.NONE)
         self.cmd_listbox.set_placeholder(Adw.StatusPage(
             title="No commands yet",
@@ -417,7 +453,7 @@ class HistoryWindow(Adw.ApplicationWindow):
         stats_scroll = Gtk.ScrolledWindow(hexpand=True, vexpand=True)
         stats_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14,
                             margin_top=14, margin_bottom=14,
-                            margin_start=14, margin_end=14)
+                            margin_start=12, margin_end=12)
         stats_scroll.set_child(stats_box)
 
         self.streak_lbl = Gtk.Label(css_classes=["title-3"], halign=Gtk.Align.START)
@@ -473,12 +509,20 @@ class HistoryWindow(Adw.ApplicationWindow):
                                 lambda *_: self._update_count())
         vbox.append(self.view_stack)
 
-        self.count_lbl = Gtk.Label(css_classes=["dim-label"],
-                                   margin_top=6, margin_bottom=10)
+        self.count_lbl = Gtk.Label(css_classes=["caption", "dim-label"],
+                                   margin_top=6, margin_bottom=10,
+                                   margin_start=12, margin_end=12)
         vbox.append(self.count_lbl)
 
         self.install_action("hist.clear", None, self._on_clear_all)
         self.install_action("hist.export", None, self._on_export)
+        self.install_action("hist.focus-search", None,
+                            lambda *_: self.search.grab_focus())
+        sc = Gtk.ShortcutController()
+        sc.add_shortcut(Gtk.Shortcut(
+            trigger=Gtk.ShortcutTrigger.parse_string("<primary>f"),
+            action=Gtk.NamedAction.new("hist.focus-search")))
+        self.add_controller(sc)
         self._exporting = False
         self._export_dlg = None
         self._load_history()
@@ -524,7 +568,9 @@ class HistoryWindow(Adw.ApplicationWindow):
 
     def _draw_activity(self, _area, cr, width: int, height: int) -> None:
         """One bar per day for the selected span; empty days draw at the
-        baseline so gaps stay visible (upstream StatsView activity chart)."""
+        baseline so gaps stay visible (upstream StatsView activity chart).
+        Bars use the theme accent when it resolves, so the chart follows
+        GNOME accent colors instead of a hardcoded blue."""
         import time as _time
         s = getattr(self, "_stats", None)
         if not s:
@@ -541,11 +587,23 @@ class HistoryWindow(Adw.ApplicationWindow):
         gap = 6.0
         bar_w = max(3.0, (width - gap * (n + 1)) / n)
         top, bottom = 18.0, height - 22.0
+        ok, accent = self.chart.lookup_color("accent_bg_color")
+        if ok:
+            bar_rgba = accent
+        else:
+            bar_rgba = self._fallback_accent
+        # baseline hairline under the bars
+        cr.set_source_rgba(0.5, 0.5, 0.5, 0.25)
+        cr.set_line_width(1.0)
+        cr.move_to(0, bottom + 0.5)
+        cr.line_to(width, bottom + 0.5)
+        cr.stroke()
         for i, c in enumerate(counts):
             x = gap + i * (bar_w + gap)
             h = (bottom - top) * (c / peak) if c else 2.0
             if c:
-                cr.set_source_rgba(0.35, 0.53, 0.90, 0.95)  # accent blue
+                cr.set_source_rgba(bar_rgba.red, bar_rgba.green,
+                                   bar_rgba.blue, 0.95)
             else:
                 cr.set_source_rgba(0.5, 0.5, 0.5, 0.25)
             cr.rounded_rectangle(x, bottom - h, bar_w, h, 3.0)
@@ -562,6 +620,10 @@ class HistoryWindow(Adw.ApplicationWindow):
             cr.set_font_size(9.0)
             cr.move_to(gap, 12)
             cr.show_text(f"peak {peak}/day")
+
+    # calm blue, used only when accent_bg_color fails to resolve
+    _fallback_accent = Gdk.RGBA()
+    _fallback_accent.parse("rgba(61,104,166,0.95)")
 
     def _on_search_changed(self, entry) -> None:
         self._query = entry.get_text().strip()
@@ -636,9 +698,9 @@ class HistoryWindow(Adw.ApplicationWindow):
     def _header_row(label: str) -> Gtk.ListBoxRow:
         row = Gtk.ListBoxRow(activatable=False, selectable=False)
         row.set_child(Gtk.Label(label=label, xalign=0.0,
-                                css_classes=["heading", "dim-label"],
-                                margin_top=10, margin_bottom=2,
-                                margin_start=6))
+                                css_classes=["section-label", "dim-label"],
+                                margin_top=12, margin_bottom=4,
+                                margin_start=4))
         return row
 
     def _update_today(self) -> None:
@@ -821,6 +883,7 @@ class HistoryWindow(Adw.ApplicationWindow):
             self.state_lbl.set_text("recording")
             self.state_dot.set_css_classes(["error"])
             self.state_dot.set_from_icon_name("media-record-symbolic")
+            self.mic_btn.set_icon_name("media-playback-stop-symbolic")
             self.mic_btn.add_css_class("destructive-action")
             self.mic_btn.remove_css_class("suggested-action")
         else:
@@ -828,6 +891,7 @@ class HistoryWindow(Adw.ApplicationWindow):
             self.state_dot.set_css_classes(["warning"] if busy else ["success"])
             self.state_dot.set_from_icon_name(
                 "emblem-synchronizing-symbolic" if busy else "object-select-symbolic")
+            self.mic_btn.set_icon_name("audio-input-microphone-symbolic")
             self.mic_btn.add_css_class("suggested-action")
             self.mic_btn.remove_css_class("destructive-action")
         self.backend_lbl.set_text(f"backend {st.get('backend') or '—'}")
@@ -836,10 +900,12 @@ class HistoryWindow(Adw.ApplicationWindow):
         self.model_lbl.set_text(f"model {model or '—'}")
         warm = st.get("warmup") or {}
         if warm.get("running"):
+            self.warmup_spinner.set_visible(True)
             self.warmup_spinner.start()
             self.warmup_lbl.set_text(f"loading {warm.get('model') or ''}…")
         else:
             self.warmup_spinner.stop()
+            self.warmup_spinner.set_visible(False)
             self.warmup_lbl.set_text(
                 f"model error: {warm['error']}" if warm.get("error") else "")
         upd = st.get("update_available")

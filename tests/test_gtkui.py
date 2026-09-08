@@ -1067,6 +1067,80 @@ class TestOnboardingWindow:
         w.close()
 
 
+class TestUiPolish:
+    """Presentation pass: friendly app names, metadata tag pills, the
+    reactive settings save bar, the onboarding checklist rows."""
+
+    def test_prettify_app(self):
+        from fluidvoice.gtkui.main_window import prettify_app
+        assert prettify_app("org.gnome.TextEditor") == "Text Editor"
+        assert prettify_app("google-chrome.desktop") == "Google Chrome"
+        assert prettify_app("code-oss") == "Code Oss"
+        assert prettify_app("zed") == "Zed"
+        assert prettify_app("firefox") == "Firefox"
+        assert prettify_app("") == ""
+
+    def _walk_labels(self, widget, out):
+        if isinstance(widget, Gtk.Label):
+            out.append(widget)
+        child = widget.get_first_child()
+        while child is not None:
+            self._walk_labels(child, out)
+            child = child.get_next_sibling()
+
+    def test_entry_meta_uses_pill_and_friendly_app(self, hist_win, loop):
+        from fluidvoice.gtkui.main_window import HistoryEntryRow
+        w = hist_win
+        reset_history(w, loop)
+        labels: list[Gtk.Label] = []
+        row = w.listbox.get_first_child()
+        while row is not None:
+            if isinstance(row, HistoryEntryRow):
+                self._walk_labels(row, labels)
+            row = row.get_next_sibling()
+        texts = [l.get_text() for l in labels]
+        assert "Firefox" in texts          # prettified app name
+        assert "org.gnome" not in "".join(texts)
+        ai = next(l for l in labels if l.get_text() == "AI polished")
+        assert "tag" in ai.get_css_classes()
+        assert "accent" in ai.get_css_classes()
+
+    def test_save_bar_reflects_dirty_state(self, settings_win, loop):
+        w = settings_win
+        reset_settings(w, loop)
+        assert w._dirty is False
+        assert all(not b.get_sensitive() for b in w._save_btns)
+        assert all(not b.get_sensitive() for b in w._discard_btns)
+        assert "All changes saved" in w._save_rows[0].get_title()
+        assert "warning" not in w._save_rows[0].get_css_classes()
+        row = w._rows[("general", "copy_to_clipboard")]
+        row.set_active(not row.get_active())
+        assert w._dirty is True
+        assert all(b.get_sensitive() for b in w._save_btns)
+        assert "Unsaved changes" in w._save_rows[0].get_title()
+        assert "warning" in w._save_rows[0].get_css_classes()
+        w.save()  # stub save + reload -> clean again
+        assert w._dirty is False
+        assert all(not b.get_sensitive() for b in w._save_btns)
+
+    def test_style_loader_idempotent(self):
+        from fluidvoice.gtkui import style
+        style.load_style()
+        style.load_style()
+        assert style._loaded is True
+
+    def test_onboarding_checklist_rows(self, loop):
+        from fluidvoice.gtkui.onboarding import OnboardingWindow
+        w = OnboardingWindow(client=StubClient())
+        w.present()
+        pump(loop)
+        assert w.hotkey_row.status.get_icon_name() == \
+            "dialog-information-symbolic"
+        assert w.mic_row.status.get_icon_name() == "dialog-warning-symbolic"
+        assert w.mic_lbl.get_text()
+        w.close()
+
+
 class TestHistoryScience:
     """UI-science uplift phases 3b+4: confidence dots, inline repair
     (edit + insert at cursor), date-header grouping."""
@@ -1236,7 +1310,7 @@ class TestUpdateSurfacing:
         w.present()
         pump(loop)
         text = w.updates_lbl.get_text()
-        assert "checks GitHub once a day" in text
+        assert "Checks GitHub once a day" in text
         assert "sayit-ermano update" in text
         assert "updates.check = false" in text
         w.close()

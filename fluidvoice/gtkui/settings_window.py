@@ -18,6 +18,7 @@ from .. import backends, model_catalog, model_download
 from ..config import DEFAULTS, KNOWN_LANGUAGES
 from ..config import KNOWN_LANGUAGES as LANGUAGES
 from .client import Client, ClientError
+from .style import load_style
 
 # GDK keyval name -> friendly keysym the config expects (where they differ)
 _KEY_REMAP = {"Control_L": "Left_Control", "Control_R": "Right_Control",
@@ -176,6 +177,7 @@ class _InstructionRow(Adw.PreferencesRow):
 
 class SettingsWindow(Adw.PreferencesWindow):
     def __init__(self, application=None, client=None):
+        load_style()
         super().__init__(application=application, title="Settings",
                          default_width=680, default_height=680)
         self.c = client or Client()
@@ -192,6 +194,8 @@ class SettingsWindow(Adw.PreferencesWindow):
         self._cycle_rows: list[dict] = []  # language-cycle code editors
         self._save_groups: list[Adw.PreferencesGroup] = []
         self._save_rows: list[Adw.ActionRow] = []
+        self._save_btns: list[Gtk.Button] = []
+        self._discard_btns: list[Gtk.Button] = []
         self._model_rows: list[Adw.ActionRow] = []
         self._gguf_rows: list[Adw.ActionRow] = []
         self._gguf_dl: dict[str, dict] = {}  # name -> {bytes, total, done, error}
@@ -228,28 +232,39 @@ class SettingsWindow(Adw.PreferencesWindow):
 
     def _save_group(self) -> Adw.PreferencesGroup:
         grp = Adw.PreferencesGroup()
-        row = Adw.ActionRow(title=self._save_title("Changes are saved"),
-                            subtitle="")
+        row = Adw.ActionRow(title=self._save_title())
         self._save_rows.append(row)
-        save_btn = Gtk.Button(label="Save", css_classes=["suggested-action"])
-        save_btn.set_valign(Gtk.Align.CENTER)
-        save_btn.connect("clicked", lambda *_: self.save())
         discard_btn = Gtk.Button(label="Discard", css_classes=["flat"])
         discard_btn.set_valign(Gtk.Align.CENTER)
         discard_btn.connect("clicked", lambda *_: self._load())
+        save_btn = Gtk.Button(label="Save", css_classes=["suggested-action"])
+        save_btn.set_valign(Gtk.Align.CENTER)
+        save_btn.connect("clicked", lambda *_: self.save())
+        self._save_btns.append(save_btn)
+        self._discard_btns.append(discard_btn)
         row.add_suffix(discard_btn)
         row.add_suffix(save_btn)
         grp.add(row)
         self._save_groups.append(grp)
         return grp
 
-    def _save_title(self, base: str) -> str:
+    def _save_title(self) -> str:
+        base = "Unsaved changes" if self._dirty else "All changes saved"
         suffix = "" if self._from_daemon else " — daemon offline, saving to file"
-        return base + (" · UNSAVED" if self._dirty else "") + suffix
+        return base + suffix
 
     def _sync_save_rows(self) -> None:
+        """Reflect dirty/offline state: row title + warning tint, and the
+        buttons only respond when there is something to apply."""
+        title = self._save_title()
         for row in self._save_rows:
-            row.set_title(self._save_title("Changes are saved"))
+            row.set_title(title)
+            if self._dirty:
+                row.add_css_class("warning")
+            else:
+                row.remove_css_class("warning")
+        for btn in (*self._save_btns, *self._discard_btns):
+            btn.set_sensitive(self._dirty)
 
     # -- field registry -----------------------------------------------------------
 
@@ -497,7 +512,7 @@ class SettingsWindow(Adw.PreferencesWindow):
     def _build_general(self) -> None:
         page = Adw.PreferencesPage(name="general", icon_name="fluidvoice-general-symbolic",
                                    title="General")
-        grp = Adw.PreferencesGroup(title="General")
+        grp = Adw.PreferencesGroup(title="Basics")
         lang = self._combo("general", "language", "Language",
                            [("auto (detect)", "auto")]
                            + [(c, c) for c in LANGUAGES],
