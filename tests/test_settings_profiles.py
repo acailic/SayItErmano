@@ -307,6 +307,10 @@ class TestProfilesCrud:
 
 
 class TestProfileBar:
+    """v0.8 macOS-parity surface: profiles render as radio rows (one per
+    profile) with per-row Rename/Delete menus; Save writes the editor to
+    the selected profile."""
+
     def _w(self, loop, c):
         from fluidvoice.gtkui.settings_window import SettingsWindow
         w = SettingsWindow(client=c)
@@ -314,32 +318,31 @@ class TestProfileBar:
         pump(loop)
         return w
 
-    def test_bar_renders_from_stub_profiles(self, loop):
+    def test_rows_render_from_stub_profiles(self, loop):
         c = _StubClient()
         c.profile_store = {"Terse": "be terse"}
         w = self._w(loop, c)
         assert w._profiles == {"Terse": "be terse"}
-        model = w._profile_combo.get_model()
-        assert model.get_n_items() == 1
-        assert model.get_string(0) == "Terse"
+        assert set(w._profile_rows) == {"Terse"}
+        assert w._profile_rows["Terse"].get_title() == "Terse"
         assert w._selected_profile() == "Terse"
+        assert w._profile_checks["Terse"].get_active() is True
         w.close()
 
-    def test_empty_store_shows_none(self, loop):
+    def test_empty_store_shows_placeholder(self, loop):
         w = self._w(loop, _StubClient())
-        model = w._profile_combo.get_model()
-        assert model.get_n_items() == 1
-        assert "none" in model.get_string(0)
+        assert w._profile_rows == {}
         assert w._selected_profile() is None
+        assert w._profile_none_row.get_visible() is True
         w.close()
 
     def test_selecting_copies_to_editor_and_marks_dirty(self, loop):
         c = _StubClient()
-        c.profile_store = {"Terse": "be terse"}
+        c.profile_store = {"Terse": "be terse", "Wordy": "be wordy"}
         w = self._w(loop, c)
         assert w._dirty is False
-        w._on_profile_selected()  # selection -> load path
-        assert w._rows[("ai", "base_prompt")].get_value() == "be terse"
+        w._profile_checks["Wordy"].set_active(True)  # radio select
+        assert w._rows[("ai", "base_prompt")].get_value() == "be wordy"
         assert w._dirty is True
         w.close()
 
@@ -348,56 +351,64 @@ class TestProfileBar:
         c.profile_store = {"Old": "old text"}
         w = self._w(loop, c)
         w._rows[("ai", "base_prompt")].set_value("current editor text")
-        w._profile_name_row.set_text("New")
         w._profile_save()
-        assert c.profile_calls[-1] == ("save", "New", "current editor text")
-        assert c.profile_store["New"] == "current editor text"
+        assert c.profile_calls[-1] == ("save", "Old", "current editor text")
+        assert c.profile_store["Old"] == "current editor text"
         w.close()
 
-    def test_save_with_empty_name_toasts_and_does_not_write(self, loop):
+    def test_save_without_selection_toasts(self, loop):
         c = _StubClient()
         w = self._w(loop, c)
         toasts: list[str] = []
         w.toast = lambda text, timeout=5: toasts.append(text)
-        w._profile_name_row.set_text("")
         w._profile_save()
         assert c.profile_calls == []
-        assert any("name" in t for t in toasts)
-        w.close()
-
-    def test_rename_with_empty_name_toasts(self, loop):
-        c = _StubClient()
-        c.profile_store = {"A": "a"}
-        w = self._w(loop, c)
-        toasts: list[str] = []
-        w.toast = lambda text, timeout=5: toasts.append(text)
-        w._profile_name_row.set_text("")
-        w._profile_rename()
-        assert c.profile_calls == []
-        assert any("name" in t for t in toasts)
+        assert any("Select a profile" in t for t in toasts)
         w.close()
 
     def test_rename_posts_old_and_new(self, loop):
         c = _StubClient()
         c.profile_store = {"Old": "txt"}
         w = self._w(loop, c)
-        w._profile_name_row.set_text("Fresh")
-        w._profile_rename()
+        w._profile_rename_action(None, None, GLib.Variant.new_string("Old"))
+        # drive the name dialog: type the new name, respond OK
+        w._name_entry.set_text("Fresh")
+        w._name_dlg.emit("response", "ok")
         assert c.profile_calls[-1] == ("rename", "Old", "Fresh")
         assert list(c.profile_store) == ["Fresh"]
         w.close()
 
+    def test_rename_cancel_keeps_store(self, loop):
+        c = _StubClient()
+        c.profile_store = {"Old": "txt"}
+        w = self._w(loop, c)
+        w._profile_rename_action(None, None, GLib.Variant.new_string("Old"))
+        w._name_entry.set_text("Fresh")
+        w._name_dlg.emit("response", "cancel")
+        assert c.profile_calls == []
+        assert list(c.profile_store) == ["Old"]
+        w.close()
+
+    def test_add_profile_saves_editor_text(self, loop):
+        c = _StubClient()
+        w = self._w(loop, c)
+        w._rows[("ai", "base_prompt")].set_value("fresh preset")
+        w._profile_add()
+        w._name_entry.set_text("New preset")
+        w._name_dlg.emit("response", "ok")
+        assert c.profile_calls[-1] == ("save", "New preset", "fresh preset")
+        assert set(w._profile_rows) == {"New preset"}
+        w.close()
+
     def test_save_does_not_clobber_editor(self, loop):
-        """The post-save combo rebuild is programmatic: it must not fire
-        the selection handler and overwrite the editor."""
+        """The post-save row rebuild is programmatic: it must not fire the
+        selection handler and overwrite the editor."""
         c = _StubClient()
         c.profile_store = {"A": "aaa", "B": "bbb"}
         w = self._w(loop, c)
         w._rows[("ai", "base_prompt")].set_value("my text")
-        w._profile_name_row.set_text("New")
         w._profile_save()
         assert w._rows[("ai", "base_prompt")].get_value() == "my text"
-        assert "New" in w._profiles
         w.close()
 
     def test_delete_rebuild_keeps_editor(self, loop):
@@ -426,16 +437,6 @@ class TestProfileBar:
         w._on_delete_profile_response(None, "cancel", "Gone")
         assert c.profile_calls == []
         assert c.profile_store == {"Gone": "x"}
-        w.close()
-
-    def test_delete_without_selection_toasts(self, loop):
-        c = _StubClient()
-        w = self._w(loop, c)
-        toasts: list[str] = []
-        w.toast = lambda text, timeout=5: toasts.append(text)
-        w._confirm_delete_profile(None)
-        assert c.profile_calls == []
-        assert any("Select" in t for t in toasts)
         w.close()
 
 

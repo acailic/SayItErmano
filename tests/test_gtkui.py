@@ -357,12 +357,24 @@ class TestHistoryWindow:
         assert callable(installed.get("hist.export"))
         assert installed["hist.export"] == w._on_export
         assert w._exporting is False
-        # user-visible wiring: the menu offers Export… -> win.hist.export
-        assert w.menu_model.get_n_items() == 2
+        # user-visible wiring: export section first (ZIP + Text), then the
+        # destructive section (Clear All)
         s = GLib.VariantType.new("s")
-        label = w.menu_model.get_item_attribute_value(0, "label", s).get_string()
-        action = w.menu_model.get_item_attribute_value(0, "action", s).get_string()
-        assert label == "Export…" and action == "win.hist.export"
+        assert w.menu_model.get_n_items() == 2
+        export = w.menu_model.get_item_link(0, "section")
+        assert export.get_n_items() == 2
+        label = export.get_item_attribute_value(0, "label", s).get_string()
+        action = export.get_item_attribute_value(0, "action", s).get_string()
+        assert label == "Export as ZIP…" and action == "win.hist.export"
+        label = export.get_item_attribute_value(1, "label", s).get_string()
+        action = export.get_item_attribute_value(1, "action", s).get_string()
+        assert label == "Export as Text…" and action == "win.hist.export-text"
+        danger = w.menu_model.get_item_link(1, "section")
+        assert danger.get_n_items() == 2
+        assert danger.get_item_attribute_value(0, "label", s).get_string() == \
+            "Pause saving"
+        assert danger.get_item_attribute_value(1, "label", s).get_string() == \
+            "Clear All…"
         w.close()
 
     def test_export_smoke(self, hist_win, loop, tmp_path, monkeypatch):
@@ -1188,6 +1200,81 @@ class TestUiPolish:
         assert w.mic_row.status.get_icon_name() == "dialog-warning-symbolic"
         assert w.mic_lbl.get_text()
         w.close()
+
+
+    def test_sidebar_macos_sections(self, settings_win, loop):
+        w = settings_win
+        reset_settings(w, loop)
+        labels = []
+
+        def row_label(row):
+            child = row.get_child()
+            if isinstance(child, Gtk.Box):
+                lbl = child.get_last_child()  # Image + Label
+                return lbl.get_label() if isinstance(lbl, Gtk.Label) else None
+            if isinstance(child, Gtk.Label):
+                return child.get_label()
+            return None
+
+        row = w._sidebar.get_first_child()
+        while row is not None:
+            labels.append(row_label(row))
+            row = row.get_next_sibling()
+        assert labels[0] == "Settings"
+        assert labels.count("Settings") == 1 and labels.count("More") == 1
+        assert labels.index("General") < labels.index("Dictation") < \
+            labels.index("Models") < labels.index("AI") < \
+            labels.index("History")
+        assert labels.index("History") < labels.index("More")
+        assert labels.index("More") < labels.index("Wayland") < \
+            labels.index("About")
+
+    def test_profile_radio_rows_select_and_save(self, settings_win, loop):
+        w = settings_win
+        c = reset_settings(w, loop)
+        c.profile_store["Default"] = "prompt one"
+        c.profile_store["Emails"] = "prompt two"
+        w._load_profiles()
+        assert set(w._profile_rows) == {"Default", "Emails"}
+        # selecting a profile loads its text into the editor (via the
+        # radio's toggled handler)
+        w._profile_checks["Emails"].set_active(True)
+        assert w._rows[("ai", "base_prompt")].get_value() == "prompt two"
+        # save writes the editor back to the selected profile
+        w._rows[("ai", "base_prompt")].set_value("edited")
+        w._profile_save()
+        assert c.profile_calls[-1] == ("save", "Emails", "edited")
+
+    def test_export_text_writes_plain_file(self, hist_win, loop, tmp_path):
+        w = hist_win
+        reset_history(w, loop)
+        out = tmp_path / "history.txt"
+
+        class FakeFile:
+            def get_path(self):
+                return str(out)
+
+        class FakeDlg:
+            def get_file(self):
+                return FakeFile()
+
+        w._on_export_text_response(FakeDlg(), Gtk.ResponseType.ACCEPT)
+        text = out.read_text()
+        assert "first entry" in text
+        assert "polished entry" in text
+
+    def test_pause_toggle_flips_config_and_label(self, hist_win, loop):
+        w = hist_win
+        c = reset_history(w, loop)
+        w._on_pause_toggle()
+        assert c.saved[-1] == {"history": {"save": False}}
+        s = GLib.VariantType.new("s")
+        assert w._danger_section.get_item_attribute_value(
+            0, "label", s).get_string() == "Resume saving"
+        w._on_pause_toggle()
+        assert c.saved[-1] == {"history": {"save": True}}
+        assert w._danger_section.get_item_attribute_value(
+            0, "label", s).get_string() == "Pause saving"
 
 
 class TestHistoryScience:

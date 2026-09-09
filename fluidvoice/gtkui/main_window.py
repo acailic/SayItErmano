@@ -360,9 +360,16 @@ class HistoryWindow(Adw.ApplicationWindow):
         header.pack_start(self.mic_btn)
 
         menu = Gio.Menu()
-        menu.append("Export…", "win.hist.export")
-        menu.append("Clear All…", "win.hist.clear")
+        export_section = Gio.Menu()
+        export_section.append("Export as ZIP…", "win.hist.export")
+        export_section.append("Export as Text…", "win.hist.export-text")
+        danger_section = Gio.Menu()
+        danger_section.append("Pause saving", "win.hist.pause")
+        danger_section.append("Clear All…", "win.hist.clear")
+        menu.append_section(None, export_section)
+        menu.append_section(None, danger_section)
         self.menu_model = menu
+        self._danger_section = danger_section
         header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic",
                                        menu_model=menu, tooltip_text="Menu"))
         settings_btn = Gtk.Button(icon_name="preferences-system-symbolic",
@@ -516,6 +523,8 @@ class HistoryWindow(Adw.ApplicationWindow):
 
         self.install_action("hist.clear", None, self._on_clear_all)
         self.install_action("hist.export", None, self._on_export)
+        self.install_action("hist.export-text", None, self._on_export_text)
+        self.install_action("hist.pause", None, self._on_pause_toggle)
         self.install_action("hist.focus-search", None,
                             lambda *_: self.search.grab_focus())
         sc = Gtk.ShortcutController()
@@ -847,10 +856,72 @@ class HistoryWindow(Adw.ApplicationWindow):
             self.action_set_enabled("hist.export", True)
         return False  # GLib.SOURCE_REMOVE - stop the idle source
 
+    # -- export as text (macOS "Save as Text" parity; plain file, offline) --
+
+    def _on_export_text(self, *_args) -> None:
+        dlg = Gtk.FileChooserNative.new(
+            "Export history as text", self, Gtk.FileChooserAction.SAVE,
+            "_Export", "_Cancel")
+        dlg.set_current_name(
+            f"sayitermano-history-{time.strftime('%Y%m%d-%H%M%S')}.txt")
+        dlg.connect("response", self._on_export_text_response)
+        self._export_dlg = dlg  # keep alive while it runs its own loop
+        dlg.show()
+
+    def _on_export_text_response(self, dlg, response) -> None:
+        self._export_dlg = None
+        if response != Gtk.ResponseType.ACCEPT:
+            return
+        f = dlg.get_file()
+        path = f.get_path() if f is not None else None
+        if not path:
+            return
+        try:
+            entries = self.c.history(q="", limit=5000)
+            lines = []
+            for e in entries:
+                ts = datetime.fromtimestamp(e.get("ts") or 0)
+                app = f" ({e['app']})" if e.get("app") else ""
+                text = str(e.get("text") or e.get("raw") or "")
+                lines.append(f"[{ts.strftime('%a %d %b %Y, %H:%M')}]{app}\n"
+                             f"{text}\n")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("\n".join(lines))
+            self._toast(f"Exported {len(entries)} entries")
+        except Exception as e:  # noqa: BLE001 - surfaced as a toast
+            self._toast(f"export failed: {e}")
+
     def _open_settings(self, _btn) -> None:
         app = self.get_application()
         if app is not None:
             app.show_settings()
+
+    # -- pause saving (macOS "Pause History" parity) -----------------------------
+
+    def _on_pause_toggle(self, *_args) -> None:
+        if getattr(self, "_history_paused", None) is not None:
+            paused = self._history_paused  # last known state (own toggle)
+        else:
+            try:
+                cfg, _ = self.c.get_config()
+                paused = not bool(cfg.get("history", {}).get("save", True))
+            except Exception:  # noqa: BLE001 - unreadable -> assume saving
+                paused = False
+        try:
+            resume = paused  # toggling from paused means resuming
+            self.c.set_config({"history": {"save": resume}})
+            self._history_paused = not resume
+            self._sync_pause_label(not resume)
+            self._toast("History saving resumed" if resume else
+                        "History paused — new dictations are not saved")
+        except Exception as e:  # noqa: BLE001 - daemon down -> toast
+            self._toast(f"Could not toggle (daemon needed): {e}")
+
+    def _sync_pause_label(self, paused: bool) -> None:
+        self._danger_section.remove_all()
+        self._danger_section.append(
+            "Resume saving" if paused else "Pause saving", "win.hist.pause")
+        self._danger_section.append("Clear All…", "win.hist.clear")
 
     def _toast(self, text: str) -> None:
         self.toast_overlay.add_toast(Adw.Toast(title=text))

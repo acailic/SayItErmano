@@ -101,7 +101,7 @@ class WaylandPageMixin:
         )
         self.wayland_page.add(tools)
         self.wayland_page.add(self._save_group())
-        self._add_page(self.wayland_page)
+        self._add_page(self.wayland_page, section="more")
         _ = session_mod
 
     def _refresh_wayland_rows(self) -> None:

@@ -196,6 +196,13 @@ class ModelsPageMixin:
                 ),
             )
             if name == active:
+                # macOS parity: the default model reads as a radio choice
+                radio = Gtk.CheckButton()
+                radio.set_active(True)
+                radio.set_sensitive(False)
+                radio.set_valign(Gtk.Align.CENTER)
+                radio.set_tooltip_text("Current default model")
+                row.add_prefix(radio)
                 row.add_suffix(
                     Gtk.Label(label="Active", css_classes=["success", "caption"])
                 )
@@ -473,6 +480,13 @@ class ModelsPageMixin:
                 ),
             )
             if name == active:
+                # macOS parity: the default model reads as a radio choice
+                radio = Gtk.CheckButton()
+                radio.set_active(True)
+                radio.set_sensitive(False)
+                radio.set_valign(Gtk.Align.CENTER)
+                radio.set_tooltip_text("Current default model")
+                row.add_prefix(radio)
                 row.add_suffix(
                     Gtk.Label(label="Active", css_classes=["success", "caption"])
                 )
@@ -581,6 +595,13 @@ class ModelsPageMixin:
                 subtitle=f"{info['size']} · {info['langs']} · {info['note']}",
             )
             if name == active:
+                # macOS parity: the default model reads as a radio choice
+                radio = Gtk.CheckButton()
+                radio.set_active(True)
+                radio.set_sensitive(False)
+                radio.set_valign(Gtk.Align.CENTER)
+                radio.set_tooltip_text("Current default model")
+                row.add_prefix(radio)
                 row.add_suffix(
                     Gtk.Label(label="Active", css_classes=["success", "caption"])
                 )

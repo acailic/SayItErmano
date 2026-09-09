@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 
-from gi.repository import Adw, Gdk, GLib, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from .common import _InstructionRow, _TextProxy
 
@@ -12,7 +12,7 @@ from .common import _InstructionRow, _TextProxy
 class AIPageMixin:
     def _build_ai(self) -> None:
         page = Adw.PreferencesPage(
-            name="ai", icon_name="fluidvoice-polish-symbolic", title="AI Polish"
+            name="ai", icon_name="fluidvoice-polish-symbolic", title="AI"
         )
         grp = Adw.PreferencesGroup(
             title="AI polish",
@@ -54,36 +54,28 @@ class AIPageMixin:
         grp.add(test_row)
         page.add(grp)
 
-        # prompt profiles: the profile bar above the prompt editor (loading
-        # copies the text into the editor; config.toml stays the source of
-        # truth for what is active)
-        prof_grp = Adw.PreferencesGroup(
+        # prompt profiles (macOS parity): radio rows + per-row ⋯ menu +
+        # Add; "Save" next to the editor below writes to the selection
+        self.prof_grp = Adw.PreferencesGroup(
             title="Prompt profiles",
-            description="Named presets of the base prompt - loading copies "
-            "the text into the editor",
+            description="Named presets of the base prompt — selecting one "
+            "loads its text into the editor",
         )
-        self._profile_combo = Adw.ComboRow(
-            title="Profile", subtitle="Select to load it into the editor"
-        )
-        self._profile_combo.connect("notify::selected", self._on_profile_selected)
-        prof_grp.add(self._profile_combo)
-        self._profile_name_row = Adw.EntryRow(title="Profile name")
-        # no _touch: the name feeds profile CRUD (immediate), not the
-        # config save flow
-        save_btn = Gtk.Button(label="Save", css_classes=["suggested-action"])
-        save_btn.set_valign(Gtk.Align.CENTER)
-        save_btn.connect("clicked", self._profile_save)
-        rename_btn = Gtk.Button(label="Rename", css_classes=["flat"])
-        rename_btn.set_valign(Gtk.Align.CENTER)
-        rename_btn.connect("clicked", self._profile_rename)
-        del_btn = Gtk.Button(label="Delete", css_classes=["flat", "destructive-action"])
-        del_btn.set_valign(Gtk.Align.CENTER)
-        del_btn.connect("clicked", self._confirm_delete_profile)
-        self._profile_name_row.add_suffix(del_btn)
-        self._profile_name_row.add_suffix(rename_btn)
-        self._profile_name_row.add_suffix(save_btn)
-        prof_grp.add(self._profile_name_row)
-        page.add(prof_grp)
+        self._profile_rows: dict[str, Adw.ActionRow] = {}
+        self._profile_checks: dict[str, Gtk.CheckButton] = {}
+        self._selected_profile_name: str | None = None
+        self._profile_none_row = Adw.ActionRow(
+            title="No profiles yet", subtitle="Add one to save preset prompts",
+            activatable=False, selectable=False,
+            css_classes=["dim-label"])
+        add_prof_row = Adw.ActionRow(title="Add profile")
+        add_prof_btn = Gtk.Button(label="Add…", css_classes=["flat"])
+        add_prof_btn.set_valign(Gtk.Align.CENTER)
+        add_prof_btn.connect("clicked", lambda *_: self._profile_add())
+        add_prof_row.add_suffix(add_prof_btn)
+        self._profile_add_row = add_prof_row
+        self.prof_grp.add(add_prof_row)
+        page.add(self.prof_grp)
 
         # custom base prompt editor (empty = the built-in dictation prompt;
         # the Prompt profiles group above saves/loads named presets of it)
@@ -106,6 +98,15 @@ class AIPageMixin:
         builtin_btn.connect("clicked", self._insert_builtin_prompt)
         builtin_row.add_suffix(builtin_btn)
         prompt_grp.add(builtin_row)
+        save_prof_row = Adw.ActionRow(
+            title="Save to profile",
+            subtitle="Write the editor contents into the selected profile",
+        )
+        save_prof_btn = Gtk.Button(label="Save", css_classes=["suggested-action"])
+        save_prof_btn.set_valign(Gtk.Align.CENTER)
+        save_prof_btn.connect("clicked", self._profile_save)
+        save_prof_row.add_suffix(save_prof_btn)
+        prompt_grp.add(save_prof_row)
         page.add(prompt_grp)
 
         self.rules_group = Adw.PreferencesGroup(
@@ -120,39 +121,10 @@ class AIPageMixin:
         self.rules_group.add(add_row)
         page.add(self.rules_group)
 
-        cmd = Adw.PreferencesGroup(
-            title="Command mode",
-            description="Voice → terminal agent. Every command needs confirmation.",
-        )
-        cmd.add(self._spin("command", "max_turns", "Max agent turns", 1, 20, 1))
-        cmd.add(
-            self._entry("command", "working_dir", "Working directory (empty = home)")
-        )
-        cmd.add(
-            self._spin(
-                "command",
-                "timeout_seconds",
-                "Command timeout (s)",
-                1,
-                3600,
-                5,
-                digits=1,
-            )
-        )
-        cmd.add(
-            self._spin(
-                "command",
-                "confirm_timeout_s",
-                "Confirmation timeout (s)",
-                5,
-                600,
-                5,
-                digits=1,
-            )
-        )
-        page.add(cmd)
         page.add(self._save_group())
         self._add_page(page)
+        self.install_action("profile.rename", "s", self._profile_rename_action)
+        self.install_action("profile.delete", "s", self._profile_delete_action)
 
     def _update_provider_logo(self) -> None:
         """Show the macOS-style provider logo matching the AI base URL."""
@@ -205,66 +177,123 @@ class AIPageMixin:
         self._touch()
 
     def _load_profiles(self) -> None:
-        """Rebuild the profile combo from the sidecar; failures degrade to
-        an empty combo."""
+        """Rebuild the profile radio rows from the sidecar; failures
+        degrade to an empty group."""
         self._profiles = self.c.prompt_profiles() or {}
-        model = Gtk.StringList()
-        names = list(self._profiles)
-        if names:
-            for n in names:
-                model.append(n)
-        else:
-            model.append("\u2014 none \u2014")
         self._suppress_touch = True  # programmatic rebuild: no load/dirty
         try:
-            self._profile_combo.set_model(model)
-            self._profile_combo.set_selected(0)
+            for row in self._profile_rows.values():
+                self.prof_grp.remove(row)
+            self._profile_rows.clear()
+            self._profile_checks.clear()
+            has = bool(self._profiles)
+            self._profile_none_row.set_visible(not has)
+            self._profile_add_row.set_visible(True)
+            if not has:
+                self.prof_grp.add(self._profile_none_row)
+            else:
+                self.prof_grp.remove(self._profile_none_row)
+            group: Gtk.CheckButton | None = None
+            for name in self._profiles:
+                check = Gtk.CheckButton()
+                if group is None:
+                    group = check
+                else:
+                    check.set_group(group)
+                check.connect("toggled", self._on_profile_toggled, name)
+                row = Adw.ActionRow(title=name)
+                row.add_prefix(check)
+                row.set_activatable_widget(check)
+                menu = Gio.Menu()
+                menu.append("Rename…", f"win.profile.rename::{name}")
+                menu.append("Delete", f"win.profile.delete::{name}")
+                mb = Gtk.MenuButton(icon_name="view-more-symbolic",
+                                    css_classes=["flat"], menu_model=menu,
+                                    valign=Gtk.Align.CENTER,
+                                    tooltip_text="Profile actions")
+                row.add_suffix(mb)
+                self._profile_rows[name] = row
+                self._profile_checks[name] = check
+                self.prof_grp.add(row)
+            # keep the last selection when it survives, else the first
+            sel = self._selected_profile_name
+            if sel not in self._profiles:
+                sel = next(iter(self._profiles), None)
+            self._selected_profile_name = sel
+            if sel is not None:
+                self._profile_checks[sel].set_active(True)
         finally:
             self._suppress_touch = False
 
-    def _selected_profile(self) -> str | None:
-        if not self._profiles:
-            return None
-        item = self._profile_combo.get_selected_item()
-        name = item.get_string() if item is not None else None
-        return name if name in self._profiles else None
-
-    def _on_profile_selected(self, *_args) -> None:
-        """Loading copies the profile text into the editor (dirty: the user
-        then Saves to persist it to config)."""
+    def _on_profile_toggled(self, check: Gtk.CheckButton, name: str) -> None:
+        if not check.get_active():
+            return
+        self._selected_profile_name = name
         if self._loading or self._suppress_touch:
             return
-        name = self._selected_profile()
-        if name is None:
-            return
+        # loading copies the profile text into the editor (dirty: the user
+        # then Saves to persist it to config)
         self._rows[("ai", "base_prompt")].set_value(self._profiles[name])
         self._touch()
 
+    def _selected_profile(self) -> str | None:
+        return self._selected_profile_name
+
+    def _ask_profile_name(self, heading: str, initial: str, done) -> None:
+        dlg = Adw.MessageDialog(transient_for=self, modal=True, heading=heading)
+        entry = Gtk.Entry(text=initial, hexpand=True)
+        dlg.set_extra_child(entry)
+        dlg.add_response("cancel", "Cancel")
+        dlg.add_response("ok", "OK")
+        dlg.set_response_appearance("ok", Adw.ResponseAppearance.SUGGESTED)
+
+        def responded(_dlg, response):
+            if response == "ok":
+                done(entry.get_text().strip())
+        dlg.connect("response", responded)
+        self._name_dlg, self._name_entry = dlg, entry  # test/driver access
+        dlg.present()
+        entry.grab_focus()
+
+    def _profile_add(self, *_args) -> None:
+        def done(name: str) -> None:
+            if not name:
+                self.toast("Enter a profile name first")
+                return
+            text = self._rows[("ai", "base_prompt")].get_value()
+            resp = self.c.prompt_profile_save(name, text)
+            self._after_profile_call(resp, f"Saved profile \u201c{name}\u201d")
+
+        self._ask_profile_name("New profile name", "", done)
+
     def _profile_save(self, *_args) -> None:
-        name = self._profile_name_row.get_text().strip()
-        if not name:
-            self.toast("Enter a profile name first")
+        name = self._selected_profile()
+        if name is None:
+            self.toast("Select a profile first")
             return
         text = self._rows[("ai", "base_prompt")].get_value()
         resp = self.c.prompt_profile_save(name, text)
         self._after_profile_call(resp, f"Saved profile \u201c{name}\u201d")
 
-    def _profile_rename(self, *_args) -> None:
-        old = self._selected_profile()
-        if old is None:
-            self.toast("Select a profile to rename first")
+    def _profile_rename_action(self, _win, _action, param) -> None:
+        old = (param.get_string() if param is not None
+               else self._selected_profile())
+        if old is None or old not in self._profiles:
             return
-        new = self._profile_name_row.get_text().strip()
-        if not new:
-            self.toast("Enter a new name first")
-            return
-        resp = self.c.prompt_profile_rename(old, new)
-        self._after_profile_call(resp, f"Renamed to \u201c{new}\u201d")
 
-    def _confirm_delete_profile(self, _btn) -> None:
-        name = self._selected_profile()
-        if name is None:
-            self.toast("Select a profile to delete first")
+        def done(new: str) -> None:
+            if not new or new == old:
+                return
+            resp = self.c.prompt_profile_rename(old, new)
+            self._selected_profile_name = new if resp.get("ok") else None
+            self._after_profile_call(resp, f"Renamed to \u201c{new}\u201d")
+
+        self._ask_profile_name(f"Rename \u201c{old}\u201d to", old, done)
+
+    def _profile_delete_action(self, _win, _action, param) -> None:
+        name = (param.get_string() if param is not None
+                else self._selected_profile())
+        if name is None or name not in self._profiles:
             return
         dlg = Adw.MessageDialog(
             transient_for=self,

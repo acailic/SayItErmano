@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from gi.repository import Adw, Gtk
 
+from ...config import KNOWN_LANGUAGES
 from .common import _ActionTriggersProxy, _ExtraShortcutsProxy, _ListProxy
 
 
@@ -107,6 +108,25 @@ class DictationPageMixin:
             mods.add_suffix(tb)
         hk.add(mods)
         page.add(hk)
+
+        # Languages (macOS parity: primary language lives on General; the
+        # cycle + wrong-language guard live here, next to the cycle key)
+        self.cycle_group = Adw.PreferencesGroup(
+            title="Languages",
+            description="The cycle-language hotkey steps this list — e.g. "
+            "auto, en, sl (runtime state; never persisted; "
+            "empty = cycle key off)",
+        )
+        wl = Adw.EntryRow(title="Language whitelist — e.g. sl, en")
+        wl.connect("changed", lambda *_: self._touch())
+        self._rows[("general", "language_whitelist")] = _ListProxy(wl)
+        self.cycle_group.add(wl)
+        self._cycle_add_row = Adw.ActionRow(title="Add language")
+        add_lang_btn = Gtk.Button(icon_name="list-add-symbolic", css_classes=["flat"])
+        add_lang_btn.connect("clicked", lambda *_: self._add_cycle_lang(""))
+        self._cycle_add_row.add_suffix(add_lang_btn)
+        self.cycle_group.add(self._cycle_add_row)
+        page.add(self.cycle_group)
 
         mic = Adw.PreferencesGroup(title="Microphone and recording")
         self.mic_row = Adw.ComboRow(
@@ -429,6 +449,41 @@ class DictationPageMixin:
             )
         )
         page.add(ins)
+
+        # Command mode (moved from the AI page, macOS parity: Commands
+        # belong with Dictation)
+        cmd = Adw.PreferencesGroup(
+            title="Commands",
+            description="Voice → terminal agent. Every command needs confirmation.",
+        )
+        cmd.add(self._spin("command", "max_turns", "Max agent turns", 1, 20, 1))
+        cmd.add(
+            self._entry("command", "working_dir", "Working directory (empty = home)")
+        )
+        cmd.add(
+            self._spin(
+                "command",
+                "timeout_seconds",
+                "Command timeout (s)",
+                1,
+                3600,
+                5,
+                digits=1,
+            )
+        )
+        cmd.add(
+            self._spin(
+                "command",
+                "confirm_timeout_s",
+                "Confirmation timeout (s)",
+                5,
+                600,
+                5,
+                digits=1,
+            )
+        )
+        page.add(cmd)
+
         page.add(self._save_group())
         self._add_page(page)
 
@@ -575,3 +630,86 @@ class DictationPageMixin:
                     "triggers and a replacement)"
                 )
         return entries
+
+    # -- language cycle editor (moved from the General page, macOS parity) --
+
+    def _load_language_cycle(self, codes: list) -> None:
+        for ref in list(self._cycle_rows):
+            self.cycle_group.remove(ref["row"])
+        self._cycle_rows = []
+        for code in codes:
+            self._add_cycle_lang(str(code))
+
+    def _add_cycle_lang(self, value: str) -> None:
+        row = Adw.EntryRow(title="Code — e.g. auto, en, sl")
+        row.set_text(value)
+        row.connect("changed", self._on_cycle_lang_changed)
+        up = Gtk.Button(
+            icon_name="go-up-symbolic", css_classes=["flat"], tooltip_text="Move up"
+        )
+        down = Gtk.Button(
+            icon_name="go-down-symbolic", css_classes=["flat"], tooltip_text="Move down"
+        )
+        rm = Gtk.Button(
+            icon_name="user-trash-symbolic",
+            css_classes=["flat", "destructive-action"],
+            tooltip_text="Remove this language",
+        )
+        ref = {"row": row, "up": up, "down": down}
+        up.connect("clicked", lambda *_: self._move_cycle_lang(ref, -1))
+        down.connect("clicked", lambda *_: self._move_cycle_lang(ref, 1))
+        rm.connect("clicked", lambda *_: self._remove_cycle_lang(ref))
+        row.add_suffix(up)
+        row.add_suffix(down)
+        row.add_suffix(rm)
+        self._cycle_rows.append(ref)
+        self._rebuild_cycle_lang()
+        self._on_cycle_lang_changed(row)
+
+    def _on_cycle_lang_changed(self, row) -> None:
+        """Non-blocking pre-flight: an entry that is neither "auto" nor a
+        known code gets the error style; the daemon's coerce_setting is
+        the authority (a bad value toasts as rejected on save)."""
+        code = row.get_text().strip().lower()
+        if code and code != "auto" and code not in KNOWN_LANGUAGES:
+            row.add_css_class("error")
+        else:
+            row.remove_css_class("error")
+        self._touch()
+
+    def _move_cycle_lang(self, ref: dict, delta: int) -> None:
+        i = self._cycle_rows.index(ref)
+        j = i + delta
+        if not 0 <= j < len(self._cycle_rows):
+            return  # already at the edge
+        self._cycle_rows[i], self._cycle_rows[j] = (
+            self._cycle_rows[j],
+            self._cycle_rows[i],
+        )
+        self._rebuild_cycle_lang()
+
+    def _rebuild_cycle_lang(self) -> None:
+        # the same widgets are re-added, so entered text survives
+        for ref in list(self._cycle_rows):
+            self.cycle_group.remove(ref["row"])
+        self.cycle_group.remove(self._cycle_add_row)
+        self.cycle_group.add(self._cycle_add_row)
+        for ref in self._cycle_rows:
+            self.cycle_group.add(ref["row"])
+        last = len(self._cycle_rows) - 1
+        for i, ref in enumerate(self._cycle_rows):
+            ref["up"].set_sensitive(i > 0)
+            ref["down"].set_sensitive(i < last)
+
+    def _remove_cycle_lang(self, ref: dict) -> None:
+        self.cycle_group.remove(ref["row"])
+        self._cycle_rows.remove(ref)
+        self._rebuild_cycle_lang()
+        self._touch()
+
+    def _collect_language_cycle(self) -> list[str]:
+        return [
+            r["row"].get_text().strip().lower()
+            for r in self._cycle_rows
+            if r["row"].get_text().strip()
+        ]

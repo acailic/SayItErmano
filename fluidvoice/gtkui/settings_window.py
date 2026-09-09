@@ -23,14 +23,12 @@ from .client import Client
 from .settings_pages.about import AboutPageMixin
 from .settings_pages.ai import AIPageMixin
 from .settings_pages.common import (
-    _ActionTriggersProxy,
-    _ExtraShortcutsProxy,
+    _default,
+    _keyname,
     _ListProxy,
     _PasswordProxy,
     _SwitchProxy,
     _TextProxy,
-    _default,
-    _keyname,
 )
 from .settings_pages.dictation import DictationPageMixin
 from .settings_pages.general import GeneralPageMixin
@@ -88,12 +86,15 @@ class SettingsWindow(
         self._suppress_touch = False  # programmatic combo rebuilds
 
         self._build_chrome()
+        # macOS-parity sidebar order (upstream Settings screenshot set,
+        # 2026-09-09): Settings section first, Linux-specific + About under
+        # "More"
         self._build_general()
+        self._build_dictation()
         self._build_models()
         self._build_ai()
-        self._build_dictation()
-        self._build_wayland()
         self._build_history_page()
+        self._build_wayland()
         self._build_about()
         self._select_first_page()
 
@@ -125,6 +126,7 @@ class SettingsWindow(
             hexpand=True,
         )
         self._sidebar_rows: dict[str, Gtk.ListBoxRow] = {}
+        self._sidebar_sections: set[str] = set()
         self._sidebar = Gtk.ListBox(css_classes=["navigation-sidebar"])
         self._sidebar.set_selection_mode(Gtk.SelectionMode.SINGLE)
         self._sidebar.connect("row-activated", self._on_sidebar_activated)
@@ -153,9 +155,15 @@ class SettingsWindow(
         self._toast_overlay = Adw.ToastOverlay(child=self._split)
         self.set_content(self._toast_overlay)
 
-    def _add_page(self, page: Adw.PreferencesPage) -> None:
-        """Register a built page: content stack + one sidebar row."""
+    def _add_page(self, page: Adw.PreferencesPage,
+                  section: str = "settings") -> None:
+        """Register a built page: content stack + one sidebar row, under a
+        macOS-parity section header ("Settings" / "More")."""
         self._page_stack.add_named(page, page.get_name())
+        if section not in self._sidebar_sections:
+            self._sidebar_sections.add(section)
+            self._sidebar.append(self._section_header(
+                "Settings" if section == "settings" else "More"))
         hbox = Gtk.Box(
             orientation=Gtk.Orientation.HORIZONTAL,
             spacing=10,
@@ -170,11 +178,22 @@ class SettingsWindow(
         self._sidebar_rows[page.get_name()] = row
         self._sidebar.append(row)
 
+    @staticmethod
+    def _section_header(label: str) -> Gtk.ListBoxRow:
+        return Gtk.ListBoxRow(
+            activatable=False, selectable=False,
+            child=Gtk.Label(label=label, xalign=0.0,
+                            css_classes=["caption", "dim-label"],
+                            margin_top=10, margin_bottom=2,
+                            margin_start=12))
+
     def _select_first_page(self) -> None:
-        first = self._sidebar.get_first_child()
-        if first is not None:
-            self._sidebar.select_row(first)
-            self._show_selected_page(first)
+        row = self._sidebar.get_first_child()
+        while row is not None and not row.get_activatable():
+            row = row.get_next_sibling()
+        if row is not None:
+            self._sidebar.select_row(row)
+            self._show_selected_page(row)
 
     def _on_sidebar_activated(self, _list, row) -> None:
         self._show_selected_page(row)
