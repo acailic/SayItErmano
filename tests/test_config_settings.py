@@ -125,6 +125,22 @@ class TestApplySettings:
             "ai": {"api_key": "should-not-set"}})
         assert changed == [] and rejected == []
 
+    def test_mic_device_empty_is_system_default(self, cfg):
+        # the mic dropdown's "Auto" option saves "" — the documented
+        # default, not a bad value (regression: it toasted as rejected
+        # on every save)
+        changed, rejected = apply_settings(
+            cfg, {"recording": {"device": "alsa_input.pci-0000_00_1f.3"}})
+        assert rejected == [] and changed == ["recording.device"]
+        changed, rejected = apply_settings(cfg, {"recording": {"device": ""}})
+        assert rejected == [] and changed == ["recording.device"]
+        assert cfg["recording"]["device"] == ""
+        _, rejected = apply_settings(cfg, {"recording": {"device": 7}})
+        assert rejected == ["recording.device"]
+        _, rejected = apply_settings(
+            cfg, {"recording": {"device": "x" * 257}})
+        assert rejected == ["recording.device"]
+
     def test_per_app_prompts_validated(self, cfg):
         ok_rules = [{"apps": ["zed"], "instructions": "be terse"}]
         changed, rejected = apply_settings(

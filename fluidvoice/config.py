@@ -791,6 +791,10 @@ def coerce_setting(section: str, key: str, value: Any) -> tuple[bool, Any]:
         # any string incl. "" (clearing is done by editing the file or
         # setting remote_url empty); never logged, masked in socket reads
         return (isinstance(value, str) and len(value) <= 4096, value)
+    if (section, key) == ("recording", "device"):
+        # "" = system default (the mic dropdown's "Auto" option), the
+        # documented default value — not a bad value
+        return (isinstance(value, str) and len(value) <= 256, value)
     rule = SETTING_RANGES.get((section, key))
     if rule:
         kind, bound = rule
