@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Callable
 
 from .audio_utils import raw_to_wav_bytes
+from .pipeline import is_repeat_hallucination
 
 
 class PreviewEngine:
@@ -209,7 +210,8 @@ class SegmentedPreviewEngine:
         self._next_commit = 0          # even window index never decoded yet
         self._silence_fired = False
         self.stats = {"decodes": 0, "commits": 0, "decode_ms_sum": 0.0,
-                      "ticks": 0, "audio_s": 0.0, "covered_s": 0.0}
+                      "ticks": 0, "audio_s": 0.0, "covered_s": 0.0,
+                      "suppressed": 0}
 
     def start(self) -> None:
         if self._thread:
@@ -370,6 +372,11 @@ class SegmentedPreviewEngine:
         if audio_s >= commit_end:
             ctx = self.committed[-1] if self.committed else None
             text = self._decode(k * self.hop_s, commit_end, ctx)
+            if is_repeat_hallucination(text):
+                # whisper loop artifact ("you you you") - commit the
+                # window's timing but never its text
+                self.stats["suppressed"] += 1
+                text = ""
             self.committed.append(text)
             self._next_commit = k + 2
             self.stats["commits"] += 1
@@ -384,6 +391,9 @@ class SegmentedPreviewEngine:
             return
         ctx = " ".join(t for t in self.committed if t)[-200:] or None
         tail = self._decode(start, audio_s, ctx)
+        if is_repeat_hallucination(tail):
+            self.stats["suppressed"] += 1
+            tail = ""
         self.stats["covered_s"] = max(self.stats["covered_s"], audio_s)
         self._emit(" ".join(t for t in self.committed if t), tail)
 

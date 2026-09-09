@@ -45,6 +45,14 @@
 
 ## What's new
 
+**Unreleased** — **hallucination guard**: when a pinned language (or a
+broken mic feed) makes Whisper return confident fluent garbage — phonetic
+English over Slovenian speech, "you you you" loops, "Thank you for
+watching" over silence — the take is re-decoded once with auto language
+detection (kept only when it comes back confidently better), pure
+repetition loops are never typed (you get a "check mic and language"
+notice instead), and the live preview suppresses loop text too.
+
 **[v0.8.1](https://github.com/acailic/SayItErmano/releases/tag/v0.8.1)** — the
 macOS-parity release: the settings sidebar groups into **Settings / More**
 sections with the upstream page order (General, Dictation, Models, AI,

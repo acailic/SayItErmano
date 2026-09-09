@@ -1479,7 +1479,9 @@ class Daemon:
                 f"commits={stats['commits']} mean_decode_ms={mean_ms:.0f} "
                 f"ticks={stats['ticks']} audio_s={stats['audio_s']:.1f} "
                 f"lag_s={lag:.1f} tail_rewrites="
-                f"{stats.get('tail_rewrites', 0)}")
+                f"{stats.get('tail_rewrites', 0)}"
+                + (f" suppressed={stats['suppressed']}"
+                   if stats.get("suppressed") else ""))
         if finishing:
             # Keep the pill up in its processing state (flat bars + shimmer,
             # like the Mac) until the final text is inserted.

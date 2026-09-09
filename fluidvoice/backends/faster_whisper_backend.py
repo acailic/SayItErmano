@@ -21,6 +21,9 @@ class FasterWhisperBackend:
     # wrong-language guard: this backend surfaces the detected language
     # (info.language) under auto, so the whitelist guard can retry
     surfaces_detected_language = True
+    # hallucination guard: transcribe() honors a language hint, so a
+    # garbage forced-language decode can be retried with auto detection
+    selects_language = True
 
     def __init__(self, cfg: dict):
         preload_cuda_libs()  # must run before ctranslate2 loads its CUDA libs
@@ -101,8 +104,10 @@ class FasterWhisperBackend:
         for seg in segments:  # generator - consume once, reuse for text AND segments
             texts.append(seg.text)
             lp = getattr(seg, "avg_logprob", None)
+            ns = getattr(seg, "no_speech_prob", None)
             segs.append({"start": round(seg.start, 3), "end": round(seg.end, 3),
                          "text": seg.text.strip(),
-                         "avg_logprob": round(lp, 3) if lp is not None else None})
+                         "avg_logprob": round(lp, 3) if lp is not None else None,
+                         "no_speech_prob": round(ns, 3) if ns is not None else None})
         return {"text": "".join(texts).strip(), "language": info.language,
                 "duration": info.duration, "segments": segs}

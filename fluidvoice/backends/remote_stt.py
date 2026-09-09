@@ -50,6 +50,9 @@ class RemoteSttBackend:
     # wrong-language guard: the plain-JSON endpoint does not surface the
     # detected language, so the pipeline gate skips us by construction
     # (see backends.LANGUAGE_GUARD["remote"]).
+    # hallucination guard: the request forwards a language field, so the
+    # endpoint's auto detection serves as the retry
+    selects_language = True
 
     def __init__(self, cfg: dict):
         m = cfg["model"]

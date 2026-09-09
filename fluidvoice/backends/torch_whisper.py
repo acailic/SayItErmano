@@ -12,6 +12,8 @@ class TorchWhisperBackend:
     # wrong-language guard: this backend surfaces the detected language
     # (result["language"]) under auto, so the whitelist guard can retry
     surfaces_detected_language = True
+    # hallucination guard: transcribe() honors a language hint
+    selects_language = True
 
     def __init__(self, cfg: dict):
         import whisper  # openai-whisper (deferred)

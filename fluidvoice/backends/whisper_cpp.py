@@ -15,6 +15,9 @@ class WhisperCppBackend:
     # language to verbose output we do not parse -> the guard skips
     # silently (documented limitation; see backends.LANGUAGE_GUARD)
     surfaces_detected_language = False
+    # hallucination guard: the binary honors -l, so a garbage forced
+    # decode can still be retried with auto detection
+    selects_language = True
 
     def __init__(self, cfg: dict):
         self.binary = _whispercpp_binary()

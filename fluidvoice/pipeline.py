@@ -7,6 +7,7 @@ audio, X11 or GPU.
 """
 from __future__ import annotations
 
+import re
 import sys
 import time
 from pathlib import Path
@@ -52,6 +53,54 @@ def confidence_band(result: dict) -> int | None:
     if mean >= CONF_LOGPROB_LOW:
         return 1
     return 0
+
+
+# Hallucination tells (2026-09-10 incident): whisper emits CONFIDENT fluent
+# garbage on audio it cannot parse - a bad mic (bluetooth-HFP loops like
+# "you you you") or speech in another language under a pinned language
+# ("Frenchman is overshadowed" over Slovenian). Logprobs cannot separate
+# those from healthy takes; the two reliable tells are a short periodic
+# token run dominating the words, and text over segments the model itself
+# scored as probably-not-speech (no_speech_prob).
+REPEAT_PERIODS = ((1, 4), (2, 6), (3, 9))  # (period words, min token count)
+REPEAT_COVERAGE = 0.8                # periodic token comparisons satisfied
+NO_SPEECH_MEAN = 0.6                 # mean segment no_speech_prob
+
+
+def _word_tokens(text: str) -> list[str]:
+    return re.findall(r"[\w']+", text.lower())
+
+
+def is_repeat_hallucination(text: str) -> bool:
+    """True when the words are a short periodic run ("you you you you",
+    "Thank you. Thank you. Thank you."): period-p comparisons hold for
+    >= 80% of the token stream."""
+    toks = _word_tokens(text)
+    if len(toks) < 4:
+        return False
+    for period, min_len in REPEAT_PERIODS:
+        if len(toks) < min_len:
+            continue
+        comps = len(toks) - period
+        matches = sum(1 for i in range(comps)
+                      if toks[i] == toks[i + period])
+        if matches / comps >= REPEAT_COVERAGE:
+            return True
+    return False
+
+
+def looks_like_hallucination(result: dict) -> bool:
+    """Repetition loop or text-over-no-speech segments: whisper's two
+    reliable garbage tells. Backends without segment tells (whisper.cpp,
+    parakeet, most fakes) degrade to repetition-only detection."""
+    if is_repeat_hallucination(str(result.get("text") or "")):
+        return True
+    segs = [s for s in (result.get("segments") or [])
+            if isinstance(s, dict)]
+    vals = [s["no_speech_prob"] for s in segs
+            if isinstance(s.get("no_speech_prob"), (int, float))]
+    return bool(str(result.get("text") or "").strip() and vals
+                and sum(vals) / len(vals) >= NO_SPEECH_MEAN)
 
 
 class DictationPipeline:
@@ -101,13 +150,44 @@ class DictationPipeline:
         lang = override if override else backends.effective_language(
             self.cfg, self.backend)
         result = self.backend.transcribe(wav, language=lang)
-        # wrong-language guard (final decode only - preview partials never
-        # re-decode): when the resolved language for the take is "auto",
-        # the backend surfaces its detected language, and detection landed
-        # outside general.language_whitelist, re-decode ONCE with the first
-        # whitelist entry and log it. Detected language unavailable
-        # (whisper.cpp under auto) or a backend without language selection
-        # (parakeet): silent skip.
+        result = self._whitelist_retry(wav, result, lang)
+        # hallucination guard (final decode only - preview partials never
+        # re-decode): a FORCED language decoding audio it cannot parse
+        # (Slovenian speech under pinned en, or a broken mic feed) returns
+        # confident fluent garbage. Measured on the 2026-09-10 incident:
+        # forced-en garbage lands in confidence band 0 (logprob ~ -1.2)
+        # while the same audio under auto is band 1+. When the forced
+        # decode shows hallucination tells OR band 0, re-decode once with
+        # auto detection and keep the retry only when it comes back clean
+        # and confident (the whitelist guard above already applied to the
+        # retry's detected language). Backends without language selection
+        # (parakeet, English-only): silent skip.
+        if (lang and lang != "auto"
+                and getattr(self.backend, "selects_language", False)
+                and (looks_like_hallucination(result)
+                     or confidence_band(result) == 0)):
+            retry = self._whitelist_retry(
+                wav, self.backend.transcribe(wav, language="auto"), "auto")
+            if (str(retry.get("text") or "").strip()
+                    and not looks_like_hallucination(retry)
+                    and confidence_band(retry) != 0):
+                self.log(f"hallucination guard: forced={lang} decode "
+                         f"{'looked hallucinated' if looks_like_hallucination(result) else 'was low-confidence'}; "
+                         f"auto retry detected={retry.get('language')}")
+                result = retry
+            else:
+                self.log(f"hallucination guard: forced={lang} decode "
+                         f"{'looked hallucinated' if looks_like_hallucination(result) else 'was low-confidence'}; "
+                         f"retry not confidently better - keeping original")
+        return result
+
+    def _whitelist_retry(self, wav: Path, result: dict, lang: str) -> dict:
+        """Wrong-language guard (final decode only): when the resolved
+        language for the take is "auto", the backend surfaces its detected
+        language, and detection landed outside general.language_whitelist,
+        re-decode ONCE with the first whitelist entry and log it. Detected
+        language unavailable (whisper.cpp under auto) or a backend without
+        language selection (parakeet): silent skip."""
         whitelist = list(((self.cfg.get("general", {}) or {})
                           .get("language_whitelist")) or []) \
             if isinstance(self.cfg, dict) else []
@@ -336,6 +416,15 @@ class DictationPipeline:
             raw = result.get("text", "")
             if not raw.strip():
                 self.log("empty transcription")
+                return None
+            if is_repeat_hallucination(raw):
+                # a pure repetition loop is never the intended speech
+                # (bad-mic whisper artifact); typing it is worse than
+                # nothing - tell the user what to check instead
+                self.log(f"hallucination guard: suppressed repetition "
+                         f"output ({len(raw)} chars): {raw[:60]!r}")
+                self.notify("SayItErmano",
+                            "No usable speech caught — check mic and language")
                 return None
             conf = confidence_band(result)
             text = post_process(raw, self.cfg, app_hint=app_hint)
