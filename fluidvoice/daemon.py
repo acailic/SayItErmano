@@ -1146,6 +1146,12 @@ class Daemon:
                 }
             return {"ok": True, "recording": self.recording, "busy": self.busy,
                     "backend": self.backend.name if self.backend else None,
+                    # what the model ACTUALLY runs on: the loaded backend's
+                    # resolved device (post auto-pick and CPU fallback);
+                    # with no model loaded, what "auto" would pick
+                    "cuda": (getattr(self.backend, "device", "") == "cuda"
+                             if self.backend is not None else
+                             backends.cuda_available()),
                     "version": __version__,
                     # None = hotkey disabled/--no-hotkey; False = every
                     # lock-mask combo not held (blocked, daemon retrying)

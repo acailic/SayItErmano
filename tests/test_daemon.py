@@ -295,6 +295,17 @@ class TestDaemon:
         resp = d.handle_request({"action": "status"})
         assert resp["ok"] and resp["recording"] is False and resp["backend"] == "stub"
 
+    def test_status_reports_cuda_from_live_backend(self, cfg, quiet_ui):
+        """The UI's 'GPU yes/no' reads status["cuda"]: it must reflect the
+        loaded backend's resolved device (post auto-pick and CPU
+        fallback), not be silently absent (the pre-2026-09-10 bug that
+        showed 'GPU no' on CUDA machines)."""
+        d = self.make(cfg, StubRecorder())
+        d.backend.device = "cuda"  # what faster-whisper resolves on a GPU box
+        assert d.handle_request({"action": "status"})["cuda"] is True
+        d.backend.device = "cpu"  # e.g. the cuDNN-missing CPU fallback
+        assert d.handle_request({"action": "status"})["cuda"] is False
+
     def test_unknown_action(self, cfg, quiet_ui):
         d = self.make(cfg, StubRecorder())
         resp = d.handle_request({"action": "explode"})
