@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://github.com/acailic/SayItErmano/releases"><img src="https://img.shields.io/github/v/release/acailic/SayItErmano?color=blue&label=release" alt="latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/acailic/SayItErmano?color=blue" alt="license GPL-3.0"></a>
-  <img src="https://img.shields.io/badge/tests-1778%20passing-brightgreen" alt="1778 automated tests">
+  <img src="https://img.shields.io/badge/tests-1782%20passing-brightgreen" alt="1782 automated tests">
   <img src="https://img.shields.io/badge/platform-Linux%20%C2%B7%20X11%20%C2%B7%20Wayland%20%C2%B7%20GTK%204-blue" alt="Linux · X11 · Wayland · GTK 4">
   <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
 </p>
@@ -44,6 +44,14 @@
 > and takes over its config, history and models.
 
 ## What's new
+
+**Unreleased** — the **macOS-parity settings** pass: the sidebar groups
+into **Settings / More** sections with the upstream page order (General,
+Dictation, Models, AI, History), Languages and Commands live on the
+Dictation page like on the Mac, prompt profiles render as **radio rows
+with per-row Rename/Delete menus**, the active model carries a radio
+indicator, and the History menu gains **Export as Text** plus a
+**Pause saving / Resume saving** toggle.
 
 **[v0.8.0](https://github.com/acailic/SayItErmano/releases/tag/v0.8.0)** — the
 integration + polish release: an **MCP server** (`sayit-ermano mcp` — drive
@@ -248,24 +256,30 @@ matrix (additive `session`/`capabilities` keys in the JSON).
 <p>
 <img src="docs/screenshots/settings-general.png" width="292" alt="Settings: General">
 <img src="docs/screenshots/settings-models.png" width="292" alt="Settings: Models with one-click switch and GGUF downloads">
-<img src="docs/screenshots/settings-ai.png" width="292" alt="Settings: AI polish">
+<img src="docs/screenshots/settings-ai.png" width="292" alt="Settings: AI — radio-row prompt profiles">
 </p>
 <p>
-<img src="docs/screenshots/settings-dictation.png" width="292" alt="Settings: Dictation with hotkey capture and mic picker">
+<img src="docs/screenshots/settings-dictation.png" width="292" alt="Settings: Dictation — hotkeys, languages, mic picker">
 <img src="docs/screenshots/settings-history.png" width="292" alt="Settings: History retention">
 <img src="docs/screenshots/settings-about.png" width="292" alt="Settings: About">
 </p>
 
 `sayit-ermano app` opens a native GTK 4 / libadwaita app (single instance;
-follows your system theme) that mirrors the macOS app's windows:
+follows your system theme) that mirrors the macOS app's windows — the
+settings sidebar even keeps the Mac's **Settings / More** section grouping
+and page order:
 
 - **History** (main window) — live status header, search, copy/delete,
-  inline audio replay for retained recordings.
-- **Settings** — General / Models (one-click switch + download) / AI polish
-  (any OpenAI-compatible endpoint, live Test connection, per-app prompts) /
-  Dictation (hotkeys with press-to-capture, mic picker, live-preview sizes,
-  spoken send) / History. Saving hot-applies what the daemon can take live
-  (hotkey re-grab, recorder/tray/model rebuild) and says what needs a restart.
+  inline audio replay for retained recordings, **Export as ZIP or plain
+  text**, and a **Pause saving** toggle.
+- **Settings** — sidebar sections: **General** / **Dictation** (hotkeys
+  with press-to-capture, languages + cycle, mic picker, commands) /
+  **Models** (radio-marked active model, one-click switch + download) /
+  **AI polish** (any OpenAI-compatible endpoint, live Test connection,
+  prompt profiles as radio rows, per-app prompts) / **History** /
+  **Wayland** / **About**. Saving hot-applies what the daemon can take
+  live (hotkey re-grab, recorder/tray/model rebuild) and says what needs
+  a restart.
 - **Onboarding** — opens once on first launch with a real 3-second tryout.
 
 With the daemon stopped, History still works and Settings saves to the
@@ -585,7 +599,7 @@ work; to see what moved upstream, run `scripts/upstream-diff.sh`.
 .venv/bin/python -m pytest -n auto tests --ignore=tests/integration  # parallel via pytest-xdist (~4-5x; skip -n for --pdb debugging)
 ```
 
-The test suite — **1778 automated tests** at v0.8.0 (`-n auto` runs it in
+The test suite — **1782 automated tests** (v0.8.0 shipped with 1778) (`-n auto` runs it in
 ~19 s):
 
 | Layer | What it exercises |
