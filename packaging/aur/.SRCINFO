@@ -20,8 +20,8 @@ pkgbase = sayit-ermano-bin
 	conflicts = sayit-ermano
 	conflicts = fluidvoice-linux
 	replaces = fluidvoice-linux
-	noextract = sayit-ermano-bin_0.8.0.deb
-	source_x86_64 = sayit-ermano-bin_0.8.0.deb::https://github.com/acailic/SayItErmano/releases/download/v0.8.0/sayit-ermano_0.8.0-1_amd64.deb
-	sha256sums_x86_64 = f819a09e0789a44c04928bb01d18e78f6f96801ca93b499d3f6d409ea7c6d1d7
+	noextract = sayit-ermano-bin_0.8.1.deb
+	source_x86_64 = sayit-ermano-bin_0.8.1.deb::https://github.com/acailic/SayItErmano/releases/download/v0.8.1/sayit-ermano_0.8.1-1_amd64.deb
+	sha256sums_x86_64 = cca100c3843f694eb3e8a168bec76c75d519f74f775f826ddad5250ed1ef308f
 
 	pkgname = sayit-ermano-bin
