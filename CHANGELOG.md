@@ -11,6 +11,26 @@ Releases begin at v0.4.0 (the rebrand to SayItErmano); earlier v0.1–v0.3
 tags predate it and were deleted from the repository, so their notes are
 not reproduced here.
 
+## [v0.8.1] — macOS-parity settings (2026-09-09)
+
+The parity-with-upstream release.
+
+- **Settings sidebar** — groups into **Settings / More** caption sections
+  with the macOS page order (General, Dictation, Models, AI, History;
+  Wayland + About under More); the AI page title shortens to "AI".
+- **Page regrouping** — General splits into General / Notifications /
+  Sounds; the language cycle + whitelist move to a "Languages" group on
+  Dictation, and Command mode moves there too (macOS grouping).
+- **Prompt profiles as radio rows** — per-profile rows with radio
+  selection, per-row Rename…/Delete menus, Add… name dialog, and "Save
+  to profile" beside the editor.
+- **Models** — the active model row carries a radio-style indicator
+  (all three catalogs).
+- **History window** — **Export as Text** (offline plain-text export)
+  and a **Pause saving / Resume saving** toggle (`history.save`, live).
+
+Full notes: [v0.8.1](https://github.com/acailic/SayItErmano/releases/tag/v0.8.1).
+
 ## [v0.8.0] — MCP server, vocabulary boosting, polished app (2026-09-08)
 
 The integration + polish release.

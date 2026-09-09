@@ -45,13 +45,13 @@
 
 ## What's new
 
-**Unreleased** — the **macOS-parity settings** pass: the sidebar groups
-into **Settings / More** sections with the upstream page order (General,
-Dictation, Models, AI, History), Languages and Commands live on the
-Dictation page like on the Mac, prompt profiles render as **radio rows
-with per-row Rename/Delete menus**, the active model carries a radio
-indicator, and the History menu gains **Export as Text** plus a
-**Pause saving / Resume saving** toggle.
+**[v0.8.1](https://github.com/acailic/SayItErmano/releases/tag/v0.8.1)** — the
+macOS-parity release: the settings sidebar groups into **Settings / More**
+sections with the upstream page order (General, Dictation, Models, AI,
+History), Languages and Commands live on the Dictation page like on the
+Mac, prompt profiles render as **radio rows with per-row Rename/Delete
+menus**, the active model carries a radio indicator, and the History menu
+gains **Export as Text** plus a **Pause saving / Resume saving** toggle.
 
 **[v0.8.0](https://github.com/acailic/SayItErmano/releases/tag/v0.8.0)** — the
 integration + polish release: an **MCP server** (`sayit-ermano mcp` — drive
@@ -599,7 +599,7 @@ work; to see what moved upstream, run `scripts/upstream-diff.sh`.
 .venv/bin/python -m pytest -n auto tests --ignore=tests/integration  # parallel via pytest-xdist (~4-5x; skip -n for --pdb debugging)
 ```
 
-The test suite — **1782 automated tests** (v0.8.0 shipped with 1778) (`-n auto` runs it in
+The test suite — **1782 automated tests** at v0.8.1 (`-n auto` runs it in
 ~19 s):
 
 | Layer | What it exercises |
