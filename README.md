@@ -51,7 +51,9 @@ English over Slovenian speech, "you you you" loops, "Thank you for
 watching" over silence — the take is re-decoded once with auto language
 detection (kept only when it comes back confidently better), pure
 repetition loops are never typed (you get a "check mic and language"
-notice instead), and the live preview suppresses loop text too.
+notice instead), and the live preview suppresses loop text too. A mic
+streaming **digital silence** (dead or wedged input path) now gets a
+"no audio from the mic" notice instead of a bare empty transcription.
 
 **[v0.8.1](https://github.com/acailic/SayItErmano/releases/tag/v0.8.1)** — the
 macOS-parity release: the settings sidebar groups into **Settings / More**

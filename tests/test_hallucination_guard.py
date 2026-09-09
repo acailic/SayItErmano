@@ -277,6 +277,52 @@ class TestRepetitionSuppression:
         assert not notes
 
 
+# -- dead-mic notice -------------------------------------------------------
+
+def silent_wav(path, seconds: float = 2.0, rate: int = 16000) -> Path:
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(b"\x00" * int(seconds * rate) * 2)
+    return path
+
+
+class TestDeadMicNotice:
+    """A mic streaming digital zeros (wedged capture path) must not look
+    like 'user said nothing': the 2026-09-10 PipeWire wedge produced bare
+    empty transcriptions with no hint the input was dead."""
+
+    def test_digital_silence_empty_notifies(self, tmp_path):
+        cfg = _cfg(language="en")
+        b = FakeModelBackend(results=[{"text": "", "language": "en"}])
+        pipe, logs = _pipeline(cfg, b)
+        notes: list[tuple[str, str]] = []
+        pipe.notify = lambda title, body="": notes.append((title, body))
+        out = pipe.run(silent_wav(tmp_path / "dead.wav"), "TestApp")
+        assert out is None
+        assert notes and "mic" in notes[0][1].lower()
+        assert any("digital silence" in l for l in logs)
+
+    def test_empty_on_live_mic_stays_quiet(self, tmp_path):
+        # quiet room, user just said nothing audible: no notification
+        cfg = _cfg(language="en")
+        b = FakeModelBackend(results=[{"text": "", "language": "en"}])
+        pipe, logs = _pipeline(cfg, b)
+        notes: list[tuple[str, str]] = []
+        pipe.notify = lambda title, body="": notes.append((title, body))
+        out = pipe.run(make_wav(tmp_path / "live.wav", seconds=2.0), "TestApp")
+        assert out is None
+        assert not notes
+        assert any("empty transcription" in l for l in logs)
+
+    def test_is_digital_silence_detector(self, tmp_path):
+        from fluidvoice.audio_utils import is_digital_silence
+        assert is_digital_silence(str(silent_wav(tmp_path / "s.wav"))) is True
+        assert is_digital_silence(
+            str(make_wav(tmp_path / "l.wav", seconds=2.0))) is False
+
+
 # -- preview suppression ----------------------------------------------------
 
 def _pcm(seconds: float, freq: int = 440) -> bytes:

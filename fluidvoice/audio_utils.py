@@ -105,6 +105,24 @@ def is_silent(path: str) -> bool:
     return stats.peak < 0.01 and stats.rms < 0.002 and stats.max_frame_rms < 0.0045
 
 
+def is_digital_silence(path: str) -> bool:
+    """True when every sample byte is zero - a dead or wedged capture
+    path streaming zeros (2026-09-10: PipeWire delivered exact silence
+    from a healthy webcam mic), which is not quiet speech."""
+    import wave as _wave
+    try:
+        with _wave.open(str(path), "rb") as wf:
+            while True:
+                chunk = wf.readframes(16000)
+                if not chunk:
+                    break
+                if chunk.count(b"\x00") != len(chunk):
+                    return False
+        return True
+    except Exception:
+        return False
+
+
 def duration_seconds(path: str) -> float:
     with wave.open(str(path), "rb") as wf:
         return wf.getnframes() / float(wf.getframerate() or 16000)

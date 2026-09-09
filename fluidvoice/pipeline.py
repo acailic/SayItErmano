@@ -17,7 +17,7 @@ from . import backends, insertion, ui
 from . import history as history_mod
 from .ai.client import AIError
 from .ai.prompts import base_prompt_for
-from .audio_utils import duration_seconds, is_silent
+from .audio_utils import (duration_seconds, is_digital_silence, is_silent)
 from .processing import post_process
 from .processing.per_app import match_app_prompt, system_prompt_for
 from .processing.refusal import (is_overcorrection, is_prompt_leak,
@@ -415,7 +415,16 @@ class DictationPipeline:
                 return None
             raw = result.get("text", "")
             if not raw.strip():
-                self.log("empty transcription")
+                if is_digital_silence(str(wav)):
+                    # the mic streamed zeros: not "user said nothing" but
+                    # a dead/wedged input path - say so, it is actionable
+                    self.log("empty transcription: mic delivered digital "
+                             "silence (dead or wedged input path)")
+                    self.notify("SayItErmano",
+                                "No audio from the mic — check that it is "
+                                "connected and selected")
+                else:
+                    self.log("empty transcription")
                 return None
             if is_repeat_hallucination(raw):
                 # a pure repetition loop is never the intended speech
