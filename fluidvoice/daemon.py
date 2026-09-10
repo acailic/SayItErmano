@@ -1220,25 +1220,19 @@ class Daemon:
 
     # -- scriptable unix-socket API (C1) --------------------------------------
 
-    _API_MAX_BYTES = 200 * 1024 * 1024  # v1 is not chunked; reject, don't OOM
-
     def _api_transcribe(self, raw_path: str, process: bool) -> dict:
         """`transcribe {path, process?}`: a file -> text through the warm
-        daemon backend (no second model load). Refuses while a take is
+        daemon backend (no second model load). Long inputs are chunked
+        (P3, `fluidvoice.chunking`): convert once, ten-minute overlapping
+        chunks, reconciled into one transcript. Refuses while a take is
         running or the pipeline is busy - GPU work must not interleave."""
-        import shutil as _shutil
-
-        from .audio_utils import AudioFormatError, ensure_wav
+        from . import chunking
+        from .audio_utils import AudioFormatError
         path = Path(raw_path).expanduser()
         if not raw_path:
             return {"ok": False, "error": "path is required"}
         if not path.is_file():
             return {"ok": False, "error": f"file not found: {path}"}
-        size = path.stat().st_size
-        if size > self._API_MAX_BYTES:
-            return {"ok": False,
-                    "error": f"file too large ({size / 1e6:.0f} MB; v1 is "
-                             "not chunked - shrink or split it first)"}
         with self._lock:
             if self.recording:
                 return {"ok": False, "error": "busy (recording)"}
@@ -1246,21 +1240,16 @@ class Daemon:
                 return {"ok": False, "error": "busy"}
             self.busy = True
         try:
-            audio, converted_dir = path, None
             try:
-                audio = ensure_wav(
-                    path, force=getattr(self.backend, "name", "")
+                result = chunking.transcribe_long(
+                    self._engines.ensure_backend(), path,
+                    language=self._engines.language_detail()[0],
+                    force_whisper_cpp=getattr(self.backend, "name", "")
                     == "whisper.cpp")
             except AudioFormatError as e:
                 return {"ok": False, "error": str(e)}
-            if audio != path:
-                converted_dir = audio.parent
-            try:
-                result = Transcript.of(self._engines.ensure_backend().transcribe(
-                    audio, self._engines.language_detail()[0]) or {})
-            finally:
-                if converted_dir is not None:
-                    _shutil.rmtree(converted_dir, ignore_errors=True)
+            except chunking.AudioTooLargeError as e:
+                return {"ok": False, "error": str(e)}
             text = result.text
             if process:
                 text = post_process(text, self.cfg)

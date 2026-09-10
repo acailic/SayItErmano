@@ -197,14 +197,14 @@ class TestCliTranscribeLanguage:
                 return {"text": "hi", "language": language, "duration": 1.0}
 
         monkeypatch.setattr(backends, "load_backend", lambda c: StubBackend())
-        monkeypatch.setattr(audio_utils, "ensure_wav",
-                            lambda p, force=False: p)
         cfile = tmp_path / "c.toml"
         cfile.write_text('[general]\nlanguage = "en"\n'
                          '[model]\n'
                          'languages = { "stub-ish" = "de" }\n')
         wav = tmp_path / "a.wav"
-        wav.write_bytes(b"x")
+        # real WAV bytes: the probe reads it, the single-shot path passes
+        # the file through untouched (no conversion patch needed)
+        wav.write_bytes(audio_utils.raw_to_wav_bytes(b"\0" * 3200))
         rc = cli.main(["transcribe", str(wav), "--config", str(cfile),
                        "--no-process"])
         assert rc == 0

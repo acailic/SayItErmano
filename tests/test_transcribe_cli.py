@@ -3,12 +3,12 @@ from __future__ import annotations
 
 import copy
 import json
+import wave
 from pathlib import Path
 
 import pytest
 
 from fluidvoice import backends, cli
-from fluidvoice.cli import LARGE_INPUT_BYTES
 from fluidvoice.config import DEFAULTS
 from fluidvoice.processing import post_process
 from tests.test_daemon import StubBackend, make_wav
@@ -117,15 +117,17 @@ class TestOut:
 
 
 class TestWarningsAndErrors:
-    def test_large_input_warns_but_transcribes(self, patched, tmp_path, capsys):
+    def test_large_sparse_input_no_warning_since_chunking(self, patched, tmp_path,
+                                                          capsys):
+        # P3: the >25 MB warning path is gone; a sparse tail is just data
         wav = make_wav(tmp_path / "huge.wav")
-        with open(wav, "ab") as fh:  # sparse-ish tail past the 25 MB gate
-            fh.truncate(LARGE_INPUT_BYTES + 1)
+        with open(wav, "ab") as fh:
+            fh.truncate(25 * 1024 * 1024 + 1)
         rc = cli.main(["transcribe", str(wav), "--no-process"])
         out = capsys.readouterr()
         assert rc == 0 and "hello world" in out.out
-        assert "warning" in out.err and "ffmpeg" in out.err
-        assert len(patched.calls) == 1
+        assert "warning" not in out.err and "ffmpeg" not in out.err
+        assert len(patched.calls) == 1  # 1 s of audio: single-shot path
 
     def test_missing_file_rc1(self, patched, tmp_path, capsys):
         rc = cli.main(["transcribe", str(tmp_path / "nope.wav")])
@@ -135,8 +137,10 @@ class TestWarningsAndErrors:
     def test_unlisted_extension_tried_anyway(self, patched, tmp_path, capsys,
                                              monkeypatch):
         # x.amr: not in SUPPORTED_AUDIO_EXTS; probe decides passthrough/ffmpeg.
+        # Real WAV bytes (the extension lies): wave-probeable -> single-shot
+        # passthrough, exactly the pre-P3 short-file behavior.
         src = tmp_path / "x.amr"
-        src.write_bytes(b"\x00" * 300)
+        make_wav(src)
         monkeypatch.setattr("fluidvoice.audio_utils._pyav_decodable",
                             lambda p: True)
         rc = cli.main(["transcribe", str(src), "--no-process"])
@@ -166,8 +170,12 @@ class TestWarningsAndErrors:
                             fake_mkdtemp)
 
         def fake_run(cmd, **kw):
-            out = Path(cmd[-1])
-            out.write_bytes(b"")
+            out = Path(cmd[-1])  # a real 1 s WAV: conversion "succeeded"
+            with wave.open(str(out), "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(16000)
+                wf.writeframes(b"\0" * 32000)
             return type("P", (), {"returncode": 0, "stderr": ""})()
 
         monkeypatch.setattr("fluidvoice.audio_utils.subprocess.run", fake_run)
@@ -178,3 +186,4 @@ class TestWarningsAndErrors:
         assert rc == 0
         assert not (tmp_path / "tmp1").exists()  # converted dir swept
         assert src.exists()  # original untouched
+        assert len(stub.calls) == 1  # 1 s converted audio: one decode

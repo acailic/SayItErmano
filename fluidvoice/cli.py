@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import sys
 import time
 from pathlib import Path
@@ -12,9 +11,6 @@ from pathlib import Path
 from . import __version__, paths
 from . import doctor as doctor_mod
 from .config import load_config, write_template
-
-# Above this size we warn: v1 has no chunked uploads, so huge inputs are slow.
-LARGE_INPUT_BYTES = 25 * 1024 * 1024
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -137,38 +133,28 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if resp.get("ok") else 1
 
     if args.cmd == "transcribe":
-        from . import backends
+        from . import backends, chunking
         from .ai.client import AIClient
-        from .audio_utils import SUPPORTED_AUDIO_EXTS, AudioFormatError, ensure_wav
+        from .audio_utils import SUPPORTED_AUDIO_EXTS, AudioFormatError
         from .processing import post_process
         if not args.file.exists():
             print(f"error: file not found: {args.file}", file=sys.stderr)
             return 1
-        if args.file.stat().st_size > LARGE_INPUT_BYTES:
-            size_mb = args.file.stat().st_size / 1e6
-            print(f"warning: input is {size_mb:.1f} MB; transcription is not "
-                  "chunked in v1 and may be slow/memory-heavy. Shrinking first "
-                  f"usually helps: ffmpeg -i {args.file} -ar 16000 -ac 1 out.wav",
-                  file=sys.stderr)
         cfg = load_config(args.config)
         backend = backends.load_backend(cfg)
         if args.file.suffix.lower() not in SUPPORTED_AUDIO_EXTS:
             print(f"note: '{args.file.suffix}' is not a verified format - trying "
                   "anyway (ffmpeg fallback when needed)", file=sys.stderr)
-        audio, converted_dir = args.file, None
         try:
-            try:
-                audio = ensure_wav(args.file, force=backend.name == "whisper.cpp")
-            except AudioFormatError as e:
-                print(f"error: {e}", file=sys.stderr)
-                return 1
-            if audio != args.file:
-                converted_dir = audio.parent
-            result = backends.Transcript.of(backend.transcribe(
-                audio, language=backends.effective_language(cfg, backend)))
-        finally:
-            if converted_dir is not None:
-                shutil.rmtree(converted_dir, ignore_errors=True)
+            # long inputs are chunked (P3): convert once, ten-minute
+            # overlapping chunks, one reconciled transcript
+            result = chunking.transcribe_long(
+                backend, args.file,
+                language=backends.effective_language(cfg, backend),
+                force_whisper_cpp=backend.name == "whisper.cpp")
+        except (AudioFormatError, chunking.AudioTooLargeError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
         text = result.to_plain_text()
         if not args.no_process:
             text = post_process(text, cfg)

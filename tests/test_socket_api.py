@@ -109,12 +109,16 @@ class TestTranscribeRoute:
         finally:
             d.handle_request({"action": "cancel"})
 
-    def test_size_cap(self, env, monkeypatch):
-        d, _b, tmp = env
-        wav = make_wav(tmp / "big.wav")
-        monkeypatch.setattr(dm.Daemon, "_API_MAX_BYTES", 100)
+    def test_too_long_rejected(self, env, monkeypatch):
+        # P3: the 200 MB v1 byte cap is gone; the bound is decoded
+        # duration (disk/temp safety), a structured error, never a hang
+        from fluidvoice import chunking
+        d, backend, tmp = env
+        monkeypatch.setattr(chunking, "MAX_TOTAL_SECONDS", 0.5)
+        wav = make_wav(tmp / "long.wav", seconds=2.0)
         r = d.handle_request({"action": "transcribe", "path": str(wav)})
-        assert r["ok"] is False and "too large" in r["error"]
+        assert r["ok"] is False and "too long" in r["error"]
+        assert backend.calls == []  # refused before any decode
 
 
 class TestHistoryRoute:
