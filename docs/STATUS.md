@@ -404,6 +404,27 @@ Plan: [research/2026-09-10-reliability-first-improvement-program.md](research/20
   REQUIRED-BEFORE-PARITY and not yet run
   ([dev/wayland-smoke-matrix.md](dev/wayland-smoke-matrix.md)).
 
+### Chunked file transcription (P3)
+Brief: [requests/chunked-file-transcription.md](../requests/chunked-file-transcription.md)
+(SHIPPED). `fluidvoice/chunking.py`.
+- **Convert once, slice, reconcile**: inputs over ten minutes are
+  converted at most once (`ensure_wav`, PyAV passthrough or one ffmpeg
+  run), sliced into 10-minute chunks with a constant 1.5 s overlap
+  (pure-stdlib WAV slicing — no per-chunk ffmpeg), transcribed
+  sequentially through the warm backend, and merged into one typed
+  `Transcript` with global timestamps. Boundary dedup is conservative:
+  a later-chunk segment is dropped only on exact normalized-text match
+  within 2× the overlap window; near-misses are always kept.
+- **Shape frozen**: CLI `--json` and control-socket/MCP `transcribe_file`
+  responses keep the exact pre-P3 key sets (golden tests); short inputs
+  (≤ 10 min) take the byte-identical single-shot path.
+- **Limits**: the 25 MB warning path (CLI) and the 200 MB v1 byte cap
+  (socket) are gone, replaced by a decoded-duration bound — 6 h of
+  audio (~690 MB peak 16 kHz mono temp), enforced with a structured
+  error before any conversion or decode. Chunks run sequentially, so
+  the daemon's single-active-job busy guarantee is untouched; per-chunk
+  progress goes to the house log (no new protocol surface).
+
 ### Infrastructure
 - CLI: `daemon / toggle / cancel / status / paste-last / transcribe (multi-format
   + --json/--out) / history (+ --export, --scrub-tests)

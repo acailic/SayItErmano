@@ -63,9 +63,6 @@ The 2026-09-10 P1 wave; details in the plan §P1:
 
 ## Capability backlog — plan P3
 
-- **Chunked file transcription** (next product priority): convert once,
-  ten-minute chunks with overlap, reconciled timestamps, current output
-  shape — removes the 25 MB warning path.
 - **Diarization** — only if an offline adapter passes the
   accuracy/redistribution/memory benchmark; optional `speaker` fields
   without changing plain-text output.

@@ -1,6 +1,14 @@
 # Chunked file transcription (P3 — next product priority)
 
-STATUS: OPEN
+STATUS: SHIPPED
+
+Shipped 2026-09-10 as `fluidvoice/chunking.py` (+ daemon `_api_transcribe`
+and CLI `transcribe` rewiring): convert once (≤1 ffmpeg run), 10-minute
+chunks with a constant 1.5 s overlap (stdlib WAV slicing), sequential
+decode, conservative boundary dedup (exact normalized-text match within
+2× the overlap window), frozen CLI/socket output shapes (golden tests),
+and a 6-hour decoded-duration bound replacing both the 25 MB CLI warning
+and the 200 MB socket byte cap. Tests: `tests/test_chunking.py`.
 
 Source: reliability-first improvement program
 (`docs/research/2026-09-10-reliability-first-improvement-program.md`, P3

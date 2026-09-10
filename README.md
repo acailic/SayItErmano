@@ -432,9 +432,12 @@ converts via ffmpeg since `whisper-cli` reliably reads WAV only.
   isn't wired up there in v1).
 - `--out PATH` writes the result to a file instead of stdout (JSON with
   `--json`); missing parent directories are created.
-- Inputs over 25 MB warn: transcription is **not chunked** in v1 and may be
-  slow/memory-heavy — shrink first with
-  `ffmpeg -i in.opus -ar 16000 -ac 1 out.wav`.
+- Long inputs are **chunked** (P3): anything over ten minutes is converted
+  once, transcribed in ten-minute overlapping chunks, and reconciled into
+  one transcript (boundary duplicates deduplicated conservatively — exact
+  text match within the 1.5 s overlap window). The old >25 MB warning is
+  gone; the bound is decoded duration — 6 h of audio max (disk/temp safety),
+  enforced with a structured error, never a hang.
 
 </details>
 
