@@ -478,8 +478,8 @@ class TestAutoStopRace:
         d.toggle()
         assert d.recording
         d.cancel()  # timer may still be pending
-        d._watchdog = threading.Timer(0.05, d._auto_stop)  # simulate late fire
-        d._watchdog.start()
+        d._capture.watchdog = threading.Timer(0.05, d._capture.auto_stop)  # simulate late fire
+        d._capture.watchdog.start()
         time.sleep(0.3)
         assert not d.recording  # and crucially:
         assert rec.started == 1  # no second recording began
@@ -908,7 +908,7 @@ class TestDoneBeat:
     def test_success_finishes_with_check(self, tmp_path, cfg, quiet_ui):
         d = self._daemon(cfg)
         disp = StubClosingDisplay()
-        d._closing_display = disp
+        d._capture.closing_display = disp
         d._process(make_wav(tmp_path / "u.wav"), "App", "dictate", None)
         assert disp.events[-1] == ("finish", "✓", None)
 
@@ -916,27 +916,27 @@ class TestDoneBeat:
         d = self._daemon(cfg, polisher=lambda t: "Polished!")
         cfg["ai"]["enabled"] = True
         disp = StubClosingDisplay()
-        d._closing_display = disp
+        d._capture.closing_display = disp
         d._process(make_wav(tmp_path / "u.wav"), "App", "dictate", None)
         assert disp.events[-1] == ("finish", "✓ AI", None)
 
     def test_failure_closes_without_beat(self, tmp_path, cfg, quiet_ui):
         d = self._daemon(cfg, StubBackend(error=RuntimeError("boom")))
         disp = StubClosingDisplay()
-        d._closing_display = disp
+        d._capture.closing_display = disp
         d._process(make_wav(tmp_path / "u.wav"), "App", "dictate", None)
         assert disp.events == [("close", None)]
 
     def test_command_mode_closes_panel_takes_over(self, tmp_path, cfg, quiet_ui):
         d = self._daemon(cfg)
         disp = StubClosingDisplay()
-        d._closing_display = disp
+        d._capture.closing_display = disp
         d._process(make_wav(tmp_path / "u.wav"), "App", "command", None)
         assert disp.events[-1] == ("close", None)
 
     def test_no_display_no_crash(self, tmp_path, cfg, quiet_ui):
         d = self._daemon(cfg)
-        d._closing_display = None
+        d._capture.closing_display = None
         d._process(make_wav(tmp_path / "u.wav"), "App", "dictate", None)
         assert d.last_result.get("text") == "typed text"
 
@@ -1043,12 +1043,12 @@ class TestExtraShortcutProfiles:
         d = self.make(cfg, StubRecorder(), lambda t, system_prompt=None: t)
         d.recording = False
         d._toggle_with_profile("Terse notes")
-        assert d._profile_override == "Terse notes"
+        assert d._capture.profile_override == "Terse notes"
         assert d.recording is True
         # stopping via any shortcut must NOT clear it mid-take
         d._toggle_with_profile("Other")
         assert d.recording is False
-        assert d._profile_override == "Terse notes"
+        assert d._capture.profile_override == "Terse notes"
 
     def test_polish_uses_profile_prompt(self, cfg, quiet_ui, tmp_path):
         from fluidvoice.ai import profiles
@@ -1114,7 +1114,7 @@ class TestExtraShortcutProfiles:
     def test_cancel_clears_override(self, cfg, quiet_ui):
         d = self.make(cfg, StubRecorder(), lambda t, system_prompt=None: t)
         d.recording = True
-        d._watchdog = threading.Timer(999.0, d._auto_stop)
-        d._profile_override = "Terse notes"
+        d._capture.watchdog = threading.Timer(999.0, d._capture.auto_stop)
+        d._capture.profile_override = "Terse notes"
         d.cancel()
-        assert d._profile_override is None
+        assert d._capture.profile_override is None

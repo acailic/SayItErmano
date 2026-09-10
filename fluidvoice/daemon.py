@@ -6,6 +6,11 @@ Structure:
   SpeechEngineManager  engine lifecycle: load/warm/reload/idle-unload/
                     select/delete + language resolution
                     (fluidvoice/engine_manager.py, P1.2)
+  CommandCoordinator command conversation: proposal, confirmation,
+                    timeout, panel, history (fluidvoice/command_coord.py)
+  CaptureCoordinator take lifecycle: recording state, preview, VAD,
+                    PCM/stall/max-duration timers, media pause, stop and
+                    cancel (fluidvoice/capture.py, P1.2)
   DictationPipeline one utterance: wav -> transcribe -> post-process -> optional
                     AI polish -> insert -> history (lives in fluidvoice/
                     pipeline.py since audit C5a; re-exported below). Every
@@ -31,10 +36,10 @@ from . import update as update_mod
 from .ai.client import AIClient, AIError  # noqa: F401 (tests patch dm.AIClient)
 from .audio_utils import duration_seconds, is_silent
 from .backends.base import Transcript
+from .capture import CaptureCoordinator
 from .command_coord import CommandCoordinator
 from .config import load_config
 from .engine_manager import SpeechEngineManager
-from .media import MediaController
 from .micmon import match_priority as micmon_match_priority
 from .pipeline import DictationPipeline, confidence_band, log  # noqa: F401
 from .processing import post_process
@@ -61,15 +66,8 @@ class Daemon:
         self._backend_factory = backend_factory
         self._pipeline_factory = pipeline_factory
         self._command_session_factory = command_session_factory
-        self.recording = False
         self.busy = False  # transcription/insertion in flight
         self.last_result: dict = {}
-        self._app_hint: str | None = None
-        self._rewrite_context: str | None = None
-        self._rewrite_mode = False
-        # Command mode: the take-mode flag (command conversation state
-        # lives in CommandCoordinator below)
-        self._command_mode = False
         # RuntimeTasks: every timer/thread the daemon spawns is named,
         # exception-reported and joined at shutdown (fluidvoice/
         # runtime_tasks.py; plan P1.2). The handles below stay Timer/
@@ -87,7 +85,7 @@ class Daemon:
             is_locked=lambda: self._locked,
             is_take_active=lambda: self.recording or self.busy,
             on_unload=self._refresh_tray,
-            on_language_change=lambda lang: (self._announce_language(lang),
+            on_language_change=lambda lang: (self._capture.announce_language(lang),
                                              self._refresh_tray()))
         # CommandCoordinator: the command-conversation state machine
         # (proposal/confirmation/timeout/panel/history, P1.2). Daemon
@@ -102,18 +100,32 @@ class Daemon:
                 title, body, enabled=self.cfg["notifications"]["enabled"]),
             session_factory=self._command_session_factory,
             arm_escape=self._arm_command_escape)
+        # CaptureCoordinator: the take lifecycle - recording state,
+        # preview, VAD, PCM/stall/max-duration timers, media pause, stop
+        # and cancel (P1.2). Daemon exposes the live recording flag
+        # through the property below.
+        self._capture = CaptureCoordinator(
+            self.cfg, self._tasks, self._lock,
+            recorder_provider=lambda: self.recorder,
+            log=log,
+            notify=lambda title, body: ui.notify(
+                title, body, enabled=self.cfg["notifications"]["enabled"]),
+            play_sound=lambda which: ui.play_sound(
+                which, self.cfg["sounds"]["volume"],
+                self.use_sounds and self.cfg["sounds"]["enabled"]),
+            on_recording_change=self._tray_recording,
+            on_take_start=self._on_take_start,
+            on_take_complete=self._on_take_complete,
+            on_activity=self._engines.touch_activity,
+            language_provider=lambda: self._engines.language_detail()[0],
+            backend_provider=lambda: self._engines.backend,
+            on_copy_last=self._copy_last_transcript,
+            on_paste_last=self.paste_last)
         self._command_hotkey = None
         self._paste_hotkey = None
         self._language_hotkey = None
         self._extra_hotkeys: list = []
-        self._profile_override: str | None = None
-        self._watchdog: threading.Timer | None = None
-        self._first_pcm_timer: threading.Timer | None = None
-        self._preview: Any = None
-        self._send_countdown_timer: threading.Timer | None = None
-        self._closing_display: Any = None
         self._tray: Any = None
-        self._media = MediaController(log=log)
         self._micmon: Any = None  # input-device watcher (micmon.MicMonitor)
         self._mic_missing_logged = False  # warn-once latch for reselects
         self._hotkey = None
@@ -146,6 +158,15 @@ class Daemon:
     @warmup.setter
     def warmup(self, value: dict) -> None:
         self._engines.warmup = value
+
+    @property
+    def recording(self) -> bool:
+        """A take is being recorded (owned by CaptureCoordinator)."""
+        return self._capture.recording
+
+    @recording.setter
+    def recording(self, value: bool) -> None:
+        self._capture.recording = value
 
     def _on_task_exception(self, name: str, exc: BaseException) -> None:
         """RuntimeTasks exception reporter: a failed supervised callback
@@ -548,19 +569,12 @@ class Daemon:
     def shutdown(self) -> None:
         log("shutting down")
         self._engines.stop_idle_watch()
-        # under the lock: these fields race the hotkey thread's toggle
-        # (N1). The race was benign - callbacks re-validate recorder
+        # under the lock: the take-state mutations race the hotkey thread's
+        # toggle (N1). The race was benign - callbacks re-validate recorder
         # identity - but serializing costs nothing and matches
-        # _cancel_locked, which already cancels under this lock.
+        # capture.cancel_locked, which already cancels under this lock.
         with self._lock:
-            if self.recording:
-                self.recorder.cancel()
-                self.recording = False
-            if self._watchdog:
-                self._watchdog.cancel()
-            if self._first_pcm_timer:
-                self._first_pcm_timer.cancel()
-                self._first_pcm_timer = None
+            self._capture.abort_locked()
         if self._micmon:
             self._micmon.stop()
             self._micmon = None
@@ -570,8 +584,8 @@ class Daemon:
         if self._update:
             self._update.stop()
             self._update = None
-        self._stop_preview()
-        self._close_closing_display()
+        self._capture.stop_preview()
+        self._capture.close_closing_display()
         self.cancel_pending_command()  # pill + Escape grab gone before hotkeys
         if self._tray:
             self._tray.stop()
@@ -1120,10 +1134,9 @@ class Daemon:
             except Exception as e:
                 log(f"selection capture failed: {e}")
                 context = ""
-            self._rewrite_mode = True
-            self._rewrite_context = context or None
             log(f"rewrite mode (context: {len(context or '')} chars)")
-            self._start_recording_locked()
+            self._capture.start_locked(mode="rewrite",
+                                       rewrite_context=context or None)
 
     def start_command(self) -> None:
         """Command hotkey: start recording the spoken instruction."""
@@ -1140,9 +1153,8 @@ class Daemon:
                       enabled=self.cfg["notifications"]["enabled"])
             return
         with self._lock:
-            self._command_mode = True
             log("command mode")
-            self._start_recording_locked()
+            self._capture.start_locked(mode="command")
 
     def _on_command_hotkey(self) -> None:
         """Command hotkey router: a second press CONFIRMS a pending proposal
@@ -1163,412 +1175,34 @@ class Daemon:
             return False
         with self._lock:
             if self.recording:
-                self._stop_recording_locked()
+                self._capture.stop_locked()
                 return False
             if self.busy:
                 log("still processing previous dictation; ignoring toggle")
                 return False
-            self._start_recording_locked()
+            self._capture.start_locked()
             return self.recording
 
-    def _start_recording_locked(self) -> None:
-        self._app_hint = insertion.active_window_class()
-        fd, tmp = tempfile.mkstemp(prefix="sayitermano-", suffix=".wav")
-        os.close(fd)
-        try:
-            self.recorder.start(Path(tmp))
-        except RecorderError as e:
-            log(f"recorder error: {e}")
-            ui.notify("SayItErmano", f"Recording failed: {e}",
-                      enabled=self.cfg["notifications"]["enabled"])
-            Path(tmp).unlink(missing_ok=True)
-            return
-        self.recording = True
-        self._engines.touch_activity()
+    def cancel(self) -> None:
+        """Escape/socket cancel: discard the take (CaptureCoordinator)."""
+        self._capture.cancel()
+
+    def _on_take_start(self) -> None:
+        """Capture hook: a take started while no backend is loaded - spawn
+        the background reload (the model loads while the user speaks)."""
         if self._engines.backend is None:
-            # Take-start reload (after an idle unload, or a failed startup
-            # load): the model loads while the user speaks.
             self._tasks.spawn("reload", self._engines.reload_backend_bg)
-        self._tray_recording(True)
-        if self.cfg["recording"].get("pause_media", True):
-            self._media.pause_if_playing()  # upstream: only what's playing
-        ui.play_sound("start", self.cfg["sounds"]["volume"],
-                      self.use_sounds and self.cfg["sounds"]["enabled"])
-        log(f"recording (app={self._app_hint or '?'})")
-        max_s = float(self.cfg["recording"].get("max_seconds", 300))
-        t = self._tasks.prepare_timer("watchdog", self._auto_stop, max_s)
-        self._watchdog = t
-        if t is not None:
-            t.start()
-        # Upstream firstPCMTimeout (2s): a live-but-silent source (muted mic,
-        # wrong device, Bluetooth glitch) should fail fast, not record air
-        # until max_seconds.
-        self._start_preview(getattr(self.recorder, "raw_path", None))
-        pcm_timeout = float(self.cfg["recording"].get("first_pcm_timeout", 2.0))
-        if pcm_timeout > 0:
-            # tracked + cancelled by every take-end path (stop/cancel/
-            # shutdown): the callback re-validates identity anyway, but a
-            # cancelled timer is the guarantee it never even fires stale
-            self._cancel_first_pcm_timer_locked()
-            t = self._tasks.prepare_timer(
-                "first-pcm", self._check_first_pcm, pcm_timeout,
-                args=(self.recorder, Path(tmp)))
-            self._first_pcm_timer = t
-            if t is not None:
-                t.start()
-        # mid-take stall watchdog (upstream #852): frozen capture stream
-        # cancels the take with a clear error
-        stall_s = float(self.cfg["recording"].get("stall_timeout_s", 8.0)
-                        or 0.0)
-        raw = getattr(self.recorder, "raw_path", None)
-        if stall_s > 0 and raw is not None:
-            self._tasks.spawn("stall", self._stall_monitor,
-                              args=(Path(raw), stall_s))
 
-    def _start_preview(self, raw_path) -> None:
-        """Live transcription preview while recording (best-effort).
-
-        Segmented engine first (constant per-tick decode cost, streaming
-        preview on every backend, trailing-silence VAD auto-stop); the
-        legacy whole-buffer engine stays as the faster-whisper fallback."""
-        rcfg = self.cfg["recording"]
-        if not rcfg.get("preview_enabled", True) or raw_path is None:
-            return
-        try:
-            from .overlay import FluidOverlay
-            from .preview import (
-                NotifyPreview,
-                PreviewEngine,
-                SegmentedPreviewEngine,
-                faster_whisper_transcriber,
-                preview_transcriber,
-            )
-            mode = rcfg.get("preview_mode", "auto")
-            if mode in ("auto", "overlay"):
-                # FluidOverlay itself falls back to notifications when the
-                # display/pill stack is unavailable.
-                accent = "rewrite" if self._rewrite_mode \
-                    else "command" if self._command_mode else "dictate"
-                chips = {"copy_last": self._copy_last_transcript,
-                         "paste_last": lambda: self.paste_last(),
-                         "cancel": self.cancel}
-                if not rcfg.get("overlay_chips", True):
-                    chips = None
-                display = FluidOverlay(
-                    raw_path=Path(raw_path),
-                    bottom_offset=int(rcfg.get("preview_bottom_offset", 64)),
-                    size=rcfg.get("preview_overlay_size", "medium"),
-                    mode=accent,
-                    actions=chips)
-                actual = "overlay" if display.using_overlay else "notify"
-            else:
-                display = NotifyPreview()
-                actual = "notify"
-            # captures the language at take start (a mid-take cycle press
-            # re-resolves only the FINAL decode, in _process)
-            language = self._engines.language_detail()[0]
-            engine = None
-            kind = None
-            if rcfg.get("preview_segmented", True):
-                made = preview_transcriber(self.cfg, self.backend, language)
-                if made is not None:
-                    transcriber, bname = made
-                    # track the last shown text so the send-countdown
-                    # notice can be swapped out again on resume
-                    shown = {"text": ""}
-
-                    def _show(text: str, stable_chars=0,
-                              _d=display, _s=shown) -> None:
-                        _s["text"] = text
-                        _s["stable"] = stable_chars
-                        try:
-                            _d.show(text, stable_chars)
-                        except TypeError:  # single-arg display
-                            _d.show(text)
-
-                    engine = SegmentedPreviewEngine(
-                        Path(raw_path), transcriber, _show,
-                        interval=float(rcfg.get("preview_interval", 1.2)),
-                        min_audio=float(rcfg.get("preview_min_audio", 1.0)),
-                        segment_s=float(rcfg.get("preview_segment_s", 2.0)),
-                        vad_silence_s=float(
-                            rcfg.get("preview_vad_silence_s", 2.0)),
-                        on_silence=self._vad_auto_stop,
-                        send_phrase=(
-                            str(rcfg.get("spoken_send_phrase", "send it"))
-                            if rcfg.get("spoken_send_enabled") else ""),
-                        send_countdown_s=float(
-                            rcfg.get("spoken_send_countdown_s", 0.0) or 0.0),
-                        on_send_countdown=self._on_send_countdown,
-                        on_send_resume=self._on_send_resume)
-                    kind = f"segmented/{bname}"
-            if engine is None:
-                model = getattr(self.backend, "_model", None)
-                if self.backend is None or model is None:
-                    display.close()
-                    return  # not a ready faster-whisper backend
-                engine = PreviewEngine(
-                    Path(raw_path),
-                    faster_whisper_transcriber(model, language),
-                    display.show,
-                    interval=float(rcfg.get("preview_interval", 1.2)),
-                    min_audio=float(rcfg.get("preview_min_audio", 1.0)))
-                kind = "legacy/faster-whisper"
-            display.start()
-            engine.start()
-            self._preview = (engine, display)
-            log(f"preview started ({actual}, {kind})")
-        except Exception as e:
-            log(f"WARN preview unavailable: {e}")
-
-    def _stop_preview(self, finishing: bool = False) -> None:
-        preview, self._preview = self._preview, None
-        self._cancel_send_countdown()
-        if preview is None:
-            return
-        engine, display = preview
-        engine.stop()
-        stats = getattr(engine, "stats", None)
-        if stats and stats.get("decodes"):
-            mean_ms = stats["decode_ms_sum"] / stats["decodes"]
-            lag = max(0.0, stats["audio_s"] - stats["covered_s"])
-            log(f"preview stats: decodes={stats['decodes']} "
-                f"commits={stats['commits']} mean_decode_ms={mean_ms:.0f} "
-                f"ticks={stats['ticks']} audio_s={stats['audio_s']:.1f} "
-                f"lag_s={lag:.1f} tail_rewrites="
-                f"{stats.get('tail_rewrites', 0)}"
-                + (f" suppressed={stats['suppressed']}"
-                   if stats.get("suppressed") else ""))
-        if finishing:
-            # Keep the pill up in its processing state (flat bars + shimmer,
-            # like the Mac) until the final text is inserted.
-            display.set_state("processing")
-            self._closing_display = display
-        else:
-            display.close()
-
-    def _vad_auto_stop(self) -> None:
-        # Trailing-silence VAD (segmented preview thread): same finish path
-        # as the max-duration watchdog, just a different reason. Re-check
-        # under the lock - the user may have stopped the take just now.
-        self._cancel_send_countdown()
-        with self._lock:
-            if not self.recording:
-                return
-            log("trailing silence detected, stopping")
-            self._stop_recording_locked()
-
-    # -- spoken-send quiet countdown (B7) -----------------------------------
-
-    def _on_send_countdown(self) -> None:
-        """Preview engine armed: phrase said + 0.5 s quiet. Show the notice
-        (the engine pauses text emission while armed) and start the timer
-        that finishes the take unless the user speaks again."""
-        countdown = float(self.cfg["recording"].get(
-            "spoken_send_countdown_s", 0.0) or 0.0)
-        if countdown <= 0:
-            return
-        self._cancel_send_countdown()
-        log("spoken-send quiet countdown armed "
-            f"({countdown:.1f} s - speak to cancel)")
-        display = self._preview[1] if self._preview else None
-        if display is not None:
-            try:
-                display.show("⏎ sending… (speak to cancel)")
-            except Exception:
-                pass
-        holder: dict[str, threading.Timer] = {}
-
-        def _fire() -> None:
-            self._send_countdown_stop(holder["t"])
-
-        timer = self._tasks.prepare_timer("send-countdown", _fire,
-                                          countdown)
-        holder["t"] = timer
-        self._send_countdown_timer = timer
-        if timer is not None:
-            timer.start()
-
-    def _on_send_resume(self) -> None:
-        """Speech resumed inside the countdown window: back to recording."""
-        self._cancel_send_countdown()
-        log("spoken-send countdown cancelled (speech resumed)")
-        display = self._preview[1] if self._preview else None
-        engine = self._preview[0] if self._preview else None
-        last = getattr(engine, "last_text", "") if engine else ""
-        if display is not None and last:
-            try:
-                display.show(last[-getattr(engine, "char_limit", 160):]
-                             if len(last) > getattr(engine, "char_limit", 160)
-                             else last)
-            except Exception:
-                pass
-
-    def _cancel_send_countdown(self) -> None:
-        timer, self._send_countdown_timer = \
-            getattr(self, "_send_countdown_timer", None), None
-        if timer is not None:
-            timer.cancel()
-
-    def _send_countdown_stop(self, timer: threading.Timer) -> None:
-        # Identity check first: a stale timer from an earlier take must
-        # never stop the current one.
-        if timer is not getattr(self, "_send_countdown_timer", None):
-            return
-        self._cancel_send_countdown()
-        with self._lock:
-            if not self.recording:
-                return
-            log("spoken-send quiet countdown elapsed, stopping")
-            self._stop_recording_locked()
-
-    def _close_closing_display(self) -> None:
-        display, self._closing_display = self._closing_display, None
-        if display is not None:
-            display.close()
-
-    def _cancel_first_pcm_timer_locked(self) -> None:
-        """Drop the first-PCM timer (caller holds self._lock): it must
-        never outlive the take that created it."""
-        timer, self._first_pcm_timer = self._first_pcm_timer, None
-        if timer is not None:
-            timer.cancel()
-
-    def _check_first_pcm(self, recorder, wav: Path) -> None:
-        # Identity check first, through the CAPTURED recorder object: a
-        # timer that outlived its take (stop raced the firing, or a
-        # settings change replaced self.recorder) must be a silent no-op
-        # and never touch attributes of the CURRENT recorder. getattr
-        # keeps this safe even for recorders without .path (test stubs).
-        with self._lock:
-            self._cancel_first_pcm_timer_locked()
-            if not self.recording or self.recorder is not recorder:
-                return
-            take = getattr(recorder, "path", None)
-            if take is None or Path(take) != wav:
-                return
-            # audio streams into the RAW file during recording (the WAV is
-            # only written at stop); fall back to the wav for stub recorders
-            probe = getattr(recorder, "raw_path", None) or wav
-            try:
-                got_pcm = probe is not None and probe.exists() \
-                    and probe.stat().st_size > 2048
-            except OSError:
-                got_pcm = False
-            if not got_pcm:
-                if self._watchdog:
-                    self._watchdog.cancel()
-                    self._watchdog = None
-                self.recorder.cancel()
-                self.recording = False
-                self._tray_recording(False)
-                self._media.resume()
-                msg = "microphone produced no audio (muted or wrong device?) - stopped"
-                log(msg)
-                ui.notify("SayItErmano", msg, enabled=self.cfg["notifications"]["enabled"])
-
-    def _auto_stop(self) -> None:
-        # Re-check under the lock: cancel()/shutdown() may have finished in
-        # between the timer firing and now - never start anything new here.
-        with self._lock:
-            if not self.recording:
-                return
-            log("max duration reached, stopping")
-            self._stop_recording_locked()
-
-    def _stop_recording_locked(self) -> None:
-        if self._watchdog:
-            self._watchdog.cancel()
-            self._watchdog = None
-        self._cancel_first_pcm_timer_locked()
-        self._stop_preview(finishing=True)
-        # Stop cue fires at capture stop (upstream behavior), before waiting
-        # for the recorder process to flush and exit.
-        ui.play_sound("stop", self.cfg["sounds"]["volume"],
-                      self.use_sounds and self.cfg["sounds"]["enabled"])
-        wav = self.recorder.stop()
-        self.recording = False
-        self._engines.touch_activity()
-        self._tray_recording(False)
-        self._media.resume()
-        if wav is None or not Path(wav).exists() or Path(wav).stat().st_size < 200:
-            log("no audio captured")
-            self._rewrite_mode = False
-            self._command_mode = False
-            self._close_closing_display()
-            if wav:
-                Path(wav).unlink(missing_ok=True)
-            return
-        mode = "rewrite" if self._rewrite_mode else \
-            "command" if self._command_mode else "dictate"
-        context = self._rewrite_context
-        self._rewrite_mode = False
-        self._command_mode = False
-        self._rewrite_context = None
+    def _on_take_complete(self, wav: Path, app_hint: str | None,
+                          mode: str,
+                          rewrite_context: str | None) -> None:
+        """Capture hook: a finished take - spawn the processing thread."""
         t = self._tasks.prepare(
             "process", self._process,
-            args=(Path(wav), self._app_hint, mode, context))
+            args=(wav, app_hint, mode, rewrite_context))
         self._process_thread = t
         if t is not None:
             t.start()
-
-    def cancel(self) -> None:
-        with self._lock:
-            if not self.recording:
-                return
-            self._cancel_locked()
-        log("cancelled")
-        ui.notify("SayItErmano", "Cancelled", enabled=self.cfg["notifications"]["enabled"])
-
-    def _cancel_locked(self) -> None:
-        """Cancel-the-take body (caller holds self._lock): no transcription,
-        media resumed, mode flags cleared."""
-        if self._watchdog:
-            self._watchdog.cancel()
-            self._watchdog = None
-        self._cancel_first_pcm_timer_locked()
-        self._stop_preview()
-        self.recorder.cancel()
-        self.recording = False
-        self._tray_recording(False)
-        self._media.resume()
-        self._rewrite_mode = False
-        self._command_mode = False
-        self._profile_override = None
-
-    _STALL_CHECK_S = 2.0
-
-    def _stall_monitor(self, raw_path: Path, timeout_s: float) -> None:
-        """Mid-take stream-stall watchdog (upstream #852): the capture file
-        must keep growing while recording; frozen for timeout_s means the
-        source died (PipeWire glitch, device vanished) - cancel the take
-        with a clear error instead of recording air until max_seconds."""
-        check = self._STALL_CHECK_S
-        last, frozen = -1, 0.0
-        while True:
-            time.sleep(check)
-            with self._lock:
-                if not self.recording:
-                    return
-            try:
-                size = raw_path.stat().st_size
-            except OSError:
-                size = last  # vanished mid-take: treat as frozen
-            if size != last:
-                last, frozen = size, 0.0
-                continue
-            frozen += check
-            if frozen >= timeout_s:
-                with self._lock:
-                    if not self.recording:
-                        return
-                    log(f"audio stream stalled ({timeout_s:.0f}s without "
-                        "new data) - cancelling")
-                    self._cancel_locked()
-                ui.notify("SayItErmano",
-                          "Audio stream stalled — dictation cancelled",
-                          enabled=self.cfg["notifications"]["enabled"])
-                return
 
     def _maybe_first_run_onboard(self) -> None:
         """Open onboarding once on first launch (macOS parity: the app opens
@@ -1706,9 +1340,10 @@ class Daemon:
         per-shortcut AI-prompt picker). The override clears when the
         take finishes or is cancelled."""
         if not self.recording:
-            self._profile_override = profile or None
-            if self._profile_override:
-                log(f"take starts with prompt profile '{self._profile_override}'")
+            self._capture.profile_override = profile or None
+            if self._capture.profile_override:
+                log(f"take starts with prompt profile "
+                    f"'{self._capture.profile_override}'")
         self.toggle()
 
     def _on_paste_hotkey(self) -> None:
@@ -1752,27 +1387,6 @@ class Daemon:
             log(f"insert-text failed: {e}")
             return False, str(e)
 
-    # -- language cycle (hotkey.language_key / general.language_cycle) ------
-
-    def _announce_language(self, lang: str) -> None:
-        """Eyes-free feedback on every cycle press: the live pill's badge
-        while recording, the notify-fallback display's show(), or a fresh
-        notify bubble. Never raises - an announcement must not break the
-        cycle."""
-        try:
-            display = self._preview[1] if self._preview else None
-            if display is not None:
-                if callable(getattr(display, "set_badge", None)):
-                    display.set_badge(f"lang: {lang}")
-                    return
-                if callable(getattr(display, "show", None)):
-                    display.show(f"Language: {lang}")
-                    return
-            from .preview import NotifyPreview
-            NotifyPreview().show(f"Language: {lang}")
-        except Exception as e:  # noqa: BLE001 - best-effort feedback only
-            log(f"WARN language announce failed: {e}")
-
     # -- pipeline ------------------------------------------------------------
 
     def _process(self, wav: Path, app_hint: str | None,
@@ -1789,7 +1403,7 @@ class Daemon:
                 wav.unlink(missing_ok=True)
                 return
             pipeline = self._pipeline_factory(self.cfg, backend)
-            pipeline._profile_override = self._profile_override
+            pipeline._profile_override = self._capture.profile_override
             # sticky runtime cycle override (unlike the profile override,
             # deliberately NOT cleared in the finally below: cycle state
             # persists until cycled away or the daemon restarts)
@@ -1800,8 +1414,8 @@ class Daemon:
         finally:
             self.busy = False
             self._engines.touch_activity()
-            self._profile_override = None
-            display, self._closing_display = self._closing_display, None
+            self._capture.profile_override = None
+            display = self._capture.take_closing_display()
             if display is not None:
                 if mode == "command":
                     display.close()  # the panel takes over the conversation

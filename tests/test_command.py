@@ -860,7 +860,7 @@ class TestDaemonCommandMode:
         d = self._daemon(cfg, recorder=rec)
         d.start_command()
         assert d.recording is True
-        assert d._command_mode is True
+        assert d._capture.take_mode == "command"
         assert rec.started == 1
         d.cancel()
 
@@ -890,7 +890,7 @@ class TestDaemonCommandMode:
                           and not d.busy
                           and not d._commands.pending)
         assert d.last_result["mode"] == "command"
-        assert d._command_mode is False
+        assert d._capture.take_mode == "dictate"
 
     def test_no_audio_resets_flags(self, cfg, quiet_ui):
         ai_ready(cfg)
@@ -915,10 +915,10 @@ class TestDaemonCommandMode:
         d = self._daemon(cfg, recorder=NoAudioRecorder(),
                          pipeline_factory=CapturingPipeline)
         d.start_command()
-        d._rewrite_mode = True  # the pre-existing bug: flag survived no-audio
+        d._capture.take_mode = "rewrite"  # the pre-existing bug: flag survived no-audio
         d.toggle()              # no audio -> early return path
-        assert d._command_mode is False
-        assert d._rewrite_mode is False
+        assert d._capture.take_mode == "dictate"
+        assert d._capture.take_mode == "dictate"
         d.toggle()              # follow-up plain dictation
         d.toggle()
         assert self._wait(lambda: seen.get("modes") == ["dictate"]
@@ -942,8 +942,8 @@ class TestDaemonCommandMode:
         assert d.recording
         d.cancel()
         assert d.recording is False
-        assert d._command_mode is False
-        assert d._rewrite_mode is False
+        assert d._capture.take_mode == "dictate"
+        assert d._capture.take_mode == "dictate"
         d.toggle()
         d.toggle()
         assert self._wait(lambda: seen.get("modes") == ["dictate"])

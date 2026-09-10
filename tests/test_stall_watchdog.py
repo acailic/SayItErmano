@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from fluidvoice import daemon as dm
+from fluidvoice.capture import CaptureCoordinator as _Cap
 from fluidvoice.config import DEFAULTS, coerce_setting
 
 
@@ -60,7 +61,7 @@ def env(tmp_path, monkeypatch):
     cfg["recording"]["stall_timeout_s"] = 0.6
     monkeypatch.setattr(dm.ui, "notify", lambda *a, **k: None)
     monkeypatch.setattr(dm.ui, "play_sound", lambda *a, **k: None)
-    monkeypatch.setattr(dm.Daemon, "_STALL_CHECK_S", 0.2)
+    monkeypatch.setattr(_Cap, "STALL_CHECK_S", 0.2)
     d = dm.Daemon(cfg, recorder=rec, backend_factory=lambda c: Backend(),
                   use_hotkey=False, use_sounds=False)
     d.backend = Backend()

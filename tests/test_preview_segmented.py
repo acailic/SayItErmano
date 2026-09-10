@@ -649,8 +649,8 @@ class TestDaemonWiring:
         d = self.make_daemon(tmp_path, monkeypatch, Rec())
         raw = tmp_path / "utt.raw"
         raw.write_bytes(pcm(1.0))
-        d._start_preview(raw)
-        eng, disp = d._preview
+        d._capture.start_preview(raw)
+        eng, disp = d._capture.preview
         assert isinstance(eng, SegmentedPreviewEngine)
         assert eng.vad_silence_s == 0.0  # threaded off in this test
         deadline = time.monotonic() + 3
@@ -687,11 +687,11 @@ class TestDaemonWiring:
         rec = Rec()
         d = self.make_daemon(tmp_path, monkeypatch, rec)
         d.recording = True
-        d._watchdog = threading.Timer(999.0, d._auto_stop)
-        d._vad_auto_stop()
+        d._capture.watchdog = threading.Timer(999.0, d._capture.auto_stop)
+        d._capture.vad_auto_stop()
         assert rec.stopped == 1
         assert d.recording is False
-        d._watchdog and d._watchdog.cancel()
+        d._capture.watchdog and d._capture.watchdog.cancel()
 
     def test_vad_stop_finishes_via_full_take_decode(self, tmp_path,
                                                     monkeypatch):
@@ -751,13 +751,13 @@ class TestDaemonWiring:
         d._pipeline_factory = pipeline_factory
         d.backend = backend
         d.recording = True
-        d._watchdog = threading.Timer(999.0, d._auto_stop)
+        d._capture.watchdog = threading.Timer(999.0, d._capture.auto_stop)
 
-        d._vad_auto_stop()
+        d._capture.vad_auto_stop()
 
         assert rec.stopped == 1
         assert d.recording is False
-        assert d._watchdog is None  # _stop_recording_locked cancelled it
+        assert d._capture.watchdog is None  # _stop_recording_locked cancelled it
         assert d._process_thread is not None
         d._process_thread.join(timeout=5)
         assert not d._process_thread.is_alive()

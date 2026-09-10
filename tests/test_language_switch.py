@@ -226,7 +226,7 @@ class TestAnnounce:
             def set_badge(self, text):
                 badges.append(text)
 
-        d._preview = (None, FakePill())
+        d._capture.preview = (None, FakePill())
         d._engines.cycle_language()  # auto
         d._engines.cycle_language()  # en
         assert badges == ["lang: auto", "lang: en"]
@@ -239,7 +239,7 @@ class TestAnnounce:
             def show(self, text):
                 shown.append(text)
 
-        d._preview = (None, FakeNotify())
+        d._capture.preview = (None, FakeNotify())
         d._engines.cycle_language()
         d._engines.cycle_language()
         assert shown == ["Language: auto", "Language: en"]
@@ -255,7 +255,7 @@ class TestAnnounce:
 
         monkeypatch.setattr(preview_mod, "NotifyPreview", FakeNotifyPreview)
         d = make_daemon(self._cfg_for_announce())
-        d._preview = None
+        d._capture.preview = None
         d._engines.cycle_language()
         d._engines.cycle_language()
         assert shown == ["Language: auto", "Language: en"]
@@ -269,7 +269,7 @@ class TestAnnounce:
 
         monkeypatch.setattr(preview_mod, "NotifyPreview", boom)
         d = make_daemon(self._cfg_for_announce())
-        d._preview = None
+        d._capture.preview = None
         out = d._engines.cycle_language()
         assert out["ok"] is True and out["language"] == "auto"
 

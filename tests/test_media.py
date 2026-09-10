@@ -104,14 +104,15 @@ class TestPauseIfPlaying:
 class TestDaemonWiring:
     def test_pause_and_resume_across_a_dictation(self, cfg, quiet_ui,
                                                   monkeypatch):
-        import fluidvoice.daemon as dm
+        import fluidvoice.daemon as dm  # noqa: F401 (dm.Daemon below)
+        from fluidvoice import media as cap_media
         from tests.test_daemon import StubRecorder
 
         calls = []
         monkeypatch.setattr(
-            dm.MediaController, "pause_if_playing",
+            cap_media.MediaController, "pause_if_playing",
             lambda self: calls.append("pause") or True)
-        monkeypatch.setattr(dm.MediaController, "resume",
+        monkeypatch.setattr(cap_media.MediaController, "resume",
                             lambda self: calls.append("resume"))
         cfg["recording"]["pause_media"] = True
         d = dm.Daemon(cfg, recorder=StubRecorder(),
@@ -124,12 +125,13 @@ class TestDaemonWiring:
         assert calls == ["pause", "resume"]
 
     def test_disabled_via_config(self, cfg, quiet_ui, monkeypatch):
-        import fluidvoice.daemon as dm
+        import fluidvoice.daemon as dm  # noqa: F401 (dm.Daemon below)
+        from fluidvoice import media as cap_media
         from tests.test_daemon import StubRecorder
 
         calls = []
         monkeypatch.setattr(
-            dm.MediaController, "pause_if_playing",
+            cap_media.MediaController, "pause_if_playing",
             lambda self: calls.append("pause") or True)
         cfg["recording"]["pause_media"] = False
         d = dm.Daemon(cfg, recorder=StubRecorder(),
