@@ -181,10 +181,16 @@ def _enforce_entry_cap_unlocked(hpath: Path) -> None:
     try:
         if hpath.stat().st_size < _TAIL_WINDOW:
             return
-        lines = hpath.read_text(encoding="utf-8").splitlines()
+        # tolerant decode like every other reader (errors="replace"),
+        # and the guard covers ValueError too (UnicodeDecodeError is a
+        # ValueError): ONE torn byte anywhere in a >128 KiB file must not
+        # turn every future append into a failure - and must not trigger
+        # the audio rollback for a row that already landed (F3).
+        data = hpath.read_bytes().decode("utf-8", errors="replace")
+        lines = _split_jsonl(data)
         if len(lines) > MAX_ENTRIES:
             _atomic_write(hpath, lines[-MAX_ENTRIES:])
-    except OSError:
+    except (OSError, ValueError):
         pass
 
 
@@ -364,11 +370,18 @@ class HistoryStore:
                 copied = _retain_audio(audio_src, paths.audio_dir())
                 if copied is not None:
                     entry["audio"] = str(copied)
+            wrote = False
             try:
                 _append_line(hpath, json.dumps(entry, ensure_ascii=False))
+                wrote = True  # the row durably references the audio now
                 _enforce_entry_cap_unlocked(hpath)
             except BaseException:
-                if copied is not None:  # roll back the retained audio
+                # roll back ONLY the audio THIS append copied, and only
+                # while the row referencing it never landed: once the
+                # JSONL line is on disk, deleting the audio would leave a
+                # dangling audio path in history (F3 - e.g. a cap-enforce
+                # failure after a successful append line)
+                if copied is not None and not wrote:
                     with contextlib.suppress(OSError):
                         copied.unlink()
                 raise

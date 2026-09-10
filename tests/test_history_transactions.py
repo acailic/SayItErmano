@@ -320,19 +320,25 @@ class TestAudioRollback:
         assert list(adir.glob("*.wav.tmp")) == []
         assert history.read_all() == []
 
-    def test_rollback_of_trim_failure_also_rolls_back_audio(
+    def test_trim_failure_after_landed_row_keeps_its_audio(
             self, hist, tmp_path, monkeypatch):
-        """Failure after the append line but during cap enforcement must
-        still not leak the retained audio."""
+        """F3 supersedes the original P0.3 expectation: when the append
+        LINE durably landed and only the later cap enforcement fails, the
+        retained audio must NOT be rolled back - the row on disk
+        references it, so deleting it would leave a dangling audio path.
+        (Audio rolls back only while the row never landed - the test
+        above.)"""
         src = write_wav(tmp_path / "src.wav")
         monkeypatch.setattr(history, "_TAIL_WINDOW", 1)
         monkeypatch.setattr(history, "_enforce_entry_cap_unlocked",
                             lambda hpath: (_ for _ in ()).throw(
                                 OSError("trim failed")))
         with pytest.raises(OSError):
-            history.append({"ts": 1.0, "text": "doomed"}, audio_src=src,
+            history.append({"ts": 1.0, "text": "kept"}, audio_src=src,
                            keep_audio=True)
-        assert list((tmp_path / "audio").glob("*.wav")) == []
+        entries = history.read_all()
+        assert [e["text"] for e in entries] == ["kept"]
+        assert Path(entries[0]["audio"]).exists()
 
     def test_collision_proof_audio_names(self, hist, tmp_path):
         src = write_wav(tmp_path / "src.wav")
@@ -495,6 +501,25 @@ class TestUnicodeLineSeparators:
         assert [json.loads(l) for l in body.split("\n") if l] == \
             [{"ts": float(i), "text": t}
              for i, t in enumerate(self.SPECIAL, start=1)]
+
+
+class TestCapPathTolerance:
+    """F3: one invalid UTF-8 byte anywhere in a >128 KiB history file must
+    not make every append() raise (the strict read inside the cap path
+    escaped as UnicodeDecodeError AFTER the row landed), and a cap-
+    enforcement failure after a successful append line must not roll back
+    audio the landed row references."""
+
+    def test_append_survives_invalid_byte_in_oversized_file(self, hist):
+        rows = "\n".join(json.dumps({"ts": float(i), "text": "x" * 300})
+                         for i in range(600)) + "\n"
+        data = rows.encode("utf-8")
+        assert len(data) > history._TAIL_WINDOW  # >128 KiB: cap path engages
+        hist.write_bytes(data.replace(b'"ts"', b'\xff"ts', 1))
+        history.append({"ts": 999.0, "text": "new take"})  # must not raise
+        texts = [e["text"] for e in history.read_all()]
+        assert texts.count("new take") == 1
+        assert texts.count("x" * 300) == 599  # only the torn row is gone
 
 
 class TestAtomicWriteDurability:
