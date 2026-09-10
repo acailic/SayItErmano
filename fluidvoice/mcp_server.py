@@ -25,7 +25,7 @@ from __future__ import annotations
 import json
 import math
 import sys
-from typing import Any, Callable, TextIO
+from typing import Any, Callable, Iterator, TextIO
 
 from . import __version__, control
 
@@ -35,6 +35,30 @@ from . import __version__, control
 # then decides whether to continue or disconnect.
 SUPPORTED_VERSIONS = ("2024-11-05",)
 PROTOCOL_VERSION = SUPPORTED_VERSIONS[-1]
+
+# stdio inbound line cap (N7): mirrors the control socket's 1 MiB request
+# bound - without it one huge line is an unbounded memory allocation in
+# the bridge process. Characters (the loop reads text): bounds any UTF-8
+# encoding of the line at 4 MiB.
+MAX_INBOUND_LINE = 1024 * 1024
+
+
+def _bounded_lines(stream: TextIO,
+                   limit: int = MAX_INBOUND_LINE) -> Iterator[str | None]:
+    """Yield lines of at most `limit` characters; None marks an
+    oversized line (fully drained first, then iteration continues)."""
+    while True:
+        line = stream.readline(limit + 1)
+        if not line:
+            return
+        if len(line) > limit and not line.endswith("\n"):
+            while True:  # drain the oversized remainder
+                rest = stream.readline(limit + 1)
+                if not rest or rest.endswith("\n"):
+                    break
+            yield None
+            continue
+        yield line
 
 # name -> (description, input schema, control action, arg mapper)
 TOOLS: dict[str, dict[str, Any]] = {
@@ -291,33 +315,45 @@ def _handle_single(msg: Any,
 def serve(stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdout,
           request: Callable[..., dict] = control.request) -> None:
     """The stdio loop: one JSON object per line in, one reply line out.
-    `request` is injectable so tests never touch a real daemon socket."""
-    for line in stdin:
-        line = line.strip()
+    `request` is injectable so tests never touch a real daemon socket.
+    Inbound lines are bounded at MAX_INBOUND_LINE characters: an
+    oversized line is drained and answered with a parse error, mirroring
+    the control socket's structured limit (N7)."""
+
+    def emit(reply: dict | list | None) -> None:
+        if reply is None:
+            return
+        try:
+            out = json.dumps(reply, ensure_ascii=False, allow_nan=False)
+        except ValueError:
+            # never emit invalid JSON (F6): a non-finite number that
+            # slipped into a payload degrades to a valid envelope
+            msg_id = reply.get("id") if isinstance(reply, dict) else None
+            out = json.dumps(
+                _err(msg_id, INTERNAL_ERROR,
+                     "non-finite number in response"), allow_nan=False)
+        stdout.write(out + "\n")
+        stdout.flush()
+
+    for raw in _bounded_lines(stdin):
+        if raw is None:
+            emit(_err(None, PARSE_ERROR,
+                      f"request too large (line limit is "
+                      f"{MAX_INBOUND_LINE} characters)"))
+            continue
+        line = raw.strip()
         if not line:
             continue
         try:
             msg = json.loads(line, parse_constant=_reject_constant)
         except (json.JSONDecodeError, ValueError):  # incl. NaN/Infinity
-            reply = _err(None, PARSE_ERROR, "parse error")
-        else:
-            try:
-                reply = handle_message(msg, request)
-            except Exception as e:  # noqa: BLE001 - the loop must survive
-                # even a bug inside the bridge itself (F1)
-                reply = _err(None, INTERNAL_ERROR, f"internal error: {e}")
-        if reply is not None:
-            try:
-                out = json.dumps(reply, ensure_ascii=False, allow_nan=False)
-            except ValueError:
-                # never emit invalid JSON (F6): a non-finite number that
-                # slipped into a payload degrades to a valid envelope
-                msg_id = reply.get("id") if isinstance(reply, dict) else None
-                out = json.dumps(
-                    _err(msg_id, INTERNAL_ERROR,
-                         "non-finite number in response"), allow_nan=False)
-            stdout.write(out + "\n")
-            stdout.flush()
+            emit(_err(None, PARSE_ERROR, "parse error"))
+            continue
+        try:
+            emit(handle_message(msg, request))
+        except Exception as e:  # noqa: BLE001 - the loop must survive
+            # even a bug inside the bridge itself (F1)
+            emit(_err(None, INTERNAL_ERROR, f"internal error: {e}"))
 
 
 def main() -> int:

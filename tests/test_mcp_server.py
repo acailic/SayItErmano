@@ -11,6 +11,7 @@ import socket
 
 from fluidvoice import control
 from fluidvoice.mcp_server import (
+    MAX_INBOUND_LINE,
     PROTOCOL_VERSION,
     handle_message,
     serve,
@@ -425,6 +426,35 @@ class TestNonFiniteNumbers:
         r = self._strict_loads(line)  # still strictly parseable
         assert r["result"]["isError"] is True  # a visible tool error, not
         # invalid JSON embedded in the result text
+
+
+# ---------------------------------------------------------------------------
+# stdio inbound line bound (N7)
+# ---------------------------------------------------------------------------
+
+class TestStdioLineBound:
+    """The control socket bounds its request line at 1 MiB (P0.2); the
+    bridge's stdio input gets the same bound so one huge line is never an
+    unbounded memory allocation - and an oversized line is answered with
+    a structured error while the loop keeps serving."""
+
+    def test_oversized_line_gets_error_and_loop_survives(self):
+        big = "x" * (MAX_INBOUND_LINE + 10)
+        inbox = io.StringIO(big + "\n" + json.dumps(rpc("ping")) + "\n")
+        out = io.StringIO()
+        serve(inbox, out, request=lambda a, **k: {"ok": True})
+        replies = [json.loads(l) for l in out.getvalue().splitlines()]
+        assert replies[0]["error"]["code"] == -32700
+        assert "too large" in replies[0]["error"]["message"]
+        assert replies[1]["result"] == {}  # next line still served
+
+    def test_line_just_under_the_bound_is_served(self):
+        msg = {"jsonrpc": "2.0", "id": 2, "method": "ping",
+               "params": {"pad": "y" * (MAX_INBOUND_LINE - 200)}}
+        out = io.StringIO()
+        serve(io.StringIO(json.dumps(msg) + "\n"), out,
+              request=lambda a, **k: {"ok": True})
+        assert json.loads(out.getvalue())["id"] == 2
 
 
 class TestInspectorHandshake:
