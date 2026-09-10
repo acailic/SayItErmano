@@ -177,20 +177,20 @@ class TestIdleUnloadCore:
         assert len(loads) == 1
         assert d.backend is loads[0]
         assert d.last_result.get("text") == "idle ok"
-        assert d._idle_unloaded_at is None
+        assert d._engines.idle_unloaded_at is None
 
     def test_no_unload_while_recording_or_busy(self, cfg, quiet_ui):
         cfg["model"]["idle_unload_s"] = 60
         factory, loads = make_factory()
         d = make_daemon(cfg, factory)
         take(d)
-        base = d._last_activity
+        base = d._engines.last_activity
         d.recording = True
-        d._maybe_idle_unload(now=base + 10_000)
+        d._engines.maybe_idle_unload(now=base + 10_000)
         assert d.backend is not None
         d.recording = False
         d.busy = True
-        d._maybe_idle_unload(now=base + 10_000)
+        d._engines.maybe_idle_unload(now=base + 10_000)
         assert d.backend is not None
         d.busy = False
 
@@ -199,9 +199,9 @@ class TestIdleUnloadCore:
         factory, loads = make_factory()
         d = make_daemon(cfg, factory)
         take(d)
-        base = d._last_activity
+        base = d._engines.last_activity
         d.warmup = {"running": True, "error": None, "model": "small"}
-        d._maybe_idle_unload(now=base + 10_000)
+        d._engines.maybe_idle_unload(now=base + 10_000)
         assert d.backend is not None
 
     def test_no_unload_while_startup_warmup_thread_alive(self, cfg, quiet_ui):
@@ -209,12 +209,12 @@ class TestIdleUnloadCore:
         factory, loads = make_factory()
         d = make_daemon(cfg, factory)
         take(d)
-        base = d._last_activity
+        base = d._engines.last_activity
         warm = threading.Thread(target=lambda: time.sleep(0.5), daemon=True)
         warm.start()
-        d._start_warm_thread = warm
+        d._engines.start_warm_thread = warm
         try:
-            d._maybe_idle_unload(now=base + 10_000)
+            d._engines.maybe_idle_unload(now=base + 10_000)
             assert d.backend is not None
         finally:
             warm.join()
@@ -224,12 +224,12 @@ class TestIdleUnloadCore:
         factory, loads = make_factory()
         d = make_daemon(cfg, factory)
         take(d)
-        base = d._last_activity
-        d._maybe_idle_unload(now=base + 59)
-        assert d.backend is not None and d._idle_unloaded_at is None
-        d._maybe_idle_unload(now=base + 60)
+        base = d._engines.last_activity
+        d._engines.maybe_idle_unload(now=base + 59)
+        assert d.backend is not None and d._engines.idle_unloaded_at is None
+        d._engines.maybe_idle_unload(now=base + 60)
         assert d.backend is None
-        assert d._idle_unloaded_at == base + 60
+        assert d._engines.idle_unloaded_at == base + 60
         assert loads[0].close_calls == 1  # the close() seam fired
 
     def test_unload_below_threshold_never(self, cfg, quiet_ui):
@@ -237,7 +237,7 @@ class TestIdleUnloadCore:
         factory, loads = make_factory()
         d = make_daemon(cfg, factory)
         take(d)
-        d._maybe_idle_unload(now=d._last_activity + 3599)
+        d._engines.maybe_idle_unload(now=d._engines.last_activity + 3599)
         assert d.backend is not None
 
     def test_policy_off_never_unloads(self, cfg, quiet_ui):
@@ -245,23 +245,23 @@ class TestIdleUnloadCore:
         factory, loads = make_factory()
         d = make_daemon(cfg, factory)
         take(d)
-        d._maybe_idle_unload(now=d._last_activity + 999_999)
+        d._engines.maybe_idle_unload(now=d._engines.last_activity + 999_999)
         assert d.backend is not None
-        assert d._idle_unloaded_at is None
+        assert d._engines.idle_unloaded_at is None
 
     def test_policy_off_starts_no_watcher_thread(self, cfg, quiet_ui):
         cfg["model"]["idle_unload_s"] = 0
         factory, loads = make_factory()
         d = make_daemon(cfg, factory)
-        d._start_idle_watch()
-        assert d._idle_thread is None  # byte-identical: nothing runs
+        d._engines.start_idle_watch()
+        assert d._engines.idle_thread is None  # byte-identical: nothing runs
 
     def test_no_backend_no_crash(self, cfg, quiet_ui):
         cfg["model"]["idle_unload_s"] = 60
         factory, loads = make_factory()
         d = make_daemon(cfg, factory)
-        d._maybe_idle_unload(now=d._last_activity + 10_000)
-        assert d.backend is None and d._idle_unloaded_at is None
+        d._engines.maybe_idle_unload(now=d._engines.last_activity + 10_000)
+        assert d.backend is None and d._engines.idle_unloaded_at is None
 
 
 # ---------------------------------------------------------------------------
@@ -275,14 +275,14 @@ class TestReloadOnNextTake:
         d = make_daemon(cfg, factory)
         take(d)
         assert len(loads) == 1
-        d._maybe_idle_unload(now=d._last_activity + 60)
+        d._engines.maybe_idle_unload(now=d._engines.last_activity + 60)
         assert d.backend is None
         d.toggle()  # start: spawns the background reload thread
         assert wait_backend(d)  # loads while the user speaks
         d.toggle()  # stop -> _process -> transcribe
         assert wait_done(d)
         assert len(loads) == 2  # exactly one reload
-        assert d._idle_unloaded_at is None
+        assert d._engines.idle_unloaded_at is None
         assert d.last_result.get("text") == "idle ok"
         assert loads[1].transcribes == 1
 
@@ -292,7 +292,7 @@ class TestReloadOnNextTake:
         d = make_daemon(cfg, factory)
         take(d)
         assert len(loads) == 1
-        d._maybe_idle_unload(now=d._last_activity + 60)
+        d._engines.maybe_idle_unload(now=d._engines.last_activity + 60)
         assert d.backend is None
         d.toggle()  # background reload fails (logged, not raised)
         time.sleep(0.2)  # let the reload thread die
@@ -321,7 +321,7 @@ class TestIdleClock:
         factory, loads = make_factory()
         d = make_daemon(cfg, factory)
         take(d)
-        base = d._last_activity
+        base = d._engines.last_activity
         st = d.handle_request({"action": "status"})
         assert st["ok"] and st["model_state"]["policy_s"] == 60
         assert st["model_state"]["loaded"] is True
@@ -333,7 +333,7 @@ class TestIdleClock:
         assert d.handle_request({"action": "insert-text",
                                  "text": "hi"})["ok"]
         assert d.handle_request({"action": "get-config"})["ok"]
-        d._maybe_idle_unload(now=base + 60)
+        d._engines.maybe_idle_unload(now=base + 60)
         assert d.backend is None  # none of those reads reset the clock
 
     def test_take_start_resets_idle(self, cfg, quiet_ui):
@@ -341,15 +341,15 @@ class TestIdleClock:
         factory, loads = make_factory()
         d = make_daemon(cfg, factory)
         take(d)
-        base = d._last_activity
-        d._maybe_idle_unload(now=base + 60)
+        base = d._engines.last_activity
+        d._engines.maybe_idle_unload(now=base + 60)
         assert d.backend is None
         # a new take reloads + touches; even a huge synthetic age cannot
         # fire while idle-tracking resumes from the fresh take
         take(d)
         assert d.backend is not None
-        assert d._last_activity > base
-        d._maybe_idle_unload(now=d._last_activity + 59)
+        assert d._engines.last_activity > base
+        d._engines.maybe_idle_unload(now=d._engines.last_activity + 59)
         assert d.backend is not None
 
 
@@ -362,18 +362,18 @@ class TestPolicyApplyAndShutdown:
         factory, loads = make_factory()
         d = make_daemon(cfg, factory)
         take(d)
-        assert d._idle_thread is None  # default off: no watcher
+        assert d._engines.idle_thread is None  # default off: no watcher
         d.cfg["model"]["idle_unload_s"] = 60
         resp = d.apply_config(["model.idle_unload_s"])
         assert resp["applied"] == ["idle unload"]
         assert resp["errors"] == []
-        assert d._idle_thread is not None and d._idle_thread.is_alive()
-        watcher = d._idle_thread
+        assert d._engines.idle_thread is not None and d._engines.idle_thread.is_alive()
+        watcher = d._engines.idle_thread
         assert watcher.name == "fluidvoice-idle-unload"
         d.cfg["model"]["idle_unload_s"] = 0
         resp = d.apply_config(["model.idle_unload_s"])
         assert resp["applied"] == ["idle unload"]
-        assert d._idle_thread is None
+        assert d._engines.idle_thread is None
         watcher.join(timeout=2)
         assert not watcher.is_alive()
 
@@ -381,8 +381,8 @@ class TestPolicyApplyAndShutdown:
         cfg["model"]["idle_unload_s"] = 60
         factory, loads = make_factory()
         d = make_daemon(cfg, factory)
-        d._start_idle_watch()
-        watcher = d._idle_thread
+        d._engines.start_idle_watch()
+        watcher = d._engines.idle_thread
         assert watcher is not None and watcher.is_alive()
         d.shutdown()
         assert not watcher.is_alive()
@@ -407,7 +407,7 @@ class TestTrayTooltipSuffix:
         factory, loads = make_factory()
         d = make_daemon(cfg, factory)
         take(d)
-        d._maybe_idle_unload(now=d._last_activity + 3661)
+        d._engines.maybe_idle_unload(now=d._engines.last_activity + 3661)
         assert "model unloaded (idle" in d._tray_tooltip()
 
     def test_no_suffix_when_policy_off(self, cfg, quiet_ui):
@@ -433,7 +433,7 @@ class TestStatusModelState:
         factory, loads = make_factory()
         d = make_daemon(cfg, factory)
         take(d)
-        d._maybe_idle_unload(now=d._last_activity + 300)
+        d._engines.maybe_idle_unload(now=d._engines.last_activity + 300)
         ms = d.handle_request({"action": "status"})["model_state"]
         assert ms["policy_s"] == 300 and ms["loaded"] is False
 

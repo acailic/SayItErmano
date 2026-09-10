@@ -439,7 +439,7 @@ class TestDaemonWarmupClearsRemote:
         d = dm.Daemon(cfg, recorder=StubRecorder(),
                       backend_factory=lambda c: FakeLocal(c),
                       use_hotkey=False, use_sounds=False)
-        d._warmup_model("small")
+        d._engines.warmup_model("small")
         assert d.cfg["model"]["remote_url"] == ""  # cleared in place
         assert d.backend.name == "faster-whisper"  # local hot-swapped in
         assert saved and saved[0]["model"]["remote_url"] == ""  # persisted
