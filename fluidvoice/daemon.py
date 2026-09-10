@@ -17,6 +17,7 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 from pathlib import Path
 from typing import Any, Callable
 
@@ -33,6 +34,7 @@ from .micmon import match_priority as micmon_match_priority
 from .pipeline import DictationPipeline, confidence_band, log  # noqa: F401
 from .processing import post_process
 from .recorder import Recorder, RecorderError
+from .runtime_tasks import RuntimeTasks
 
 BackendFactory = Callable[[dict], Any]
 
@@ -69,6 +71,11 @@ class Daemon:
         self._command_destructive_armed = False  # 1st press of strong confirm
         self._command_display = None
         self._command_entries: list[dict] = []  # panel conversation feed
+        # RuntimeTasks: every timer/thread the daemon spawns is named,
+        # exception-reported and joined at shutdown (fluidvoice/
+        # runtime_tasks.py; plan P1.2). The handles below stay Timer/
+        # Thread objects so call sites and tests keep identity checks.
+        self._tasks = RuntimeTasks(on_exception=self._on_task_exception)
         self._command_timer: threading.Timer | None = None
         self._command_hotkey = None
         self._paste_hotkey = None
@@ -109,6 +116,14 @@ class Daemon:
         self._session = session_mod.probe()  # session type + capabilities
         self._evdev_ptt: Any = None  # optional evdev push-to-talk (wayland)
 
+    def _on_task_exception(self, name: str, exc: BaseException) -> None:
+        """RuntimeTasks exception reporter: a failed supervised callback
+        is logged in full, never raised unhandled in its worker thread
+        (which the suite's thread-exception gate turns into a failure)."""
+        log(f"WARN runtime task {name!r} failed: "
+            f"{exc.__class__.__name__}: {exc}\n"
+            + "".join(traceback.format_exception(exc)).rstrip())
+
     # -- lifecycle -----------------------------------------------------------
 
     def run(self) -> None:
@@ -141,9 +156,10 @@ class Daemon:
                     except Exception as e:
                         log(f"WARN model warmup failed: {e}")
 
-                self._start_warm_thread = threading.Thread(
-                    target=_warm, name="fluidvoice-warmup", daemon=True)
-                self._start_warm_thread.start()
+                t = self._tasks.prepare("warmup", _warm)
+                self._start_warm_thread = t
+                if t is not None:
+                    t.start()
         # Idle unload watcher: only exists when model.idle_unload_s > 0.
         self._start_idle_watch()
 
@@ -447,8 +463,9 @@ class Daemon:
     def _quit_gracefully(self) -> None:
         log("quit requested from menu")
         import os
-        threading.Timer(0.1, lambda: os.kill(os.getpid(),
-                                             signal.SIGTERM)).start()
+        self._tasks.schedule("quit-signal",
+                             lambda: os.kill(os.getpid(), signal.SIGTERM),
+                             0.1)
 
     def _tray_recording(self, recording: bool) -> None:
         if self._tray is not None:
@@ -553,6 +570,14 @@ class Daemon:
         for hk in self._extra_hotkeys:
             hk.stop()
         self._extra_hotkeys = []
+        # Supervised timers/threads: pending timers are cancelled and
+        # in-flight workers joined, each bounded (see RuntimeTasks.shutdown)
+        # - a mid-flight transcription/command gets a short grace window,
+        # then the process exits as before.
+        report = self._tasks.shutdown(timeout=10.0)
+        if report.get("timed_out"):
+            log(f"WARN tasks still running after shutdown join: "
+                f"{', '.join(report['timed_out'])}")
         if self._srv:
             try:
                 self._srv.close()
@@ -931,8 +956,8 @@ class Daemon:
             if self.warmup["running"]:
                 return {"ok": False, "error": "a model download is already running"}
             self.warmup = {"running": True, "error": None, "model": name}
-        threading.Thread(target=self._warmup_model, args=(name,),
-                         daemon=True).start()
+        self._tasks.spawn("model-switch", self._warmup_model,
+                          args=(name,))
         return {"ok": True, "model": name}
 
     def _warmup_model(self, name: str) -> None:
@@ -1048,16 +1073,14 @@ class Daemon:
         if self._idle_thread is not None and self._idle_thread.is_alive():
             return
         self._idle_stop = threading.Event()
-        self._idle_thread = threading.Thread(
-            target=self._idle_watch_loop, name="fluidvoice-idle-unload",
-            daemon=True)
-        self._idle_thread.start()
+        t = self._tasks.prepare("idle-unload", self._idle_watch_loop)
+        self._idle_thread = t
+        if t is not None:
+            t.start()
 
     def _stop_idle_watch(self) -> None:
         self._idle_stop.set()
-        thread = self._idle_thread
-        if thread is not None and thread is not threading.current_thread():
-            thread.join(timeout=2)
+        self._tasks.join("idle-unload", timeout=2)
 
     def _apply_idle_unload_setting(self) -> None:
         """model.idle_unload_s flipped live: restart (or stop) the watcher.
@@ -1251,8 +1274,8 @@ class Daemon:
                 if not self.warmup["running"]:
                     self.warmup = {"running": True, "error": None,
                                    "model": self._active_model_name()}
-                    threading.Thread(target=self._reload_backend,
-                                     daemon=True).start()
+                    self._tasks.spawn("engine-reload",
+                                      self._reload_backend)
                     applied.append("speech engine (reloading)")
                 else:
                     errors.append("speech engine: a load is already running - "
@@ -1342,8 +1365,7 @@ class Daemon:
         if self.backend is None:
             # Take-start reload (after an idle unload, or a failed startup
             # load): the model loads while the user speaks.
-            threading.Thread(target=self._reload_backend_bg,
-                             name="fluidvoice-reload", daemon=True).start()
+            self._tasks.spawn("reload", self._reload_backend_bg)
         self._tray_recording(True)
         if self.cfg["recording"].get("pause_media", True):
             self._media.pause_if_playing()  # upstream: only what's playing
@@ -1351,9 +1373,10 @@ class Daemon:
                       self.use_sounds and self.cfg["sounds"]["enabled"])
         log(f"recording (app={self._app_hint or '?'})")
         max_s = float(self.cfg["recording"].get("max_seconds", 300))
-        self._watchdog = threading.Timer(max_s, self._auto_stop)
-        self._watchdog.daemon = True
-        self._watchdog.start()
+        t = self._tasks.prepare_timer("watchdog", self._auto_stop, max_s)
+        self._watchdog = t
+        if t is not None:
+            t.start()
         # Upstream firstPCMTimeout (2s): a live-but-silent source (muted mic,
         # wrong device, Bluetooth glitch) should fail fast, not record air
         # until max_seconds.
@@ -1364,20 +1387,20 @@ class Daemon:
             # shutdown): the callback re-validates identity anyway, but a
             # cancelled timer is the guarantee it never even fires stale
             self._cancel_first_pcm_timer_locked()
-            t = threading.Timer(pcm_timeout, self._check_first_pcm,
-                                args=(self.recorder, Path(tmp)))
-            t.daemon = True
-            t.start()
+            t = self._tasks.prepare_timer(
+                "first-pcm", self._check_first_pcm, pcm_timeout,
+                args=(self.recorder, Path(tmp)))
             self._first_pcm_timer = t
+            if t is not None:
+                t.start()
         # mid-take stall watchdog (upstream #852): frozen capture stream
         # cancels the take with a clear error
         stall_s = float(self.cfg["recording"].get("stall_timeout_s", 8.0)
                         or 0.0)
         raw = getattr(self.recorder, "raw_path", None)
         if stall_s > 0 and raw is not None:
-            threading.Thread(target=self._stall_monitor,
-                             args=(Path(raw), stall_s),
-                             name="fluidvoice-stall", daemon=True).start()
+            self._tasks.spawn("stall", self._stall_monitor,
+                              args=(Path(raw), stall_s))
 
     def _start_preview(self, raw_path) -> None:
         """Live transcription preview while recording (best-effort).
@@ -1536,10 +1559,12 @@ class Daemon:
         def _fire() -> None:
             self._send_countdown_stop(holder["t"])
 
-        timer = threading.Timer(countdown, _fire)
+        timer = self._tasks.prepare_timer("send-countdown", _fire,
+                                          countdown)
         holder["t"] = timer
         self._send_countdown_timer = timer
-        timer.start()
+        if timer is not None:
+            timer.start()
 
     def _on_send_resume(self) -> None:
         """Speech resumed inside the countdown window: back to recording."""
@@ -1657,10 +1682,12 @@ class Daemon:
         self._rewrite_mode = False
         self._command_mode = False
         self._rewrite_context = None
-        self._process_thread = threading.Thread(
-            target=self._process,
-            args=(Path(wav), self._app_hint, mode, context), daemon=True)
-        self._process_thread.start()
+        t = self._tasks.prepare(
+            "process", self._process,
+            args=(Path(wav), self._app_hint, mode, context))
+        self._process_thread = t
+        if t is not None:
+            t.start()
 
     def cancel(self) -> None:
         with self._lock:
@@ -2097,8 +2124,7 @@ class Daemon:
             if self.busy or self._command_pending:
                 return
             self.busy = True
-        threading.Thread(target=_guarded, name="fluidvoice-command",
-                         daemon=True).start()
+        self._tasks.spawn("command", _guarded)
 
     def _rerun_command(self, command: str,
                        purpose: str | None = None) -> dict:
@@ -2187,11 +2213,12 @@ class Daemon:
             body = "⚠ DESTRUCTIVE\n" + body
         ui.notify("SayItErmano — run this command?", body,
                   enabled=self.cfg["notifications"]["enabled"])
-        self._command_timer = threading.Timer(
-            float(self.cfg["command"].get("confirm_timeout_s", 120.0)),
-            self._on_confirm_timeout)
-        self._command_timer.daemon = True
-        self._command_timer.start()
+        timer = self._tasks.prepare_timer(
+            "command-confirm", self._on_confirm_timeout,
+            float(self.cfg["command"].get("confirm_timeout_s", 120.0)))
+        self._command_timer = timer
+        if timer is not None:
+            timer.start()
 
     def _confirm_pending_command(self) -> None:
         """Hotkey-confirmed: execute (the only path into
@@ -2254,7 +2281,8 @@ class Daemon:
                           + (" (step limit reached)" if session.exhausted
                              else ""),
                           enabled=self.cfg["notifications"]["enabled"])
-                threading.Timer(8.0, self._close_command_panel).start()
+                self._tasks.schedule("command-panel-close",
+                                     self._close_command_panel, 8.0)
                 self._end_command_session(close_panel=False)
                 return
             self._command_panel(self._command_entries, status="Working...",
@@ -2273,8 +2301,7 @@ class Daemon:
                           enabled=self.cfg["notifications"]["enabled"])
                 self._end_command_session()
 
-        threading.Thread(target=_guarded, name="fluidvoice-command",
-                         daemon=True).start()
+        self._tasks.spawn("command", _guarded)
 
     def _arm_destructive_confirm(self, proposal) -> None:
         """First press on a destructive proposal: NOTHING executes. Refresh
@@ -2293,11 +2320,12 @@ class Daemon:
               "· Esc to cancel"
         ui.notify("SayItErmano — ⚠ destructive", body,
                   enabled=self.cfg["notifications"]["enabled"])
-        self._command_timer = threading.Timer(
-            float(self.cfg["command"].get("confirm_timeout_s", 120.0)),
-            self._on_confirm_timeout)
-        self._command_timer.daemon = True
-        self._command_timer.start()
+        timer = self._tasks.prepare_timer(
+            "command-confirm", self._on_confirm_timeout,
+            float(self.cfg["command"].get("confirm_timeout_s", 120.0)))
+        self._command_timer = timer
+        if timer is not None:
+            timer.start()
 
     def cancel_pending_command(self) -> None:
         """Escape on a pending proposal (or a test): nothing executes."""
