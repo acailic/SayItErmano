@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import json
+import socket
 
 from fluidvoice import control
 from fluidvoice.mcp_server import (
@@ -236,6 +237,67 @@ def test_serve_non_object_json(monkeypatch):
     r = json.loads(out.getvalue())
     assert_valid_response(r, None, error=True)
     assert r["error"]["code"] == -32600
+
+
+# ---------------------------------------------------------------------------
+# Bridge survival (F1): transport failures must never kill the process
+# ---------------------------------------------------------------------------
+
+class TestBridgeSurvivesTransportFailures:
+    """control.request raises plain OSErrors from its 15 s socket timeout
+    (a slow-but-legal transcribe_file) and ConnectionResetError when the
+    daemon restarts mid-call. The bridge must answer with a clean
+    JSON-RPC error and keep serving - the old loop died on the first one."""
+
+    def _call(self, raiser):
+        return handle_message(
+            rpc("tools/call", name="transcribe_file",
+                arguments={"path": "/x.wav"}),
+            request=raiser)
+
+    def test_socket_timeout_is_a_clean_error(self):
+        def slow_daemon(action, **kw):
+            raise socket.timeout("timed out")  # control.request at 15 s
+
+        r = self._call(slow_daemon)
+        assert_valid_response(r, 1, error=True)
+        assert r["error"]["code"] == -32000
+        assert "daemon" in r["error"]["message"]
+
+    def test_daemon_restart_mid_call_is_a_clean_error(self):
+        def restarted(action, **kw):
+            raise ConnectionResetError("daemon restarted")
+
+        r = self._call(restarted)
+        assert_valid_response(r, 1, error=True)
+        assert r["error"]["code"] == -32000
+
+    def test_unexpected_exception_is_internal_error_not_death(self):
+        def buggy(action, **kw):
+            raise KeyError("bridge bug")
+
+        r = self._call(buggy)
+        assert_valid_response(r, 1, error=True)
+        assert r["error"]["code"] == -32603
+
+    def test_serve_loop_survives_a_timeout_and_serves_the_next_line(self):
+        # the sweep's exact repro shape: a transcribe_file whose model
+        # time exceeds the client timeout used to kill the bridge process
+        def slow_daemon(action, **kw):
+            if action == "transcribe":
+                raise socket.timeout("timed out")
+            return {"ok": True}
+
+        inbox = io.StringIO("\n".join([
+            json.dumps(rpc("tools/call", name="transcribe_file",
+                           arguments={"path": "/x.wav"})),
+            json.dumps(rpc("ping")),
+        ]) + "\n")
+        out = io.StringIO()
+        serve(inbox, out, request=slow_daemon)  # returns: the bridge lived
+        replies = [json.loads(l) for l in out.getvalue().splitlines()]
+        assert replies[0]["error"]["code"] == -32000
+        assert replies[1]["result"] == {}  # still serving after the failure
 
 
 class TestInspectorHandshake:

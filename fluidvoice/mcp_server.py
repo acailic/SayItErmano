@@ -94,6 +94,7 @@ PARSE_ERROR = -32700
 INVALID_REQUEST = -32600
 METHOD_NOT_FOUND = -32601
 INVALID_PARAMS = -32602
+INTERNAL_ERROR = -32603
 # Server error: the bridge could not reach the local daemon
 DAEMON_UNREACHABLE = -32000
 
@@ -225,6 +226,17 @@ def handle_message(msg: dict,
     except control.ControlError as e:
         # daemon unreachable: a protocol-level error the client will show
         return _err(msg_id, DAEMON_UNREACHABLE, str(e))
+    except OSError as e:
+        # transport failures out of control.request: its 15 s socket
+        # timeout on a long transcribe_file (TimeoutError is an OSError),
+        # ConnectionResetError from a daemon restarting mid-call, an
+        # ENOENT race on the socket path. A clean protocol-level error
+        # response - the bridge process itself must survive (F1).
+        return _err(msg_id, DAEMON_UNREACHABLE,
+                    f"cannot reach daemon: {e}")
+    except Exception as e:  # noqa: BLE001 - one bad call must never kill
+        # the bridge: answer with an internal error and keep serving
+        return _err(msg_id, INTERNAL_ERROR, f"internal error: {e}")
 
 
 def serve(stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdout,
@@ -240,7 +252,11 @@ def serve(stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdout,
         except json.JSONDecodeError:
             reply = _err(None, PARSE_ERROR, "parse error")
         else:
-            reply = handle_message(msg, request)
+            try:
+                reply = handle_message(msg, request)
+            except Exception as e:  # noqa: BLE001 - the loop must survive
+                # even a bug inside the bridge itself (F1)
+                reply = _err(None, INTERNAL_ERROR, f"internal error: {e}")
         if reply is not None:
             stdout.write(json.dumps(reply, ensure_ascii=False) + "\n")
             stdout.flush()
