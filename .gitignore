@@ -10,6 +10,9 @@ build/
 # deliberate bundled test assets (the rules above exclude captures)
 !tests/integration/fixtures/*.wav
 
+# private evaluation corpora (docs/eval/README.md §Private corpora)
+eval-private/
+
 # sssf runtime
 adws/adw_data/sessions/
 adws/adw_data/sssf.db*

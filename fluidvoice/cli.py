@@ -78,6 +78,14 @@ def main(argv: list[str] | None = None) -> int:
                    help="run the MCP server on stdio (for MCP-capable "
                         "agents; forwards to the running daemon)")
 
+    # local evaluation harness (plan P1.4): thin passthrough — everything
+    # lives in fluidvoice.evalharness (python -m fluidvoice.evalharness)
+    p = sub.add_parser("eval-run",
+                       help="local evaluation harness (args passed through; "
+                            "see `python -m fluidvoice.evalharness --help`)")
+    p.add_argument("harness_args", nargs=argparse.REMAINDER, metavar="ARGS",
+                   help="harness subcommand and flags (run/check/fixtures/soak)")
+
     p = sub.add_parser(
         "update",
         help="check for a newer release and print the upgrade command for "
@@ -247,6 +255,10 @@ def main(argv: list[str] | None = None) -> int:
         from .mcp_server import serve
         serve()
         return 0
+
+    if args.cmd == "eval-run":
+        from .evalharness.cli import main as eval_main
+        return eval_main(list(args.harness_args))
 
     if args.cmd == "doctor":
         return doctor_mod.run()
