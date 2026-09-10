@@ -17,10 +17,12 @@ unrelated actions behind a long one.
 """
 from __future__ import annotations
 
+import errno
 import json
 import os
 import queue
 import socket
+import sys
 import threading
 import time
 from pathlib import Path
@@ -35,6 +37,14 @@ _BACKLOG = 128                         # kernel accept queue (was 8)
 _DRAIN_CAP = 4 * 1024 * 1024           # discard cap after an oversized line
 _DRAIN_TIMEOUT_S = 2.0                 # bound the discard loop
 _CHUNK = 65536
+_ACCEPT_RETRY_S = 0.05                 # backoff after a transient accept error
+
+
+def _log(msg: str) -> None:
+    """House log idiom (see pipeline.log): stderr, timestamped, quiet -
+    only exceptional control-server paths ever log (F11)."""
+    print(f"[sayit-ermano] {time.strftime('%H:%M:%S')} {msg}",
+          file=sys.stderr, flush=True)
 
 
 class ControlError(RuntimeError):
@@ -173,8 +183,23 @@ class ControlServer:
         while not self._stopping.is_set():
             try:
                 conn, _ = self._srv.accept()
-            except OSError:
-                break  # listening socket closed -> shutdown
+            except OSError as e:
+                if self._stopping.is_set():
+                    break  # our shutdown() closed the listening socket
+                if e.errno in (errno.EBADF, errno.EINVAL):
+                    # listening socket gone while we were NOT stopping:
+                    # unrecoverable - exit loudly, never silently
+                    _log(f"control accept: listening socket closed "
+                         f"({e!r}) - accept thread exiting")
+                    break
+                # transient (EMFILE, ECONNABORTED, ENOMEM, ...): the
+                # thread must survive it or the control plane is bricked
+                # with the socket still bound and nobody accepting (F4).
+                # Back off briefly so EMFILE/ENOMEM cannot hot-loop.
+                _log(f"control accept: transient {e!r} - retrying in "
+                     f"{_ACCEPT_RETRY_S:g}s")
+                time.sleep(_ACCEPT_RETRY_S)
+                continue
             try:
                 conn.settimeout(self._idle_timeout)
             except OSError:

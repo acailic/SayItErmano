@@ -9,6 +9,7 @@ accept thread and every worker leaving ``threading.enumerate()`` clean.
 """
 from __future__ import annotations
 
+import errno
 import json
 import os
 import socket
@@ -362,6 +363,84 @@ def test_handler_exception_is_a_payload_and_workers_survive(tmp_path):
         assert len(_control_threads()) == before  # nobody died
         with _client(srv.path) as c:
             assert _rt_obj(c, {"action": "status"}) == {"ok": True}
+
+
+# -- accept-loop resilience (F4) --------------------------------------------------
+
+class TestAcceptLoopResilience:
+    """One transient accept() OSError (EMFILE, ECONNABORTED, ENOMEM)
+    must not permanently exit the accept thread: the socket stays bound
+    and listening, new clients queue in the kernel, nobody ever accepts
+    again - the control plane is silently bricked until restart."""
+
+    def test_transient_accept_error_is_survived_and_logged(
+            self, tmp_path, monkeypatch, capsys):
+        with _server(lambda req: {"ok": True}, tmp_path) as srv:
+            with _client(srv.path) as c:  # baseline: serving
+                assert _rt_obj(c, {"action": "status"}) == {"ok": True}
+            real = srv._srv
+
+            class FlakyAccept:
+                """Delegates to the real listening socket, but the first
+                accept() raises one injected transient error (the errno
+                the kernel reports for a connection aborted before the
+                accept completed)."""
+
+                def __init__(self):
+                    self.injected = False
+
+                def accept(self):
+                    if not self.injected:
+                        self.injected = True
+                        raise ConnectionAbortedError(
+                            errno.ECONNABORTED, "injected transient")
+                    return real.accept()
+
+                def __getattr__(self, name):  # shutdown/close/stat/...
+                    return getattr(real, name)
+
+            monkeypatch.setattr(srv, "_srv", FlakyAccept())
+            # wake the thread out of its blocked real accept: this client
+            # is served by the in-flight accept; the thread's NEXT
+            # accept() hits the injected transient error
+            with _client(srv.path) as c:
+                assert _rt_obj(c, {"action": "status"}) == {"ok": True}
+            err = ""
+            deadline = time.monotonic() + 5
+            while "retrying" not in err and time.monotonic() < deadline:
+                time.sleep(0.02)
+                err += capsys.readouterr().err
+            assert "transient" in err  # the error fired AND was logged
+            assert srv._accept_thread.is_alive()
+            # a new client after the transient error is still served
+            with _client(srv.path) as c:
+                assert _rt_obj(c, {"action": "status"}) == {"ok": True}
+            assert srv._accept_thread.is_alive()
+
+    def test_unrecoverable_accept_error_exits_the_thread_loudly(
+            self, tmp_path, monkeypatch, capsys):
+        with _server(lambda req: {"ok": True}, tmp_path) as srv:
+            real = srv._srv
+
+            class DeadAccept:
+                def accept(self):
+                    raise OSError(errno.EBADF, "injected bad fd")
+
+                def __getattr__(self, name):
+                    return getattr(real, name)
+
+            monkeypatch.setattr(srv, "_srv", DeadAccept())
+            # wake the blocked real accept: the connection is served or
+            # simply kernel-queued - either way the thread's NEXT accept()
+            # hits the injected EBADF
+            c = _client(srv.path, timeout=2)
+            c.close()
+            thread = srv._accept_thread
+            deadline = time.monotonic() + 5
+            while thread.is_alive() and time.monotonic() < deadline:
+                time.sleep(0.02)
+            assert not thread.is_alive()  # exited instead of spinning
+        assert "accept thread exiting" in capsys.readouterr().err
 
 
 # -- module facade compatibility ---------------------------------------------------
