@@ -107,6 +107,29 @@ House-style manual follow-ups after publish (unchanged): AUR recipe
 bump (`packaging/aur`), Reddit/HN post, machine refresh
 (`scripts/install-one-shot.sh`).
 
+## Speech-pipeline evaluation gate (plan P1.4)
+
+Before any release that changes the speech pipeline — backends,
+transcription decoding, the hallucination guard, or transcript
+post-processing — a **manual representative-model evaluation** through
+the local evaluation harness is required (`docs/eval/README.md`):
+
+1. Run the harness over a corpus that includes real speech for the
+   languages you ship (`--external` private corpus + the committed
+   synthetic one), with the representative model plugged in via
+   `--transcriber`.
+2. Attach the resulting `report.json`/`report.md` to the release
+   notes; WER/CER/hotword-recall regressions and any guard
+   false-positive/false-negative change block the release until
+   explained.
+3. Soak (same policy doc): a **2-hour soak** before major releases,
+   and a documented **24-hour run** for lifecycle changes (idle-unload,
+   model reload/hot-swap, memory work) — `scripts/soak.py` CSV embedded
+   with `evalharness run --soak-csv`.
+
+The harness's metric math is exercised in CI without any model; the
+model-dependent half of this gate is the manual step above.
+
 ## History
 
 `scripts/release.sh` is the pre-P0.5 interactive single-host release
