@@ -11,6 +11,33 @@ Releases begin at v0.4.0 (the rebrand to SayItErmano); earlier v0.1–v0.3
 tags predate it and were deleted from the repository, so their notes are
 not reproduced here.
 
+## [Unreleased]
+
+Packaging and documentation correctness (plan P0.6).
+
+- **Deb contract** — the .deb is now honestly Ubuntu 24.04 / x86_64 /
+  Python 3.12 only: `Depends` pins `python3 (>= 3.12), python3 (<< 3.13)`
+  instead of claiming 3.11+, and `packaging/build-deb.sh` refuses to build
+  outside Linux/CPython 3.12/amd64 (its interpreter becomes the deb's
+  runtime). pipx remains the any-distro Python 3.11+ route.
+- **Pinned, reproducible deb builds** — release artifacts come from the
+  pinned `ubuntu:24.04` container (`packaging/deb/Dockerfile`, digest
+  pinning documented) using a committed, reviewed dependency lock
+  (`packaging/deb/constraints.txt`, regenerable with
+  `packaging/deb/update-constraints.sh`, wheel-hash capable) instead of a
+  hidden `pip freeze` at build time.
+- **Native AUR recipe** — `packaging/aur/` now builds the app from source
+  against Arch's current Python (PEP 517 `python -m build` + `installer`,
+  speech via AUR `python-faster-whisper`), replacing the unpublished
+  `sayit-ermano-bin` deb-repackaging recipe.
+- **README fixes** — the duplicate `[general]` settings table is merged
+  (one `[general]` block) and the `hotwords` example moved to `[model]`
+  where the key actually lives; install docs now lead with the Ubuntu
+  24.04 deb and the pipx cross-distro route.
+- **Roadmap** — the stale local-HTTP/TCP roadmap item is removed; the
+  no-network-listener decision (Unix-socket-only) is canonical in
+  Non-goals.
+
 ## [v0.8.1] — macOS-parity settings (2026-09-09)
 
 The parity-with-upstream release.
