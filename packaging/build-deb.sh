@@ -6,6 +6,15 @@
 #   -> daemon autostarts at login (XDG autostart)
 #   -> icon, systemd user unit
 #
+# DEB CONTRACT (plan P0.6): Ubuntu 24.04 / x86_64 / Python 3.12 ONLY.
+# The bundled venv's python symlinks the system interpreter, so this
+# script's interpreter becomes the deb's runtime — the contract checks
+# below fail the build anywhere else, and release artifacts are built in
+# the pinned container (packaging/deb/Dockerfile). Dependencies are fixed
+# by the committed lock packaging/deb/constraints.txt (see
+# packaging/deb/README.md). Other distros/Pythons: pipx (3.11+) or the
+# native AUR package — README "Installation".
+#
 # The Python runtime is a bundled venv under /opt/sayit-ermano/venv so the
 # deb needs no pip/uv on the target. --system-site-packages is used so a CUDA
 # torch already on the machine (and its NVIDIA libs) are reused when present;
@@ -13,20 +22,48 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 REPO="$(pwd)"
-VERSION="$(.venv/bin/python -c 'import fluidvoice; print(fluidvoice.__version__)')"
+# Version from the project source itself: prefer the repo venv (the tested
+# locked environment), fall back to the system python on a fresh checkout
+# (e.g. inside the pinned Docker build, where no .venv exists).
+VERSION_PY="$REPO/.venv/bin/python"
+[ -x "$VERSION_PY" ] || VERSION_PY="python3"
+VERSION="$($VERSION_PY -c 'import sys; sys.path.insert(0, "."); import fluidvoice; print(fluidvoice.__version__)')"
 PKGVER="${DEB_VERSION:-1}"
 ARCH="${DEB_ARCH:-$(dpkg --print-architecture)}"
 NAME="sayit-ermano"
-STAGE="$(mktemp -d)/pkg"
-trap 'rm -rf "$(dirname "$STAGE")"' EXIT
+CONSTRAINTS="$REPO/packaging/deb/constraints.txt"
 
 echo "== building $NAME ${VERSION}-${PKGVER} ($ARCH) =="
+
+# --- contract: Ubuntu 24.04 / x86_64 / Python 3.12 -------------------------
+# Refuse anything else instead of shipping a package that lies in Depends.
+PY_MINOR="$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+if [ "$PY_MINOR" != "3.12" ]; then
+    echo "ERROR: deb contract is Python 3.12 (Ubuntu 24.04); build host has $PY_MINOR" >&2
+    echo "       Build in the pinned environment instead (packaging/deb/Dockerfile)." >&2
+    exit 1
+fi
+if [ -z "${DEB_ARCH:-}" ] && [ "$(dpkg --print-architecture)" != "amd64" ]; then
+    echo "ERROR: deb contract is x86_64/amd64 only; host is $(dpkg --print-architecture)" >&2
+    exit 1
+fi
+[ -f "$CONSTRAINTS" ] || {
+    echo "ERROR: missing dependency lock $CONSTRAINTS" >&2
+    echo "       (regenerate: packaging/deb/update-constraints.sh)" >&2
+    exit 1
+}
+
+STAGE="$(mktemp -d)/pkg"
+trap 'rm -rf "$(dirname "$STAGE")"' EXIT
 
 # 1. Application payload: bundled venv + package ---------------------------
 mkdir -p "$STAGE/opt/$NAME"
 python3 -m venv --system-site-packages "$STAGE/opt/$NAME/venv"
 "$STAGE/opt/$NAME/venv/bin/pip" install -q --upgrade pip
-"$STAGE/opt/$NAME/venv/bin/pip" install -q --no-cache-dir .
+# -c constraints.txt: the committed, reviewed dependency lock — no silent
+# resolution at build time (and wheel-hash verification once the lock
+# carries --hash lines; needs pip >= 23.1, guaranteed by the upgrade above).
+"$STAGE/opt/$NAME/venv/bin/pip" install -q --no-cache-dir -c "$CONSTRAINTS" .
 rm -rf "$STAGE/opt/$NAME/venv/share"  # docs/man from wheels
 
 # strip the pyc cache (rebuilt on first run) to shrink the package
@@ -89,7 +126,7 @@ Version: $VERSION-$PKGVER
 Section: sound
 Priority: optional
 Architecture: $ARCH
-Depends: python3 (>= 3.11), pipewire-audio-utils | pulseaudio-utils, xdotool, xclip, libnotify-bin, python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1
+Depends: python3 (>= 3.12), python3 (<< 3.13), pipewire-audio-utils | pulseaudio-utils, xdotool, xclip, libnotify-bin, python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1
 Recommends: pulseaudio-utils
 Conflicts: fluidvoice-linux
 Replaces: fluidvoice-linux
