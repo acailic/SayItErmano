@@ -1,37 +1,93 @@
 # Maintainer: acailic <https://aur.archlinux.org> — published via
 # packaging/aur/publish.sh (one command; needs an AUR SSH key).
 # Manual releases only: bump pkgver + sha256 per release, then run the
-# script. See packaging/aur/README.md for the full workflow.
+# script. See packaging/aur/README.md for the full workflow and the note
+# on the superseded (never-published) sayit-ermano-bin recipe.
 #
-# -bin package: repackages the official release .deb asset (source = release
-# asset, not git). The deb ships /opt/sayit-ermano (bundled venv), /usr/bin
-# and /usr/share payloads, a systemd user unit, and /etc/xdg/autostart —
-# all of it is intended, including the autostart (the hotkey daemon must
-# run per session; disable per-user with `systemctl --user` or by removing
-# the autostart file).
-pkgname=sayit-ermano-bin
+# NATIVE package (plan P0.6): PEP 517 source build against Arch's CURRENT
+# Python — this is the Arch install path now that the release .deb is a
+# Ubuntu-24.04/Python-3.12-only artifact. The app wheel itself is pure
+# Python; speech runs through AUR python-faster-whisper (which drags
+# ctranslate2/onnxruntime/av from its own chain). Anything not mappable
+# to a distro package rides along as a normal wheel dependency.
+pkgname=sayit-ermano
 pkgver=0.8.1
 pkgrel=1
 pkgdesc="Local voice dictation with AI polish (community Linux port of FluidVoice)"
-arch=('x86_64')
+arch=('any')
 url="https://github.com/acailic/SayItErmano"
 license=('GPL-3.0-or-later')
-depends=('python' 'pipewire-audio-utils' 'xdotool' 'xclip' 'libnotify'
-         'python-gobject' 'gtk4' 'libadwaita' 'zstd')
-optdepends=('pulseaudio-utils: legacy PulseAudio recording fallback')
-provides=('sayit-ermano' 'fluidvoice-linux')
-conflicts=('sayit-ermano' 'fluidvoice-linux')
+depends=('python'
+         'python-faster-whisper'   # AUR: speech engine (+ctranslate2/onnxruntime/av)
+         'python-xlib'
+         'python-pillow'
+         'python-gobject'           # GTK app + tray
+         'gtk4'
+         'libadwaita'
+         'pipewire-audio-utils'     # pw-record capture
+         'xdotool'                  # X11 text insertion + hotkey context
+         'xclip'                    # clipboard paste mode
+         'libnotify')               # notifications
+optdepends=('pulseaudio-utils: legacy PulseAudio recording fallback'
+            'wtype: Wayland text insertion (wlroots/KDE)'
+            'ydotool: Wayland text insertion (any compositor; needs ydotoold)'
+            'wl-clipboard: Wayland clipboard paste mode'
+            'python-evdev: evdev push-to-talk (hotkey.wayland_evdev)')
+makedepends=('python-build' 'python-installer' 'python-wheel' 'python-setuptools')
+provides=('fluidvoice-linux')
+conflicts=('fluidvoice-linux' 'sayit-ermano-bin')
 replaces=('fluidvoice-linux')
-source_x86_64=("${pkgname}_${pkgver}.deb::${url}/releases/download/v${pkgver}/sayit-ermano_${pkgver}-1_amd64.deb")
-# Fill from the release page (the asset digest printed by `sayit-ermano
-# update` in v0.5.0+): `b2sum`/`sha256sum` of the downloaded asset. SKIP is
-# only acceptable while the recipe is unadopted.
-sha256sums_x86_64=('cca100c3843f694eb3e8a168bec76c75d519f74f775f826ddad5250ed1ef308f')
-noextract=("${pkgname}_${pkgver}.deb")
+source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
+# Placeholder while the recipe is unadopted (project precedent): FILL from
+# the release page digest (or `updpkgsums` / `makepkg -g`) before the first
+# publish — a submission with SKIP left in is a packaging bug.
+sha256sums=('SKIP')
+
+build() {
+    # GitHub tag archives extract to SayItErmano-<tag>/ (repo name, not
+    # pkgname; glob is robust to the v-prefix in the root dir name)
+    cd "${srcdir}"/SayItErmano-*
+    # --no-isolation: build deps come from makedepends (offline build)
+    python -m build --wheel --no-isolation
+}
+# no check(): the suite needs pytest + PipeWire/X11/GPU fixtures and model
+# downloads — not viable inside makepkg; upstream CI covers it per release.
 
 package() {
-    # The deb's payload is data.tar.zst (verified with `ar t` on the v0.4.0+
-    # assets; bsdtar auto-detects the compression — do NOT pin -J/-z flags).
-    bsdtar -xOf "${srcdir}/${pkgname}_${pkgver}.deb" data.tar.\* \
-        | bsdtar -xf- -C "${pkgdir}"
+    cd "${srcdir}"/SayItErmano-*
+    python -m installer --destdir="${pkgdir}" dist/*.whl
+
+    # Desktop integration + session autostart + systemd user unit live in
+    # the repo's packaging/ tree (not in the wheel). Same layout as the deb.
+    install -Dm644 packaging/sayit-ermano.desktop \
+        "${pkgdir}/usr/share/applications/sayit-ermano.desktop"
+    install -Dm644 packaging/autostart.desktop \
+        "${pkgdir}/etc/xdg/autostart/sayit-ermano.desktop"
+    for png in packaging/icons/hicolor/*x*/apps/sayit-ermano.png; do
+        install -Dm644 "${png}" \
+            "${pkgdir}/usr/share/icons/hicolor/${png#packaging/icons/hicolor/}"
+    done
+    # bundled symbolic UI icons under our own names (theme-swap-proof)
+    for svg in fluidvoice/assets/icons/symbolic/actions/*.svg; do
+        install -Dm644 "${svg}" \
+            "${pkgdir}/usr/share/icons/hicolor/symbolic/actions/$(basename "${svg}")"
+    done
+    # systemd user unit: same as the deb ships (the repo's systemd/ copy is
+    # a dev-machine example with venv paths baked in, so it is embedded here)
+    install -d -m755 "${pkgdir}/usr/lib/systemd/user"
+    cat > "${pkgdir}/usr/lib/systemd/user/sayit-ermano.service" <<'UNIT'
+[Unit]
+Description=SayItErmano dictation daemon
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/sayit-ermano daemon
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target
+UNIT
 }
