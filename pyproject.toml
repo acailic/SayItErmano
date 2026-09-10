@@ -54,6 +54,7 @@ include = ["fluidvoice*"]
 [tool.setuptools.package-data]
 "fluidvoice" = ["assets/sfx/*", "assets/icon.png",
                 "assets/icons/*", "assets/icons/symbolic/actions/*.svg", "assets/providers/*"]
+"fluidvoice.evalharness.corpus" = ["manifest.toml"]  # synthetic eval corpus (P1.4)
 
 # Parallel runs: pytest-xdist is part of the dev setup - run the suite with
 # `... -m pytest -n auto tests --ignore=tests/integration` for a ~4-5x

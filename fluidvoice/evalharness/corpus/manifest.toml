@@ -1,0 +1,40 @@
+# Committed synthetic evaluation corpus (plan P1.4).
+#
+# CC0-1.0 by construction: the audio is synthesized tones/silence (no
+# recorded speech), regenerated from each case's `synth` recipe — see
+# docs/eval/MANIFEST-SCHEMA.md for the field reference. Metric math over
+# these cases is fully offline; representative-model evaluation is the
+# documented manual step (docs/eval/README.md §Release policy).
+
+[[cases]]
+id = "tone-en-basic"
+audio = "tone-en-basic.wav"
+reference_text = "hello world"
+language = "en"
+tags = ["hello"]
+expected_guard = "ok"
+license = "CC0-1.0"
+source = "synthetic (fluidvoice.evalharness.synth; no recorded speech)"
+synth = { kind = "tone", seconds = 1.0 }
+
+[[cases]]
+id = "chirp-en-hotwords"
+audio = "chirp-en-hotwords.wav"
+reference_text = "the quick brown fox jumps over the lazy dog"
+language = "en"
+tags = ["quick", "fox", "lazy"]
+expected_guard = "ok"
+license = "CC0-1.0"
+source = "synthetic (fluidvoice.evalharness.synth; no recorded speech)"
+synth = { kind = "chirp", seconds = 2.0 }
+
+[[cases]]
+id = "silence-guard"
+audio = "silence-guard.wav"
+reference_text = ""
+language = "en"
+tags = []
+expected_guard = "flag"
+license = "CC0-1.0"
+source = "synthetic (fluidvoice.evalharness.synth; no recorded speech)"
+synth = { kind = "silence", seconds = 1.0 }
