@@ -191,9 +191,36 @@ def _tool_call(name: str, arguments: dict,
     return {"content": [{"type": "text", "text": text}]}
 
 
-def handle_message(msg: dict,
-                   request: Callable[..., dict] = control.request) -> dict | None:
-    """Route one decoded JSON-RPC message; None for notifications."""
+def handle_message(msg: Any,
+                   request: Callable[..., dict] = control.request
+                   ) -> dict | list | None:
+    """Route one decoded JSON-RPC message; None for notifications. A
+    list is a JSON-RPC 2.0 batch (F7): the reply is an array of
+    per-member responses (notifications produce none)."""
+    if isinstance(msg, list):
+        return _handle_batch(msg, request)
+    return _handle_single(msg, request)
+
+
+def _handle_batch(batch: list, request: Callable[..., dict]
+                  ) -> list | None:
+    """JSON-RPC 2.0 §Batch: process each member independently and reply
+    with an array (invalid members get individual error objects;
+    notifications are skipped). An empty batch is a single invalid-
+    request object per the spec; a batch whose members are ALL
+    notifications produces no output at all."""
+    if not batch:
+        return _err(None, INVALID_REQUEST, "empty batch")
+    replies: list[dict] = []
+    for member in batch:
+        reply = _handle_single(member, request)
+        if reply is not None:
+            replies.append(reply)
+    return replies or None
+
+
+def _handle_single(msg: Any,
+                   request: Callable[..., dict]) -> dict | None:
     req, err = validate(msg)
     if err is not None:
         return err

@@ -132,14 +132,16 @@ class TestJsonRpcCompliance:
 
     def test_invalid_request_shapes(self):
         cases = [
-            ([1, 2, 3], None),          # batch/array: not an object
             (42, None),                 # scalar: not an object
+            ("str", None),              # string: not an object
             ({"id": 1, "method": "ping"}, 1),          # no jsonrpc member
             ({"jsonrpc": "1.0", "id": 1, "method": "ping"}, 1),  # wrong ver
             ({"jsonrpc": "2.0", "id": 1, "params": {}}, 1),  # no method
             ({"jsonrpc": "2.0", "id": False, "method": "ping"}, None),
             ({"jsonrpc": "2.0", "id": {"bad": 1}, "method": "ping"}, None),
         ]
+        # note: a LIST is no longer "not an object" - it is a batch and
+        # gets per-member replies (F7, TestJsonRpcBatch)
         for msg, expected_id in cases:
             r = assert_valid_response(handle_message(msg), expected_id,
                                       error=True)
@@ -231,17 +233,86 @@ def test_serve_loop_end_to_end(monkeypatch):
         assert r["jsonrpc"] == "2.0"
 
 
-def test_serve_non_object_json(monkeypatch):
+def test_serve_non_object_json():
+    # a bare array is a (three-invalid-member) batch, not a parse error:
+    # the reply is the spec's array of individual invalid-request errors
     out = io.StringIO()
-    serve(io.StringIO('[1, 2, 3]\n'), out)
-    r = json.loads(out.getvalue())
-    assert_valid_response(r, None, error=True)
-    assert r["error"]["code"] == -32600
+    serve(io.StringIO('[1, 2, 3]\n'), out,
+          request=lambda a, **k: {"ok": True})
+    replies = json.loads(out.getvalue())
+    assert isinstance(replies, list) and len(replies) == 3
+    assert all(r["error"]["code"] == -32600 for r in replies)
 
 
 # ---------------------------------------------------------------------------
 # Bridge survival (F1): transport failures must never kill the process
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# JSON-RPC 2.0 batches (F7)
+# ---------------------------------------------------------------------------
+
+class TestJsonRpcBatch:
+    """Batch arrays get per-member responses: valid members are answered
+    (the old bridge answered ONE invalid-request object, so a batching
+    client hung on every valid id), invalid members get individual error
+    objects, notifications are silent."""
+
+    def test_mixed_batch_answers_every_callables_member(self):
+        batch = [
+            {"jsonrpc": "2.0", "id": "1", "method": "ping"},
+            {"jsonrpc": "2.0", "id": 2, "method": "ping"},
+            1,   # invalid member: individual error object
+            {"jsonrpc": "2.0",
+             "method": "notifications/initialized"},  # no reply
+            {"jsonrpc": "2.0", "id": None, "method": "no/such"},
+        ]
+        r = handle_message(batch, request=lambda a, **k: {"ok": True})
+        assert isinstance(r, list) and len(r) == 4  # notification skipped
+        assert_valid_response(r[0], "1", result=True)
+        assert_valid_response(r[1], 2, result=True)
+        assert_valid_response(r[2], None, error=True)
+        assert r[2]["error"]["code"] == -32600
+        assert_valid_response(r[3], None, error=True)
+        assert r[3]["error"]["code"] == -32601
+
+    def test_invalid_batch_members_each_get_an_error(self):
+        # the spec's own example: [1,2,3] -> three invalid-request objects
+        r = handle_message([1, 2, 3])
+        assert isinstance(r, list) and len(r) == 3
+        for member in r:
+            assert_valid_response(member, None, error=True)
+            assert member["error"]["code"] == -32600
+
+    def test_nested_batch_member_is_invalid(self):
+        r = handle_message([[{"jsonrpc": "2.0", "id": 1, "method": "ping"}]])
+        assert isinstance(r, list) and len(r) == 1
+        assert r[0]["error"]["code"] == -32600
+
+    def test_empty_batch_is_one_invalid_request(self):
+        # the spec: "rpc call with an empty Array" -> a single object
+        r = assert_valid_response(handle_message([]), None, error=True)
+        assert r["error"]["code"] == -32600
+
+    def test_all_notification_batch_produces_no_output(self):
+        # the spec: no response objects -> nothing is returned at all
+        assert handle_message([
+            {"jsonrpc": "2.0", "method": "notifications/initialized"},
+            {"jsonrpc": "2.0", "method": "notifications/cancelled"},
+        ]) is None
+
+    def test_batch_through_the_stdio_loop(self):
+        batch = [rpc("ping"),
+                 {"jsonrpc": "2.0", "id": 5, "method": "no/such"}]
+        out = io.StringIO()
+        serve(io.StringIO(json.dumps(batch) + "\n"), out,
+              request=lambda a, **k: {"ok": True})
+        replies = json.loads(out.getvalue())
+        assert isinstance(replies, list) and len(replies) == 2
+        assert replies[0]["id"] == 1 and "result" in replies[0]
+        assert replies[1]["id"] == 5
+        assert replies[1]["error"]["code"] == -32601
+
 
 class TestBridgeSurvivesTransportFailures:
     """control.request raises plain OSErrors from its 15 s socket timeout
