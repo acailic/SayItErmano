@@ -164,12 +164,12 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
             if audio != args.file:
                 converted_dir = audio.parent
-            result = backend.transcribe(
-                audio, language=backends.effective_language(cfg, backend))
+            result = backends.Transcript.of(backend.transcribe(
+                audio, language=backends.effective_language(cfg, backend)))
         finally:
             if converted_dir is not None:
                 shutil.rmtree(converted_dir, ignore_errors=True)
-        text = result["text"]
+        text = result.to_plain_text()
         if not args.no_process:
             text = post_process(text, cfg)
         if args.ai and cfg["ai"].get("enabled"):
@@ -177,12 +177,13 @@ def main(argv: list[str] | None = None) -> int:
         elif args.ai:
             print("(ai.enabled=false in config; raw transcription only)", file=sys.stderr)
         if args.json:
+            # CLI-edge serialization: the historical --json payload shape
+            # (duration_s; raw per-segment text, not post-processed)
             payload = {"text": text,  # final text (post-processed/AI if on)
-                       "language": result.get("language"),
+                       "language": result.language,
                        # null for torch/whisper.cpp; [] when backend exposes none
-                       "duration_s": result.get("duration"),
-                       # raw per-segment text, not post-processed
-                       "segments": result.get("segments", [])}
+                       "duration_s": result.duration,
+                       "segments": [s.to_dict() for s in result.segments]}
             out_text = json.dumps(payload, indent=2, ensure_ascii=False)
         else:
             out_text = text

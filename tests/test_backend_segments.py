@@ -1,4 +1,10 @@
-"""Segment exposure in the three backends (constructors bypassed, no models)."""
+"""Segment exposure in the three backends (constructors bypassed, no models).
+
+Result shape note (P1.1 seam): backends now return `Transcript`; the
+legacy dict view (`out["segments"]` etc.) serializes via to_dict(),
+which omits absent optional confidence fields (avg_logprob/
+no_speech_prob) instead of emitting nulls. tests/test_backend_contract.py
+runs the shared adapter contract over all five backends."""
 from __future__ import annotations
 
 
@@ -37,11 +43,11 @@ class TestFasterWhisperSegments:
         out = be.transcribe(wav)
         assert out["text"] == "And so it goes."
         assert out["language"] == "en" and out["duration"] == 2.0
+        # FakeSeg carries no confidence attrs: the absent optionals are
+        # OMITTED (typed contract), not emitted as nulls
         assert out["segments"] == [
-            {"start": 0.123, "end": 1.001, "text": "And so", "avg_logprob": None,
-             "no_speech_prob": None},
-            {"start": 1.5, "end": 2.0, "text": "it goes.", "avg_logprob": None,
-             "no_speech_prob": None},
+            {"start": 0.123, "end": 1.001, "text": "And so"},
+            {"start": 1.5, "end": 2.0, "text": "it goes."},
         ]
         assert len(calls) == 1  # generator consumed once, no re-transcription
 

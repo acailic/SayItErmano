@@ -14,6 +14,7 @@ from . import (
     preload_cuda_libs,
     resolve_model_name,
 )
+from .base import BackendCapabilities, Transcript, TranscriptSegment
 
 
 class FasterWhisperBackend:
@@ -24,6 +25,18 @@ class FasterWhisperBackend:
     # hallucination guard: transcribe() honors a language hint, so a
     # garbage forced-language decode can be retried with auto detection
     selects_language = True
+    # the seam (plan P1.1): canonical capability declaration. The two
+    # legacy attributes above are kept as aliases (pre-seam consumers);
+    # the contract suite asserts they agree.
+    capabilities = BackendCapabilities(
+        supports_language_select=True,    # language= hint honored
+        supports_language_detect=True,    # info.language under auto
+        supports_hotwords=True,           # native decoder hotwords param
+        supports_streaming=False,         # preview = segmented batch
+        supports_segments=True,           # start/end/text per segment
+        supports_confidence=True,         # avg_logprob + no_speech_prob
+        supports_alternatives=False,
+    )
 
     def __init__(self, cfg: dict):
         preload_cuda_libs()  # must run before ctranslate2 loads its CUDA libs
@@ -53,6 +66,9 @@ class FasterWhisperBackend:
             self._warm_inference()
         except Exception:
             pass  # the model loaded; a failed probe must not fail startup
+
+    def close(self) -> None:
+        """No-op: CTranslate2 weights free on refcount drop + gc."""
 
     def _warm_inference(self) -> None:
         fd, name = tempfile.mkstemp(prefix="sayitermano-warmup-", suffix=".wav")
@@ -90,7 +106,8 @@ class FasterWhisperBackend:
             else:
                 raise
 
-    def transcribe(self, wav_path: Path, language: str | None = None) -> dict[str, Any]:
+    def transcribe(self, wav_path: Path,
+                   language: str | None = None) -> Transcript:
         self._load()
         lang = language or self.language
         if lang == "auto":
@@ -100,14 +117,17 @@ class FasterWhisperBackend:
             # getattr: duck-typed constructions (tests) bypass __init__
             hotwords=getattr(self, "hotwords", None),
         )
-        texts, segs = [], []
+        segs, texts = [], []
         for seg in segments:  # generator - consume once, reuse for text AND segments
-            texts.append(seg.text)
             lp = getattr(seg, "avg_logprob", None)
             ns = getattr(seg, "no_speech_prob", None)
-            segs.append({"start": round(seg.start, 3), "end": round(seg.end, 3),
-                         "text": seg.text.strip(),
-                         "avg_logprob": round(lp, 3) if lp is not None else None,
-                         "no_speech_prob": round(ns, 3) if ns is not None else None})
-        return {"text": "".join(texts).strip(), "language": info.language,
-                "duration": info.duration, "segments": segs}
+            texts.append(seg.text)  # raw: joining unstripped keeps the spaces
+            segs.append(TranscriptSegment(
+                start=round(seg.start, 3), end=round(seg.end, 3),
+                text=seg.text.strip(),
+                avg_logprob=round(lp, 3) if lp is not None else None,
+                no_speech_prob=round(ns, 3) if ns is not None else None))
+        return Transcript(
+            text="".join(texts).strip(),
+            language=info.language, duration=info.duration,
+            segments=tuple(segs))

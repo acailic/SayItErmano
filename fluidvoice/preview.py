@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Callable
 
 from .audio_utils import raw_to_wav_bytes
+from .backends.base import SpeechBackend
 from .pipeline import is_repeat_hallucination
 
 
@@ -398,12 +399,21 @@ class SegmentedPreviewEngine:
         self._emit(" ".join(t for t in self.committed if t), tail)
 
 
-def preview_transcriber(cfg: dict, backend, language: str | None
+def preview_transcriber(cfg: dict, backend: SpeechBackend | None,
+                        language: str | None
                         ) -> tuple[Callable[[bytes, str | None], str], str] | None:
     """Bytes+context -> text transcriber for the segmented preview engine,
     for whichever backend is loaded and ready. Returns (fn, backend-name) or
     None when the backend has no model loaded yet (preview simply stays off,
-    exactly like the legacy faster-whisper-only path)."""
+    exactly like the legacy faster-whisper-only path).
+
+    Preview deliberately reads the backend's loaded model internals
+    (`_model`/`_decoder`/...) rather than calling `transcribe()`: partials
+    must decode a growing in-memory buffer cheaply, below the final
+    decode's contract. `name` is the seam's stable identity member; the
+    internals are the documented preview escape hatch (no capability flag
+    for it - see BackendCapabilities.supports_streaming, False for all
+    adapters until a real streaming adapter exists)."""
     name = getattr(backend, "name", "?") if backend is not None else None
     model = getattr(backend, "_model", None)
     lang = None if language in (None, "", "auto") else language

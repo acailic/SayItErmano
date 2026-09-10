@@ -26,6 +26,7 @@ from . import session as session_mod
 from . import update as update_mod
 from .ai.client import AIClient, AIError  # noqa: F401 (tests patch dm.AIClient)
 from .audio_utils import duration_seconds, is_silent
+from .backends.base import Transcript
 from .config import load_config
 from .media import MediaController
 from .micmon import match_priority as micmon_match_priority
@@ -1771,17 +1772,19 @@ class Daemon:
             if audio != path:
                 converted_dir = audio.parent
             try:
-                result = self._ensure_backend().transcribe(
-                    audio, self._language_detail()[0]) or {}
+                result = Transcript.of(self._ensure_backend().transcribe(
+                    audio, self._language_detail()[0]) or {})
             finally:
                 if converted_dir is not None:
                     _shutil.rmtree(converted_dir, ignore_errors=True)
-            text = str(result.get("text") or "")
+            text = result.text
             if process:
                 text = post_process(text, self.cfg)
+            # control-edge serialization: the historical response shape
+            # (text/language/duration_s), byte-identical to pre-seam
             return {"ok": True, "path": str(path), "text": text,
-                    "language": result.get("language"),
-                    "duration_s": result.get("duration")}
+                    "language": result.language,
+                    "duration_s": result.duration}
         except Exception as e:  # noqa: BLE001 - API errors are payloads
             return {"ok": False, "error": str(e)}
         finally:
@@ -1836,10 +1839,10 @@ class Daemon:
                 return {"ok": False, "duration_s": duration,
                         "error": "audio was silent - is the mic muted?"}
             backend = self._ensure_backend()
-            result = backend.transcribe(
-                Path(wav), self._language_detail()[0]) or {}
+            result = Transcript.of(backend.transcribe(
+                Path(wav), self._language_detail()[0]) or {})
             return {"ok": True, "duration_s": round(duration, 1),
-                    "text": result.get("text", "")}
+                    "text": result.text}
         except Exception as e:
             return {"ok": False, "error": str(e)}
         finally:

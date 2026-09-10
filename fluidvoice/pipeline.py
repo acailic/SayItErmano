@@ -18,6 +18,7 @@ from . import history as history_mod
 from .ai.client import AIError
 from .ai.prompts import base_prompt_for
 from .audio_utils import duration_seconds, is_digital_silence, is_silent
+from .backends.base import Transcript, capabilities_of
 from .processing import post_process
 from .processing.per_app import match_app_prompt, system_prompt_for
 from .processing.refusal import is_overcorrection, is_prompt_leak, is_refusal
@@ -37,13 +38,14 @@ CONF_LOGPROB_MIXED = -0.35
 CONF_LOGPROB_LOW = -0.90
 
 
-def confidence_band(result: dict) -> int | None:
-    """0-2 ordinal recognition confidence from a transcribe result."""
-    segs = result.get("segments")
+def confidence_band(result: Transcript | dict) -> int | None:
+    """0-2 ordinal recognition confidence from a transcribe result
+    (typed Transcript or a legacy result dict)."""
+    segs = Transcript.of(result).segments
     if not segs:
         return None
-    vals = [s.get("avg_logprob") for s in segs if isinstance(s, dict)]
-    vals = [v for v in vals if isinstance(v, (int, float))]
+    vals = [s.avg_logprob for s in segs
+            if s.avg_logprob is not None]
     if not vals:
         return None
     mean = sum(vals) / len(vals)
@@ -88,17 +90,16 @@ def is_repeat_hallucination(text: str) -> bool:
     return False
 
 
-def looks_like_hallucination(result: dict) -> bool:
+def looks_like_hallucination(result: Transcript | dict) -> bool:
     """Repetition loop or text-over-no-speech segments: whisper's two
     reliable garbage tells. Backends without segment tells (whisper.cpp,
     parakeet, most fakes) degrade to repetition-only detection."""
-    if is_repeat_hallucination(str(result.get("text") or "")):
+    t = Transcript.of(result)
+    if is_repeat_hallucination(t.text):
         return True
-    segs = [s for s in (result.get("segments") or [])
-            if isinstance(s, dict)]
-    vals = [s["no_speech_prob"] for s in segs
-            if isinstance(s.get("no_speech_prob"), (int, float))]
-    return bool(str(result.get("text") or "").strip() and vals
+    vals = [s.no_speech_prob for s in t.segments
+            if s.no_speech_prob is not None]
+    return bool(t.text.strip() and vals
                 and sum(vals) / len(vals) >= NO_SPEECH_MEAN)
 
 
@@ -142,13 +143,15 @@ class DictationPipeline:
             return False
         return duration <= 4.0 and is_silent(str(wav))
 
-    def _transcribe(self, wav: Path) -> dict:
+    def _transcribe(self, wav: Path) -> Transcript:
         # runtime cycle override (set by Daemon._process via attribute
         # injection, mirroring _profile_override) > effective_language
         override = getattr(self, "_language_override", None)
         lang = override if override else backends.effective_language(
             self.cfg, self.backend)
-        result = self.backend.transcribe(wav, language=lang)
+        # Transcript.of: pre-seam backends/fakes still return dicts - the
+        # seam normalizes once, here, and everything below is typed
+        result = Transcript.of(self.backend.transcribe(wav, language=lang))
         result = self._whitelist_retry(wav, result, lang)
         # hallucination guard (final decode only - preview partials never
         # re-decode): a FORCED language decoding audio it cannot parse
@@ -162,17 +165,19 @@ class DictationPipeline:
         # retry's detected language). Backends without language selection
         # (parakeet, English-only): silent skip.
         if (lang and lang != "auto"
-                and getattr(self.backend, "selects_language", False)
+                and capabilities_of(self.backend).supports_language_select
                 and (looks_like_hallucination(result)
                      or confidence_band(result) == 0)):
             retry = self._whitelist_retry(
-                wav, self.backend.transcribe(wav, language="auto"), "auto")
-            if (str(retry.get("text") or "").strip()
+                wav,
+                Transcript.of(self.backend.transcribe(wav, language="auto")),
+                "auto")
+            if (retry.text.strip()
                     and not looks_like_hallucination(retry)
                     and confidence_band(retry) != 0):
                 self.log(f"hallucination guard: forced={lang} decode "
                          f"{'looked hallucinated' if looks_like_hallucination(result) else 'was low-confidence'}; "
-                         f"auto retry detected={retry.get('language')}")
+                         f"auto retry detected={retry.language}")
                 result = retry
             else:
                 self.log(f"hallucination guard: forced={lang} decode "
@@ -180,7 +185,8 @@ class DictationPipeline:
                          f"retry not confidently better - keeping original")
         return result
 
-    def _whitelist_retry(self, wav: Path, result: dict, lang: str) -> dict:
+    def _whitelist_retry(self, wav: Path, result: Transcript,
+                         lang: str) -> Transcript:
         """Wrong-language guard (final decode only): when the resolved
         language for the take is "auto", the backend surfaces its detected
         language, and detection landed outside general.language_whitelist,
@@ -190,16 +196,18 @@ class DictationPipeline:
         whitelist = list(((self.cfg.get("general", {}) or {})
                           .get("language_whitelist")) or []) \
             if isinstance(self.cfg, dict) else []
-        detected = str(result.get("language") or "").strip().lower() or None
+        detected = (result.language or "").strip().lower() or None
         if (whitelist and lang == "auto" and detected
-                and getattr(self.backend, "surfaces_detected_language", False)
+                and capabilities_of(
+                    self.backend).supports_language_detect
                 and detected.split("-")[0] not in
                     {w.split("-")[0] for w in whitelist}):
             retry = whitelist[0]
             self.log(f"language guard: detected={detected} outside "
                      f"whitelist [{', '.join(whitelist)}]; "
                      f"re-decoding as {retry}")
-            result = self.backend.transcribe(wav, language=retry)
+            result = Transcript.of(
+                self.backend.transcribe(wav, language=retry))
         return result
 
     def _polish(self, text: str, app_hint: str | None = None) -> tuple[str, bool]:
@@ -412,7 +420,7 @@ class DictationPipeline:
                 self.log(f"transcription failed: {e}")
                 self.notify("SayItErmano", f"Transcription failed: {e}")
                 return None
-            raw = result.get("text", "")
+            raw = result.text
             if not raw.strip():
                 if is_digital_silence(str(wav)):
                     # the mic streamed zeros: not "user said nothing" but

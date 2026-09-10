@@ -16,7 +16,16 @@ from __future__ import annotations
 import ctypes
 import glob
 import os
-from typing import Any
+
+# the seam (plan P1.1): typed capabilities + transcripts. Re-exported here
+# so `from fluidvoice import backends` keeps being the one import site.
+from .base import (  # noqa: F401
+    BackendCapabilities,
+    SpeechBackend,
+    Transcript,
+    TranscriptSegment,
+    capabilities_of,
+)
 
 # faster-whisper model names -> HuggingFace repos
 FW_MODEL_REPOS: dict[str, str] = {
@@ -149,24 +158,6 @@ def backend_status() -> dict[str, str]:
     return status
 
 
-class Backend:
-    name = "backend"
-
-    def transcribe(self, wav_path: Path, language: str | None) -> dict[str, Any]:
-        raise NotImplementedError
-
-    def warmup(self) -> None:  # optional model preload/download
-        pass
-
-    def close(self) -> None:
-        """Optional teardown before the daemon drops its reference (idle
-        unload). The default no-op is right for every current backend:
-        CTranslate2/ONNX/torch weights free on refcount drop + gc, and
-        whisper.cpp runs a subprocess per transcription so it holds no
-        model memory in-process at all."""
-        pass
-
-
 def resolve_model_name(name: str) -> str:
     name = ALIASES.get(name.strip().lower(), name.strip().lower())
     if name in ("", "auto"):
@@ -253,8 +244,10 @@ def language_detail(cfg, backend=None, runtime: str = "") -> tuple[str, str]:
 
 
 # Wrong-language guard applicability per backend, without instantiating
-# one (doctor + tests read this; the pipeline gate itself checks the
-# backend class attribute `surfaces_detected_language`).
+# one (doctor + tests read this; the pipeline gate itself resolves the
+# backend's capabilities through backends.capabilities_of, which reads
+# the typed `capabilities` declaration and falls back to the legacy
+# `surfaces_detected_language` flag).
 LANGUAGE_GUARD: dict[str, str] = {
     "faster-whisper": "language hint + detected language - whitelist "
                       "guard active",
@@ -304,7 +297,7 @@ def resolved_backend_name(cfg: dict) -> str | None:
     return None
 
 
-def load_backend(cfg: dict) -> Backend:
+def load_backend(cfg: dict) -> SpeechBackend:
     # remote wins over every local choice while a URL is configured -
     # and nothing below runs otherwise (local-first: no probe, no import
     # side effects; byte-identical code path to the pre-remote behavior)
@@ -347,5 +340,6 @@ def load_backend(cfg: dict) -> Backend:
     raise ValueError(f"unknown backend '{wanted}'")
 
 
-# stdlib-only module: safe to re-export for direct users (tests, doctor)
+# stdlib-only module: safe to re-export for direct users (tests, doctor).
+# Bottom placement: remote_stt imports this package's helpers back.
 from .remote_stt import RemoteSttBackend, RemoteSttError  # noqa: E402,F401
