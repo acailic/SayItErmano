@@ -19,6 +19,7 @@ from __future__ import annotations
 from gi.repository import Adw, GLib, Gtk
 
 from ..config import KNOWN_LANGUAGES as LANGUAGES
+from ..config import enum_options, ui_range
 from .client import Client
 from .settings_pages.about import AboutPageMixin
 from .settings_pages.ai import AIPageMixin
@@ -289,8 +290,14 @@ class SettingsWindow(
             row.add_suffix(btn)
         return row
 
-    def _combo(self, section, key, title, values, subtitle="") -> Adw.ComboRow:
-        """values: list of (label, config_value)."""
+    def _combo(self, section, key, title, values=None, subtitle="", labels=None):
+        """values: list of (label, config_value). None -> the config
+        registry's enum options for the key (the value doubles as the
+        label); `labels` overrides the display text for chosen values."""
+        if values is None:
+            values = [(v, v) for v in enum_options(section, key) or ()]
+        if labels:
+            values = [(labels.get(v, label), v) for label, v in values]
         row = Adw.ComboRow(title=title, subtitle=subtitle)
         model = Gtk.StringList()
         for label, _v in values:
@@ -310,8 +317,17 @@ class SettingsWindow(
         self._combo_values[(section, key)] = [v for _l, v in values]
 
     def _spin(
-        self, section, key, title, lo, hi, step, digits=0, subtitle=""
+        self, section, key, title, step=1, digits=0, subtitle="", lo=None, hi=None
     ) -> Adw.SpinRow:
+        """Numeric row. Bounds come from the config registry's validation
+        range (single source of truth); explicit lo/hi only override a
+        registry-less, UI-only number."""
+        bounds = ui_range(section, key)
+        if bounds is not None:
+            lo = bounds[0] if lo is None else lo
+            hi = bounds[1] if hi is None else hi
+        lo = 0 if lo is None else lo
+        hi = lo if hi is None else hi
         adj = Gtk.Adjustment(value=lo, lower=lo, upper=hi, step_increment=step)
         row = Adw.SpinRow(title=title, subtitle=subtitle, adjustment=adj, digits=digits)
         row.connect("notify::value", lambda *_: self._touch())

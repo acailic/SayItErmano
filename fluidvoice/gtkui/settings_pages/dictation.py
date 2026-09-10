@@ -27,7 +27,6 @@ class DictationPageMixin:
                 "hotkey",
                 "mode",
                 "Mode",
-                [("toggle", "toggle"), ("hold", "hold"), ("both", "both")],
                 subtitle="tap to start/stop · hold = push-to-talk · "
                 "both: quick tap toggles, holding talks · "
                 "modifier-only keys need toggle",
@@ -146,21 +145,14 @@ class DictationPageMixin:
                 "recording",
                 "command",
                 "Recorder",
-                [
-                    ("auto", "auto"),
-                    ("pw-record", "pw-record"),
-                    ("parecord", "parecord"),
-                ],
             )
         )
-        mic.add(self._spin("recording", "max_seconds", "Max duration (s)", 5, 3600, 5))
+        mic.add(self._spin("recording", "max_seconds", "Max duration (s)", 5))
         mic.add(
             self._spin(
                 "recording",
                 "first_pcm_timeout",
                 "No-audio timeout (s)",
-                0,
-                60,
                 0.5,
                 digits=1,
                 subtitle="0 = off; stops a muted/wrong mic fast",
@@ -207,11 +199,7 @@ class DictationPageMixin:
                 "recording",
                 "preview_mode",
                 "Mode",
-                [
-                    ("auto", "auto"),
-                    ("overlay", "overlay"),
-                    ("notify", "notifications only"),
-                ],
+                labels={"notify": "notifications only"},
             )
         )
         preview.add(
@@ -219,18 +207,12 @@ class DictationPageMixin:
                 "recording",
                 "preview_overlay_size",
                 "Size",
-                [
-                    ("pill", "pill"),
-                    ("small", "small"),
-                    ("medium", "medium"),
-                    ("large", "large"),
-                ],
                 subtitle="macOS size presets",
             )
         )
         preview.add(
             self._spin(
-                "recording", "preview_bottom_offset", "Bottom offset (px)", 0, 400, 2
+                "recording", "preview_bottom_offset", "Bottom offset (px)", 2
             )
         )
         preview.add(
@@ -238,8 +220,6 @@ class DictationPageMixin:
                 "recording",
                 "preview_interval",
                 "Update interval (s)",
-                0.3,
-                10.0,
                 0.1,
                 digits=1,
             )
@@ -249,8 +229,6 @@ class DictationPageMixin:
                 "recording",
                 "preview_min_audio",
                 "First partial after (s)",
-                0.3,
-                10.0,
                 0.1,
                 digits=1,
             )
@@ -268,8 +246,6 @@ class DictationPageMixin:
                 "recording",
                 "preview_segment_s",
                 "Segment window (s)",
-                1.0,
-                6.0,
                 0.5,
                 digits=1,
             )
@@ -287,8 +263,6 @@ class DictationPageMixin:
                 "recording",
                 "preview_vad_silence_s",
                 "Stop after silence (s)",
-                0.0,
-                10.0,
                 0.5,
                 digits=1,
                 subtitle="0 keeps the old behavior (hotkey stops every take)",
@@ -378,11 +352,6 @@ class DictationPageMixin:
                 "recording",
                 "spoken_send_key",
                 "Key",
-                [
-                    ("enter", "enter"),
-                    ("shift+enter", "shift+enter"),
-                    ("ctrl+enter", "ctrl+enter"),
-                ],
             )
         )
         send.add_row(
@@ -390,8 +359,6 @@ class DictationPageMixin:
                 "recording",
                 "spoken_send_countdown_s",
                 "Quiet countdown (s)",
-                0.0,
-                5.0,
                 0.1,
                 digits=1,
                 subtitle="phrase + 0.5 s quiet finishes "
@@ -432,19 +399,14 @@ class DictationPageMixin:
                 "insertion",
                 "mode",
                 "Mode",
-                [("auto", "auto"), ("typed", "typed"), ("paste", "paste")],
             )
         )
-        ins.add(
-            self._spin("insertion", "type_delay_ms", "Typing delay (ms)", 0, 1000, 1)
-        )
+        ins.add(self._spin("insertion", "type_delay_ms", "Typing delay (ms)", 1))
         ins.add(
             self._spin(
                 "insertion",
                 "paste_threshold_chars",
                 "Paste threshold (chars)",
-                1,
-                100000,
                 50,
             )
         )
@@ -456,7 +418,7 @@ class DictationPageMixin:
             title="Commands",
             description="Voice → terminal agent. Every command needs confirmation.",
         )
-        cmd.add(self._spin("command", "max_turns", "Max agent turns", 1, 20, 1))
+        cmd.add(self._spin("command", "max_turns", "Max agent turns", 1))
         cmd.add(
             self._entry("command", "working_dir", "Working directory (empty = home)")
         )
@@ -465,8 +427,6 @@ class DictationPageMixin:
                 "command",
                 "timeout_seconds",
                 "Command timeout (s)",
-                1,
-                3600,
                 5,
                 digits=1,
             )
@@ -476,8 +436,6 @@ class DictationPageMixin:
                 "command",
                 "confirm_timeout_s",
                 "Confirmation timeout (s)",
-                5,
-                600,
                 5,
                 digits=1,
             )
