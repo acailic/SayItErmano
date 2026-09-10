@@ -514,14 +514,19 @@ class Daemon:
     def shutdown(self) -> None:
         log("shutting down")
         self._stop_idle_watch()
-        if self.recording:
-            self.recorder.cancel()
-            self.recording = False
-        if self._watchdog:
-            self._watchdog.cancel()
-        if self._first_pcm_timer:
-            self._first_pcm_timer.cancel()
-            self._first_pcm_timer = None
+        # under the lock: these fields race the hotkey thread's toggle
+        # (N1). The race was benign - callbacks re-validate recorder
+        # identity - but serializing costs nothing and matches
+        # _cancel_locked, which already cancels under this lock.
+        with self._lock:
+            if self.recording:
+                self.recorder.cancel()
+                self.recording = False
+            if self._watchdog:
+                self._watchdog.cancel()
+            if self._first_pcm_timer:
+                self._first_pcm_timer.cancel()
+                self._first_pcm_timer = None
         if self._micmon:
             self._micmon.stop()
             self._micmon = None
