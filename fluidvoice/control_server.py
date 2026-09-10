@@ -126,6 +126,11 @@ class ControlServer:
         # identity of OUR socket file: shutdown only unlinks a path that
         # still points at this server (a replacement may have rebound it)
         self._sock_ino = os.stat(self.path).st_ino
+        # unlink happens at most once: a REPEATED shutdown must never
+        # touch the path again - a replacement binding the freed path can
+        # even reuse our just-freed inode number, defeating the inode
+        # check (F5)
+        self._unlinked = False
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -188,6 +193,9 @@ class ControlServer:
         self.shutdown()
 
     def _unlink_owned_path(self) -> None:
+        if self._unlinked:
+            return  # ours is already gone: the path belongs to someone else
+        self._unlinked = True
         try:
             if os.stat(self.path).st_ino == self._sock_ino:
                 self.path.unlink()

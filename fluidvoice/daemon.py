@@ -554,11 +554,14 @@ class Daemon:
             hk.stop()
         self._extra_hotkeys = []
         if self._srv:
+            # ControlServer.shutdown() unlinks the socket path only when
+            # it still points at THIS daemon's socket (inode check). A
+            # blind unlink here could delete a replacement daemon's
+            # freshly bound control channel (F5).
             try:
                 self._srv.close()
             except OSError:
                 pass
-            paths.socket_path().unlink(missing_ok=True)
 
     @staticmethod
     def _sweep_stale_tmp() -> None:

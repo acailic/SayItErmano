@@ -524,6 +524,28 @@ class TestBackpressure:
                 c.close()
 
 
+# -- socket unlink hygiene (F5) ----------------------------------------------------
+
+def test_shutdown_never_unlinks_a_replacement_socket(tmp_path):
+    """The inode check means OUR shutdown - even a repeated one after a
+    replacement daemon rebound the freed path - only ever removes a
+    socket that is still ours (the daemon-side twin of this test lives in
+    test_daemon.py)."""
+    path = tmp_path / "c.sock"
+    a = ControlServer(lambda req: {"ok": True}, path)
+    a.start()
+    a.shutdown()  # unlinks its own socket
+    b = ControlServer(lambda req: {"ok": True}, path)  # replacement binds
+    b.start()
+    try:
+        a.shutdown()  # late/idempotent shutdown: must NOT touch b's socket
+        assert path.exists()
+        with _client(path) as c:
+            assert _rt_obj(c, {"action": "status"}) == {"ok": True}
+    finally:
+        b.shutdown()
+
+
 # -- module facade compatibility ---------------------------------------------------
 
 def test_serve_facade_round_trip(tmp_path, monkeypatch):
