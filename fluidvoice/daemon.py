@@ -31,6 +31,7 @@ from . import update as update_mod
 from .ai.client import AIClient, AIError  # noqa: F401 (tests patch dm.AIClient)
 from .audio_utils import duration_seconds, is_silent
 from .backends.base import Transcript
+from .command_coord import CommandCoordinator
 from .config import load_config
 from .engine_manager import SpeechEngineManager
 from .media import MediaController
@@ -60,20 +61,15 @@ class Daemon:
         self._backend_factory = backend_factory
         self._pipeline_factory = pipeline_factory
         self._command_session_factory = command_session_factory
-        self._command_context = None  # lazily built CommandContextStore
         self.recording = False
         self.busy = False  # transcription/insertion in flight
         self.last_result: dict = {}
         self._app_hint: str | None = None
         self._rewrite_context: str | None = None
         self._rewrite_mode = False
-        # Command mode: recording flag + the awaiting-confirmation state
+        # Command mode: the take-mode flag (command conversation state
+        # lives in CommandCoordinator below)
         self._command_mode = False
-        self._command_session = None
-        self._command_pending = False
-        self._command_destructive_armed = False  # 1st press of strong confirm
-        self._command_display = None
-        self._command_entries: list[dict] = []  # panel conversation feed
         # RuntimeTasks: every timer/thread the daemon spawns is named,
         # exception-reported and joined at shutdown (fluidvoice/
         # runtime_tasks.py; plan P1.2). The handles below stay Timer/
@@ -93,7 +89,19 @@ class Daemon:
             on_unload=self._refresh_tray,
             on_language_change=lambda lang: (self._announce_language(lang),
                                              self._refresh_tray()))
-        self._command_timer: threading.Timer | None = None
+        # CommandCoordinator: the command-conversation state machine
+        # (proposal/confirmation/timeout/panel/history, P1.2). Daemon
+        # routes control actions and hotkey presses to it.
+        self._commands = CommandCoordinator(
+            self.cfg, self._tasks, self._lock,
+            is_busy=lambda: self.busy,
+            set_busy=self._set_busy,
+            is_recording=lambda: self.recording,
+            log=log,
+            notify=lambda title, body: ui.notify(
+                title, body, enabled=self.cfg["notifications"]["enabled"]),
+            session_factory=self._command_session_factory,
+            arm_escape=self._arm_command_escape)
         self._command_hotkey = None
         self._paste_hotkey = None
         self._language_hotkey = None
@@ -146,6 +154,20 @@ class Daemon:
         log(f"WARN runtime task {name!r} failed: "
             f"{exc.__class__.__name__}: {exc}\n"
             + "".join(traceback.format_exception(exc)).rstrip())
+
+    def _set_busy(self, busy: bool) -> None:
+        """Coordinator hook: flip the daemon's busy flag (callers that
+        need atomicity hold the shared lock)."""
+        self.busy = busy
+
+    def _arm_command_escape(self, active: bool) -> None:
+        """Coordinator hook: arm/disarm the command hotkey's Escape grab
+        while a proposal is pending."""
+        if self._command_hotkey:
+            try:
+                self._command_hotkey.set_recording(active)
+            except Exception:
+                pass
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -393,8 +415,8 @@ class Daemon:
                 was_recording = self.recording
             if was_recording:
                 self.cancel()  # existing path: watchdog off, discard, notify
-            if self._command_pending:
-                self.cancel_pending_command()
+            if self._commands.pending:
+                self._commands.cancel_pending()
             self._refresh_tray()
         else:
             log("screen unlocked - hotkeys resumed")
@@ -963,7 +985,7 @@ class Daemon:
             return {"ok": ok, "error": detail if not ok else None}
         if action == "command-rerun":
             purpose = req.get("purpose")
-            return self._rerun_command(str(req.get("command", "")),
+            return self._commands.rerun(str(req.get("command", "")),
                                        str(purpose) if purpose else None)
         if action == "status":
             upd = self._update_status()
@@ -1109,7 +1131,7 @@ class Daemon:
             return  # session locked: hotkey entries ignored
         from . import command as command_mod
         with self._lock:
-            if self.recording or self.busy or self._command_pending:
+            if self.recording or self.busy or self._commands.pending:
                 return
         ready = command_mod.command_mode_ready(self.cfg)
         if ready:
@@ -1125,10 +1147,14 @@ class Daemon:
     def _on_command_hotkey(self) -> None:
         """Command hotkey router: a second press CONFIRMS a pending proposal
         (the only execution trigger); otherwise it starts a recording."""
-        if self._command_pending:
-            self._confirm_pending_command()
+        if self._commands.pending:
+            self._commands.confirm_pending()
         else:
             self.start_command()  # guards make this a no-op mid-recording
+
+    def cancel_pending_command(self) -> None:
+        """Escape/shutdown/lock on a pending proposal: nothing executes."""
+        self._commands.cancel_pending()
 
     def toggle(self) -> bool:
         if self._locked:
@@ -1790,322 +1816,4 @@ class Daemon:
         # Turn 1 runs AFTER busy clears, so there is no busy-flag race with
         # the hotkey-confirm handoff below.
         if mode == "command" and out.get("mode") == "command":
-            self._begin_command(str(out.get("text", "")), app=app_hint)
-
-    # -- command mode ---------------------------------------------------------
-
-    def _begin_command(self, instruction: str,
-                       app: str | None = None) -> None:
-        """Turn 1: ask the model for the first proposal (background thread;
-        the user is not blocked - not even by the LLM latency). `app` scopes
-        the follow-up context store (last results in the SAME focused app)."""
-        from . import command as command_mod
-        if instruction.strip().lower() in command_mod.NEW_SESSION_PHRASES:
-            if self._command_context is not None:
-                self._command_context.clear(app)
-            log("command context cleared (spoken 'new session')")
-            ui.notify("SayItErmano", "Command context cleared",
-                      enabled=self.cfg["notifications"]["enabled"])
-            return
-        self._command_entries = [{"kind": "user", "text": instruction}]
-        self._command_panel(self._command_entries, status="Working...",
-                            awaiting=None)
-
-        def _work():
-            factory = self._command_session_factory or command_mod.CommandSession
-            if self._command_context is None:
-                self._command_context = command_mod.CommandContextStore()
-            session = factory(self.cfg, context_store=self._command_context,
-                              app=app)
-            try:
-                proposal = session.start(instruction)
-            except command_mod.CommandError as e:
-                with self._lock:
-                    self.busy = False
-                log(f"command mode failed: {e}")
-                ui.notify("SayItErmano", f"Command mode failed: {e}",
-                          enabled=self.cfg["notifications"]["enabled"])
-                return
-            if proposal is None:
-                with self._lock:
-                    self.busy = False
-                ui.notify("SayItErmano",
-                          session.summary or "Command mode: nothing to run.",
-                          enabled=self.cfg["notifications"]["enabled"])
-                return
-            with self._lock:                 # atomic handoff to the pending state
-                self._command_session = session
-                self._command_pending = True
-                self.busy = False            # waiting for the user, not busy
-            self._present_proposal(session, proposal)
-
-        def _guarded():
-            try:
-                _work()
-            except Exception as e:  # noqa: BLE001 - never strand `busy`
-                log(f"command mode failed: {e}")
-                ui.notify("SayItErmano", f"Command mode failed: {e}",
-                          enabled=self.cfg["notifications"]["enabled"])
-                self._end_command_session()
-
-        with self._lock:
-            if self.busy or self._command_pending:
-                return
-            self.busy = True
-        self._tasks.spawn("command", _guarded)
-
-    def _rerun_command(self, command: str,
-                       purpose: str | None = None) -> dict:
-        """History Commands view 'Re-run' (v2): re-post the exact stored
-        command as a PENDING proposal - the user confirms with the hotkey
-        exactly like a fresh voice proposal (strong confirm included when
-        destructive). NOTHING executes here: this only ever creates a
-        pending proposal; CommandSession.confirm() stays the single
-        execution site. No LLM call is needed to propose."""
-        from . import command as command_mod
-        with self._lock:
-            if self.recording or self.busy or self._command_pending:
-                return {"ok": False, "error": "daemon busy"}
-        ready = command_mod.command_mode_ready(self.cfg)
-        if ready:
-            return {"ok": False, "error": ready}
-        if self._command_context is None:
-            self._command_context = command_mod.CommandContextStore()
-        factory = self._command_session_factory or command_mod.CommandSession
-        session = factory(self.cfg, context_store=self._command_context)
-        try:
-            proposal = session.preset(command, purpose)
-        except command_mod.CommandError as e:
-            return {"ok": False, "error": str(e)}
-        self._command_entries = [{"kind": "user",
-                                  "text": session.instruction or ""}]
-        with self._lock:                 # atomic handoff to the pending state
-            self._command_session = session
-            self._command_pending = True
-            self.busy = False            # waiting for the user, not busy
-        self._present_proposal(session, proposal)
-        return {"ok": True, "pending": True, "command": proposal.command}
-
-    def _command_panel(self, entries: list[dict], status: str | None,
-                       awaiting: str | None):
-        """Live conversation panel (best-effort). Reuses the running panel
-        when present; falls back to None headlessly."""
-        try:
-            from .overlay import CommandPanel
-            panel = self._command_display
-            if panel is not None and panel.using_overlay:
-                panel.update(entries, status=status, awaiting=awaiting)
-                return panel
-            rcfg = self.cfg["recording"]
-            panel = CommandPanel(
-                bottom_offset=int(rcfg.get("preview_bottom_offset", 64)))
-            if not panel.using_overlay:
-                panel.close()
-                return None
-            panel.update(entries, status=status, awaiting=awaiting)
-            panel.start()
-            self._command_display = panel
-            return panel
-        except Exception as e:  # noqa: BLE001 - never block the agent loop
-            log(f"WARN command panel unavailable: {e}")
-            return None
-
-    def _present_proposal(self, session, proposal) -> None:
-        """Awaiting-confirmation UX: conversation panel, armed Escape grab,
-        notification, confirm watchdog. Call with no lock held. A
-        destructive proposal arms the STRONG confirmation (two presses,
-        amber pill warning) - the first press only arms."""
-        self._command_destructive_armed = False
-        try:
-            entry = {"kind": "proposal", "text": proposal.command,
-                     "sub": proposal.purpose}
-            awaiting = "run: command key · Esc"
-            if proposal.destructive:
-                entry["destructive"] = True
-                awaiting = "⚠ destructive — press command key AGAIN to run · Esc"
-            self._command_entries = (self._command_entries + [entry])[-8:]
-            self._command_panel(self._command_entries, status=None,
-                                awaiting=awaiting)
-        except Exception as e:  # noqa: BLE001 - never block confirmation
-            log(f"WARN command pill unavailable: {e}")
-        if self._command_hotkey:
-            try:
-                self._command_hotkey.set_recording(True)  # arm Escape grab
-            except Exception:
-                pass
-        purpose = proposal.purpose or ""
-        body = (f"{purpose}\n" if purpose else "") \
-            + f"$ {proposal.command}\n" \
-            + "Press the command hotkey to run · Esc to cancel"
-        if proposal.destructive:
-            body = "⚠ DESTRUCTIVE\n" + body
-        ui.notify("SayItErmano — run this command?", body,
-                  enabled=self.cfg["notifications"]["enabled"])
-        timer = self._tasks.prepare_timer(
-            "command-confirm", self._on_confirm_timeout,
-            float(self.cfg["command"].get("confirm_timeout_s", 120.0)))
-        self._command_timer = timer
-        if timer is not None:
-            timer.start()
-
-    def _confirm_pending_command(self) -> None:
-        """Hotkey-confirmed: execute (the only path into
-        CommandSession.confirm), then either present the next proposal or
-        finish. Destructive proposals need the STRONG confirmation: the
-        first press only arms (fresh hint + restarted watchdog); the second
-        takes this normal path. Non-destructive: single press, as always."""
-        arm = False
-        with self._lock:
-            if not self._command_pending or self.busy or self.recording:
-                return
-            session = self._command_session
-            proposal = session.pending if session is not None else None
-            if proposal is not None and proposal.destructive \
-                    and not self._command_destructive_armed:
-                self._command_destructive_armed = True
-                arm = True
-            else:
-                self._command_destructive_armed = False
-                self._command_pending = False
-                self.busy = True                 # atomic with the flag clear
-        if arm:
-            self._arm_destructive_confirm(proposal)
-            return
-        session = self._command_session      # never None while pending
-        # the conversation panel survives the pending-UX teardown
-        panel, self._command_display = self._command_display, None
-        self._teardown_pending_ux()
-        self._command_display = panel
-
-        def _work():
-            from . import command as command_mod
-            try:
-                proposal = session.confirm()
-            except command_mod.CommandError as e:
-                log(f"command mode failed: {e}")
-                ui.notify("SayItErmano", f"Command mode failed: {e}",
-                          enabled=self.cfg["notifications"]["enabled"])
-                self._end_command_session()
-                return
-            outcome = session.executed[-1] if session.executed else None
-            if outcome is not None:          # result via notification + history
-                brief = (outcome.output or outcome.error or "").strip()[:200]
-                ui.notify("SayItErmano",
-                          f"$ {outcome.command} → exit {outcome.exit_code}"
-                          + (f"\n{brief}" if brief else ""),
-                          enabled=self.cfg["notifications"]["enabled"])
-                self._command_entries = (self._command_entries + [
-                    {"kind": "ok" if outcome.success else "fail",
-                     "text": f"$ {outcome.command} · "
-                             f"exit {outcome.exit_code}"}])[-8:]
-            if proposal is None:
-                self._command_entries = (self._command_entries + [
-                    {"kind": "summary",
-                     "text": session.summary or "Command finished."}])[-8:]
-                self._command_panel(self._command_entries, status=None,
-                                    awaiting=None)
-                ui.notify("SayItErmano",
-                          (session.summary or "Command finished.")
-                          + (" (step limit reached)" if session.exhausted
-                             else ""),
-                          enabled=self.cfg["notifications"]["enabled"])
-                self._tasks.schedule("command-panel-close",
-                                     self._close_command_panel, 8.0)
-                self._end_command_session(close_panel=False)
-                return
-            self._command_panel(self._command_entries, status="Working...",
-                                awaiting=None)
-            with self._lock:
-                self._command_pending = True
-                self.busy = False
-            self._present_proposal(session, proposal)
-
-        def _guarded():
-            try:
-                _work()
-            except Exception as e:  # noqa: BLE001 - never strand `busy`
-                log(f"command mode failed: {e}")
-                ui.notify("SayItErmano", f"Command mode failed: {e}",
-                          enabled=self.cfg["notifications"]["enabled"])
-                self._end_command_session()
-
-        self._tasks.spawn("command", _guarded)
-
-    def _arm_destructive_confirm(self, proposal) -> None:
-        """First press on a destructive proposal: NOTHING executes. Refresh
-        the pill to the again-to-CONFIRM hint, re-notify and restart the
-        confirm watchdog (the old timer is cancelled - never stacked)."""
-        if self._command_timer:
-            self._command_timer.cancel()
-            self._command_timer = None
-        self._command_panel(
-            self._command_entries, status=None,
-            awaiting="⚠ press command key AGAIN to CONFIRM · Esc cancels")
-        purpose = proposal.purpose or ""
-        body = (f"{purpose}\n" if purpose else "") \
-            + f"$ {proposal.command}\n" \
-            + "⚠ destructive: press the command hotkey AGAIN to CONFIRM " \
-              "· Esc to cancel"
-        ui.notify("SayItErmano — ⚠ destructive", body,
-                  enabled=self.cfg["notifications"]["enabled"])
-        timer = self._tasks.prepare_timer(
-            "command-confirm", self._on_confirm_timeout,
-            float(self.cfg["command"].get("confirm_timeout_s", 120.0)))
-        self._command_timer = timer
-        if timer is not None:
-            timer.start()
-
-    def cancel_pending_command(self) -> None:
-        """Escape on a pending proposal (or a test): nothing executes."""
-        with self._lock:
-            if not self._command_pending:
-                return
-            self._command_pending = False
-        session, self._command_session = self._command_session, None
-        self._teardown_pending_ux()
-        if session is not None:
-            session.cancel()
-        ui.notify("SayItErmano", "Command cancelled",
-                  enabled=self.cfg["notifications"]["enabled"])
-
-    def _on_confirm_timeout(self) -> None:
-        if self._command_pending:
-            self.cancel_pending_command()
-            ui.notify("SayItErmano", "Command mode: confirmation timed out",
-                      enabled=self.cfg["notifications"]["enabled"])
-
-    def _teardown_pending_ux(self) -> None:
-        self._command_destructive_armed = False
-        if self._command_timer:
-            self._command_timer.cancel()
-            self._command_timer = None
-        if self._command_hotkey:
-            try:
-                self._command_hotkey.set_recording(False)
-            except Exception:
-                pass
-        display, self._command_display = self._command_display, None
-        if display is not None:
-            try:
-                display.close()
-            except Exception:
-                pass
-
-    def _close_command_panel(self) -> None:
-        if self._command_session is not None:
-            return  # a new command session reused the panel - leave it up
-        panel, self._command_display = self._command_display, None
-        if panel is not None:
-            try:
-                panel.close()
-            except Exception:
-                pass
-
-    def _end_command_session(self, close_panel: bool = True) -> None:
-        with self._lock:
-            self._command_pending = False
-            self._command_destructive_armed = False
-            self.busy = False
-        self._command_session = None
-        if close_panel:
-            self._teardown_pending_ux()
+            self._commands.begin(str(out.get("text", "")), app=app_hint)
