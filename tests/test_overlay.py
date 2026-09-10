@@ -6,9 +6,16 @@ import struct
 
 import pytest
 
-from fluidvoice.overlay import (BAR_COUNT, BAR_MAX_H, BAR_MIN_H, PILL_H,
-                                PILL_RADIUS, AudioLevels, CommandPanel,
-                                FluidOverlay, PillRenderer, head_truncate)
+from fluidvoice.overlay import (
+    BAR_COUNT,
+    BAR_MAX_H,
+    BAR_MIN_H,
+    PILL_H,
+    PILL_RADIUS,
+    AudioLevels,
+    PillRenderer,
+    head_truncate,
+)
 
 
 def sine(seconds: float = 1.0, rate: int = 16000, freq: int = 220,

@@ -1,0 +1,192 @@
+name: release-publish
+
+# Release step 2 of 2 (plan P0.5). Manual only — like every workflow in
+# this repo. NEVER tags or uploads on its own: every gate below must pass
+# first, most importantly a successful MANUALLY DISPATCHED CI run for the
+# EXACT release SHA (five releases once shipped without any CI at all —
+# this workflow exists to make that impossible).
+#
+# Gates, in order:
+#   1. the release SHA is the current tip of `linux` (no stale releases)
+#   2. clean checkout
+#   3. version agreement: inputs == pyproject == fluidvoice/__init__.py
+#   4. a completed, successful CI run whose head_sha IS the release SHA
+#   5. dependency-lock freshness (same check as release-prepare)
+#   6. the deb artifact release-prepare built for THIS version exists,
+#      is unexpired, and its control Version agrees
+#   7. tag v<version> does not exist yet
+# Only then: push the tag and create the GitHub release with the deb.
+#
+# Full flow: docs/dev/release-gates.md
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version being published (must match release-prepare)"
+        required: true
+        type: string
+      sha:
+        description: "Release SHA (the version-bump commit release-prepare pushed; short or full)"
+        required: true
+        type: string
+      notes:
+        description: "Release notes (optional; default: the [Unreleased] section of CHANGELOG.md)"
+        required: false
+        type: string
+
+permissions:
+  contents: write # tag + release upload
+  actions: read  # verify the CI run + fetch the prepare artifact
+
+concurrency:
+  group: release-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: "verify gates + tag + upload (v${{ inputs.version }})"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      VERSION: ${{ inputs.version }}
+      SHA_IN: ${{ inputs.sha }}
+      NOTES_IN: ${{ inputs.notes }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: linux
+          fetch-depth: 0
+
+      - name: Release SHA is the tip of linux; clean checkout
+        run: |
+          set -euo pipefail
+          TIP="$(git rev-parse origin/linux)"
+          case "$TIP" in
+              "$SHA_IN"*) ;; # full sha or unambiguous short form
+              *)
+                  echo "ERROR: input SHA ${SHA_IN} is not the tip of origin/linux (${TIP})." >&2
+                  echo "       Releases publish the branch head; re-run prepare if the branch moved." >&2
+                  exit 1 ;;
+          esac
+          echo "SHA=$TIP" >> "$GITHUB_ENV"
+          [ -n "$(git status --porcelain)" ] && {
+              echo "ERROR: dirty checkout" >&2; exit 1; }
+
+      - name: Version agreement (input == pyproject == package)
+        run: |
+          set -euo pipefail
+          grep -q "^version = \"${VERSION}\"" pyproject.toml || {
+              echo "ERROR: pyproject.toml is not at version ${VERSION}" >&2; exit 1; }
+          grep -q "^__version__ = \"${VERSION}\"" fluidvoice/__init__.py || {
+              echo "ERROR: fluidvoice/__init__.py is not at version ${VERSION}" >&2; exit 1; }
+
+      - name: Green CI on the EXACT release SHA (manual-dispatch policy)
+        run: |
+          set -euo pipefail
+          GREEN=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${SHA}&per_page=100" \
+              --jq '[.workflow_runs[]
+                     | select(.path == ".github/workflows/ci.yml"
+                              and .status == "completed"
+                              and .conclusion == "success")] | length')
+          if [ "${GREEN:-0}" -lt 1 ]; then
+              echo "ERROR: no successful CI run for commit ${SHA}." >&2
+              echo "       Dispatch CI manually on that exact commit (Actions → CI →" >&2
+              echo "       Run workflow → branch linux) and wait for green first." >&2
+              gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${SHA}&per_page=100" \
+                  --jq '.workflow_runs[] | "  found: \(.name) \(.status) \(.conclusion // "")"' || true
+              exit 1
+          fi
+          echo "CI is green for ${SHA}"
+
+      - name: Dependency-lock freshness (stale-constraints check)
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re, sys, tomllib
+
+          with open("pyproject.toml", "rb") as fh:
+              deps = tomllib.load(fh)["project"]["dependencies"]
+          pins = set()
+          for line in open("packaging/deb/constraints.txt"):
+              line = line.strip()
+              if not line or line.startswith("#"):
+                  continue
+              m = re.match(r"^([A-Za-z0-9_.-]+)==\S+", line)
+              if not m:
+                  sys.exit(f"ERROR: constraints line is not an exact pin: {line!r}")
+              pins.add(m.group(1).lower().replace("_", "-"))
+          missing = []
+          for d in deps:
+              name = re.split(r"[<>=!~\[; ]", d.strip(), 1)[0]
+              name = name.lower().replace("_", "-")
+              if name not in pins:
+                  missing.append(name)
+          if missing:
+              sys.exit("ERROR: stale constraints — runtime deps without an exact "
+                       f"pin in packaging/deb/constraints.txt: {', '.join(missing)}\n"
+                       "       regenerate with: packaging/deb/update-constraints.sh")
+          print(f"constraints OK: all {len(deps)} runtime deps exactly pinned "
+                f"({len(pins)} pins total)")
+          PY
+
+      - name: Fetch and verify the deb release-prepare built
+        run: |
+          set -euo pipefail
+          ART="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=deb-v${VERSION}" \
+              --jq '.artifacts[0] // empty')"
+          [ -n "$ART" ] || {
+              echo "ERROR: no deb-v${VERSION} artifact — run release-prepare first" >&2; exit 1; }
+          EXPIRED="$(printf '%s' "$ART" | python3 -c 'import json,sys; print(json.load(sys.stdin)["expired"])')"
+          RUN_ID="$(printf '%s' "$ART" | python3 -c 'import json,sys; print(json.load(sys.stdin)["workflow_run"]["id"])')"
+          [ "$EXPIRED" = "False" ] || {
+              echo "ERROR: deb-v${VERSION} artifact expired — re-run release-prepare" >&2; exit 1; }
+          mkdir -p dist
+          ( cd dist && gh run download "$RUN_ID" -n "deb-v${VERSION}" )
+          DEB="dist/sayit-ermano_${VERSION}-1_amd64.deb"
+          [ -f "$DEB" ] || { echo "ERROR: expected $DEB in the artifact" >&2; ls -la dist; exit 1; }
+          [ "$(dpkg-deb -f "$DEB" Version)" = "${VERSION}-1" ] || {
+              echo "ERROR: deb control Version disagrees with ${VERSION}" >&2; exit 1; }
+          echo "deb verified: $DEB ($(du -h "$DEB" | cut -f1))"
+
+      - name: Tag does not exist yet
+        run: |
+          if git ls-remote --tags origin "v${VERSION}" | grep -q .; then
+              echo "ERROR: tag v${VERSION} already exists" >&2
+              exit 1
+          fi
+
+      - name: Push tag
+        run: |
+          git config user.name "release-publish"
+          git config user.email "actions@users.noreply.github.com"
+          git tag "v${VERSION}" "$SHA"
+          git push origin "v${VERSION}"
+
+      - name: GitHub release with the deb
+        run: |
+          set -euo pipefail
+          NOTES="$(mktemp --suffix=.md)"
+          if [ -n "${NOTES_IN:-}" ]; then
+              printf '%s\n' "$NOTES_IN" > "$NOTES"
+          else
+              # default notes: whatever is pending under [Unreleased]
+              awk '/^## \[Unreleased\]/{f=1;next} /^## /{f=0} f{print}' \
+                  CHANGELOG.md > "$NOTES"
+          fi
+          [ -s "$NOTES" ] || echo "Release v${VERSION}. See CHANGELOG.md." > "$NOTES"
+          gh release create "v${VERSION}" dist/*.deb \
+              --repo "$GITHUB_REPOSITORY" --target "$SHA" \
+              --title "v${VERSION} — $(head -1 "$NOTES" | sed 's/^#* *//')" \
+              --notes-file "$NOTES"
+
+      - name: Summary
+        run: |
+          {
+              echo "### release-publish v${VERSION} — released"
+              echo
+              echo "- tag: \`v${VERSION}\` @ \`${SHA}\` (CI-verified)"
+              echo "- artifact: the deb release-prepare built in the pinned container"
+              echo "- manual follow-ups (house style): AUR recipe bump"
+              echo "  (packaging/aur), Reddit/HN post, machine refresh"
+          } >> "$GITHUB_STEP_SUMMARY"

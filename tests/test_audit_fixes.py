@@ -3,13 +3,11 @@ escape (C3), config-registration meta-test (C4)."""
 from __future__ import annotations
 
 import copy
-import threading
 
 import pytest
 
 from fluidvoice import control
-from fluidvoice.config import (ALLOWED_SETTINGS, DEFAULTS, _SAVE_WHITELIST)
-
+from fluidvoice.config import _SAVE_WHITELIST, ALLOWED_SETTINGS, DEFAULTS
 
 # -- C1: a live daemon's socket is never stolen ------------------------------
 

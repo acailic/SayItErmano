@@ -434,9 +434,11 @@ class TestConfigWiring:
 # Phase 2: daemon wiring, CLI `update`, doctor
 # ---------------------------------------------------------------------------
 
-from fluidvoice import cli  # noqa: E402
+from fluidvoice import (
+    cli,  # noqa: E402
+    doctor,  # noqa: E402
+)
 from fluidvoice import daemon as dm  # noqa: E402
-from fluidvoice import doctor  # noqa: E402
 
 
 class _Rec:

@@ -19,10 +19,12 @@ import pytest
 
 from fluidvoice import daemon as dm
 from fluidvoice.config import DEFAULTS
-from fluidvoice.lockmon import (MANAGER_PATH, LockMonitor,
-                                pick_graphical_session,
-                                session_path_from_env)
-
+from fluidvoice.lockmon import (
+    MANAGER_PATH,
+    LockMonitor,
+    pick_graphical_session,
+    session_path_from_env,
+)
 
 # ---------------------------------------------------------------------------
 # LockMonitor: transitions only
@@ -930,7 +932,8 @@ class TestDoctorLockLine:
 
     def _lines(self, monkeypatch, tmp_path, status, pause=True, alive=True):
         from fluidvoice import control as control_mod
-        from fluidvoice import doctor, paths as paths_mod
+        from fluidvoice import doctor
+        from fluidvoice import paths as paths_mod
         sock = tmp_path / "sock"
         if alive:
             sock.touch()

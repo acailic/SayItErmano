@@ -12,15 +12,18 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from Xlib import X, XK
+from Xlib import XK, X
 
 from fluidvoice import daemon as dm
 from fluidvoice import hotkey
-from fluidvoice.config import (DEFAULTS, TEMPLATE, apply_settings,
-                               coerce_setting)
-from fluidvoice.hotkey import (_LOCK_MASKS, HotkeyError,
-                               MousePTTListener, parse_button_spec,
-                               parse_raw_button_event)
+from fluidvoice.config import DEFAULTS, TEMPLATE, apply_settings, coerce_setting
+from fluidvoice.hotkey import (
+    _LOCK_MASKS,
+    HotkeyError,
+    MousePTTListener,
+    parse_button_spec,
+    parse_raw_button_event,
+)
 
 BTN = 8
 ESCAPE_KEYCODE = 9

@@ -5,10 +5,13 @@ from __future__ import annotations
 
 import copy
 
-import pytest
-
-from fluidvoice.config import (ALLOWED_SETTINGS, DEFAULTS, ENGINE_KEYS,
-                               _SAVE_WHITELIST, coerce_setting)
+from fluidvoice.config import (
+    _SAVE_WHITELIST,
+    ALLOWED_SETTINGS,
+    DEFAULTS,
+    ENGINE_KEYS,
+    coerce_setting,
+)
 
 
 def test_defaults_and_registration():
@@ -159,7 +162,8 @@ def test_hotword_hit_rate_logged(tmp_path, monkeypatch):
     pipe = dm.DictationPipeline(cfg, B(), inserter=lambda t, c: "typed",
                                 history_writer=lambda e, w: None,
                                 logger=logs.append)
-    import struct, wave
+    import struct
+    import wave
     wav = tmp_path / "u.wav"
     with wave.open(str(wav), "wb") as wf:
         wf.setnchannels(1)

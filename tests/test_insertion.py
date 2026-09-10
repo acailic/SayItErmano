@@ -93,8 +93,9 @@ def base_cfg(mode="auto", threshold=1200, delay=8):
 
 
 def full_cfg(mode="auto", threshold=1200, delay=8, apps=None, space=True):
-    from fluidvoice.config import DEFAULTS
     import copy
+
+    from fluidvoice.config import DEFAULTS
     cfg = copy.deepcopy(DEFAULTS)
     cfg["insertion"].update(mode=mode, type_delay_ms=delay,
                             paste_threshold_chars=threshold,

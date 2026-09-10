@@ -23,8 +23,7 @@ import argparse
 import sys
 
 from adw_modules import agents, changes, gates, session, utils
-from adw_modules.data_types import (AgentCall, ChangeCapture, DocumentOutput,
-                                    PhaseParams)
+from adw_modules.data_types import AgentCall, ChangeCapture, DocumentOutput, PhaseParams
 
 REQUIRED_AGENTS = ["documenter"]
 

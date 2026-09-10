@@ -12,7 +12,8 @@ import subprocess
 
 import pytest
 
-from fluidvoice import insertion, session as session_mod
+from fluidvoice import insertion
+from fluidvoice import session as session_mod
 from fluidvoice.config import DEFAULTS
 
 X11_ENV = {"XDG_SESSION_TYPE": "x11"}
@@ -211,6 +212,7 @@ class TestToggleScript:
 
     def test_idempotent_and_never_raises(self, tmp_path, monkeypatch):
         import os
+
         from fluidvoice import paths
         target = tmp_path / "bin" / "sayit-ermano-toggle"
         monkeypatch.setattr(paths, "toggle_script", lambda: target)
@@ -242,6 +244,7 @@ class TestToggleScript:
 class TestDaemonStatus:
     def _daemon(self, monkeypatch, env):
         import copy
+
         from fluidvoice import daemon as dm
 
         class StubRecorder:
@@ -974,8 +977,7 @@ class TestWaylandConfigRoundtrip:
         import copy
 
         from fluidvoice import paths as p
-        from fluidvoice.config import (apply_settings, load_config,
-                                       save_config)
+        from fluidvoice.config import apply_settings, load_config, save_config
         target = tmp_path / "c.toml"
         monkeypatch.setattr(p, "config_file", lambda: target)
         cfg = copy.deepcopy(DEFAULTS)
@@ -993,8 +995,9 @@ class TestWaylandConfigRoundtrip:
         assert on_disk["insertion"]["wayland_tool"] == "ydotool"
 
     def test_bad_values_rejected(self):
-        from fluidvoice.config import apply_settings
         import copy
+
+        from fluidvoice.config import apply_settings
         cfg = copy.deepcopy(DEFAULTS)
         _, rejected = apply_settings(
             cfg, {"hotkey": {"wayland_evdev": "yes",

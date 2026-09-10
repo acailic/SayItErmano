@@ -12,9 +12,15 @@ import os
 
 import pytest
 
-from fluidvoice.config import (DEFAULTS, RESTART_REQUIRED, TEMPLATE,
-                               apply_settings, coerce_setting, load_config,
-                               save_config)
+from fluidvoice.config import (
+    DEFAULTS,
+    RESTART_REQUIRED,
+    TEMPLATE,
+    apply_settings,
+    coerce_setting,
+    load_config,
+    save_config,
+)
 
 
 class TestSaveConfig:

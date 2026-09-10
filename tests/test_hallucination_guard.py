@@ -23,10 +23,9 @@ from pathlib import Path
 
 import pytest
 
-from fluidvoice.config import DEFAULTS
 from fluidvoice import daemon as dm
-from fluidvoice.pipeline import (is_repeat_hallucination,
-                                 looks_like_hallucination)
+from fluidvoice.config import DEFAULTS
+from fluidvoice.pipeline import is_repeat_hallucination, looks_like_hallucination
 from fluidvoice.preview import SegmentedPreviewEngine
 
 RATE = 16000

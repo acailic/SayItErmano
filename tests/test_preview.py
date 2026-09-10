@@ -4,7 +4,6 @@ from __future__ import annotations
 import struct
 import time
 import wave
-from pathlib import Path
 
 from fluidvoice.audio_utils import raw_to_wav_bytes, raw_to_wav_file
 from fluidvoice.preview import NotifyPreview, PreviewEngine
@@ -111,7 +110,6 @@ class TestNotifyPreview:
 
 class TestRawRecorder:
     def test_stop_converts_raw_to_wav(self, tmp_path, monkeypatch):
-        import signal as sig
         from fluidvoice import recorder as rec
 
         class SlowProc:

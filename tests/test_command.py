@@ -12,7 +12,13 @@ import pytest
 
 from fluidvoice import command as cm
 from fluidvoice.ai.client import AIError
-from tests.test_daemon import StubBackend, StubRecorder, make_wav, quiet_ui, cfg
+from tests.test_daemon import (  # noqa: F401 (cfg/quiet_ui are pytest fixtures)
+    StubBackend,
+    StubRecorder,
+    cfg,
+    make_wav,
+    quiet_ui,
+)
 
 
 class StubAIClient:

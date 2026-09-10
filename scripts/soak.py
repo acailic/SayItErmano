@@ -17,10 +17,9 @@ from __future__ import annotations
 
 import argparse
 import csv
+import subprocess
 import time
 from pathlib import Path
-
-import subprocess
 
 
 def daemon_pid() -> int | None:

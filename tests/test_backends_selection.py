@@ -244,6 +244,7 @@ class TestParakeetSelection:
 
     def test_backend_status_available(self, monkeypatch):
         from types import SimpleNamespace
+
         from fluidvoice import model_catalog
         monkeypatch.setattr(backends, "_import_ok", lambda m: m != "torch")
         stub = SimpleNamespace(
@@ -263,7 +264,6 @@ class TestFasterWhisperWarmup:
 
     @staticmethod
     def _backend(model):
-        from types import SimpleNamespace
 
         from fluidvoice.backends import faster_whisper_backend as fw
         be = object.__new__(fw.FasterWhisperBackend)

@@ -1,16 +1,18 @@
 """GAAV + spoken-send + rewrite mode tests."""
 from __future__ import annotations
 
-import copy
 import time
 
-import pytest
-
 from fluidvoice import daemon as dm
-from fluidvoice.config import DEFAULTS
 from fluidvoice.processing.extra_formats import apply_gaav, parse_spoken_send
 from fluidvoice.rewrite import RewriteError, build_edit_messages
-from tests.test_daemon import StubBackend, StubRecorder, make_wav, quiet_ui, cfg
+from tests.test_daemon import (  # noqa: F401 (cfg/quiet_ui are pytest fixtures)
+    StubBackend,
+    StubRecorder,
+    cfg,
+    make_wav,
+    quiet_ui,
+)
 
 
 class TestGAAV:

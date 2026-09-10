@@ -537,7 +537,6 @@ class TestPasteLast:
         assert resp["ok"] and pasted == ["hello again"]
 
     def test_nothing_to_paste(self, cfg, quiet_ui):
-        from fluidvoice import history
         monkeypatch_hist = []
         d = dm.Daemon(cfg, recorder=StubRecorder(),
                       backend_factory=lambda c: StubBackend("x"),

@@ -1,5 +1,4 @@
 """Real CLI invocations through the actual console script."""
-import json
 import os
 import subprocess
 

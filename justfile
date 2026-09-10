@@ -1,21 +1,83 @@
 # SSSF starter recipes. Stamped by install.py, then yours to edit.
 #
-# Deliberately small. These are the handful you need on day one: run something,
-# watch it, and open the trace. Add your own as your chains grow, and see the
-# example branch for the fuller set (orchestrator agents, kill, rosters, ipi).
+# Two halves (plan P0.5):
+#   1. SayItErmano APPLICATION recipes, unprefixed: lint / test /
+#      test-parallel / gate (+ release-prepare / release-publish driving
+#      the manual GitHub workflows).
+#   2. The agent FACTORY (SSSF starter) recipes, all under the `factory-`
+#      prefix, functionally unchanged. Add your own as your chains grow;
+#      see the example branch for the fuller set (orchestrator agents,
+#      kill, rosters, ipi).
 
 # `.env` reaches every ADW through this, so keys work without exporting them.
 set dotenv-load
 set positional-arguments
 
-# Every recipe passes this through, so `SSSF_CONFIG=other.yaml just sdlc "..."`
-# swaps the whole roster for one run.
+# Every factory recipe passes this through, so `SSSF_CONFIG=other.yaml just
+# factory-prompt "..."` swaps the whole roster for one run.
 config := env_var_or_default("SSSF_CONFIG", "adws/adw_sssf_config/sssf.config.yaml")
 db     := "adws/adw_data/sssf.db"
+
+# Python for the application recipes: repo venv if present, else $SAYIT_PY,
+# else python3. (Worktrees share the main tree's venv via SAYIT_PY; see
+# AGENTS.md — never bare `pytest`.)
+python := env_var_or_default("SAYIT_PY", `[ -x .venv/bin/python ] && echo .venv/bin/python || echo python3`)
 
 # list every recipe
 default:
     @just --list
+
+# ── application: developer gates (plan P0.5) ────────────────────────────────
+# The complete local gate is `just gate`; releases run the same checks in
+# .github/workflows/release-prepare.yml. Suite scope is always
+# `tests --ignore=tests/integration` (integration needs the real model).
+
+# ruff lint (config: [tool.ruff.lint] in pyproject.toml)
+lint:
+    {{python}} -m ruff check .
+
+# offline unit suite, serial (plain pytest stays single-process: --pdb, -x)
+test *ARGS:
+    {{python}} -m pytest -q tests --ignore=tests/integration {{ARGS}}
+
+# offline unit suite on pytest-xdist auto workers (~4-5x faster)
+test-parallel *ARGS:
+    {{python}} -m pytest -q -n auto tests --ignore=tests/integration {{ARGS}}
+
+# the complete local gate: clean tree, lint, suite with warnings as errors
+# (unhandled thread exceptions are already errors via [tool.pytest])
+gate:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+        echo "gate: tracked files have uncommitted changes — commit or stash first" >&2
+        exit 1
+    fi
+    {{python}} -m ruff check .
+    {{python}} -m pytest -q -W error tests --ignore=tests/integration
+    echo "gate: clean tree, lint clean, suite green, zero warnings"
+
+# ── application: release dispatch (manual-only, like all CI here) ───────────
+# prepare bumps the version, runs the full gate + locked deb build, commits
+# and pushes. You then dispatch CI for the produced SHA from the Actions
+# tab, and publish verifies that green CI run for the EXACT SHA before
+# tagging/uploading. Full flow: docs/release-gates.md
+
+# dispatch release-prepare for VERSION (e.g. just release-prepare 0.8.2)
+release-prepare VERSION:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    gh workflow run release-prepare.yml -f version="{{VERSION}}"
+    echo "dispatched release-prepare for v{{VERSION}} — watch: gh run watch"
+
+# dispatch release-publish for VERSION at SHA (needs green CI on that SHA)
+release-publish VERSION SHA:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    gh workflow run release-publish.yml -f version="{{VERSION}}" -f sha="{{SHA}}"
+    echo "dispatched release-publish for v{{VERSION}} @ {{SHA}} — watch: gh run watch"
+
+# ── factory (SSSF agent factory) ────────────────────────────────────────────
 
 # ── first run ───────────────────────────────────────────────────────────────
 
@@ -25,58 +87,58 @@ default:
 #
 # (`just --list` shows only the LAST comment line, so that one is the summary.)
 
-# start here: two cheap read-only runs, end to end
-demo:
+# factory: two cheap read-only runs, end to end
+factory-demo:
     @echo "1/2  adw_prompt: one agent, one prompt"
     uv run adws/adw_prompt.py --config {{config}} --agent scout "reply with a one-line summary of this repo"
     @echo "\n2/2  adw_scout: read-only recon"
     uv run adws/adw_scout.py --config {{config}} "list the top-level directories in this repo and what each is for. change nothing."
-    @echo "\nboth done. now run:  just sessions    (or: just obs)"
+    @echo "\nboth done. now run:  just factory-sessions    (or: just factory-obs)"
 
 # ── run a workflow ──────────────────────────────────────────────────────────
 # Args pass straight through: "<prompt or path/to/prompt.md>" [--adw-id X]
 
-# one agent, one prompt: just prompt "summarize this repo"
-prompt *ARGS:
+# factory: one agent, one prompt
+factory-prompt *ARGS:
     uv run adws/adw_prompt.py --config {{config}} "$@"
 
-# read-only recon: just scout "where is auth handled"
-scout *ARGS:
+# factory: read-only recon
+factory-scout *ARGS:
     uv run adws/adw_scout.py --config {{config}} "$@"
 
-# plan only: just plan "add a /health endpoint"
-plan *ARGS:
+# factory: plan only
+factory-plan *ARGS:
     uv run adws/adw_plan.py --config {{config}} "$@"
 
-# planner, builder, commit: just plan-build "add a /health endpoint"
-plan-build *ARGS:
+# factory: planner, builder, commit
+factory-plan-build *ARGS:
     uv run adws/adw_plan_build.py --config {{config}} "$@"
 
-# plan, build, test, commit: just sdlc "add a /health endpoint"
-sdlc *ARGS:
+# factory: plan, build, test, commit
+factory-sdlc *ARGS:
     uv run adws/adw_plan_build_test.py --config {{config}} "$@"
 
-# the full chain, plus review and docs: just simple-sdlc "add a /health endpoint"
-simple-sdlc *ARGS:
+# factory: the full chain, plus review and docs
+factory-simple-sdlc *ARGS:
     uv run adws/adw_simple_sdlc.py --config {{config}} "$@"
 
 # ── watch it ────────────────────────────────────────────────────────────────
 # Reads never block a running workflow, the db is WAL. Poll as hard as you like.
 
-# the last 10 runs
-sessions:
+# factory: the last 10 runs
+factory-sessions:
     @sqlite3 {{db}} "select adw_id, status, substr(request,1,50), total_tokens, round(total_cost,4) from sessions order by started_at desc limit 10;"
 
-# phase status in sequence: just phases <adw_id>
-phases ADW_ID:
+# factory: phase status in sequence
+factory-phases ADW_ID:
     @sqlite3 {{db}} "select seq, name, kind, owner, status, attempt from phases where adw_id='{{ADW_ID}}' order by seq;"
 
-# the live event tail: just tail <adw_id>
-tail ADW_ID:
+# factory: the live event tail
+factory-tail ADW_ID:
     @sqlite3 {{db}} "select rowid, type, name, started_at from events where adw_id='{{ADW_ID}}' order by rowid desc limit 25;"
 
-# what a run has alive right now, with pids: just procs <adw_id>
-procs ADW_ID:
+# factory: what a run has alive right now, with pids
+factory-procs ADW_ID:
     @sqlite3 {{db}} "select kind, name, pid, command, started_at from processes where adw_id='{{ADW_ID}}' and ended_at is null order by id;"
 
 # ── observability UI ────────────────────────────────────────────────────────
@@ -84,6 +146,6 @@ procs ADW_ID:
 # Needs bun. The db path is passed explicitly because the server runs from the
 # app dir and would otherwise look for a trace db sitting next to itself.
 
-# boot the trace UI, http://localhost:4601 (api on :4600)
-obs:
+# factory: boot the trace UI, http://localhost:4601 (api on :4600)
+factory-obs:
     cd .claude/skills/sssf/apps/visualizer && bun install && (SSSF_DB={{justfile_directory()}}/{{db}} bun run server/index.ts &) && bunx vite

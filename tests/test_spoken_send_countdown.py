@@ -14,7 +14,9 @@ from fluidvoice.config import DEFAULTS, coerce_setting
 
 class StubRecorder:
     def __init__(self, path):
-        import wave, struct, math
+        import math
+        import struct
+        import wave
         with wave.open(str(path), "wb") as wf:
             wf.setnchannels(1)
             wf.setsampwidth(2)
@@ -150,7 +152,7 @@ def test_config_coercion():
 
 
 def test_config_socket_settable():
-    from fluidvoice.config import ALLOWED_SETTINGS, _SAVE_WHITELIST
+    from fluidvoice.config import _SAVE_WHITELIST, ALLOWED_SETTINGS
     assert "spoken_send_countdown_s" in ALLOWED_SETTINGS["recording"]
     assert "spoken_send_countdown_s" in _SAVE_WHITELIST["recording"]
 

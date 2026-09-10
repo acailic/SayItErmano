@@ -36,8 +36,13 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from .data_types import (EventRecord, QualityCheckResult, QualityCheckSpec, QualityResult,
-                         VerifyOutput)
+from .data_types import (
+    EventRecord,
+    QualityCheckResult,
+    QualityCheckSpec,
+    QualityResult,
+    VerifyOutput,
+)
 from .utils import now_iso, operator_env
 
 # How much of a failing command's output rides back inside the envelope. Enough

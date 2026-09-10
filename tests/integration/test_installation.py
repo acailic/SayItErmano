@@ -2,7 +2,6 @@
 installer download. Heaviest tests in the repo (minutes)."""
 import os
 import subprocess
-from pathlib import Path
 
 import pytest
 

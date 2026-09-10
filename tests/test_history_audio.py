@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import json
 import math
 import struct
-import json
 import wave
 from pathlib import Path
 
@@ -215,8 +215,9 @@ class TestUpdateText:
                                                      monkeypatch):
         # edited_from round-trips through _rewrite (delete of another
         # entry) and export_zip - the dictionary learner's durable signal
-        from fluidvoice import paths
         import zipfile
+
+        from fluidvoice import paths
         hpath = tmp_path / "history.jsonl"
         monkeypatch.setattr(paths, "history_file", lambda: hpath)
         history.append({"ts": 1.0, "text": "open the miro board app"})

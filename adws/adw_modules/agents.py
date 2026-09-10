@@ -16,9 +16,18 @@ from typing import Optional
 import yaml
 
 from . import agent_pi, permissions, prompts
-from .data_types import (AgentCall, AgentConfig, EnvelopeBase, EventRecord,
-                         GateCheck, GateReport, Phase, PiRequest, SSSFConfig,
-                         UsageBreakdown)
+from .data_types import (
+    AgentCall,
+    AgentConfig,
+    EnvelopeBase,
+    EventRecord,
+    GateCheck,
+    GateReport,
+    Phase,
+    PiRequest,
+    SSSFConfig,
+    UsageBreakdown,
+)
 from .utils import new_id
 
 JSON_FIX_ATTEMPTS = 2      # continue-with-correction attempts for malformed JSON

@@ -1,8 +1,6 @@
 """Segment exposure in the three backends (constructors bypassed, no models)."""
 from __future__ import annotations
 
-from pathlib import Path
-
 
 class FakeSeg:
     def __init__(self, start, end, text):
