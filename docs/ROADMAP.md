@@ -212,16 +212,21 @@ sources. Everything below is a known, classified gap — see
 - [x] Settings UI — done as a native GTK 4 + libadwaita app
       (`fluidvoice app`; History/Settings/onboarding windows over the
       control socket; the former web page was retired with it).
-- [ ] Local HTTP API (upstream exposes an OpenAI-style server on 127.0.0.1
-      with /v1/transcribe, /v1/history, dictionary routes).
 - [x] Packaging: AUR, pipx (deb is DONE - packaging/build-deb.sh: launcher entry,
       login autostart, icon, systemd unit, bundled venv) — DONE: pipx verified
       from a locally built wheel (`scripts/verify-pipx.sh`: entry points, data
       files, pipx method detection; PyPI publish stays manual by project rule),
-      AUR `sayit-ermano-bin` recipe in packaging/aur/ (instructions only, not
-      published by us). nix still open.
+      deb contracted to Ubuntu 24.04/x86_64/Python 3.12 with a pinned
+      container build + committed dependency lock (packaging/deb/), AUR moved
+      to a native PEP 517 source recipe `sayit-ermano` in packaging/aur/
+      (instructions only, not published by us). nix still open.
 
 ## Non-goals
+- Local HTTP/TCP API — **decided, not backlog**: the user-owned Unix control
+  socket (plus the stdio MCP bridge) is the only external interface; the
+  daemon never opens a network listener. Upstream's loopback OpenAI-style
+  server is deliberately not ported — see the plan's Assumptions and the
+  unix-socket API in the README. Do not re-add this as roadmap work.
 - Bundling a closed-source "Fluid Intelligence" equivalent — use any local
   OpenAI-compatible server (Ollama/LM Studio/llama.cpp) instead.
 - Cohere Transcribe (CoreML-only upstream artifacts; no Linux runtime).

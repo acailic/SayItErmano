@@ -1,0 +1,14 @@
+# Keep the pinned deb build (packaging/deb/Dockerfile) context small: the
+# build needs only the source tree — not the dev venv (GB-scale with a CUDA
+# torch), build artifacts, git history, or caches. build-deb.sh detects the
+# missing .venv and reads the version from the system python inside.
+.git
+.venv
+venv
+dist
+*.deb
+*.whl
+.pytest_cache
+.ruff_cache
+__pycache__
+*.pyc

@@ -1,0 +1,39 @@
+# Locked dependency set for the SayItErmano deb — Ubuntu 24.04 / x86_64 /
+# Python 3.12 ONLY (P0.6 deb contract). Generated 2026-09-10
+# from the locked venv by packaging/deb/update-constraints.sh; consumed
+# by packaging/build-deb.sh via `pip install -c <this file> .`.
+#
+# Review rules:
+#   - every pin is exact (==); version bumps must arrive as a visible
+#     diff of this file, never as silent resolution at build time;
+#   - --hash lines (when present) are sha256 of the exact wheels the
+#     Ubuntu 24.04 / py3.12 / x86_64 build downloads from PyPI; pip
+#     >= 23.1 verifies them during the deb build;
+#   - regenerate with: packaging/deb/update-constraints.sh
+#     (add --pins-only for a network-free pin refresh).
+
+anyio==4.14.2
+av==18.1.0
+certifi==2026.7.22
+click==8.4.2
+ctranslate2==4.8.2
+faster-whisper==1.2.1
+filelock==3.30.2
+flatbuffers==25.12.19
+fsspec==2026.6.0
+h11==0.16.0
+hf-xet==1.6.0
+httpcore==1.0.9
+httpx==0.28.1
+huggingface-hub==1.30.0
+idna==3.6
+numpy==1.26.4
+onnxruntime==1.29.0
+packaging==24.0
+pillow==10.2.0
+protobuf==7.36.1
+python-xlib==0.33
+pyyaml==6.0.1
+tokenizers==0.23.2
+tqdm==4.68.4
+typing-extensions==4.16.0

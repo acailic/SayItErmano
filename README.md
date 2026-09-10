@@ -54,6 +54,10 @@ repetition loops are never typed (you get a "check mic and language"
 notice instead), and the live preview suppresses loop text too. A mic
 streaming **digital silence** (dead or wedged input path) now gets a
 "no audio from the mic" notice instead of a bare empty transcription.
+**Packaging** got honest: the deb is now declared (and dependency-pinned)
+Ubuntu 24.04 / x86_64 / Python 3.12 only, built in a pinned container from
+a committed, hash-lockable dependency set; the AUR recipe became a native
+source build against Arch's current Python.
 
 **[v0.8.1](https://github.com/acailic/SayItErmano/releases/tag/v0.8.1)** — the
 macOS-parity release: the settings sidebar groups into **Settings / More**
@@ -128,15 +132,34 @@ Prefer the classic system-wide .deb (root-owned, `/opt` runtime)?
 curl -fsSL https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/install-one-shot.sh | bash -s -- --system
 ```
 
-### Manual download
+### Ubuntu 24.04 — official .deb
+
+The .deb is a **single-target package: Ubuntu 24.04 · x86_64 · Python 3.12**
+(24.04 derivatives like Pop!_OS 24.04 work too). Its bundled runtime venv
+uses the system Python, and the package declares
+`Depends: python3 (>= 3.12), python3 (<< 3.13)` — so it installs cleanly
+on the target and refuses to lie about compatibility. Other distros or
+Python versions: use [pipx](#pipx--pip-any-distro-python-311) below or the
+[AUR package](#arch-linux-aur).
 
 ```bash
-curl -LO https://github.com/acailic/SayItErmano/releases/download/v0.4.0/sayit-ermano_0.4.0-2_amd64.deb
-sudo apt install ./sayit-ermano_0.4.0-2_amd64.deb
+curl -LO https://github.com/acailic/SayItErmano/releases/download/v0.8.1/sayit-ermano_0.8.1-1_amd64.deb
+sudo apt install ./sayit-ermano_0.8.1-1_amd64.deb
 ```
 
-Grab a specific version from the [releases page](https://github.com/acailic/SayItErmano/releases),
-or build it yourself: `git clone … -b linux && ./packaging/build-deb.sh`.
+Grab a specific version from the [releases page](https://github.com/acailic/SayItErmano/releases).
+Building it yourself: release artifacts come out of a **pinned Ubuntu 24.04
+container** with a **committed, hash-lockable dependency set** —
+
+```bash
+docker build -t sayit-ermano-deb -f packaging/deb/Dockerfile .
+mkdir -p dist && docker run --rm -v "$PWD/dist:/out" sayit-ermano-deb
+```
+
+(or `./packaging/build-deb.sh` directly on an Ubuntu 24.04 / Python 3.12
+host — it refuses to run anywhere else). See
+[packaging/deb/README.md](packaging/deb/README.md) for the deb contract,
+the pinned environment, and the reviewed `constraints.txt` lock.
 
 **What you get after install** (log out/in once):
 
@@ -149,38 +172,11 @@ or build it yourself: `git clone … -b linux && ./packaging/build-deb.sh`.
   pre-rename `fluidvoice-linux` package replaces it automatically; your
   config, history and downloaded models are kept
 
-### From source (development)
+### pipx / pip (any distro, Python 3.11+)
 
-```bash
-git clone https://github.com/acailic/SayItErmano.git -b linux
-cd SayItErmano
-./scripts/install.sh          # apt deps + venv (reuses your CUDA torch if present)
-
-# run it (foreground; systemd unit in systemd/)
-.venv/bin/sayit-ermano daemon
-```
-
-Press **Right Ctrl**, speak, press **Right Ctrl** again. Done.
-
-Useful commands:
-
-```bash
-sayit-ermano app               # native GTK app: History, Settings, onboarding
-sayit-ermano doctor            # environment check
-sayit-ermano toggle            # CLI trigger (bind to a DE shortcut on Wayland)
-sayit-ermano cancel            # abort a recording
-sayit-ermano language          # cycle the dictation language (language_cycle)
-sayit-ermano transcribe x.opus --json   # one-shot file transcription
-sayit-ermano history -n 10
-sayit-ermano config init       # write ~/.config/sayit-ermano/config.toml
-sayit-ermano update            # check for a newer release + print the upgrade command
-```
-
-### pipx / pip (any distro)
-
-Works on any Linux with Python 3.11+ — a pipx install lands under
-`~/.local/pipx` (or `~/.local/share/pipx`) and never touches the system
-Python:
+The cross-distro route (the deb above is Ubuntu 24.04-only): works on any
+Linux with Python 3.11+ — a pipx install lands under `~/.local/pipx` (or
+`~/.local/share/pipx`) and never touches the system Python:
 
 ```bash
 pipx install sayit-ermano          # from PyPI (publishing is manual — if the
@@ -212,11 +208,43 @@ restarts the daemon and cleans up duplicate installs.)
 
 ### Arch Linux (AUR)
 
-Published as [`sayit-ermano-bin`](https://aur.archlinux.org/packages/sayit-ermano-bin)
-(repackages the release `.deb`); the recipe and the one-command publish
-script live in [`packaging/aur/`](packaging/aur/). If the package page
-does not exist yet, the first push is still pending an AUR SSH key —
-`packaging/aur/publish.sh` finishes it.
+A native package, [`sayit-ermano`](https://aur.archlinux.org/packages/sayit-ermano),
+source-built against Arch's current Python (PEP 517 `python -m build` —
+speech via the AUR
+[`python-faster-whisper`](https://aur.archlinux.org/packages/python-faster-whisper)
+package). The recipe and the one-command publish script live in
+[`packaging/aur/`](packaging/aur/). If the package page does not exist
+yet, the first push is still pending an AUR SSH key —
+`packaging/aur/publish.sh` finishes it. (An earlier `sayit-ermano-bin`
+recipe that repackaged the Ubuntu deb was never published and is
+superseded.)
+
+### From source (development)
+
+```bash
+git clone https://github.com/acailic/SayItErmano.git -b linux
+cd SayItErmano
+./scripts/install.sh          # apt deps + venv (reuses your CUDA torch if present)
+
+# run it (foreground; systemd unit in systemd/)
+.venv/bin/sayit-ermano daemon
+```
+
+Press **Right Ctrl**, speak, press **Right Ctrl** again. Done.
+
+Useful commands:
+
+```bash
+sayit-ermano app               # native GTK app: History, Settings, onboarding
+sayit-ermano doctor            # environment check
+sayit-ermano toggle            # CLI trigger (bind to a DE shortcut on Wayland)
+sayit-ermano cancel            # abort a recording
+sayit-ermano language          # cycle the dictation language (language_cycle)
+sayit-ermano transcribe x.opus --json   # one-shot file transcription
+sayit-ermano history -n 10
+sayit-ermano config init       # write ~/.config/sayit-ermano/config.toml
+sayit-ermano update            # check for a newer release + print the upgrade command
+```
 
 ### Requirements
 
@@ -225,8 +253,9 @@ does not exist yet, the first push is still pending an AUR SSH key —
   below; you need `wtype` or `ydotool` for text insertion and a
   desktop-environment custom shortcut for the hotkey (Settings → Wayland
   assists with both).
-- Python 3.11+ (tested 3.12), `pipewire` (`pw-record`), `xdotool`, `xclip`,
-  `libnotify-bin`, `pulseaudio-utils` (sounds).
+- Python 3.11+ for pipx/source installs (tested 3.12); the .deb bundles
+  and requires Ubuntu 24.04's Python 3.12. Also `pipewire` (`pw-record`),
+  `xdotool`, `xclip`, `libnotify-bin`, `pulseaudio-utils` (sounds).
 - A whisper model is downloaded on first use (~75 MB tiny … ~3.1 GB large-v3;
   default `small` ≈ 484 MB, or `base` on CPU). For the whisper.cpp backend,
   the curated GGUF models are one-click downloads in Settings → Models.
@@ -537,6 +566,10 @@ device = "auto"             # auto | cuda | cpu
 # remote_model = "whisper-large-v3"
 # remote_api_key = ""        # optional bearer token
 # remote_timeout_s = 30
+# Vocabulary biasing: words the decoder is steered toward (ADD, unlike the
+# dictionary's replacements) - names, jargon; changes reload the engine.
+# Keep it short (<=20): long bias lists make the decoder hallucinate list words
+# hotwords = ["SayItErmano", "PipeWire"]
 
 [general]
 # Fast language switching: the cycle key steps this list at runtime
@@ -547,6 +580,8 @@ device = "auto"             # auto | cuda | cpu
 # Case-insensitive WM_CLASS substrings identifying terminals — spoken-send
 # never presses Enter here and typed insertions gain one autocomplete space
 terminal_apps = ["gnome-terminal", "kgx", "konsole", "xterm", "alacritty", "kitty", "wezterm", "ghostty", "foot", "tilix", "terminator", "guake", "yakuake", "st-256color", "warp"]
+# Ignore hotkeys + cancel active dictation while the session is locked
+pause_when_locked = true
 
 [recording]
 mic_priority = ["bluez", "usb-cam"]  # fallback order when the chosen mic vanishes
@@ -558,17 +593,8 @@ push_to_talk_button = "button8"  # "" = off
 # phrase finishes the dictation by itself (speak again to cancel) — no
 # hotkey press needed. 0 = off; needs spoken-send enabled in Settings.
 spoken_send_countdown_s = 1.2
-# Vocabulary biasing: words the decoder is steered toward (ADD, unlike the
-# dictionary's replacements) - names, jargon; changes reload the engine
-# hotwords = ["SayItErmano", "PipeWire"]  # keep it short (<=20):
-                                          # long bias lists make the
-                                          # decoder hallucinate list words
 # Cancel the take if the mic stream freezes mid-dictation (0 = off)
 stall_timeout_s = 8.0
-
-[general]
-# Ignore hotkeys + cancel active dictation while the session is locked
-pause_when_locked = true
 
 [processing]
 dictionary = [ { triggers = ["miro board"], replacement = "Miro board" } ]
