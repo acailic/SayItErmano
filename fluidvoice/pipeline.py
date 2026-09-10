@@ -14,13 +14,15 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import backends, insertion, ui
+from . import context as context_mod
 from . import history as history_mod
+from . import profiles as profiles_mod
 from .ai.client import AIError
 from .ai.prompts import base_prompt_for
 from .audio_utils import duration_seconds, is_digital_silence, is_silent
 from .backends.base import Transcript, capabilities_of
 from .processing import post_process
-from .processing.per_app import match_app_prompt, system_prompt_for
+from .processing.per_app import system_prompt_for
 from .processing.refusal import is_overcorrection, is_prompt_leak, is_refusal
 from .processing.slash import squeeze_slash_mentions
 
@@ -112,7 +114,8 @@ class DictationPipeline:
                  history_writer: Callable[[dict, Path | None], None] | None = None,
                  key_presser: Callable[[str], None] | None = None,
                  rewriter: Callable[[str, str | None], str] | None = None,
-                 logger: Callable[[str], None] = log):
+                 logger: Callable[[str], None] = log,
+                 context_reader: Callable[[], "context_mod.FocusContext"] | None = None):
         self.cfg = cfg
         self.backend = backend
         self.polisher = polisher  # None -> build AIClient lazily when enabled
@@ -120,16 +123,30 @@ class DictationPipeline:
         self.key_presser = key_presser or self._press_send_key
         self.rewriter = rewriter
         self.log = logger
+        # P2 context seam: None (the default when disabled/unavailable)
+        # means NO focused-field context - behavior identical to pre-P2.
+        # Tests inject a fake reader; production gets reader_for(cfg).
+        self.context_reader = (context_reader
+                               if context_reader is not None
+                               else context_mod.reader_for(cfg))
+        self._focus_identity: str | None = None
         self._pending_send_key: str | None = None
         self._pending_send_skipped_terminal = False
         self.notify = lambda title, body="": ui.notify(title, body, enabled=cfg["notifications"]["enabled"])
         if inserter is insertion.insert_text:
             # default path: surface paste-fallback / clipboard-restore
             # warnings from insertion through the existing notification path
-            # (no pill/UI change; stub inserters in tests stay untouched)
+            # (no pill/UI change; stub inserters in tests stay untouched).
+            # With insertion-time context (P2), the focused app identity
+            # rides along so terminal quirks apply without a second
+            # xdotool lookup.
             notify = self.notify
 
             def _inserter(text: str, c: dict) -> str:
+                if self._focus_identity:
+                    return insertion.insert_text(
+                        text, c, wm_class=self._focus_identity,
+                        on_notice=notify)
                 return insertion.insert_text(text, c, on_notice=notify)
 
             self.inserter = _inserter
@@ -221,8 +238,11 @@ class DictationPipeline:
         # steering this construction, exactly as before the split
         from .daemon import AIClient
         polisher = self.polisher or AIClient(self.cfg).polish
-        instructions = match_app_prompt(
-            self.cfg["ai"].get("per_app_prompts", []), app_hint)
+        # P2: canonical profiles.rules first (inline instructions or a
+        # named preset), then the legacy ai.per_app_prompts rules - the
+        # result is identical to pre-P2 while no canonical rules exist.
+        instructions = profiles_mod.prompt_instructions_for(
+            self.cfg, app_hint)
         override_prompt = None
         if getattr(self, "_profile_override", None):
             _profile = self._profile_override
@@ -347,13 +367,16 @@ class DictationPipeline:
             self._pending_send_key = None
             self._pending_send_skipped_terminal = False
             if result.should_send:
-                # terminal blocklist (upstream ContentView.swift:1928-1937,
-                # :2786-2798): the phrase still strips and the text still
-                # inserts, but Enter is never pressed — executing a
-                # half-typed shell line is worse than not sending
-                if app_hint and insertion.is_terminal_app(app_hint, self.cfg):
+                # per-app spoken-send policy (P2 profiles; canonical rule
+                # first, then the legacy terminal blocklist - identical
+                # outcome to pre-P2 while no canonical rules exist).
+                profile = (profiles_mod.resolve_profile(self.cfg, app_hint)
+                           if app_hint else profiles_mod.DEFAULT_PROFILE)
+                allowed, why = profiles_mod.spoken_send_allowed(
+                    profile, default_enabled=True, phrase_present=True)
+                if not allowed:
                     self._pending_send_skipped_terminal = True
-                    self.log("spoken-send: Enter suppressed (terminal app)")
+                    self.log(f"spoken-send: Enter suppressed ({why})")
                 else:
                     self._pending_send_key = self.cfg["recording"].get(
                         "spoken_send_key", "enter")
@@ -388,6 +411,72 @@ class DictationPipeline:
             insertion.copy_to_clipboard(text)  # upstream copyTranscriptionToClipboard
         return strategy
 
+    def _read_insertion_context(self) -> "context_mod.FocusContext | None":
+        """One bounded focused-field read, immediately before insertion.
+
+        Returns a usable FocusContext or None (disabled reader, failed
+        read, missing context). Never raises. The only persistence of
+        anything from the value is `self._focus_identity` (the app NAME,
+        same class of data the daemon already logs at take start) - the
+        selection/preceding text never leaves this take's insert path."""
+        self._focus_identity = None
+        if self.context_reader is None:
+            return None
+        try:
+            focus = self.context_reader()
+        except Exception:  # noqa: BLE001 - a broken reader is no context
+            return None
+        if not isinstance(focus, context_mod.FocusContext) or not focus.usable:
+            return None
+        if focus.identity:
+            self._focus_identity = focus.identity
+        self.log(f"context: {focus.provider_name} "
+                 f"(role={focus.accessible_role or '?'}, "
+                 f"stale={focus.stale})")  # lengths/flags only, never text
+        return focus
+
+    def _apply_focus_formatting(self, text: str,
+                                focus: "context_mod.FocusContext") -> str:
+        """Insertion-time formatting from the focused field (P2):
+        GAAV per an explicit profile override or a search-like accessible
+        role (continuous dictation into search boxes), then sentence
+        continuation - leading spacing + first-letter capitalization -
+        against the bounded preceding text. Unknown preceding (None)
+        changes nothing: exactly today's output."""
+        from .processing.extra_formats import apply_gaav
+        profile = (profiles_mod.resolve_profile(self.cfg, focus.identity)
+                   if focus.identity else profiles_mod.DEFAULT_PROFILE)
+        gaav = profile.formatting_mode == "gaav"
+        if (not profile.formatting_mode and focus.field_usable
+                and focus.search_like):
+            gaav = True  # role hint: GAAV target (search field)
+        if gaav:
+            p = self.cfg.get("processing", {})
+            text = apply_gaav(
+                text,
+                lowercase_first=p.get("gaav_lowercase_first", True),
+                remove_trailing_period=p.get("gaav_remove_trailing_period",
+                                              True))
+        if focus.field_usable and focus.preceding_text is not None:
+            text = context_mod.apply_continuation(
+                text, focus.preceding_text, capitalize=not gaav)
+        return text
+
+    def _recheck_send_key(self, focus: "context_mod.FocusContext") -> None:
+        """Safety net for the spoken-send Enter: with the insertion-time
+        identity, a terminal recognized only now (e.g. on Wayland, where
+        the take-start hint is None) still suppresses the keypress. An
+        explicit spoken_send = "on" profile overrides even a terminal."""
+        if not focus.identity:
+            return
+        profile = profiles_mod.resolve_profile(self.cfg, focus.identity)
+        allowed, why = profiles_mod.spoken_send_allowed(
+            profile, default_enabled=True, phrase_present=True)
+        if not allowed and self._pending_send_key:
+            self._pending_send_key = None
+            self._pending_send_skipped_terminal = True
+            self.log(f"spoken-send: Enter suppressed at insert ({why})")
+
     def _write_history(self, entry: dict, wav: Path) -> None:
         if not self.cfg["history"].get("save"):
             return
@@ -408,6 +497,7 @@ class DictationPipeline:
         from .audio_utils import pad_wav
         started = time.monotonic()
         self._pending_send_skipped_terminal = False
+        self._focus_identity = None
         try:
             duration = duration_seconds(str(wav))
             if self._should_skip(wav, duration):
@@ -451,8 +541,18 @@ class DictationPipeline:
                 return self._command(text, raw, duration, wav)
             polished, ai_used = self._polish(text, app_hint=app_hint)
             polished = self._after_ai_formatting(polished, app_hint=app_hint)
+            # P2 context seam: THE insertion-time focused-field read -
+            # the only place surrounding text is ever fetched, consumed
+            # locally below and never stored (privacy invariant).
+            focus = self._read_insertion_context()
+            if focus is not None:
+                polished = self._apply_focus_formatting(polished, focus)
             self._log_hotword_hits(polished)
             strategy = self._insert(polished)
+            if self._pending_send_key and focus is not None:
+                # insertion-time identity re-check: a terminal identified
+                # only now still suppresses the Enter key
+                self._recheck_send_key(focus)
             if self._pending_send_key:
                 spec, self._pending_send_key = self._pending_send_key, None
                 self._set_pill_badge("⏎ sending…")

@@ -70,8 +70,11 @@ def test_monitor_device_never_reselected():
 # -- C4: every DEFAULTS key is registered everywhere it must be --------------
 
 # deliberately NOT socket-settable / not persisted (documented exceptions):
-# ai.api_key is env-only by design; sample_rate is a fixed hardware constant
-_NOT_ALLOWED = {("ai", "api_key"), ("recording", "sample_rate")}
+# ai.api_key is env-only by design; sample_rate is a fixed hardware constant;
+# profiles.migrated_from_legacy is a one-time migration marker (P2), not a
+# user setting - saved to persist the one-time semantics, never socket-set
+_NOT_ALLOWED = {("ai", "api_key"), ("recording", "sample_rate"),
+                ("profiles", "migrated_from_legacy")}
 _NOT_SAVED = {("recording", "sample_rate")}
 
 

@@ -409,14 +409,24 @@ def insert_paste(text: str, *, key: str = "ctrl+v", verify: bool = True,
 
 
 def is_terminal_app(wm_class: str | None, cfg: dict) -> bool:
-    """True when the WM_CLASS matches any general.terminal_apps entry
-    (case-insensitive substring — the config drives both the spoken-send
-    Enter blocklist and terminal autocomplete spacing)."""
-    apps = cfg.get("general", {}).get("terminal_apps") or []
-    if not wm_class:
-        return False
-    lowered = wm_class.lower()
-    return any(p.lower() in lowered for p in apps)
+    """True when the app identity matches a terminal: a canonical
+    profiles.rules match first (P2), then the legacy general.terminal_apps
+    list (still read until v1.0 - identical to the pre-P2 check)."""
+    from .profiles import resolve_profile
+    return resolve_profile(cfg, wm_class).terminal
+
+
+def _effective_insertion_mode(cfg: dict, wm: str | None) -> str:
+    """insertion.mode with the per-app profile override (P2): a canonical
+    rule carrying insertion_mode (typed|paste|auto) wins for its app;
+    everything else inherits the global setting exactly as before."""
+    mode = cfg["insertion"]["mode"]
+    if wm:
+        from .profiles import resolve_profile
+        override = resolve_profile(cfg, wm).insertion_mode
+        if override:
+            return override
+    return mode
 
 
 def terminal_trailing_space(text: str) -> str:
@@ -433,23 +443,27 @@ def insert_text(text: str, cfg: dict, wm_class: str | None = None,
                 on_notice: Callable[[str], None] | None = None) -> str:
     """Insert `text` at the caret. Returns the strategy used.
 
-    wm_class: the insertion target's WM_CLASS (None -> live lookup). In
-    terminal apps (general.terminal_apps) pastes use ctrl+shift+v
-    (insertion.terminal_paste_key - X11 terminals pass ctrl+v to the app)
-    and typed insertions ending in a word character gain one trailing
-    space (insertion.terminal_autocomplete_space) so autocomplete commits;
-    the space is typing-only - clipboard copy and history keep the text
-    without it. on_notice surfaces paste-fallback / restore warnings.
+    wm_class: the insertion target's app identity (None -> live lookup).
+    In terminal apps (profiles.rules first, then general.terminal_apps)
+    pastes use ctrl+shift+v (insertion.terminal_paste_key - X11 terminals
+    pass ctrl+v to the app) and typed insertions ending in a word
+    character gain one trailing space (insertion.terminal_autocomplete_space)
+    so autocomplete commits; the space is typing-only - clipboard copy and
+    history keep the text without it. A canonical profile may override the
+    insertion mode for its app (P2). on_notice surfaces paste-fallback /
+    restore warnings.
 
-    Wayland sessions route to _insert_text_wayland (wm_class is always
-    None there: terminal quirks are inert, documented divergence)."""
+    Wayland sessions route to _insert_text_wayland (wm_class is None there
+    UNLESS the P2 context seam supplied an identity at insertion time;
+    without one, terminal quirks are inert, documented divergence)."""
     if session_mod.current().is_wayland:
-        return _insert_text_wayland(text, cfg, on_notice)
-    mode = cfg["insertion"]["mode"]
-    threshold = cfg["insertion"].get("paste_threshold_chars", 1200)
-    delay = cfg["insertion"].get("type_delay_ms", 8)
+        return _insert_text_wayland(text, cfg, wm_class=wm_class,
+                                    on_notice=on_notice)
     wm = active_window_class() if wm_class is None else wm_class
     terminal = bool(wm and is_terminal_app(wm, cfg))
+    mode = _effective_insertion_mode(cfg, wm)
+    threshold = cfg["insertion"].get("paste_threshold_chars", 1200)
+    delay = cfg["insertion"].get("type_delay_ms", 8)
     use_paste = (mode == "paste" or len(text) > threshold or text.startswith("-"))
     if use_paste:
         key = (cfg["insertion"].get("terminal_paste_key", "ctrl+shift+v")
@@ -472,6 +486,7 @@ def insert_text(text: str, cfg: dict, wm_class: str | None = None,
 
 
 def _insert_text_wayland(text: str, cfg: dict,
+                        wm_class: str | None = None,
                         on_notice: Callable[[str], None] | None = None) -> str:
     """Wayland insert: the same mode/threshold/leading-dash routing as the
     X11 body, over the wtype/ydotool + wl-clipboard backends.
@@ -479,18 +494,25 @@ def _insert_text_wayland(text: str, cfg: dict,
     Degradation ladder (each step only when the previous is impossible):
       tool+typed -> tool+wl-clipboard paste -> wl-copy + "paste manually"
       notice ("clipboard-fallback") -> InsertError (the pipeline notifies;
-      history still records the take). Terminal quirks never apply: without
-    a WM_CLASS equivalent (AT-SPI is future work) ctrl+shift+v and the
-    autocomplete space stay off - a wrong plain ctrl+v in a terminal is
-    recoverable, a mistyped terminal-paste is not."""
-    mode = cfg["insertion"]["mode"]
+      history still records the take). Terminal quirks apply ONLY when an
+    app identity was supplied (P2: the context seam passes the AT-SPI
+    identity at insertion time); wm_class None keeps today's behavior -
+    without an identity ctrl+shift+v and the autocomplete space stay off
+    (a wrong plain ctrl+v in a terminal is recoverable, a mistyped
+    terminal-paste is not)."""
+    wm = wm_class
+    terminal = bool(wm and is_terminal_app(wm, cfg))
+    mode = _effective_insertion_mode(cfg, wm)
     threshold = cfg["insertion"].get("paste_threshold_chars", 1200)
     delay = cfg["insertion"].get("type_delay_ms", 8)
     tool, _reason = _resolve_wayland_tool(cfg)
     use_paste = (mode == "paste" or len(text) > threshold or text.startswith("-"))
     if use_paste:
+        key = (cfg["insertion"].get("terminal_paste_key", "ctrl+shift+v")
+               if terminal else "ctrl+v")
         try:
-            _insert_paste_wayland(text, tool=tool, on_notice=on_notice)
+            _insert_paste_wayland(text, key=key, tool=tool,
+                                  on_notice=on_notice)
             return "paste"
         except InsertError:
             if mode == "paste":
@@ -499,6 +521,9 @@ def _insert_text_wayland(text: str, cfg: dict,
                 on_notice("Paste did not land - trying to type instead")
     if tool is not None:
         try:
+            if cfg["insertion"].get("terminal_autocomplete_space", True) \
+                    and terminal:
+                text = terminal_trailing_space(text)
             insert_typed(text, delay, tool=tool)
             return "typed"
         except InsertError:

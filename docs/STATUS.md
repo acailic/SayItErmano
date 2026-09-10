@@ -372,6 +372,38 @@ Plan: [research/2026-09-10-reliability-first-improvement-program.md](research/20
   build + committed dependency lock; native PEP 517 AUR recipe replaces
   the `-bin` repack; README install section leads with the contract.
 
+### Contextual dictation seam (P2, in tree — prototype, OFF by default)
+Plan: [research/2026-09-10-reliability-first-improvement-program.md](research/2026-09-10-reliability-first-improvement-program.md)
+(P2). Design: [dev/context-seam.md](dev/context-seam.md).
+- **ContextProvider seam** (`fluidvoice/context/`): `FocusContext`
+  (app identity, accessible role, selection, bounded preceding text,
+  stale/missing flags) behind a one-shot `reader_for(cfg)` callable
+  the pipeline invokes exactly once, immediately before insertion.
+  X11 adapter (WM_CLASS identity) + AT-SPI adapter (lazy pyatspi/GIR
+  import, cached failure, bounded desktop→app→ACTIVE-window→FOCUSED
+  walk; window-level fallback = stale identity-only). Missing
+  deps/read → no context, never a crash.
+- **Privacy**: selection/preceding hard-bounded (500 chars, enforced
+  in the frozen dataclass), redacted `__repr__`, and nothing from a
+  FocusContext ever reaches history/config/logs (pinned by tests).
+- **Per-app behavior profiles** (`[profiles] rules`, registered in
+  the config registry): match → terminal, prompt_profile /
+  instructions, insertion_mode, formatting_mode (gaav), spoken_send
+  (on/off). Canonical rules first, legacy `terminal_apps` /
+  `per_app_prompts` still read as fallback until v1.0; the first
+  settings save migrates legacy prompts + a CUSTOMIZED terminal list
+  into rules (one-time, idempotent, never clobbers).
+- **Consumers**: sentence continuation (spacing + capitalization)
+  from bounded preceding text; GAAV per profile or search-like
+  accessible role; terminal safety + spoken-send re-check from the
+  insertion-time identity (Wayland app hints); AI-polish prompt
+  selection canonical-then-legacy. With context missing, every
+  consumer is byte-identical pre-P2 (compat floor pinned by tests).
+- **OFF by default** (`context.enabled`): the live Wayland smoke
+  matrices — GNOME Wayland + sway, plus an X11 control matrix — are
+  REQUIRED-BEFORE-PARITY and not yet run
+  ([dev/wayland-smoke-matrix.md](dev/wayland-smoke-matrix.md)).
+
 ### Infrastructure
 - CLI: `daemon / toggle / cancel / status / paste-last / transcribe (multi-format
   + --json/--out) / history (+ --export, --scrub-tests)
