@@ -20,6 +20,7 @@ live under the `factory-` prefix and are unchanged.
 | `just test` | offline suite, serial: `pytest -q tests --ignore=tests/integration` |
 | `just test-parallel` | same scope on pytest-xdist `-n auto` (~4–5× faster) |
 | `just gate` | clean-tree check + lint + suite with `-W error` |
+| `just validate-requests` | every `requests/*.md` brief carries one valid `STATUS: OPEN\|SHIPPED\|SUPERSEDED` header |
 
 Notes:
 
@@ -36,6 +37,9 @@ Notes:
   from every offline gate via `--ignore`.
 - Dev dependencies (`pip install -e ".[dev]"`): `pytest`, `pytest-xdist`,
   `ruff`.
+- The deb's Ubuntu 24.04 / x86_64 / Python 3.12 target and the pinned
+  container build are a decision, not a setting —
+  [ADR-0004](../adr/ADR-0004-ubuntu-deb-contract.md).
 
 ## Release flow
 

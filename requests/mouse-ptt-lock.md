@@ -1,5 +1,9 @@
 Mouse push-to-talk + lock suppression - two roadmap "Later" items: "Mouse-button push-to-talk (XGrabButton + button-state polling) - upstream parity candidate from the 09-02 event-tap work; plus suppressing hotkeys while the screen is locked". Upstream reference: macOS PR #939 (mouse-button hotkeys: event-tap isolation, interrupted mouse holds, press lifecycle), triaged as a parity candidate in docs/UPSTREAM-TRACKING.md.
 
+STATUS: SHIPPED
+
+<!-- shipped in c2a95f6 -->
+
 Today: fluidvoice/hotkey.py is keyboard-only (XGrabKey). Hold mode already solves the hard part of push-to-talk on X11 for keys: the XGrabKey activation is released for the hold's duration so other keys pass through natively, release is detected by auto-repeat-proof query_keymap() polling, a passive Escape grab covers cancel-during-hold, and the grab re-arms afterwards. Nothing suppresses the hotkey when the session is locked - a locked screen with an active dictation keeps the daemon recording, and hotkey presses under the lock screen still toggle state.
 
 Scope:

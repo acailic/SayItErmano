@@ -1,5 +1,9 @@
 Plan the upgrade of `fluidvoice transcribe` (one-shot file transcription) - the UPSTREAM-TRACKING row "File transcription: chunked API uploads, .opus/.oga input" and the speaker-labeling prerequisite "timestamps/JSON export would come with it".
 
+STATUS: SHIPPED
+
+<!-- shipped in 6981a2d -->
+
 Scope v1:
 1) Input formats: today the README claims wav/flac/mp3 but opus/oga are unverified. faster-whisper decodes via PyAV, so most formats likely already work - the plan must first VERIFY which extensions actually decode, then add an explicit ffmpeg fallback (fluidvoice/audio_utils.py: `ensure_wav(path) -> Path` converting anything ffmpeg knows to 16k mono wav when the direct decode fails; error message names ffmpeg when it is missing), and accept the verified extension list in the CLI/docs.
 2) Structured output: `fluidvoice transcribe FILE --json` prints {text, language, duration_s, segments: [{start, end, text}]} (segments from the faster-whisper segment iterator; empty segments list for backends that do not expose them), and `--out PATH` writes the transcription to a file instead of stdout. Keep plain-text default output unchanged.

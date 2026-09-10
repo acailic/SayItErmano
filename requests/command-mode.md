@@ -1,5 +1,9 @@
 Plan the implementation of Command Mode - the last big unported macOS feature: voice-driven command execution with AI, confirmation-gated, as a multi-turn agent loop.
 
+STATUS: SHIPPED
+
+<!-- shipped in 49ef209 -->
+
 What it is upstream (Sources/Fluid/Services/CommandModeService.swift in altic-dev/Fluid-oss, fetched at /tmp/fluidui/mac/CommandModeService.swift): the user dictates an instruction; an LLM (OpenAI-compatible, same AIClient transport we already have) analyzes it and proposes shell commands (with a purpose string); the proposal is a PendingCommand that the user must CONFIRM before execution (confirmAndExecute / cancelPendingCommand); executed commands run with a working directory, output is fed back into the conversation, and the loop continues for a bounded number of turns (maxTurns); conversation history persists per chat; Escape cancels.
 
 Linux v1 scope (repo context: fluidvoice/daemon.py has modes dictate/rewrite already - rewrite is the pattern to follow: hotkey.rewrite_key -> start_rewrite -> _process(mode="rewrite")):

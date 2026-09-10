@@ -1,5 +1,9 @@
 Auto-update + packaging breadth - roadmap "Later" items: "Auto-updater (or packaged releases); onboarding" and "Packaging: AUR, nix, pipx (deb is DONE)". Motivating incident 2026-09-04: the daily-driver machine was upgraded to v0.5.0 by hand-pipping into the relocated user venv while the old 0.2.1 deb kept autostarting from /etc/xdg/autostart - the two-daemon XGrabKey race that silently killed the hotkey for a whole session. A check-and-assist updater prevents exactly this class of drift. GitHub releases exist (v0.4.0, v0.5.0 on acailic/SayItErmano); the Reddit announcement already points at the release install URL.
 
+STATUS: SHIPPED
+
+<!-- shipped in 55c2062 -->
+
 Today: there is no update check anywhere - fluidvoice/ has no update module; the deb (packaging/build-deb.sh) installs to /opt/fluidvoice-linux with a bundled venv, the user install is ~/.local/share/sayit-ermano/venv + ~/.local/bin; `sayit-ermano doctor` reports environment but not version freshness. CI is manual-only by project rule (never add push/PR triggers) - the updater is client-side checking against GitHub releases, not a publishing pipeline.
 
 Scope:

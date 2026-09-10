@@ -1,5 +1,9 @@
 Plan the implementation of hold-mode key passthrough - docs/STATUS.md line "Hold-mode key passthrough (other keys interrupt, not swallow)". Small, focused fix.
 
+STATUS: SHIPPED
+
+<!-- shipped in d99caab -->
+
 Today: hotkey "hold" mode (fluidvoice/hotkey.py _hold_cycle) grabs the WHOLE keyboard from hotkey press to release so it can see the release; every other key pressed during the hold is swallowed (GrabModeAsync on keyboard means events come to us and we discard everything that is not the hotkey release or Escape). Upstream macOS push-to-talk lets you keep typing while holding the dictation modifier.
 
 Scope:

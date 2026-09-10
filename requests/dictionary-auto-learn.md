@@ -1,5 +1,9 @@
 Dictionary auto-learning from corrections - roadmap "Later" item "Custom-dictionary auto-learning from post-insertion corrections"; docs/UPSTREAM-TRACKING.md:168 lists upstream's version as "Auto-suggested custom-dictionary replacements" (⏳). Unblocked now that inline repair exists (history.update_text, aa24ebf): the user's own edits are the signal. Upstream semantics must be verified against altic-dev/Fluid-oss during planning (threshold? suggest vs auto-add? where surfaced?) and quoted file:line in the spec.
 
+STATUS: SHIPPED
+
+<!-- shipped in 55d3f9c -->
+
 Today: update_text (fluidvoice/history.py:154) overwrites entry["text"] in place - the pre-edit text is LOST, so nothing can be learned. The custom dictionary (processing/dictionary.py, config comment shows the canonical case: triggers ["miro board"] -> replacement "Miro board") is purely hand-maintained via the Settings editor.
 
 Scope:

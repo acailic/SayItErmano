@@ -1,5 +1,9 @@
 Plan the implementation of input-device monitoring with automatic microphone switching - UPSTREAM-TRACKING row "Mic priority list, drag-to-reorder, device history" and docs/STATUS.md "Input-device monitoring / Bluetooth auto-switch" (MPRIS media pause already landed; this is the remaining half).
 
+STATUS: SHIPPED
+
+<!-- shipped in 60c4d60 -->
+
 Today: the tray menu's Microphone submenu (fluidvoice/tray.py list_microphones + daemon._set_device) lists pactl sources and switching persists recording.device, but nothing reacts when devices appear/disappear - a Bluetooth headset connecting mid-session never becomes the mic unless the user re-opens the menu, and a disconnect mid-dictation kills the take.
 
 Scope v1:

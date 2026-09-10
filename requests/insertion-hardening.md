@@ -1,5 +1,9 @@
 Insertion hardening: paste verification, clipboard hygiene, terminal paste quirks - roadmap "Later" item "Insertion hardening", docs/UPSTREAM-TRACKING.md line 154 ("Reliable pasting in Ghostty/tmux/terminals"). Robustness work with no UI change; the failure modes below are reproducible today.
 
+STATUS: SHIPPED
+
+<!-- shipped in 32c65b3 -->
+
 Today: insert_paste (fluidvoice/insertion.py:76) = read clipboard, write dictation text, xdotool ctrl+v, sleep 0.25 s, restore the previous clipboard blindly. Failure modes: (a) a slow-to-focus app reads the clipboard AFTER our restore - dictation is lost and the user's old clipboard is pasted over it; (b) nothing verifies the paste landed before we restore and report success; (c) clipboard managers (GPaste/Klipper/Clipman) snapshot the dictation text as it flashes through the selection - privacy leak and clutter; (d) terminals and tmux/ghostty front-ends need ctrl+shift+v, not ctrl+v - docs/UPSTREAM-TRACKING.md:154.
 
 Scope:

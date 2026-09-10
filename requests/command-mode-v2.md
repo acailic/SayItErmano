@@ -1,5 +1,9 @@
 Command mode v2 - deepen the port's clearest differentiator: voice-run commands with confirm-first safety. Command mode v1 shipped (requests/command-mode.md): strict-JSON single-tool protocol, every command confirmed, pill overlay feedback. Upstream parity items still open in docs/UPSTREAM-TRACKING.md and ROADMAP "Later": "Command mode (voice -> terminal agent) with the upstream tool schema and destructive-command confirmation list" - the chat store and native tool_calls remain upstream-only. Sequence AFTER requests/history-integrity.md lands so usage stats can validate the investment with clean data.
 
+STATUS: SHIPPED
+
+<!-- shipped in 396e63e (series 03d243f..396e63e) -->
+
 Today: fluidvoice/command.py runs one command per dictation - strict JSON single tool, confirm-every-run; history stores mode/command/purpose/exit_code/success/output rows (fluidvoice/history.py). There is no follow-up context (each voice run starts cold), no destructive-command classing beyond confirm-always, and no History-window surface for command rows - the History list shows them as text entries without retry/copy affordances.
 
 Scope (verify every semantic against the upstream Swift source - github.com/altic-dev/Fluid-oss, command/chat files - during planning, quote file:line in the spec, same as the punctuation port):

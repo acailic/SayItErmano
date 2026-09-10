@@ -1,5 +1,9 @@
 Plan the implementation of a Parakeet TDT backend via ONNX Runtime — ROADMAP v0.4, UPSTREAM-TRACKING row "Parakeet TDT v2/v3 (upstream default) 🚧 v0.4 — via NeMo/ONNX; highest-value model addition on NVIDIA". Upstream runs NVIDIA Parakeet as its DEFAULT model on Apple Silicon (BEHAVIOR-SPEC.md:170-172: TDT v3 461 MiB multilingual, TDT v2 443 MiB EN); on Linux the win is NVIDIA/CPU users getting a fast non-whisper engine.
 
+STATUS: SHIPPED
+
+<!-- shipped in 99c4afd -->
+
 Today: `fluidvoice/backends/__init__.py` knows faster-whisper / whisper-torch / whisper.cpp only (`load_backend` at :147, `backend_status` at :108, docstring priority list at :1-6). The GGUF run (bba…, shipped) already built the download machinery to reuse: `fluidvoice/model_catalog.py` (`GGUF_CATALOG` dict of {name: {url,size}}, `gguf_dir()/gguf_path()/gguf_downloaded()`) and `fluidvoice/model_download.py` (streaming urllib, .part rename, progress callback). Goal: `model.backend = "parakeet"` gives Linux a one-click, auto-downloaded Parakeet TDT v2 (EN) / v3 (multilingual) engine, transcribing entirely offline.
 
 Scope:

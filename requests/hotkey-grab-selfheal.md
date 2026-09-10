@@ -1,5 +1,9 @@
 Hotkey-grab self-healing - the daemon must never sit "ready" with a dead hotkey. Live evidence 2026-09-04: at login a second daemon (stale fluidvoice-linux 0.2.1 deb autostart) won the XGrabKey race for Right_Control; this daemon's 8 lock-mask grabs were all refused (8x BadAccess, GrabKey, major_opcode 33) yet startup logged "hotkey Right_Control = keycode 105 ... ready" and kept running silently keyless until manually restarted. The stale deb is being purged from this machine, but the class is general: any second grab holder (WM rebind, another dictation tool, a test daemon) reproduces it.
 
+STATUS: SHIPPED
+
+<!-- shipped in 23e2567 -->
+
 Today: fluidvoice/hotkey.py grabs the hotkey once in HotkeyListener.setup() via _grab() (one grab_key per _LOCK_MASKS combo, 8 total) and never retries; python-xlib delivers the BadAccess through the DEFAULT error handler (it prints "X protocol error:" - it does NOT raise through the grab_key call), so the failure is invisible to the listener and to everything above it. Only the cancel key self-heals (_sync_cancel_grab, hardened in c720b25, retried each 10 ms poll loop iteration). Grab health appears nowhere: not in doctor.py, not in the tray tooltip (tray.py), not in status.
 
 Scope:

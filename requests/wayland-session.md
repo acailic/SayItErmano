@@ -1,5 +1,9 @@
 Wayland session support - ROADMAP v0.3 milestone, fully open today: "Insertion via ydotool/wtype + wlr virtual-keyboard protocol", "Hotkey: document/bind DE shortcuts per compositor (GNOME/KDE/COSMIC); optional evdev listener for physical push-to-talk", "Clipboard via wl-clipboard (wl-copy/wl-paste) with restore". docs/UPSTREAM-TRACKING.md marks Wayland insertion as the remaining smart-typing gap. The port is currently X11-only end-to-end (hotkey grabs, overlay, insertion, clipboard); GNOME and KDE default to Wayland and Pop!_OS is mid-transition, so this is the reach multiplier.
 
+STATUS: SHIPPED
+
+<!-- shipped in dbe307f -->
+
 Today: fluidvoice/hotkey.py (XGrabKey), fluidvoice/overlay.py (X11 override-redirect pill), fluidvoice/insertion.py (xdotool type / X11 clipboard paste with the verified-paste design), fluidvoice/selection.py, fluidvoice/tray.py (SNI - already display-server-neutral) all assume X11; daemon start on a Wayland session dies in hotkey setup (HotkeyError "cannot open X display" - verify exact failure during planning; doctor reports it).
 
 Scope (phased; each phase must leave a working X11 regression state - Wayland is additive, never a rewrite of the X11 paths):

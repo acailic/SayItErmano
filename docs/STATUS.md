@@ -1,14 +1,18 @@
 # SayItErmano — Status Ledger
 
-Last updated: 2026-09-05 · v0.5.0 · **1114 automated tests** (1077 offline + 37 integration)
+Last updated: 2026-09-10 · v0.8.1 released, **P0 reliability program in
+tree (unreleased)** · **1882 automated offline tests + 38 integration**
 · verified against upstream `altic-dev/FluidVoice` by a 5-agent audit
 (prompts/AI, punctuation rules, daemon pipeline, models, security).
 
-Companion docs: [BEHAVIOR-SPEC.md](BEHAVIOR-SPEC.md) (what upstream does,
-with file:line evidence) · [ROADMAP.md](ROADMAP.md) (the forward plan) ·
-[COMPARISON.md](COMPARISON.md) (vs. other Linux dictation tools) ·
-[UPSTREAM-TRACKING.md](UPSTREAM-TRACKING.md) (macOS-vs-Linux capability
-matrix + upstream changelog with its refresh loop).
+Companion docs: [glossary.md](glossary.md) (domain terms) ·
+[ROADMAP.md](ROADMAP.md) (future work — everything not yet shipped) ·
+[adr/](adr/) (locked decisions, [index](adr/README.md)) ·
+[BEHAVIOR-SPEC.md](BEHAVIOR-SPEC.md) (what upstream does, with file:line
+evidence) · [COMPARISON.md](COMPARISON.md) (vs. other Linux dictation
+tools) · [UPSTREAM-TRACKING.md](UPSTREAM-TRACKING.md) (macOS-vs-Linux
+capability matrix + upstream changelog with its refresh loop) ·
+[research/](research/) (the evidence base).
 
 ---
 
@@ -25,14 +29,24 @@ matrix + upstream changelog with its refresh loop).
   Escape grab covers cancel-during-hold, and the hotkey re-arms afterwards
   (an XTEST-replay variant was prototyped and abandoned: live Xorg 21.1
   silently drops XTEST fakes that match the current key state, so replayed
-  presses never reach the app); optional second cancel key.
+  presses never reach the app); optional second cancel key. **Activation
+  mode "both"** (86fad3e): a 250 ms tap/hold disambiguation window — tap
+  toggles, hold talks; the take opens no later than the threshold so
+  speech is never delayed. Up to **three dictation shortcuts** with
+  per-shortcut prompt profiles (`hotkey.extra_shortcuts`, 3411af3).
 - Recording through PipeWire (`pw-record`) / PulseAudio (`parecord`), 16 kHz
   mono s16 WAV, configurable device; SIGINT→SIGTERM→SIGKILL stop escalation;
   stderr drained to avoid pipe blocking.
 - Transcription on **faster-whisper with CUDA** (auto-falls back to CPU int8);
-  torch-whisper and whisper.cpp backends; auto-selection priority; models
+  torch-whisper, whisper.cpp and **Parakeet TDT v2/v3 (ONNX)** backends; a
+  **remote OpenAI-compatible STT backend** (`model.remote_url`) wins over
+  every local choice while configured; auto-selection priority; models
   tiny→large-v3-turbo (auto: small on GPU / base on CPU), background
-  download + hot-swap; upstream `whisper-*` names accepted.
+  download + hot-swap; upstream `whisper-*` names accepted. Per-model
+  language overrides plus a **runtime language cycle hotkey**
+  (`hotkey.language_key` + `general.language_cycle`, with the
+  wrong-language whitelist re-decode guard, d604db8…052df8a). **Idle model
+  unload** (`model.idle_unload_s`, 923001e).
 - Text insertion: `xdotool type` (clipboard-free) or clipboard paste with
   restore; auto-paste for long texts; leading-dash guard; clipboard fallback;
   **insertion hardening**: for the duration of a paste SayItErmano owns the
@@ -68,17 +82,24 @@ matrix + upstream changelog with its refresh loop).
     lands without a fresh selection read would time out (0.6 s) and re-type
     — the documented trade-off of the read-based verify signal.
 - Watchdogs: max-duration auto-stop (300 s), **first-PCM timeout** (2 s —
-  muted/wrong mic fails fast), silence gate (opt-in, upstream thresholds),
-  sub-1s zero padding, stale `/tmp` sweep at startup, auto-stop race guard.
+  muted/wrong mic fails fast; the timer is tracked and cancelled on every
+  take end, its callback identity-checks its recorder — P0.4), silence gate
+  (opt-in, upstream thresholds), sub-1s zero padding, stale `/tmp` sweep at
+  startup, auto-stop race guard.
 - Stop/start SFX (the original GPLv3 upstream sounds), desktop notifications,
-  history JSONL (5000-entry cap, efficient tail, optional audio retention
-  with GB budget), `paste-last`, optional copy-to-clipboard.
+  **history JSONL with transactional writes** (5000-entry cap, efficient
+  tail, sidecar-flock append/edit/trim transactions, atomic replace + fsync,
+  retained audio with rollback and GB budget — ADR-0002, 238a85f),
+  `paste-last`, optional copy-to-clipboard. A **digital-silence notice**
+  (3157fdf) tells the user when a take was pure zeros (dead mic), instead
+  of an empty transcript.
 - **Live streaming preview** (upstream's headline UX): SEGMENTED engine
   (2026-09-05, spec a3f7c21e) — fixed 2 s windows at 50% hop, exactly one
   decode per tick (constant cost regardless of take length — the
   re-transcribe-whole-buffer failure upstream hit as bug #833 cannot
   happen), committed text is stable while the fresh tail re-renders with
-  word-overlap dedupe, preview works on ALL four backends
+  word-overlap dedupe (the provisional tail renders flicker-stable,
+  ce8070f), preview works on ALL four backends
   (faster-whisper/whisper-torch pass rolling initial_prompt; whisper.cpp
   and parakeet get preview for the first time), and an energy+zero-crossing
   VAD auto-stops the take after 2.0 s of trailing silence once real speech
@@ -112,6 +133,10 @@ matrix + upstream changelog with its refresh loop).
 - **MCP server** (`sayit-ermano mcp`, upstream request #927): stdio
   JSON-RPC bridge exposing transcribe_file/history/status/toggle to
   MCP-capable agents, forwarded over the existing unix control socket.
+  Every response is valid **JSON-RPC 2.0** with request/version/method/
+  params validation and MCP version negotiation (P0.4, ff0ae55); the README
+  documents that registering the bridge grants the client local-history
+  and dictation control.
 - **Command-mode safety** (upstream #861/#930 ported): `find -delete` /
   `find -exec` join the destructive strong-confirm patterns; run_shell
   kills the whole process group on timeout so a background descendant
@@ -121,6 +146,18 @@ matrix + upstream changelog with its refresh loop).
   rides `ai.refusal_guard`.
 - **GAAV mode**: optional lowercase-first + trailing-period strip for
   search-box/casual dictation.
+- **Command mode** (v1 49ef209, v2 03d243f…396e63e): voice-driven terminal
+  agent — the dictated instruction goes to the LLM under the upstream
+  tool schema travelling in our strict-JSON `tool_calls` protocol (per-arg
+  validation; a reply may propose a SET of calls, each individually
+  confirmed); the proposal shows in the pill awaiting confirmation —
+  hotkey confirms, Escape cancels; the upstream 28-rule destructive list
+  is ported verbatim + `command.destructive_patterns` user additions,
+  destructive matches need a TWO-press strong confirm; per-app follow-up
+  context (last 5 results within `command.context_window_s`, spoken "new
+  session" clears, in-memory only); History Commands view with
+  collapsible output, Copy and confirm-gated Re-run; every run logged to
+  history (mode `command`). See the C1–C6 divergence rows below.
 - **Mic priority list + input-device monitoring** (`recording.mic_priority`):
   a 3 s `pactl list short sources` diff poll notices connects/disconnects;
   when the configured microphone disappears and a priority pattern matches
@@ -161,6 +198,14 @@ matrix + upstream changelog with its refresh loop).
   `%` after a digit; original-text trailing period before formatting actions).
   *Fidelity note: upstream's dot/slash/at-sign "context gates" are dead code —
   the shipping app applies rules unconditionally; so do we.*
+- Slash/mention literal squeeze + terminal send-safety (c42879b): `/ fix` →
+  `/fix`, `@ John Smith` → `@John Smith` (first space only; URLs/emails/
+  mid-token sigils untouched, `processing.slash_mention_squeeze`); the
+  spoken forms (`slash fix`, `at sign`, `tag`) ride the user-extensible
+  spoken formatting actions (7b1fc4a + Settings editor); one trailing
+  space on typed insertions in `general.terminal_apps` commits terminal
+  autocomplete (`insertion.terminal_autocomplete_space`); the spoken-send
+  Enter is blocked in terminals (blocklist).
 
 ### AI polish (audit-verified byte-identical prompts)
 - All five upstream prompts copied **byte-identical** (verified with Swift
@@ -173,6 +218,9 @@ matrix + upstream changelog with its refresh loop).
 - Works with any OpenAI-compatible endpoint (OpenAI/Groq/Ollama/LM Studio/
   llama.cpp); live-tested against local Ollama.
 - Error behavior: AI failure falls back to raw transcript + notification.
+  **Guard chain** (never type model junk): refusal guard (`ai.refusal_guard`,
+  9e283eec) → prompt-leak guard (#910) → over-correction guard (ce8070f:
+  polish must not rewrite correct words).
 - Custom base prompt: `ai.base_prompt` (empty = the built-in dictation
   prompt) feeds both the AI client and the per-app compose; Settings → AI
   edits it and manages named presets in a sidecar `prompt-profiles.json`
@@ -182,18 +230,32 @@ matrix + upstream changelog with its refresh loop).
 
 ### Native GTK app (`fluidvoice app` / `fluidvoice settings`)
 - GTK 4 + libadwaita, single instance with remote window raising
-  (`--open history|settings`, `--onboard`); follows the system theme.
+  (`--open history|settings`, `--onboard`); follows the system theme;
+  macOS-parity layout (v0.8.1, d4ba137): sidebar with Settings/More
+  caption sections in the macOS page order, prompt profiles as radio rows,
+  radio-style active-model indicator, History **Export as Text** and
+  **Pause saving / Resume saving** (`history.save`, live). The settings
+  code is split per page (`gtkui/settings_pages/`, 82e5554).
 - **History window** (macOS main-window counterpart): live status header
   (state/backend/GPU/model + warmup), search, copy/delete, inline audio
-  replay (GtkMediaFile, xdg-open fallback), clear-all, daemon-down banner.
+  replay (GtkMediaFile, xdg-open fallback), clear-all, daemon-down banner,
+  today-usage line, ZIP export (`fluidvoice history --export`, 412617f);
+  **confidence dots** (●●●/●●○/●○○ from whisper segment log-probs, honest:
+  absent when the backend cannot say), **inline repair** (click-to-edit,
+  saves through the validated JSONL path, stamps `edited_from`),
+  **Insert at cursor** row action, **date-header grouping**
+  (Today/Yesterday/date), mode icons (mic/pen/terminal) — the UI-science
+  uplift (4bc9e14, d1805b6, 71495e3), plus a **Stats page** (streak,
+  time-saved, 7/30-day activity chart, 48b32ac) and pill hover chips
+  (`recording.overlay_chips`).
 - **Settings window**: every validated key across General / Models /
   AI Polish (+ per-app prompt rules) / Dictation (hotkeys with press-to-
   capture, mic picker, preview, spoken send, GAAV, insertion) / History /
-  About; dirty tracking, Ctrl+S, close-with-changes confirm; saves go over
-  the control socket and hot-apply (hotkeys re-grab, recorder/tray/model
-  rebuild); file-only mode when the daemon is down.
-- **whisper.cpp GGUF manager** (Settings → Models): curated catalog of the
-  7 `ggerganov/whisper.cpp` ggml models (base…large-v3, multilingual +
+  Wayland / About; dirty tracking, Ctrl+S, close-with-changes confirm;
+  saves go over the control socket and hot-apply (hotkeys re-grab,
+  recorder/tray/model rebuild); file-only mode when the daemon is down.
+- **whisper.cpp GGUF manager** (Settings → Models): curated catalog of
+  the 7 `ggerganov/whisper.cpp` ggml models (base…large-v3, multilingual +
   English-only) with streaming one-click download (progress subtitle,
   worker thread + GLib polling, `.part` + atomic rename, no half-written
   files); "Use" switches the backend via validated `set-config`
@@ -219,86 +281,158 @@ matrix + upstream changelog with its refresh loop).
   files directly, not even in daemon-offline mode).
 - Replaces the retired web UI (spec: docs/superpowers/specs/
   2026-09-02-native-settings-app-design.md) - no TCP listener remains;
-  the localhost CSRF/DNS-rebinding surface is gone by construction.
-  Validation lives in config.apply_settings (one source of truth), config
-  is written 0600 atomically, secrets masked in get-config.
+  the localhost CSRF/DNS-rebinding surface is gone by construction
+  (ADR-0001). Validation lives in config.apply_settings (one source of
+  truth), config is written 0600 atomically, secrets masked in get-config.
+
+### Wayland session support (v0.3, shipped 2026-09 — dbe307f)
+The daemon is genuinely useful on a Wayland session; X11 behavior is
+byte-identical (the port is strictly additive; every wayland branch is
+gated ONLY on the session probe: `XDG_SESSION_TYPE` > `WAYLAND_DISPLAY` >
+`DISPLAY` > unknown-as-x11, `fluidvoice/session.py`). The live smoke
+checklist (GNOME-Wayland, then sway) is tracked in
+[ROADMAP.md](ROADMAP.md); unit coverage is complete in
+`tests/test_wayland_capabilities.py`.
+- **Session + capability matrix**: daemon startup logs one
+  `session: wayland (gnome) - capabilities: …` line; `status`
+  carries additive `session`/`capabilities` keys; `doctor` prints the
+  per-capability matrix with per-tool found/missing and flips its exit
+  code only when insertion is `unavailable`; Settings → Wayland shows
+  the same resolution.
+- **Insertion**: `wtype` (auto resolution skips it on GNOME — no
+  zwp virtual-keyboard protocol) or `ydotool` (any compositor; needs
+  `ydotoold` + `/dev/uinput`; spec→code table with loud errors for
+  unmapped keys), `insertion.wayland_tool` = `auto|wtype|ydotool`. Typed
+  insertion is the default (no clipboard flash), matching xdotool
+  semantics; paste mode uses wl-clipboard with snapshot + restore of the
+  original mime type. Degradation ladder: tool+typed → tool+wl-paste →
+  wl-copy + "paste manually" notice (`clipboard-fallback`) → InsertError.
+- **Hotkey**: no global grabs exist — the daemon writes a bindable
+  `~/.local/share/sayit-ermano/bin/sayit-ermano-toggle` script and
+  prints per-DE bind steps (GNOME/KDE/COSMIC/generic) in doctor and
+  Settings → Wayland (copy button + open-DE-panel button on GNOME/KDE).
+  Optional **evdev push-to-talk** (`hotkey.wayland_evdev`, default off):
+  hold a physical key read from `/dev/input` — a PRIVILEGED path (input
+  group + `pip install 'sayit-ermano[wayland]'`), never fatal when absent.
+- **Overlay**: the notification preview IS the wayland preview
+  (FluidOverlay's existing notify fallback); the X11 pill is not possible
+  on GNOME-Wayland in v1 and a wlroots layer-shell pill is future work
+  (ROADMAP).
+- **Rewrite selection capture** works via tool-ctrl+c + wl-paste/
+  wl-copy restore; spoken-send/paste-last keys route through the
+  resolved tool; `copy_to_clipboard`/`clipboard_fallback` use wl-copy on
+  wayland sessions.
+- **Divergences (deliberate)**: (1) paste verification degrades to a
+  fixed settle (`WAYLAND_PASTE_SETTLE_S = 0.45`) — cross-client
+  selection-read observation, the core of the X11 verified paste, is
+  impossible on Wayland; (2) no clipboard-manager hygiene markers while
+  flashing the clipboard — wayland clipboard managers will see the
+  dictation; (3) no app hints (no WM_CLASS equivalent; AT-SPI future
+  work), so `terminal_apps` quirks (ctrl+shift+v, autocomplete space,
+  spoken-send Enter blocklist) are inert.
+- A literal KDE shortcut-file import was rejected — Plasma 6
+  custom-command shortcuts live in `kglobalshortcutsrc` under
+  kglobalacceld with no supported import format; the bindable script +
+  open-panel button + per-DE instructions deliver the same outcome.
+
+### Reliability-first program P0 (in tree, unreleased — shaping v0.8.2)
+Plan: [research/2026-09-10-reliability-first-improvement-program.md](research/2026-09-10-reliability-first-improvement-program.md).
+- **Hallucination guard** (b73ecd2): preview/transcript never shows or
+  types fluent garbage — repeat-hallucination detection across the
+  preview seam and pipeline.
+- **Responsive, bounded control socket** (e9a5364, P0.2): `ControlServer`
+  (`fluidvoice/control_server.py`) — one accept thread + fixed 8-worker
+  pool so a long `transcribe` never blocks `status`/UI; wire protocol
+  byte-identical; 1 MiB request / 16 MiB response caps, 10 s idle read,
+  socket mode 0600, deterministic shutdown joining every thread; the
+  daemon's single-transcription `busy` guarantee is untouched; structured
+  errors for non-object JSON, bad actions, oversized lines/responses.
+- **Transactional history** (238a85f, P0.3, ADR-0002): `HistoryStore` +
+  sidecar flock (shared reads, exclusive append/read-modify-replace
+  transactions), unique temp file → fsync → atomic replace → dir fsync;
+  collision-proof retained audio with rollback; orphan pruning under the
+  same lock; schema and module-level API unchanged.
+- **Lifecycle + protocol defects closed** (P0.4): first-PCM timer tracked
+  and cancelled on stop/cancel/shutdown with identity-checked callbacks
+  (b05ebed); unhandled thread exceptions fail the suite and expected
+  test-server disconnect noise is silenced (412e1a9); every MCP response
+  is valid JSON-RPC 2.0 with request validation and MCP version
+  negotiation (ff0ae55); the MCP trust boundary is documented (0f1ff64).
+- **Developer and release gates** (P0.5): pytest `testpaths=tests` (bare
+  `pytest` can never collect the agent factory), application `just`
+  recipes (`lint`/`test`/`test-parallel`/`gate` — clean tree, ruff, suite
+  with `-W error`), ruff config moved + all findings cleaned (6b0a88a),
+  release split into manual `prepare` and `publish` workflows where
+  publish requires a green, manually dispatched CI run for the exact SHA
+  (b06738a, b2fe274, 514a720, 8db5003; docs: [dev/release-gates.md](dev/release-gates.md)).
+- **Packaging contract** (P0.6, ADR-0004): deb = Ubuntu 24.04/x86_64/
+  Python 3.12 only with honest `Depends`, pinned `ubuntu:24.04` container
+  build + committed dependency lock; native PEP 517 AUR recipe replaces
+  the `-bin` repack; README install section leads with the contract.
 
 ### Infrastructure
 - CLI: `daemon / toggle / cancel / status / paste-last / transcribe (multi-format
-  + --json/--out) / history
-  / config / settings / doctor`; unix-socket control protocol.
+  + --json/--out) / history (+ --export, --scrub-tests)
+  / config / settings / doctor / mcp / update`; unix-socket control protocol
+  with scriptable `transcribe` + `history` routes (25fd209, no TCP —
+  ADR-0001); **check-and-assist updater** (`fluidvoice/update.py`, 55c2062):
+  daily GitHub check on a daemon thread that never blocks startup, one
+  notification per newer release, `sayit-ermano update` prints the
+  copy-paste upgrade command per detected install method, doctor drift
+  WARN for deb+user double installs — no silent self-update.
 - systemd user unit (DISPLAY/XAUTHORITY aware, tied to graphical session);
   installer generates it with real paths and enables it.
-- Python 3.11+, GPLv3, published as the `linux` branch of the fork
-  `acailic/SayItErmano`.
-- Hotkey-grab self-healing (P1, `docs/research/2026-09-04-product-proposals.md`):
-  every listener grab carries a per-request python-xlib `onerror` (a truthy
-  return suppresses the printing default handler — BadAccess never raises
-  through `grab_key`), so a refused combo (stale deb autostart, WM rebind,
-  any second grab holder) becomes per-combo data, not stderr noise; the
-  poll loop re-attempts missing combos every ~10 ms tick (zero X traffic
-  when healthy, WARN-capped), startup logs WARN + desktop notification
-  when refused, and health is surfaced in `status` (`hotkey_grabbed`),
-  the tray tooltip (` - hotkey blocked!`, live-refreshed on flip) and
-  `doctor` (ok / BLOCKED / disabled / unknown). Live-verified 2026-09-04:
-  deliberate conflicting holder of all 8 F9 lock-mask combos → daemon
-  WARNed + `hotkey_grabbed:false`, and within one tick of the holder
-  closing its connection the grab was re-taken, `status` flipped true and
-  a synthetic F9 press toggled recording — no restart
-  (`tests/integration/test_live_x11.py::TestHotkeyGrabRecovery`).
+- GPLv3, published as the `linux` branch of the fork
+  `acailic/SayItErmano`. Packaging: deb (Ubuntu 24.04 contract,
+  ADR-0004), pipx (Python 3.11+, any distro — `scripts/verify-pipx.sh`),
+  native AUR source recipe (`packaging/aur/`, instructions only).
+- Hotkey-grab self-healing (`hotkey.py`): every listener grab carries a
+  per-request python-xlib `onerror` (a truthy return suppresses the
+  printing default handler — BadAccess never raises through `grab_key`),
+  so a refused combo (stale deb autostart, WM rebind, any second grab
+  holder) becomes per-combo data, not stderr noise; the poll loop
+  re-attempts missing combos every ~10 ms tick (zero X traffic when
+  healthy, WARN-capped), startup logs WARN + desktop notification when
+  refused, and health is surfaced in `status` (`hotkey_grabbed`), the
+  tray tooltip (` - hotkey blocked!`, live-refreshed on flip) and
+  `doctor`. Live-verified 2026-09-04: deliberate conflicting holder of
+  all 8 F9 lock-mask combos → daemon WARNed + `hotkey_grabbed:false`,
+  and within one tick of the holder closing its connection the grab was
+  re-taken, `status` flipped true and a synthetic F9 press toggled
+  recording — no restart (`tests/integration/test_live_x11.py::TestHotkeyGrabRecovery`).
 - **Mouse-button push-to-talk** (`recording.push_to_talk_button`, e.g.
   `"button8"`; buttons 6–255, click/scroll buttons 1–5 refused by
   validation, optional `push_to_talk_modifiers`): a spare mouse button
   held = dictation, released = stop & transcribe; CLICKS during the hold
   reach the window under the pointer as real events. Mechanism
   (hotkey.MousePTTListener, the pointer twin of the keyboard hold):
-  XGrabButton passive grabs on all 8 lock-mask combos
-  (owner_events=False, GrabModeAsync, refusals as data + ~10 ms retry —
-  the keyboard pattern); the press activation is released with
-  ungrab_pointer so clicks pass through natively, and the passive grab
-  SURVIVES it (buttons have no auto-repeat, so no re-arm dance unlike
-  keys); the release is detected from XI2 RawButtonRelease events on all
-  master pointers, parsed from python-xlib's GenericEvent bytes; a
-  passive Escape grab covers cancel-during-hold. Live-verified on Xorg
-  21.1: mousedown 8 → recording; a native button-1 click reached the
-  receiver window mid-hold; mouseup 8 → stop & transcribe; Escape
-  mid-hold → cancel; a conflicting holder blocked the arm (status
-  `mouse_ptt_grabbed:false` + WARN) and releasing it re-armed within a
-  tick. Doctor reports the resolution + live arm state; `status` exposes
-  `mouse_ptt_grabbed`.
+  XGrabButton passive grabs on all 8 lock-mask combos; the press
+  activation is released with ungrab_pointer so clicks pass through
+  natively, and the passive grab SURVIVES it; the release is detected
+  from XI2 RawButtonRelease events on all master pointers; a passive
+  Escape grab covers cancel-during-hold. Live-verified on Xorg 21.1;
+  `status` exposes `mouse_ptt_grabbed`.
 - **Lock suppression** (`general.pause_when_locked`, default true;
   fluidvoice/lockmon.py): while the session is locked or suspended the
-  daemon ignores every hotkey entry (keyboard, mouse PTT, tray click,
-  socket `toggle`/rewrite/command starts), cancels an active dictation
-  through the existing cancel path (watchdog off, discard, notify),
-  cancels a pending command proposal, and the tray tooltip notes
-  `paused (locked)`; `cancel` and the rest of the socket surface stay
-  available. Sources (all additive, transitions deduped): logind session
-  Lock/Unlock signals, LockedHint PropertiesChanged (GNOME's path — no
-  screensaver D-Bus name is owned there, verified live), Manager
-  PrepareForSleep (suspend counts as locked),
-  org.freedesktop/org.gnome ScreenSaver ActiveChanged where a DE owns
-  the names, plus a 5 s LockedHint reconcile poll. Session resolution:
-  validated `$XDG_SESSION_ID` → `GetSessionByPID(own pid)` → (the fix
-  for daemons under the systemd USER unit, which live in user.slice
-  with no session scope) `ListSessions` picking the same-UID active
-  graphical user session (active > online > FIFO, x11/wayland only —
-  `NoSessionForPID` is swallowed quietly); manager signals wire first
-  (PrepareForSleep + SessionRemoved/SessionNew), so no graphical
-  session at all = sleep-only mode (suspend still gates, start() True)
-  and a logout/login swap re-resolves the watched session. Without
-  D-Bus/logind the watch is off with one WARN. `status` exposes
-  `lock_watch` (mode/session/via) and doctor reports the watched
-  session. Live-verified on the daily-driver user-unit daemon
-  (2026-09-05, `systemctl --user` start): the old
-  `NoSessionForPID`/headless WARN pair is gone —
-  `lock watch: session _34 via ListSessions (active, x11, uid 1000)`,
-  doctor `lock watch: ok (watching session _34 via ListSessions)`, and
-  the real `loginctl lock-session`/`unlock-session` cycle logged
+  daemon ignores every hotkey entry, cancels an active dictation, cancels
+  a pending command proposal, and the tray tooltip notes
+  `paused (locked)`. Sources (all additive, transitions deduped): logind
+  session Lock/Unlock signals, LockedHint PropertiesChanged (GNOME's
+  path), Manager PrepareForSleep (suspend counts as locked), screensaver
+  ActiveChanged where a DE owns the names, plus a 5 s LockedHint
+  reconcile poll. Session resolution: validated `$XDG_SESSION_ID` →
+  `GetSessionByPID(own pid)` → (the fix for daemons under the systemd
+  USER unit, 87f2b2c) `ListSessions` picking the same-UID active
+  graphical user session. Live-verified on the daily-driver user-unit
+  daemon (2026-09-05): the `NoSessionForPID` WARN pair is gone, and the
+  real `loginctl lock-session`/`unlock-session` cycle logged
   `screen locked - hotkeys paused` / `screen unlocked - hotkeys
-  resumed` with `lock_watch.locked` following; the transition state
-  machine is unit-pinned (mocked-bus ListSessions fallback included)
-  and the lock flow has a documented manual check (below).
+  resumed`.
+- **Test isolation + hygiene**: the suite never writes into live data
+  (634dbca — per-session data-dir isolation, the regression guard, and
+  `history --scrub-tests`); a history test-fingerprint count surfaced in
+  doctor; socket-steal refusal, monitor-escape and config meta-tests
+  from the 2026-09-08 audit (2cb618c).
 
 ---
 
@@ -338,199 +472,6 @@ matrix + upstream changelog with its refresh loop).
 
 ---
 
-## 🚧 Left (see ROADMAP.md for details and upstream references)
-
-### Near term — daily-driver polish (v0.2)
-- [x] **Rewrite/Write mode** — DONE (the Done-section entry above): the
-      `hotkey.rewrite_key` capture → verbatim upstream edit prompts →
-      retype loop, X11 selection capture + the Wayland tool-based path,
-      confidence badge. This bullet predates the implementation.
-- [x] **Hold-mode key passthrough** — DONE: keys typed during a push-to-talk
-      hold reach the focused app as REAL events (the XGrabKey activation is
-      released for the hold's duration; release detected via auto-repeat-proof
-      query_keymap polling; passive Escape grab keeps cancel-during-hold;
-      hotkey re-armed after). An XTEST ungrab→inject→re-grab replay design
-      was prototyped and rejected: live Xorg 21.1 drops XTEST fakes that
-      match the current key state, so replayed presses are deduped away.
-      Remaining divergence (deliberate): typed keys do not end the dictation
-      (upstream clean-tap interrupts), and the held hotkey's auto-repeats
-      reach the app.
-- [x] **Per-model language selection** — DONE: one flat `model.languages`
-      dict (`{model_key: code}` across all three catalogs) instead of
-      upstream's separate whisper/cohere/nemotron per-store pickers;
-      missing key / `""` inherits `general.language`, `"auto"` forces
-      detection for that model (upstream "automatic preserved"). Resolution
-      lives in one `backends.effective_language(cfg, backend)` helper wired
-      into all four language call sites (pipeline, live preview,
-      test-dictation, `transcribe` CLI); applies live (not an engine key).
-      Parakeet v2 (English-only) records but cannot enforce a code; the
-      Settings → Models picker skips it. Divergence from upstream: flat
-      dict vs per-store pickers.
-- [x] **Runtime language cycle + wrong-language guard** — DONE: upstream
-      promised runtime language switching in #506 (unshipped since
-      2026-04) and closed #100 with "Parakeet doesn't allow language
-      selection"; this ships the leapfrog. `hotkey.language_key` steps
-      `general.language_cycle` (ordered codes, may include `auto`) through
-      a RUNTIME daemon override — never persisted, sticky across takes
-      until cycled away or the daemon restarts; precedence per take:
-      cycle > `model.languages[model_key]` > `general.language`. Every
-      press announces (pill badge / notification) and the tray tooltip +
-      `status`/doctor report the effective source; `sayit-ermano
-      language` is the socket/wayland path. The guard: when the effective
-      language is `auto` and `general.language_whitelist` is set, a
-      detected language outside the list re-decodes ONCE with
-      `whitelist[0]` (faster-whisper + whisper-torch surface the detected
-      language; whisper.cpp does not under auto — silent skip, a noted
-      limitation; parakeet English-only — not applicable, same rationale
-      as upstream's #100 closure).
-
-### Wayland parity (v0.3)
-- [x] **Shipped (2026-09)** — the daemon is genuinely useful on a Wayland
-      session; X11 behavior is byte-identical (the port is strictly
-      additive; every wayland branch is gated ONLY on the session probe:
-      `XDG_SESSION_TYPE` > `WAYLAND_DISPLAY` > `DISPLAY` > unknown-as-x11,
-      `fluidvoice/session.py`).
-      - **Session + capability matrix**: daemon startup logs one
-        `session: wayland (gnome) - capabilities: …` line; `status`
-        carries additive `session`/`capabilities` keys; `doctor` prints
-        the per-capability matrix with per-tool found/missing and flips
-        its exit code only when insertion is `unavailable`; Settings →
-        Wayland shows the same resolution.
-      - **Insertion**: `wtype` (auto resolution skips it on GNOME — no
-        zwp virtual-keyboard protocol) or `ydotool` (any compositor;
-        needs `ydotoold` + `/dev/uinput`; spec→code table with loud
-        errors for unmapped keys), `insertion.wayland_tool` =
-        `auto|wtype|ydotool`. Typed insertion is the default (no
-        clipboard flash), matching xdotool semantics; paste mode uses
-        wl-clipboard with snapshot + restore of the original mime type.
-        Degradation ladder: tool+typed → tool+wl-paste → wl-copy +
-        "paste manually" notice (`clipboard-fallback`) → InsertError.
-      - **Hotkey**: no global grabs exist — the daemon writes a bindable
-        `~/.local/share/sayit-ermano/bin/sayit-ermano-toggle` script and
-        prints per-DE bind steps (GNOME/KDE/COSMIC/generic) in doctor and
-        Settings → Wayland (copy button + open-DE-panel button on
-        GNOME/KDE). Optional **evdev push-to-talk**
-        (`hotkey.wayland_evdev`, default off): hold a physical key read
-        from `/dev/input` — a PRIVILEGED path (input group +
-        `pip install 'sayit-ermano[wayland]'`), never fatal when absent.
-      - **Overlay**: the notification preview IS the wayland preview
-        (FluidOverlay's existing notify fallback); the X11 pill is not
-        possible on GNOME-Wayland in v1 and a wlroots layer-shell pill
-        is future work (out of scope).
-      - **Rewrite selection capture** works via tool-ctrl+c + wl-paste/
-        wl-copy restore; spoken-send/paste-last keys route through the
-        resolved tool; `copy_to_clipboard`/`clipboard_fallback` use
-        wl-copy on wayland sessions.
-      - **Divergences (deliberate)**: (1) paste verification degrades to
-        a fixed settle (`WAYLAND_PASTE_SETTLE_S = 0.45`) — cross-client
-        selection-read observation, the core of the X11 verified paste,
-        is impossible on Wayland; (2) no clipboard-manager hygiene
-        markers while flashing the clipboard — wayland clipboard managers
-        will see the dictation; (3) no app hints (no WM_CLASS equivalent;
-        AT-SPI future work), so `terminal_apps` quirks (ctrl+shift+v,
-        autocomplete space, spoken-send Enter blocklist) are inert.
-      - **Deviation from the task text (documented)**: a literal KDE
-        shortcut-file import was rejected — Plasma 6 custom-command
-        shortcuts live in `kglobalshortcutsrc` under kglobalacceld with
-        no supported import format; writing it blind is fragile. The
-        bindable script + open-panel button + per-DE instructions
-        deliver the same outcome honestly.
-- [ ] **Live smoke checklist** (run per compositor, priority GNOME-Wayland
-      then sway; note results here as they land — unit coverage is
-      complete in `tests/test_wayland_capabilities.py`, these are the
-      live-verification items). *Blocked on this dev machine (noted
-      2026-09-08): no Wayland compositor installed (GNOME runs X11 here)
-      and no sudo to add one; needs a real Wayland session — sway or a
-      GNOME-Wayland login — to execute.*
-      1. Baseline, no tools installed: daemon starts in the foreground
-         AND under the installed systemd user unit (the unit bakes
-         `Environment=DISPLAY` — confirm `XDG_SESSION_TYPE`/
-         `WAYLAND_DISPLAY` reached `systemctl --user show-environment`;
-         the probe tolerates a stale DISPLAY, the unit comment says so).
-         Tray/socket/`status` alive; a dictation transcribes and lands in
-         history; the "no insertion tool" notification appears.
-      2. sway + wtype: typed insertion into a terminal and an editor;
-         spoken-send Enter; paste-last; paste mode via wl-clipboard —
-         verify the pre-paste clipboard is restored after both paths;
-         leading-dash text takes the paste path.
-      3. GNOME + ydotool (ydotoold running, uinput perms): same set; note
-         whether key-duration tuning is needed (fix the central
-         `_ydotool_*` builders only).
-      4. Overlay: recording shows the notification preview; no X11-pill
-         attempt noise in the log.
-      5. Doctor on the live session: matrix + per-tool found/missing
-         correct; exit 0 with insertion resolved, non-zero without.
-      6. Settings → Wayland: renders, Copy yields a working script; bind
-         it in the DE; toggle dictation via the shortcut.
-      7. evdev push-to-talk (if input-group access): hold-to-talk works;
-         note the device-name match.
-      8. X11 regression, same build: full manual pass (hotkey grab, pill
-         preview, verified paste, spoken-send, rewrite) — zero deltas.
-
-### Models (v0.4)
-- [x] **Parakeet TDT v2/v3 via ONNX** — DONE: curated sherpa-onnx tarball
-c      catalog (v2 English / v3 multilingual, int8) with sha256-verified
-      multi-file download (tarball + per-file checksums, atomic model dir,
-      streamed extraction — never extractall), pure-numpy log-mel
-      featurizer + greedy TDT decode over ONNX Runtime (CUDA execution
-      provider picked up automatically when the installed wheel has it);
-      Settings → Models "Parakeet (ONNX)" group with download progress +
-      Use, doctor resolution report, `parakeet` pip extra.
-      *Divergence (deliberate): `backend = "auto"` still prefers the
-      whisper family — upstream runs Parakeet as its default; Parakeet is
-      explicit-selection-only here.* Default model is v2 (upstream defaults
-      to v3).
-- [ ] Parakeet Realtime / Nemotron 3.5 streaming (NeMo/Riva) — unlocks real
-      streaming preview.
-- [x] whisper.cpp GGUF auto-download + model manager — DONE: curated GGUF
-      catalog with one-click streaming download (progress, atomic rename),
-      name-or-path `model.whispercpp_model`, "Use" hot-swaps the backend,
-      doctor resolution report.
-
-### Later
-- [x] Command mode **v2 shipped**: upstream tool schema in the strict-JSON
-      `tool_calls` protocol (per-arg validation, one-command-per-call sets,
-      all confirmed sequentially), the destructive-command list ported
-      verbatim + `command.destructive_patterns` user additions behind a
-      two-press strong confirm, per-app follow-up context (last 5 results,
-      300 s window, spoken "new session" clear), History Commands view with
-      collapsible output + Copy + confirm-gated Re-run, doctor line. (Native
-      `tool_calls` wire format and persistent chat sessions across daemon
-      restarts stay upstream-only — see the C1-C6 divergences.)
-- [ ] GAAV + continuous-dictation formatting (needs caret text via AT-SPI).
-- [x] Slash-command/mention literal formatting + terminal autocomplete
-      spacing — DONE: literal squeeze (`processing.slash_mention_squeeze`)
-      AND the spoken forms (`slash fix`/`at sign`/`tag`, bc1ced3);
-      terminal trailing space `insertion.terminal_autocomplete_space`
-      keyed on the shared `general.terminal_apps` list.
-- [x] **Insertion hardening** — DONE: paste verify-then-restore (selection
-      ownership + read observation before the clipboard restore, unverified
-      pastes fall back to typed insertion with a notification),
-      clipboard-manager hygiene markers (CopyQ 7.1.0 live-verified; the
-      GNOME-shell-extension residual and the full live evidence are recorded
-      in the Done section above), terminal `ctrl+shift+v` paste key
-      (`insertion.terminal_paste_key`, shared `general.terminal_apps` key),
-      `insertion.verify_paste` toggle + doctor lines. The AT-SPI insertion
-      fallback stays open (grouped with the AT-SPI work above).
-- [x] Input-device monitoring / Bluetooth auto-switch — DONE: mic priority
-      list (`recording.mic_priority`, tray + settings editor) + pactl source
-      monitoring (3 s diff poll) with vanished-device auto-switch (bluez
-      pattern example in README); never mid-take, auto never overridden.
-      MPRIS media pause shipped earlier.
-- [x] Updater + packaging (deb / AUR / pipx / one-shot installer) — DONE:
-      update check + `sayit-ermano update` assisted upgrade (v0.6.0),
-      deb releases, AUR and pipx install paths (README). Still open from
-      this line: a nix flake; the local scriptable API landed as the
-      **unix-socket routes** (`transcribe` through the warm model +
-      `history` query — TCP/HTTP stays a locked non-goal).
-
-### Non-goals
-- Cohere Transcribe (CoreML-only artifacts, no Linux runtime).
-- Bundling a closed-source "Fluid Intelligence" (use any local LLM server).
-- macOS support. Telemetry.
-
----
-
 ## Test & verification status
 
 | Area | Verification |
@@ -542,9 +483,20 @@ c      catalog (v2 English / v3 multilingual, int8) with sha256-verified
 | Socket config actions (get/set-config, select-model) + apply_settings | unit (fake backend factory) + real-daemon socket integration |
 | Mic monitoring (pactl poll/diff/priority matching, daemon auto-switch, tray ordering) | unit (fake pactl runner, stub recorder daemon) |
 | Recorder / insertion / history / backends | stub or subprocess-mock tests |
+| HistoryStore transactions (append-vs-edit, append-vs-trim, two-process mutation, crash residue, audio rollback, corrupt rows, cap) | unit suite (P0.3) |
+| ControlServer (concurrency, size/idle limits, 0600 mode, structured errors, worker shutdown, status-under-long-transcribe ≤ 250 ms) | unit + integration-style tests (P0.2) |
+| MCP (JSON-RPC 2.0 validity, request validation, version negotiation, handshake) | unit suite with official JSON-RPC examples (P0.4) |
+| Unhandled thread exceptions | suite-wide error filter — any unhandled exception in any thread fails the run (P0.4) |
 | Hotkey grab self-healing (error routing, retry state machine, warn cap, status/tooltip/notify/doctor surfaces) | fake-Display unit tests (no X server) + live X11 conflicting-holder recovery (blocked → WARN → release → re-take → F9 fires) |
-| Mouse push-to-talk (button parsing, XI gate, grab routing, hold-cycle state machine, daemon wiring, doctor lines) | fake-X unit tests (no X server) + live X11: arm/hold with native click passthrough/release-transcribe/Escape-cancel/blocked-arm recovery (`test_live_x11.py::TestMousePTTLive`, desktop-marked) |
-| Lock suppression (lockmon dedup/sources/session resolution chain incl. the ListSessions fallback for user-slice daemons, sleep-only mode, re-resolve on session close, daemon gate: toggle ignored, recording cancelled, pending command cancelled, log-once, pause_when_locked flip, lock_watch status + doctor line) | unit state machine (handlers driven directly, no bus) + mocked-bus fallback/re-resolve/run tests + live monitor start/reconcile against the real logind session (both session-scoped and user-unit launches) |
-| Manual lock check (the live lock flow cannot be exercised by CI — locking the session locks the operator's desktop) | with a running daemon and `push_to_talk_button = "button8"`: 1) start a dictation, 2) lock the session (Super+L or `loginctl lock-session`) → log shows `screen locked - hotkeys paused`, the recording is cancelled ("Cancelled" notification), tray tooltip reads `… - paused (locked)`; 3) press the dictation hotkey while locked → nothing happens; 4) unlock → `screen unlocked - hotkeys resumed`, dictation works again |
+| Mouse push-to-talk (button parsing, XI gate, grab routing, hold-cycle state machine, daemon wiring, doctor lines) | fake-X unit tests (no X server) + live X11 (`test_live_x11.py::TestMousePTTLive`, desktop-marked) |
+| Lock suppression (lockmon dedup/sources/session resolution chain incl. the ListSessions fallback, sleep-only mode, re-resolve on session close, daemon gate) | unit state machine + mocked-bus fallback/re-resolve/run tests + live monitor against the real logind session |
+| Manual lock check (the live lock flow cannot be exercised by CI — locking the session locks the operator's desktop) | with a running daemon and `push_to_talk_button = "button8"`: 1) start a dictation, 2) lock the session → log shows `screen locked - hotkeys paused`, the recording is cancelled, tray tooltip reads `… - paused (locked)`; 3) press the dictation hotkey while locked → nothing happens; 4) unlock → dictation works again |
+| Request briefs (STATUS headers) | `just validate-requests` — every `requests/*.md` carries exactly one valid `STATUS: OPEN\|SHIPPED\|SUPERSEDED` line |
 | End-to-end speech | JFK sample through GPU transcription (pytest `-m slow`) |
 | Live hardware loop | mic→GPU transcription via speaker playback; hotkey grab on X11; acoustic JFK transcription verified verbatim |
+
+---
+
+Future work lives in [ROADMAP.md](ROADMAP.md); locked decisions in
+[adr/](adr/) ([index](adr/README.md)); the evidence base in
+[research/](research/).

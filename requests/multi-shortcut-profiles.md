@@ -1,4 +1,6 @@
-STATUS 2026-09-06: SHIPPED in 3411af3 (+86fad3e sweep) - hotkey.extra_shortcuts (up to 2, key+modifiers+profile), _toggle_with_profile handoff to the pipeline, Settings rows with key capture + profile picker. This brief is done; do not re-open.
+STATUS: SHIPPED
+
+Shipped in 3411af3 (+86fad3e sweep) — hotkey.extra_shortcuts (up to 2, key+modifiers+profile), _toggle_with_profile handoff to the pipeline, Settings rows with key capture + profile picker. This brief is done; do not re-open.
 
 Multi-shortcut dictation with per-shortcut prompt profiles (B1, macOS parity: upstream supports multiple primary shortcuts - one with AI ON, one raw; v1.5.12/v1.6.1). Today SayItErmano has ONE dictation hotkey (hotkey.key + modifiers in config.py) plus single-purpose feature keys (paste_key, command_key, rewrite_key) - see config.py hotkey section and hotkey.py's grab machinery (self-heal per-combo BadAccess retry, grab-health surfacing). Prompt profiles (named presets of the base prompt) shipped with the settings depth pack; planner verifies the exact store/config section. The gap: a user cannot bind e.g. Right_Control = profile "raw", F9 = profile "email-polish", F10 = profile "code" without opening Settings.
 
