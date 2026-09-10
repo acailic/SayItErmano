@@ -82,7 +82,9 @@ filterwarnings = ["error::pytest.PytestUnhandledThreadExceptionWarning"]
 # unused imports only, for now.
 [tool.ruff]
 line-length = 88
-target-version = "py312"
+target-version = "py311"  # matches requires-python ">=3.11" (F10): the
+# only automated 3.11 guard — py312 here would let 3.12-only syntax
+# (PEP 695, f-string grammar changes) sail past lint into 3.11 users
 
 [tool.ruff.lint]
 select = ["I001", "F401"]

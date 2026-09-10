@@ -21,6 +21,7 @@ import io
 import json
 import os
 import shutil
+import sys
 import tempfile
 import time
 import uuid
@@ -35,6 +36,31 @@ MAX_ENTRIES = 5000
 _TAIL_WINDOW = 128 * 1024  # bytes read from the end for tail()
 _LOCK_SUFFIX = ".lock"     # sidecar flock; never the JSONL fd itself
 _TMP_SUFFIX = ".tmp"       # unique same-dir transaction temp files
+
+
+def _log(msg: str) -> None:
+    """House log idiom (see pipeline.log): stderr, timestamped, quiet -
+    only exceptional history paths ever log (F11)."""
+    print(f"[sayit-ermano] {time.strftime('%H:%M:%S')} history: {msg}",
+          file=sys.stderr, flush=True)
+
+
+def _split_jsonl(text: str) -> list[str]:
+    """Split decoded history text into JSONL lines on "\n" ONLY.
+
+    str.splitlines() would also split on U+2028/U+2029/U+0085 - three
+    characters json.dumps(ensure_ascii=False) leaves RAW inside JSON
+    strings, so a row containing one would tear into two unparseable
+    halves: dropped by every reader and erased by the next rewrite (the
+    F2 data-loss class). The writers' record separator is exactly "\n"
+    (\r never occurs: writers never emit it), so the readers split on
+    exactly that. The trailing empty remainder after the final newline is
+    not a record and is dropped.
+    """
+    lines = text.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
 
 
 # -- durability primitives ------------------------------------------------------
@@ -163,10 +189,16 @@ def _enforce_entry_cap_unlocked(hpath: Path) -> None:
     try:
         if hpath.stat().st_size < _TAIL_WINDOW:
             return
-        lines = hpath.read_text(encoding="utf-8").splitlines()
+        # tolerant decode like every other reader (errors="replace"),
+        # and the guard covers ValueError too (UnicodeDecodeError is a
+        # ValueError): ONE torn byte anywhere in a >128 KiB file must not
+        # turn every future append into a failure - and must not trigger
+        # the audio rollback for a row that already landed (F3).
+        data = hpath.read_bytes().decode("utf-8", errors="replace")
+        lines = _split_jsonl(data)
         if len(lines) > MAX_ENTRIES:
             _atomic_write(hpath, lines[-MAX_ENTRIES:])
-    except OSError:
+    except (OSError, ValueError):
         pass
 
 
@@ -223,7 +255,11 @@ class HistoryStore:
             self._hpath().parent.mkdir(parents=True, exist_ok=True)
         try:
             fd = os.open(self._lock_path(), os.O_RDWR | os.O_CREAT, 0o600)
-        except OSError:
+        except OSError as e:
+            # the transaction proceeds WITHOUT the very lost-update
+            # guarantee this module promises (EROFS/EACCES on the lock
+            # sidecar) - that must be visible, not silent (F11)
+            _log(f"lock unavailable ({e!r}) - proceeding unlocked")
             yield  # nothing to protect: proceed unlocked and tolerant
             return
         try:
@@ -253,7 +289,7 @@ class HistoryStore:
         out = []
         # errors="replace" (like tail): torn bytes must not crash or hide
         # the other rows - the damaged line simply fails json parsing
-        for line in data.decode("utf-8", errors="replace").splitlines():
+        for line in _split_jsonl(data.decode("utf-8", errors="replace")):
             with contextlib.suppress(json.JSONDecodeError):
                 out.append(json.loads(line))
         return out
@@ -267,7 +303,7 @@ class HistoryStore:
         with open(hpath, "rb") as fh:
             fh.seek(max(0, size - _TAIL_WINDOW))
             chunk = fh.read()
-        lines = chunk.decode("utf-8", errors="replace").splitlines()
+        lines = _split_jsonl(chunk.decode("utf-8", errors="replace"))
         if size > _TAIL_WINDOW and lines:
             lines = lines[1:]  # first line is likely partial
         out = []
@@ -346,11 +382,20 @@ class HistoryStore:
                 copied = _retain_audio(audio_src, paths.audio_dir())
                 if copied is not None:
                     entry["audio"] = str(copied)
+            wrote = False
             try:
                 _append_line(hpath, json.dumps(entry, ensure_ascii=False))
+                wrote = True  # the row durably references the audio now
                 _enforce_entry_cap_unlocked(hpath)
             except BaseException:
-                if copied is not None:  # roll back the retained audio
+                # roll back ONLY the audio THIS append copied, and only
+                # while the row referencing it never landed: once the
+                # JSONL line is on disk, deleting the audio would leave a
+                # dangling audio path in history (F3 - e.g. a cap-enforce
+                # failure after a successful append line)
+                if copied is not None and not wrote:
+                    _log(f"append failed before the row landed - rolling "
+                         f"back retained audio {copied.name}")
                     with contextlib.suppress(OSError):
                         copied.unlink()
                 raise
@@ -598,16 +643,6 @@ def export_zip(path: Path, on_note: Callable[[str], None] | None = None) -> int:
 
 def scrub_test_entries(*, apply: bool = False) -> tuple[int, int, Path | None]:
     return _store.scrub_test_entries(apply=apply)
-
-
-def _rewrite(keep, drop_audio: bool) -> int:
-    """Pre-P0.3 internal entry point, kept as a locked transaction."""
-    return _store.rewrite(keep, drop_audio)
-
-
-def _enforce_entry_cap(hpath: Path) -> None:
-    with HistoryStore(hpath)._locked(exclusive=True):
-        _enforce_entry_cap_unlocked(hpath)
 
 
 # -- test-row scrub -------------------------------------------------------------

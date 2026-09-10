@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import io
 import json
+import socket
 
 from fluidvoice import control
 from fluidvoice.mcp_server import (
+    MAX_INBOUND_LINE,
     PROTOCOL_VERSION,
     handle_message,
     serve,
@@ -131,14 +133,16 @@ class TestJsonRpcCompliance:
 
     def test_invalid_request_shapes(self):
         cases = [
-            ([1, 2, 3], None),          # batch/array: not an object
             (42, None),                 # scalar: not an object
+            ("str", None),              # string: not an object
             ({"id": 1, "method": "ping"}, 1),          # no jsonrpc member
             ({"jsonrpc": "1.0", "id": 1, "method": "ping"}, 1),  # wrong ver
             ({"jsonrpc": "2.0", "id": 1, "params": {}}, 1),  # no method
             ({"jsonrpc": "2.0", "id": False, "method": "ping"}, None),
             ({"jsonrpc": "2.0", "id": {"bad": 1}, "method": "ping"}, None),
         ]
+        # note: a LIST is no longer "not an object" - it is a batch and
+        # gets per-member replies (F7, TestJsonRpcBatch)
         for msg, expected_id in cases:
             r = assert_valid_response(handle_message(msg), expected_id,
                                       error=True)
@@ -230,12 +234,236 @@ def test_serve_loop_end_to_end(monkeypatch):
         assert r["jsonrpc"] == "2.0"
 
 
-def test_serve_non_object_json(monkeypatch):
+def test_serve_non_object_json():
+    # a bare array is a (three-invalid-member) batch, not a parse error:
+    # the reply is the spec's array of individual invalid-request errors
     out = io.StringIO()
-    serve(io.StringIO('[1, 2, 3]\n'), out)
-    r = json.loads(out.getvalue())
-    assert_valid_response(r, None, error=True)
-    assert r["error"]["code"] == -32600
+    serve(io.StringIO('[1, 2, 3]\n'), out,
+          request=lambda a, **k: {"ok": True})
+    replies = json.loads(out.getvalue())
+    assert isinstance(replies, list) and len(replies) == 3
+    assert all(r["error"]["code"] == -32600 for r in replies)
+
+
+# ---------------------------------------------------------------------------
+# Bridge survival (F1): transport failures must never kill the process
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# JSON-RPC 2.0 batches (F7)
+# ---------------------------------------------------------------------------
+
+class TestJsonRpcBatch:
+    """Batch arrays get per-member responses: valid members are answered
+    (the old bridge answered ONE invalid-request object, so a batching
+    client hung on every valid id), invalid members get individual error
+    objects, notifications are silent."""
+
+    def test_mixed_batch_answers_every_callables_member(self):
+        batch = [
+            {"jsonrpc": "2.0", "id": "1", "method": "ping"},
+            {"jsonrpc": "2.0", "id": 2, "method": "ping"},
+            1,   # invalid member: individual error object
+            {"jsonrpc": "2.0",
+             "method": "notifications/initialized"},  # no reply
+            {"jsonrpc": "2.0", "id": None, "method": "no/such"},
+        ]
+        r = handle_message(batch, request=lambda a, **k: {"ok": True})
+        assert isinstance(r, list) and len(r) == 4  # notification skipped
+        assert_valid_response(r[0], "1", result=True)
+        assert_valid_response(r[1], 2, result=True)
+        assert_valid_response(r[2], None, error=True)
+        assert r[2]["error"]["code"] == -32600
+        assert_valid_response(r[3], None, error=True)
+        assert r[3]["error"]["code"] == -32601
+
+    def test_invalid_batch_members_each_get_an_error(self):
+        # the spec's own example: [1,2,3] -> three invalid-request objects
+        r = handle_message([1, 2, 3])
+        assert isinstance(r, list) and len(r) == 3
+        for member in r:
+            assert_valid_response(member, None, error=True)
+            assert member["error"]["code"] == -32600
+
+    def test_nested_batch_member_is_invalid(self):
+        r = handle_message([[{"jsonrpc": "2.0", "id": 1, "method": "ping"}]])
+        assert isinstance(r, list) and len(r) == 1
+        assert r[0]["error"]["code"] == -32600
+
+    def test_empty_batch_is_one_invalid_request(self):
+        # the spec: "rpc call with an empty Array" -> a single object
+        r = assert_valid_response(handle_message([]), None, error=True)
+        assert r["error"]["code"] == -32600
+
+    def test_all_notification_batch_produces_no_output(self):
+        # the spec: no response objects -> nothing is returned at all
+        assert handle_message([
+            {"jsonrpc": "2.0", "method": "notifications/initialized"},
+            {"jsonrpc": "2.0", "method": "notifications/cancelled"},
+        ]) is None
+
+    def test_batch_through_the_stdio_loop(self):
+        batch = [rpc("ping"),
+                 {"jsonrpc": "2.0", "id": 5, "method": "no/such"}]
+        out = io.StringIO()
+        serve(io.StringIO(json.dumps(batch) + "\n"), out,
+              request=lambda a, **k: {"ok": True})
+        replies = json.loads(out.getvalue())
+        assert isinstance(replies, list) and len(replies) == 2
+        assert replies[0]["id"] == 1 and "result" in replies[0]
+        assert replies[1]["id"] == 5
+        assert replies[1]["error"]["code"] == -32601
+
+
+class TestBridgeSurvivesTransportFailures:
+    """control.request raises plain OSErrors from its 15 s socket timeout
+    (a slow-but-legal transcribe_file) and ConnectionResetError when the
+    daemon restarts mid-call. The bridge must answer with a clean
+    JSON-RPC error and keep serving - the old loop died on the first one."""
+
+    def _call(self, raiser):
+        return handle_message(
+            rpc("tools/call", name="transcribe_file",
+                arguments={"path": "/x.wav"}),
+            request=raiser)
+
+    def test_socket_timeout_is_a_clean_error(self):
+        def slow_daemon(action, **kw):
+            raise socket.timeout("timed out")  # control.request at 15 s
+
+        r = self._call(slow_daemon)
+        assert_valid_response(r, 1, error=True)
+        assert r["error"]["code"] == -32000
+        assert "daemon" in r["error"]["message"]
+
+    def test_daemon_restart_mid_call_is_a_clean_error(self):
+        def restarted(action, **kw):
+            raise ConnectionResetError("daemon restarted")
+
+        r = self._call(restarted)
+        assert_valid_response(r, 1, error=True)
+        assert r["error"]["code"] == -32000
+
+    def test_unexpected_exception_is_internal_error_not_death(self):
+        def buggy(action, **kw):
+            raise KeyError("bridge bug")
+
+        r = self._call(buggy)
+        assert_valid_response(r, 1, error=True)
+        assert r["error"]["code"] == -32603
+
+    def test_transport_failure_is_logged(self, capsys):
+        """F11: bridge errors are visible on stderr, not silent."""
+
+        def restarted(action, **kw):
+            raise ConnectionResetError("daemon restarted")
+
+        self._call(restarted)
+        assert "daemon transport failed" in capsys.readouterr().err
+
+    def test_serve_loop_survives_a_timeout_and_serves_the_next_line(self):
+        # the sweep's exact repro shape: a transcribe_file whose model
+        # time exceeds the client timeout used to kill the bridge process
+        def slow_daemon(action, **kw):
+            if action == "transcribe":
+                raise socket.timeout("timed out")
+            return {"ok": True}
+
+        inbox = io.StringIO("\n".join([
+            json.dumps(rpc("tools/call", name="transcribe_file",
+                           arguments={"path": "/x.wav"})),
+            json.dumps(rpc("ping")),
+        ]) + "\n")
+        out = io.StringIO()
+        serve(inbox, out, request=slow_daemon)  # returns: the bridge lived
+        replies = [json.loads(l) for l in out.getvalue().splitlines()]
+        assert replies[0]["error"]["code"] == -32000
+        assert replies[1]["result"] == {}  # still serving after the failure
+
+
+# ---------------------------------------------------------------------------
+# Non-finite numbers (F6): NaN/Infinity are not valid JSON (RFC 8259)
+# ---------------------------------------------------------------------------
+
+class TestNonFiniteNumbers:
+    """Python's json accepts NaN/Infinity literals by default; the old
+    lenient parse let id: NaN through and json.dumps echoed it raw -
+    wire output no strict client (e.g. JavaScript JSON.parse) can read."""
+
+    @staticmethod
+    def _strict_loads(line: str):
+        # a parse that rejects NaN/Infinity anywhere, like a real client
+        return json.loads(
+            line, parse_constant=lambda s: (_ for _ in ()).throw(
+                AssertionError(f"non-finite literal {s} on the wire")))
+
+    def test_nan_id_line_gets_parse_error(self):
+        out = io.StringIO()
+        serve(io.StringIO(
+            '{"jsonrpc": "2.0", "id": NaN, "method": "ping"}\n'), out,
+            request=lambda a, **k: {"ok": True})
+        r = self._strict_loads(out.getvalue())
+        assert_valid_response(r, None, error=True)
+        assert r["error"]["code"] == -32700
+
+    def test_infinity_anywhere_gets_parse_error(self):
+        out = io.StringIO()
+        serve(io.StringIO(
+            '{"jsonrpc": "2.0", "id": 1, "method": "ping", '
+            '"params": {"x": Infinity}}\n'), out,
+            request=lambda a, **k: {"ok": True})
+        r = self._strict_loads(out.getvalue())
+        assert r["error"]["code"] == -32700
+
+    def test_nonfinite_id_rejected_at_validation_too(self):
+        # direct handle_message callers bypass json.loads: validation
+        # must reject a non-finite id just the same
+        for bad in (float("nan"), float("inf"), float("-inf")):
+            msg = {"jsonrpc": "2.0", "id": bad, "method": "ping"}
+            r = assert_valid_response(handle_message(msg), None, error=True)
+            assert r["error"]["code"] == -32600, bad
+
+    def test_nan_in_daemon_payload_degrades_to_valid_json(self):
+        def nan_daemon(action, **kw):
+            return {"ok": True, "score": float("nan")}
+
+        out = io.StringIO()
+        serve(io.StringIO(json.dumps(
+            rpc("tools/call", name="status", arguments={})) + "\n"), out,
+            request=nan_daemon)  # explicit: never touch a real daemon
+        line = out.getvalue().strip()
+        r = self._strict_loads(line)  # still strictly parseable
+        assert r["result"]["isError"] is True  # a visible tool error, not
+        # invalid JSON embedded in the result text
+
+
+# ---------------------------------------------------------------------------
+# stdio inbound line bound (N7)
+# ---------------------------------------------------------------------------
+
+class TestStdioLineBound:
+    """The control socket bounds its request line at 1 MiB (P0.2); the
+    bridge's stdio input gets the same bound so one huge line is never an
+    unbounded memory allocation - and an oversized line is answered with
+    a structured error while the loop keeps serving."""
+
+    def test_oversized_line_gets_error_and_loop_survives(self):
+        big = "x" * (MAX_INBOUND_LINE + 10)
+        inbox = io.StringIO(big + "\n" + json.dumps(rpc("ping")) + "\n")
+        out = io.StringIO()
+        serve(inbox, out, request=lambda a, **k: {"ok": True})
+        replies = [json.loads(l) for l in out.getvalue().splitlines()]
+        assert replies[0]["error"]["code"] == -32700
+        assert "too large" in replies[0]["error"]["message"]
+        assert replies[1]["result"] == {}  # next line still served
+
+    def test_line_just_under_the_bound_is_served(self):
+        msg = {"jsonrpc": "2.0", "id": 2, "method": "ping",
+               "params": {"pad": "y" * (MAX_INBOUND_LINE - 200)}}
+        out = io.StringIO()
+        serve(io.StringIO(json.dumps(msg) + "\n"), out,
+              request=lambda a, **k: {"ok": True})
+        assert json.loads(out.getvalue())["id"] == 2
 
 
 class TestInspectorHandshake:

@@ -9,6 +9,7 @@ accept thread and every worker leaving ``threading.enumerate()`` clean.
 """
 from __future__ import annotations
 
+import errno
 import json
 import os
 import socket
@@ -362,6 +363,216 @@ def test_handler_exception_is_a_payload_and_workers_survive(tmp_path):
         assert len(_control_threads()) == before  # nobody died
         with _client(srv.path) as c:
             assert _rt_obj(c, {"action": "status"}) == {"ok": True}
+
+
+def test_worker_survives_a_connection_level_error_and_logs(
+        tmp_path, monkeypatch, capsys):
+    """F11: an exception OUTSIDE the handler (the serve path itself)
+    used to be swallowed - the connection dropped with no trace. The
+    worker logs it and keeps serving."""
+    with _server(lambda req: {"ok": True}, tmp_path) as srv:
+        real = srv._serve_connection
+        state = {"boom": True}
+
+        def flaky(conn):
+            if state["boom"]:
+                state["boom"] = False
+                raise RuntimeError("injected connection bug")
+            return real(conn)
+
+        monkeypatch.setattr(srv, "_serve_connection", flaky)
+        with _client(srv.path) as c:  # first connection dies in the worker
+            c.sendall(b'{"action": "status"}\n')
+            try:
+                got = c.recv(65536)
+            except ConnectionResetError:
+                got = b""  # RST from close-with-unread-data: no reply either
+            assert got == b""  # dropped without a reply
+        with _client(srv.path) as c:  # the worker pool still serves
+            assert _rt_obj(c, {"action": "status"}) == {"ok": True}
+    err = capsys.readouterr().err
+    assert "connection dropped" in err
+
+
+# -- accept-loop resilience (F4) --------------------------------------------------
+
+class TestAcceptLoopResilience:
+    """One transient accept() OSError (EMFILE, ECONNABORTED, ENOMEM)
+    must not permanently exit the accept thread: the socket stays bound
+    and listening, new clients queue in the kernel, nobody ever accepts
+    again - the control plane is silently bricked until restart."""
+
+    def test_transient_accept_error_is_survived_and_logged(
+            self, tmp_path, monkeypatch, capsys):
+        with _server(lambda req: {"ok": True}, tmp_path) as srv:
+            with _client(srv.path) as c:  # baseline: serving
+                assert _rt_obj(c, {"action": "status"}) == {"ok": True}
+            real = srv._srv
+
+            class FlakyAccept:
+                """Delegates to the real listening socket, but the first
+                accept() raises one injected transient error (the errno
+                the kernel reports for a connection aborted before the
+                accept completed)."""
+
+                def __init__(self):
+                    self.injected = False
+
+                def accept(self):
+                    if not self.injected:
+                        self.injected = True
+                        raise ConnectionAbortedError(
+                            errno.ECONNABORTED, "injected transient")
+                    return real.accept()
+
+                def __getattr__(self, name):  # shutdown/close/stat/...
+                    return getattr(real, name)
+
+            monkeypatch.setattr(srv, "_srv", FlakyAccept())
+            # wake the thread out of its blocked real accept: this client
+            # is served by the in-flight accept; the thread's NEXT
+            # accept() hits the injected transient error
+            with _client(srv.path) as c:
+                assert _rt_obj(c, {"action": "status"}) == {"ok": True}
+            err = ""
+            deadline = time.monotonic() + 5
+            while "retrying" not in err and time.monotonic() < deadline:
+                time.sleep(0.02)
+                err += capsys.readouterr().err
+            assert "transient" in err  # the error fired AND was logged
+            assert srv._accept_thread.is_alive()
+            # a new client after the transient error is still served
+            with _client(srv.path) as c:
+                assert _rt_obj(c, {"action": "status"}) == {"ok": True}
+            assert srv._accept_thread.is_alive()
+
+    def test_unrecoverable_accept_error_exits_the_thread_loudly(
+            self, tmp_path, monkeypatch, capsys):
+        with _server(lambda req: {"ok": True}, tmp_path) as srv:
+            real = srv._srv
+
+            class DeadAccept:
+                def accept(self):
+                    raise OSError(errno.EBADF, "injected bad fd")
+
+                def __getattr__(self, name):
+                    return getattr(real, name)
+
+            monkeypatch.setattr(srv, "_srv", DeadAccept())
+            # wake the blocked real accept: the connection is served or
+            # simply kernel-queued - either way the thread's NEXT accept()
+            # hits the injected EBADF
+            c = _client(srv.path, timeout=2)
+            c.close()
+            thread = srv._accept_thread
+            deadline = time.monotonic() + 5
+            while thread.is_alive() and time.monotonic() < deadline:
+                time.sleep(0.02)
+            assert not thread.is_alive()  # exited instead of spinning
+        assert "accept thread exiting" in capsys.readouterr().err
+
+
+# -- backpressure (F8) ------------------------------------------------------------
+
+class TestBackpressure:
+    """The accept queue is bounded (reject-and-close with a structured
+    busy error beyond it) and the idle deadline is a per-REQUEST total
+    read budget - not per recv - so slow-drip clients cannot hold workers
+    forever (8 of them used to freeze the whole control plane, and a
+    frozen status made probe_live report the daemon dead)."""
+
+    def test_drip_feed_clients_cannot_starve_status(self, tmp_path):
+        # one dripper per worker; each sends a partial line every 90 ms -
+        # faster than the old per-recv 500 ms timeout, so under per-recv
+        # semantics they NEVER time out and hold their worker forever
+        with _server(lambda req: {"ok": True}, tmp_path, workers=8,
+                     idle_timeout=0.5) as srv:
+            stop = threading.Event()
+
+            def drip():
+                c = _client(srv.path, timeout=5)
+                try:
+                    while not stop.is_set():
+                        c.sendall(b"{")  # partial JSON, never a full line
+                        time.sleep(0.09)
+                except OSError:
+                    pass  # server ended the drip: expected
+                finally:
+                    c.close()
+
+            drips = [threading.Thread(target=drip, daemon=True)
+                     for _ in range(8)]
+            for t in drips:
+                t.start()
+            time.sleep(0.3)  # all eight workers now occupied by dribblers
+            t0 = time.monotonic()
+            with _client(srv.path, timeout=10) as c:
+                resp = _rt_obj(c, {"action": "status"})
+            elapsed = time.monotonic() - t0
+            assert resp == {"ok": True}
+            # bounded by the 0.5 s read budget (+ margin): per-recv
+            # semantics would have starved status indefinitely
+            assert elapsed < 5, f"status waited {elapsed:.1f}s behind drips"
+            stop.set()
+            for t in drips:
+                t.join(timeout=5)
+
+    def test_drip_feeder_gets_the_structured_timeout_error(self, tmp_path):
+        with _server(lambda req: {"ok": True}, tmp_path,
+                     idle_timeout=0.4) as srv:
+            with _client(srv.path, timeout=5) as c:
+                c.sendall(b'{"action": ')  # partial, then go quiet
+                line = _read_line(c)
+            resp = json.loads(line.decode())
+            assert resp["ok"] is False
+            assert "timed out" in resp["error"]
+
+    def test_queue_overflow_rejects_with_busy_error(self, tmp_path):
+        entered = threading.Event()
+        release = threading.Event()
+
+        def handler(req):
+            entered.set()
+            release.wait(5)
+            return {"ok": True}
+
+        with _server(handler, tmp_path, workers=1) as srv:
+            # queue bound: workers * _QUEUE_PER_WORKER = 4
+            first = _client(srv.path)
+            first.sendall(b'{"action": "status"}\n')
+            assert entered.wait(5)  # the one worker sits inside our handler
+            queued = [_client(srv.path) for _ in range(4)]  # fills the queue
+            beyond = _client(srv.path, timeout=5)  # beyond the bound...
+            resp = _roundtrip(beyond, b'{"action": "status"}\n')
+            assert resp["ok"] is False and "busy" in resp["error"]
+            release.set()
+            assert json.loads(_read_line(first)) == {"ok": True}
+            first.close()
+            beyond.close()
+            for c in queued:
+                c.close()
+
+
+# -- socket unlink hygiene (F5) ----------------------------------------------------
+
+def test_shutdown_never_unlinks_a_replacement_socket(tmp_path):
+    """The inode check means OUR shutdown - even a repeated one after a
+    replacement daemon rebound the freed path - only ever removes a
+    socket that is still ours (the daemon-side twin of this test lives in
+    test_daemon.py)."""
+    path = tmp_path / "c.sock"
+    a = ControlServer(lambda req: {"ok": True}, path)
+    a.start()
+    a.shutdown()  # unlinks its own socket
+    b = ControlServer(lambda req: {"ok": True}, path)  # replacement binds
+    b.start()
+    try:
+        a.shutdown()  # late/idempotent shutdown: must NOT touch b's socket
+        assert path.exists()
+        with _client(path) as c:
+            assert _rt_obj(c, {"action": "status"}) == {"ok": True}
+    finally:
+        b.shutdown()
 
 
 # -- module facade compatibility ---------------------------------------------------

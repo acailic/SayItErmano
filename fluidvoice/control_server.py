@@ -17,10 +17,12 @@ unrelated actions behind a long one.
 """
 from __future__ import annotations
 
+import errno
 import json
 import os
 import queue
 import socket
+import sys
 import threading
 import time
 from pathlib import Path
@@ -35,6 +37,15 @@ _BACKLOG = 128                         # kernel accept queue (was 8)
 _DRAIN_CAP = 4 * 1024 * 1024           # discard cap after an oversized line
 _DRAIN_TIMEOUT_S = 2.0                 # bound the discard loop
 _CHUNK = 65536
+_ACCEPT_RETRY_S = 0.05                 # backoff after a transient accept error
+_QUEUE_PER_WORKER = 4                  # accept-queue bound (F8: 8 workers -> 32)
+
+
+def _log(msg: str) -> None:
+    """House log idiom (see pipeline.log): stderr, timestamped, quiet -
+    only exceptional control-server paths ever log (F11)."""
+    print(f"[sayit-ermano] {time.strftime('%H:%M:%S')} {msg}",
+          file=sys.stderr, flush=True)
 
 
 class ControlError(RuntimeError):
@@ -43,6 +54,18 @@ class ControlError(RuntimeError):
 
 class _LineTooLarge(Exception):
     """The request line exceeded the limit before a newline arrived."""
+
+
+class _RequestTimeout(Exception):
+    """The TOTAL first-line read budget expired (F8: the idle deadline is
+    per REQUEST, not per recv - a client dripping one byte every 9 s beat
+    the old per-recv 10 s timeout forever). `partial` distinguishes a
+    client that never sent anything (clean close, like the old idle
+    timeout) from one that dribbled partial data (structured error)."""
+
+    def __init__(self, partial: bool):
+        super().__init__(f"request read budget expired (partial={partial})")
+        self.partial = partial
 
 
 def probe_live(path: Path, timeout: float = 1.0) -> bool:
@@ -78,7 +101,11 @@ class ControlServer:
         self._response_limit = int(response_limit)
         self._idle_timeout = float(idle_timeout)
         self._stopping = threading.Event()
-        self._connections: queue.Queue = queue.Queue()
+        # Bounded (F8): an unbounded queue let misbehaving same-user
+        # clients pile up connections (each holding an fd) until EMFILE
+        # took out the accept thread outright.
+        self._connections: queue.Queue = queue.Queue(
+            maxsize=self._worker_count * _QUEUE_PER_WORKER)
         self._accept_thread: threading.Thread | None = None
         self._workers: list[threading.Thread] = []
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -99,6 +126,11 @@ class ControlServer:
         # identity of OUR socket file: shutdown only unlinks a path that
         # still points at this server (a replacement may have rebound it)
         self._sock_ino = os.stat(self.path).st_ino
+        # unlink happens at most once: a REPEATED shutdown must never
+        # touch the path again - a replacement binding the freed path can
+        # even reuse our just-freed inode number, defeating the inode
+        # check (F5)
+        self._unlinked = False
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -123,6 +155,7 @@ class ControlServer:
         """Deterministic shutdown: stop accepting, drop queued connections,
         let in-flight requests finish, and join every thread. Idempotent."""
         self._stopping.set()
+        joined = 0
         try:
             # wake a thread blocked in accept(): close() alone does NOT
             # unblock it on Linux; shutdown() does
@@ -149,11 +182,14 @@ class ControlServer:
         if self._accept_thread is not None \
                 and self._accept_thread is not current:
             self._accept_thread.join(timeout=timeout)
+            joined += 1
         for t in self._workers:
             if t is not current:
                 t.join(timeout=timeout)
+                joined += 1
         self._workers = []
         self._accept_thread = None
+        _log(f"control server: shutdown complete ({joined} threads joined)")
 
     def close(self) -> None:
         """Socket-compatible alias: the old serve() returned a raw socket
@@ -161,6 +197,9 @@ class ControlServer:
         self.shutdown()
 
     def _unlink_owned_path(self) -> None:
+        if self._unlinked:
+            return  # ours is already gone: the path belongs to someone else
+        self._unlinked = True
         try:
             if os.stat(self.path).st_ino == self._sock_ino:
                 self.path.unlink()
@@ -173,14 +212,37 @@ class ControlServer:
         while not self._stopping.is_set():
             try:
                 conn, _ = self._srv.accept()
-            except OSError:
-                break  # listening socket closed -> shutdown
+            except OSError as e:
+                if self._stopping.is_set():
+                    break  # our shutdown() closed the listening socket
+                if e.errno in (errno.EBADF, errno.EINVAL):
+                    # listening socket gone while we were NOT stopping:
+                    # unrecoverable - exit loudly, never silently
+                    _log(f"control accept: listening socket closed "
+                         f"({e!r}) - accept thread exiting")
+                    break
+                # transient (EMFILE, ECONNABORTED, ENOMEM, ...): the
+                # thread must survive it or the control plane is bricked
+                # with the socket still bound and nobody accepting (F4).
+                # Back off briefly so EMFILE/ENOMEM cannot hot-loop.
+                _log(f"control accept: transient {e!r} - retrying in "
+                     f"{_ACCEPT_RETRY_S:g}s")
+                time.sleep(_ACCEPT_RETRY_S)
+                continue
             try:
                 conn.settimeout(self._idle_timeout)
             except OSError:
                 _close_quietly(conn)
                 continue
-            self._connections.put(conn)
+            try:
+                self._connections.put_nowait(conn)
+            except queue.Full:
+                # saturated (F8): shed load with a structured error
+                # instead of queueing without bound
+                _log("control accept: queue saturated - rejecting client")
+                self._send(conn, {"ok": False,
+                                  "error": "server busy - retry shortly"})
+                _close_quietly(conn)
 
     def _worker_loop(self) -> None:
         while True:
@@ -191,7 +253,10 @@ class ControlServer:
                 break
             try:
                 self._serve_connection(conn)
-            except Exception:  # noqa: BLE001 - a dead worker is a capacity leak
+            except Exception as e:  # noqa: BLE001 - a dead worker is a
+                # capacity leak: log it (F11) instead of dying silently
+                _log(f"worker {threading.current_thread().name} hit "
+                     f"{e!r} - connection dropped, worker continues")
                 _close_quietly(conn)
 
     # -- one connection ------------------------------------------------------
@@ -207,25 +272,46 @@ class ControlServer:
                              f"{self._request_limit} bytes)"})
                 self._drain(conn)  # discard the rest so close() cannot RST
                 return             # the error reply out from under the client
-            except socket.timeout:
-                return  # idle client: clean close, no response
+            except _RequestTimeout as e:
+                if e.partial:
+                    # a real request dribbled past the total read budget:
+                    # answer with the structured timeout error (F8)
+                    self._send(conn, {
+                        "ok": False,
+                        "error": f"request read timed out "
+                                 f"(budget is {self._idle_timeout:g}s)"})
+                return  # nothing received at all: idle client, clean close
             except OSError:
                 return
             if line is None:
                 return  # connected and left (or blank line): clean close
+            conn.settimeout(self._idle_timeout)  # sane budget for the reply
             self._send(conn, self._dispatch(line))
 
     def _read_request_line(self, conn: socket.socket) -> bytes | None:
-        """Read up to the first newline, bounded by the request limit.
+        """Read up to the first newline, bounded by the request limit and
+        by an OVERALL deadline: idle_timeout is the budget for the whole
+        request line, not for each individual recv (F8).
 
         Returns the raw line (possibly empty trailing bytes past the
         newline are ignored, as before), or None on EOF/blank input.
         Raises _LineTooLarge once the line passes the limit with no
-        newline; socket.timeout/OSError propagate to the caller."""
+        newline, and _RequestTimeout when the budget expires."""
+        deadline = time.monotonic() + self._idle_timeout
         buf = b""
         overflow = False
+        expired = False
         while b"\n" not in buf and not overflow:
-            chunk = conn.recv(_CHUNK)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                expired = True
+                break
+            conn.settimeout(remaining)
+            try:
+                chunk = conn.recv(_CHUNK)
+            except socket.timeout:
+                expired = True
+                break
             if not chunk:
                 break
             buf += chunk
@@ -235,6 +321,8 @@ class ControlServer:
                 overflow = True
         if overflow:
             raise _LineTooLarge
+        if expired:
+            raise _RequestTimeout(partial=bool(buf))
         return buf if buf.strip() else None
 
     def _dispatch(self, raw: bytes) -> dict:

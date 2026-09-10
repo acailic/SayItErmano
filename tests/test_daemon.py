@@ -15,6 +15,7 @@ import pytest
 from fluidvoice import daemon as dm
 from fluidvoice.ai.client import AIError
 from fluidvoice.config import DEFAULTS
+from fluidvoice.control_server import ControlServer
 from fluidvoice.insertion import InsertError
 from fluidvoice.recorder import RecorderError
 
@@ -434,6 +435,37 @@ class TestDaemon:
         assert self.wait_done(d)
         assert d.last_result == {}  # nothing typed, error notified
         assert any("Transcription failed" in (t + b) for t, b in quiet_ui["notify"])
+
+
+class TestShutdownSocketHygiene:
+    """F5: daemon.shutdown() must never blindly unlink the socket path.
+    ControlServer.shutdown() already unlinks only when the path still
+    points at THIS daemon's socket (inode check) - a blind unlink right
+    after it deleted a REPLACEMENT daemon's freshly bound control
+    channel (new connects fail, probe_live says dead, a third starter
+    steals the path: two daemons, one socket path)."""
+
+    class _AlreadyClosedServer:
+        """Stands in for the daemon's ControlServer after it already shut
+        down - its inode-checked unlink of its own socket already ran."""
+
+        def close(self):
+            pass
+
+    def test_shutdown_leaves_a_replacement_socket_alone(
+            self, cfg, quiet_ui, tmp_path, monkeypatch):
+        sock = tmp_path / "sayit.sock"
+        monkeypatch.setattr(dm.paths, "socket_path", lambda: sock)
+        # a replacement daemon already bound the freed path
+        replacement = ControlServer(lambda req: {"ok": True}, sock)
+        replacement.start()
+        try:
+            d = TestDaemon().make(cfg, StubRecorder())
+            d._srv = self._AlreadyClosedServer()
+            d.shutdown()
+            assert sock.exists()  # the replacement's socket survived
+        finally:
+            replacement.shutdown()
 
 
 class TestAutoStopRace:

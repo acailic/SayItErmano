@@ -59,11 +59,28 @@ trap 'rm -rf "$(dirname "$STAGE")"' EXIT
 # 1. Application payload: bundled venv + package ---------------------------
 mkdir -p "$STAGE/opt/$NAME"
 python3 -m venv --system-site-packages "$STAGE/opt/$NAME/venv"
-"$STAGE/opt/$NAME/venv/bin/pip" install -q --upgrade pip
-# -c constraints.txt: the committed, reviewed dependency lock — no silent
-# resolution at build time (and wheel-hash verification once the lock
-# carries --hash lines; needs pip >= 23.1, guaranteed by the upgrade above).
-"$STAGE/opt/$NAME/venv/bin/pip" install -q --no-cache-dir -c "$CONSTRAINTS" .
+PIP="$STAGE/opt/$NAME/venv/bin/pip"
+"$PIP" install -q --upgrade pip  # guarantees pip >= 23.1 (--require-hashes)
+# The committed, reviewed dependency lock (F9). When it carries --hash
+# lines (added by a release-time NETWORK run of
+# packaging/deb/update-constraints.sh — hashes cannot be fabricated
+# offline), the install is fully artifact-locked: pip verifies every
+# wheel it downloads against the committed sha256 set. The lock is fed
+# via -r, not -c: pip only ENFORCES hashes carried by requirements, not
+# by constraints. The app itself installs --no-deps from the committed
+# source in this tree — nothing about it is fetched. Without --hash
+# lines the build stays pin-locked (exact == versions, no silent
+# resolution) with a loud note; see packaging/deb/README.md.
+if grep -q -- '--hash=sha256:' "$CONSTRAINTS"; then
+    echo ">> hash-locked install: every downloaded wheel verified against $CONSTRAINTS"
+    "$PIP" install -q --no-cache-dir --require-hashes -r "$CONSTRAINTS"
+    "$PIP" install -q --no-cache-dir --no-deps .
+else
+    echo ">> NOTE: $CONSTRAINTS carries no --hash lines - building pin-locked only" >&2
+    echo ">>       (versions exact, wheel artifacts unverified). Regenerate WITH hashes" >&2
+    echo ">>       at release time: packaging/deb/update-constraints.sh   (network run)" >&2
+    "$PIP" install -q --no-cache-dir -c "$CONSTRAINTS" .
+fi
 rm -rf "$STAGE/opt/$NAME/venv/share"  # docs/man from wheels
 
 # strip the pyc cache (rebuilt on first run) to shrink the package

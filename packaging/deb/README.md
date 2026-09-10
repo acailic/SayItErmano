@@ -36,23 +36,38 @@ The `Dockerfile` pins `ubuntu:24.04` (digest-pinning via
 `pip install .` inside the build resolves dependencies; without a lock that
 resolution is a hidden `pip freeze` at build time. Instead
 [`constraints.txt`](constraints.txt) is a **committed, exact-pin lock** of the
-complete runtime closure (generated from the tested repo venv), and
-`build-deb.sh` installs with `pip install -c packaging/deb/constraints.txt .`:
+complete runtime closure (generated from the tested repo venv):
 
 - every version bump arrives as a reviewable diff of the lock file;
-- when the lock carries `--hash=sha256:…` lines, pip verifies each downloaded
-  wheel during the build (needs pip ≥ 23.1 — the build venv upgrades pip
-  first);
 - the release gate fails on a stale lock (a constraint that no longer
   satisfies the resolved tree) — resolution errors out instead of drifting.
 
-Regenerate after changing dependencies or bumping the tested venv:
+### Hash locking (F9)
+
+Exact pins lock *versions*, not *artifacts* — a compromised or
+yanked-and-replaced PyPI wheel under the same version string would install
+silently. A release therefore regenerates the lock **with wheel hashes**:
 
 ```bash
 packaging/deb/update-constraints.sh               # pins + wheel hashes (network)
 packaging/deb/update-constraints.sh --pins-only   # pins only (offline refresh)
 ```
 
-Both modes walk the closure from `pyproject.toml`'s core dependencies
-against the locked venv (`.venv` by default — must itself be Linux/CPython
-3.12/x86_64) and refuse anything else.
+The full run downloads the exact wheels the Ubuntu 24.04 / py3.12 / x86_64
+build would fetch and records each `--hash=sha256:…` beside its pin (needs
+pip ≥ 23.1 — `build-deb.sh` upgrades the build venv's pip first). **The
+committed lock is pin-only today: hashes require that network run and are
+regenerated + committed at release time**, before the locked deb build.
+
+When the lock carries hashes, `build-deb.sh` switches to fully artifact-
+locked installation automatically:
+
+- the lock is installed with `pip install --require-hashes -r constraints.txt`
+  (via `-r`, not `-c` — pip only *enforces* hashes carried by requirements;
+  hashes in a bare constraints file are parsed but never checked), so every
+downloaded wheel is verified against the committed sha256;
+- the application itself is installed `--no-deps` from the committed source
+tree — nothing about it is fetched from an index.
+
+Without hashes the build is pin-locked only and prints a loud note to that
+effect.

@@ -531,14 +531,19 @@ class Daemon:
     def shutdown(self) -> None:
         log("shutting down")
         self._stop_idle_watch()
-        if self.recording:
-            self.recorder.cancel()
-            self.recording = False
-        if self._watchdog:
-            self._watchdog.cancel()
-        if self._first_pcm_timer:
-            self._first_pcm_timer.cancel()
-            self._first_pcm_timer = None
+        # under the lock: these fields race the hotkey thread's toggle
+        # (N1). The race was benign - callbacks re-validate recorder
+        # identity - but serializing costs nothing and matches
+        # _cancel_locked, which already cancels under this lock.
+        with self._lock:
+            if self.recording:
+                self.recorder.cancel()
+                self.recording = False
+            if self._watchdog:
+                self._watchdog.cancel()
+            if self._first_pcm_timer:
+                self._first_pcm_timer.cancel()
+                self._first_pcm_timer = None
         if self._micmon:
             self._micmon.stop()
             self._micmon = None
@@ -579,11 +584,14 @@ class Daemon:
             log(f"WARN tasks still running after shutdown join: "
                 f"{', '.join(report['timed_out'])}")
         if self._srv:
+            # ControlServer.shutdown() unlinks the socket path only when
+            # it still points at THIS daemon's socket (inode check). A
+            # blind unlink here could delete a replacement daemon's
+            # freshly bound control channel (F5).
             try:
                 self._srv.close()
             except OSError:
                 pass
-            paths.socket_path().unlink(missing_ok=True)
 
     @staticmethod
     def _sweep_stale_tmp() -> None:
