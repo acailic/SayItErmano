@@ -79,7 +79,12 @@ Manual dispatch with the version. In order:
    `packaging/deb/constraints.txt`, and a `pip install --dry-run -c
    constraints.txt .` resolution must still succeed (catches bumped
    minimums the lock no longer satisfies). Regenerate the lock with
-   `packaging/deb/update-constraints.sh`.
+   `packaging/deb/update-constraints.sh`. Hash locking (F9): regenerate
+   **with hashes** (the full, networked run — hashes cannot be fabricated
+   offline) and commit the result on the release branch before the
+   locked build; `build-deb.sh` then verifies every downloaded wheel
+   (`--require-hashes -r`) automatically. The committed lock is pin-only
+   between releases.
 6. **Locked package build** — the deb is built in the pinned container
    (`packaging/deb/Dockerfile`, Ubuntu 24.04 / x86_64 / Python 3.12)
    against the hashed constraints; its control `Version` must equal
