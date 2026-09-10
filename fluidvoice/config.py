@@ -484,6 +484,66 @@ def _coerce_per_app_prompts(value: Any) -> tuple[bool, Any]:
     return (True, rules)
 
 
+def _coerce_profile_rules(value: Any) -> tuple[bool, Any]:
+    """[profiles].rules: canonical per-app behavior profiles, one dict
+    per app matcher. Fields: match (1..32 substrings, required),
+    terminal, prompt_profile, instructions, insertion_mode
+    (""/typed/paste/auto), formatting_mode (""/gaav), spoken_send
+    (""/on/off). Unknown fields reject the whole value so hand-edit
+    typos surface at save time."""
+    if not isinstance(value, list) or len(value) > 50:
+        return (False, value)
+    allowed = {"match", "terminal", "prompt_profile", "instructions",
+               "insertion_mode", "formatting_mode", "spoken_send"}
+    cleaned: list[dict] = []
+    for raw in value:
+        if not isinstance(raw, dict) or set(raw) - allowed:
+            return (False, value)
+        patterns_raw = raw.get("match")
+        if (not isinstance(patterns_raw, list)
+                or not 1 <= len(patterns_raw) <= 32
+                or any(not isinstance(p, str) for p in patterns_raw)):
+            return (False, value)
+        patterns: list[str] = []
+        seen: set[str] = set()
+        for p in patterns_raw:
+            pattern = p.strip()
+            if not pattern or len(pattern) > 64 or pattern.lower() in seen:
+                continue
+            seen.add(pattern.lower())
+            patterns.append(pattern)
+        if not patterns:
+            return (False, value)
+        terminal = raw.get("terminal", False)
+        if not isinstance(terminal, bool):
+            return (False, value)
+        prompt_profile = raw.get("prompt_profile", "")
+        instructions = raw.get("instructions", "")
+        if (not isinstance(prompt_profile, str)
+                or len(prompt_profile) > 64
+                or not isinstance(instructions, str)
+                or len(instructions) > 2000):
+            return (False, value)
+        if prompt_profile.strip() and instructions.strip():
+            return (False, value)  # pick one prompt source per rule
+        for key, options in (("insertion_mode",
+                              ("", "typed", "paste", "auto")),
+                             ("formatting_mode", ("", "gaav")),
+                             ("spoken_send", ("", "on", "off"))):
+            v = raw.get(key, "")
+            if not isinstance(v, str) or v not in options:
+                return (False, value)
+        rule = {"match": patterns, "terminal": terminal,
+                "prompt_profile": prompt_profile,
+                "instructions": instructions,
+                "insertion_mode": raw.get("insertion_mode", ""),
+                "formatting_mode": raw.get("formatting_mode", ""),
+                "spoken_send": raw.get("spoken_send", "")}
+        cleaned.append(rule)
+    return (True, cleaned)
+_coerce_profile_rules.kind = "list"  # type: ignore[attr-defined]
+
+
 @dataclass(frozen=True)
 class SettingSpec:
     """One configuration key: everything the daemon, the file writer, the
@@ -838,6 +898,45 @@ _spec("insertion", "wayland_tool", "auto", _enum("auto", "wtype", "ydotool"),
       "wlroots/KDE; ydotool works everywhere but needs ydotoold +\n"
       "/dev/uinput access). Ignored on X11 sessions.")
 
+# -- [context] / [profiles] (P2: insertion-time context + behavior profiles)
+
+_spec("context", "enabled", False, _bool(),
+      description="Insertion-time focused-field context (P2 seam): app\n"
+                  "identity, accessible role, selection and bounded\n"
+                  "preceding text, read ONCE right before typing and never\n"
+                  "stored (nothing reaches history/config/logs). Off by\n"
+                  "default - prototype-grade; complete the Wayland smoke\n"
+                  "matrix (docs/dev/wayland-smoke-matrix.md) before\n"
+                  "relying on it.")
+_spec("context", "provider", "auto",
+      _enum("auto", "x11", "atspi", "none"),
+      description="Context backend: auto (wayland -> atspi, x11 -> x11) |\n"
+                  "x11 (WM_CLASS identity only) | atspi (identity + role +\n"
+                  "selection + preceding text; works on x11 too) | none.\n"
+                  "Missing dependencies degrade to no context, never crash.")
+_spec("context", "max_preceding_chars", 120, _num("int", 0, 500),
+      description="Hard cap on the focused field text preceding the caret\n"
+                  "read for sentence continuation (0..500; 0 disables the\n"
+                  "continuation read). Enforced again inside FocusContext,\n"
+                  "whatever the provider returns.")
+_spec("profiles", "rules", [], _coerce_profile_rules,
+      description="Canonical per-app behavior profiles, first match wins\n"
+                  '(case-insensitive substrings of the app identity, "*"\n'
+                  "matches everything): rules = [{ match =\n"
+                  '["gnome-terminal", "kgx"], terminal = true, spoken_send\n'
+                  '= "off" }]. Fields: terminal, prompt_profile (a named\n'
+                  "AI prompt preset), instructions (inline prompt text),\n"
+                  "insertion_mode (typed|paste|auto), formatting_mode\n"
+                  "(gaav), spoken_send (on|off); empty = inherit the global\n"
+                  "setting. Legacy general.terminal_apps and\n"
+                  "ai.per_app_prompts stay read as fallback until v1.0 and\n"
+                  "migrate into rules on the first settings save.")
+_spec("profiles", "migrated_from_legacy", False, _bool(),
+      persistence=PERSIST_SAVE_ONLY,
+      description="Set once the first settings save migrated legacy\n"
+                  "per-app prompts / terminal lists into profiles.rules\n"
+                  "(migration marker; not socket-settable).")
+
 # -- [sounds] / [notifications] / [updates] ----------------------------------
 
 _spec("sounds", "enabled", True, _bool(),
@@ -1151,8 +1250,15 @@ def write_template(path: Path | None = None) -> Path:
 # ---------------------------------------------------------------------------
 
 def save_config(cfg: dict, path: Path | None = None) -> Path:
-    """Persist the whitelisted config keys as TOML, carrying over api_key."""
+    """Persist the whitelisted config keys as TOML, carrying over api_key.
+
+    P2: the first save also migrates legacy per-app prompts and a
+    customized terminal list into canonical profiles.rules (one-time,
+    idempotent - see profiles.migrate_legacy_profiles)."""
     path = path or paths.config_file()
+    from .profiles import migrate_legacy_profiles  # lazy: no import cycle
+    migrate_legacy_profiles(
+        cfg, default_terminal_apps=DEFAULTS["general"]["terminal_apps"])
     carry: dict = {}
     if path.exists():
         try:
