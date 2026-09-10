@@ -37,6 +37,24 @@ _LOCK_SUFFIX = ".lock"     # sidecar flock; never the JSONL fd itself
 _TMP_SUFFIX = ".tmp"       # unique same-dir transaction temp files
 
 
+def _split_jsonl(text: str) -> list[str]:
+    """Split decoded history text into JSONL lines on "\n" ONLY.
+
+    str.splitlines() would also split on U+2028/U+2029/U+0085 - three
+    characters json.dumps(ensure_ascii=False) leaves RAW inside JSON
+    strings, so a row containing one would tear into two unparseable
+    halves: dropped by every reader and erased by the next rewrite (the
+    F2 data-loss class). The writers' record separator is exactly "\n"
+    (\r never occurs: writers never emit it), so the readers split on
+    exactly that. The trailing empty remainder after the final newline is
+    not a record and is dropped.
+    """
+    lines = text.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
+
+
 # -- durability primitives ------------------------------------------------------
 
 def _fsync_dir(directory: Path) -> None:
@@ -253,7 +271,7 @@ class HistoryStore:
         out = []
         # errors="replace" (like tail): torn bytes must not crash or hide
         # the other rows - the damaged line simply fails json parsing
-        for line in data.decode("utf-8", errors="replace").splitlines():
+        for line in _split_jsonl(data.decode("utf-8", errors="replace")):
             with contextlib.suppress(json.JSONDecodeError):
                 out.append(json.loads(line))
         return out
@@ -267,7 +285,7 @@ class HistoryStore:
         with open(hpath, "rb") as fh:
             fh.seek(max(0, size - _TAIL_WINDOW))
             chunk = fh.read()
-        lines = chunk.decode("utf-8", errors="replace").splitlines()
+        lines = _split_jsonl(chunk.decode("utf-8", errors="replace"))
         if size > _TAIL_WINDOW and lines:
             lines = lines[1:]  # first line is likely partial
         out = []

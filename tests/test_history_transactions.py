@@ -23,6 +23,7 @@ import sys
 import threading
 import time
 import wave
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -55,9 +56,12 @@ def hist(tmp_path, monkeypatch) -> Path:
 def _read_lines(hpath: Path) -> list[dict]:
     """Strict read (unlike history's tolerant readers): every line must be
     valid JSON - a torn write under concurrency is exactly what these
-    tests exist to catch."""
-    return [json.loads(line) for line in
-            hpath.read_text(encoding="utf-8").splitlines() if line]
+    tests exist to catch. Splits on "\n" ONLY, like the production
+    readers (N8): str.splitlines() would also split on U+2028/U+2029/
+    U+0085, hiding exactly the data-loss class these tests must catch
+    (a row whose text contains one of those characters)."""
+    lines = hpath.read_text(encoding="utf-8").split("\n")
+    return [json.loads(line) for line in lines if line]
 
 
 class TestStoreInterface:
@@ -436,6 +440,61 @@ class TestCorruptRows:
         assert history.delete(777.0) == 0
         assert [e["text"] for e in history.read_all()] == \
             ["good one", "good two"]
+
+
+class TestUnicodeLineSeparators:
+    """F2 golden test: rows whose text contains U+2028 (LINE SEPARATOR),
+    U+2029 (PARAGRAPH SEPARATOR) or U+0085 (NEL) - which
+    json.dumps(ensure_ascii=False) writes RAW inside the JSON string -
+    must survive append -> read_all -> rewrite -> read_all. The old
+    splitlines() readers tore each such row in two unparseable halves
+    (silently dropped, then permanently erased by the next rewrite)."""
+
+    SPECIAL = ("line one\u2028line two",       # LINE SEPARATOR
+               "para one\u2029para two",       # PARAGRAPH SEPARATOR
+               "nel\u0085also nel",            # NEXT LINE (NEL)
+               "backslash-n literal \\n stays",  # 2-char sequence \n
+               "mix \u2028 \u2029 \u0085 \\n all")
+
+    def test_round_trip_append_read_rewrite_read(self, hist):
+        history.append({"ts": 0.0, "text": "plain seed"})
+        for i, text in enumerate(self.SPECIAL, start=1):
+            history.append({"ts": float(i), "text": text})
+        history.append({"ts": 99.0, "text": "plain tail"})
+
+        # every reader sees every row, exactly once, in order
+        assert [e["text"] for e in history.read_all()] == \
+            ["plain seed", *self.SPECIAL, "plain tail"]
+        assert [e["text"] for e in history.tail(20)] == \
+            ["plain seed", *self.SPECIAL, "plain tail"]
+        assert [e["text"] for e in history.search("line") ] == \
+            ["line one\u2028line two"]
+
+        # the file on disk holds one physical line per row: the special
+        # characters are inside JSON strings, never record separators
+        disk = hist.read_text(encoding="utf-8").split("\n")
+        assert len(disk) == len(self.SPECIAL) + 2 + 1  # + trailing ""
+
+        # a rewrite (update of an unrelated row) must not erase them
+        assert history.update_text(0.0, "PLAIN SEED") is True
+        texts = [e["text"] for e in history.read_all()]
+        assert texts == ["PLAIN SEED", *self.SPECIAL, "plain tail"]
+
+        # delete/cap rewrites keep them too
+        assert history.delete(99.0) == 1
+        assert [e["text"] for e in history.read_all()] == \
+            ["PLAIN SEED", *self.SPECIAL]
+
+    def test_export_zip_carries_them_through(self, hist, tmp_path):
+        for i, text in enumerate(self.SPECIAL, start=1):
+            history.append({"ts": float(i), "text": text})
+        zpath = tmp_path / "export.zip"
+        assert history.export_zip(zpath) == len(self.SPECIAL)
+        with zipfile.ZipFile(zpath) as zf:
+            body = zf.read("history.jsonl").decode("utf-8")
+        assert [json.loads(l) for l in body.split("\n") if l] == \
+            [{"ts": float(i), "text": t}
+             for i, t in enumerate(self.SPECIAL, start=1)]
 
 
 class TestAtomicWriteDurability:
