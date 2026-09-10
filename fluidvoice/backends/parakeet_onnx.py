@@ -39,6 +39,7 @@ import numpy as np
 
 from .. import model_catalog
 from . import effective_language
+from .base import BackendCapabilities, Transcript, TranscriptSegment
 
 TAIL_PAD_S = 2.0  # seconds of silence appended before featurization
 SAMPLE_RATE = 16000
@@ -208,6 +209,19 @@ class ParakeetOnnxBackend:
     surfaces_detected_language = False
     # hallucination guard: no language selection to retry with either
     selects_language = False
+    # the seam (plan P1.1): canonical capability declaration. The two
+    # legacy attributes above are kept as aliases (pre-seam consumers);
+    # the contract suite asserts they agree.
+    capabilities = BackendCapabilities(
+        supports_language_select=False,   # English-only models: no -l alike
+        supports_language_detect=False,
+        supports_hotwords=False,          # no prompt/vocab concept in the
+                                          # greedy TDT decode
+        supports_streaming=False,
+        supports_segments=True,           # one whole-audio segment
+        supports_confidence=False,        # greedy decode: no logprobs
+        supports_alternatives=False,
+    )
 
     def __init__(self, cfg: dict, _sessions: Any | None = None):
         mcfg = cfg.get("model", {})
@@ -237,6 +251,9 @@ class ParakeetOnnxBackend:
 
     def warmup(self) -> None:
         self._load()
+
+    def close(self) -> None:
+        """No-op: ONNX Runtime sessions free on refcount drop + gc."""
 
     def _default_sessions(self, model_dir: Path):
         import onnxruntime as ort  # deferred: optional dependency
@@ -302,7 +319,7 @@ class ParakeetOnnxBackend:
             "(need 16-bit PCM or 32-bit float)")
 
     def transcribe(self, wav_path: Path,
-                   language: str | None = None) -> dict[str, Any]:
+                   language: str | None = None) -> Transcript:
         self._load()
         samples = self._read_wav(Path(wav_path))
         n = samples.shape[0]
@@ -316,7 +333,9 @@ class ParakeetOnnxBackend:
         text = detokenize(ids, self._id2tok)
         lang = language or self.language or "auto"
         duration = n / SAMPLE_RATE
-        return {"text": text,
-                "language": None if lang == "auto" else lang,
-                "duration": duration,
-                "segments": [{"start": 0.0, "end": duration, "text": text}]}
+        return Transcript(
+            text=text,
+            language=None if lang == "auto" else lang,
+            duration=duration,
+            segments=(TranscriptSegment(start=0.0, end=duration,
+                                        text=text),))

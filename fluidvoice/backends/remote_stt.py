@@ -19,10 +19,10 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any
 from urllib.parse import urlparse
 
 from . import effective_language
+from .base import BackendCapabilities, Transcript, TranscriptSegment
 
 # mirrors AIClient: retried statuses only (config 4xx never self-heal)
 _RETRYABLE_HTTP = {429, 500, 502, 503, 504}
@@ -53,6 +53,21 @@ class RemoteSttBackend:
     # hallucination guard: the request forwards a language field, so the
     # endpoint's auto detection serves as the retry
     selects_language = True
+    surfaces_detected_language = False
+    # the seam (plan P1.1): canonical capability declaration. The two
+    # legacy attributes above are kept as aliases (pre-seam consumers);
+    # the contract suite asserts they agree.
+    capabilities = BackendCapabilities(
+        supports_language_select=True,    # language field sent with request
+        supports_language_detect=False,   # endpoint does not surface it
+        supports_hotwords=False,          # no hotwords field forwarded
+        supports_streaming=False,
+        # segments pass through verbatim when the endpoint sends
+        # verbose_json - never requested, so not a guaranteed capability
+        supports_segments=False,
+        supports_confidence=False,
+        supports_alternatives=False,
+    )
 
     def __init__(self, cfg: dict):
         m = cfg["model"]
@@ -153,7 +168,7 @@ class RemoteSttBackend:
     # -- backend contract -----------------------------------------------------
 
     def transcribe(self, wav_path: Path,
-                   language: str | None = None) -> dict[str, Any]:
+                   language: str | None = None) -> Transcript:
         wav_bytes = Path(wav_path).read_bytes()
         lang = (language or self.language or "").strip()
         fields: dict[str, tuple[str, str, bytes]] = {
@@ -166,10 +181,17 @@ class RemoteSttBackend:
         data = self._request(body, content_type)
         text = self._extract_text(data, _host_of(self.remote_url))
         segments = data.get("segments") if isinstance(data, dict) else None
-        return {"text": text,
-                "language": None if lang in ("", "auto") else lang,
-                "duration": None,
-                "segments": segments if isinstance(segments, list) else []}
+        segs = tuple(TranscriptSegment.from_dict(s) for s in segments
+                     if isinstance(s, dict)) \
+            if isinstance(segments, list) else ()
+        return Transcript(
+            text=text,
+            language=None if lang in ("", "auto") else lang,
+            duration=None,
+            segments=segs)
 
     def warmup(self) -> None:
         pass  # reachability belongs to doctor + the real take
+
+    def close(self) -> None:
+        """No-op: no connection is held between requests."""

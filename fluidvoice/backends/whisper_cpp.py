@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from typing import Any
 
 from .. import model_catalog
 from . import _whispercpp_binary, effective_language
+from .base import BackendCapabilities, Transcript
 
 
 class WhisperCppBackend:
@@ -18,6 +18,18 @@ class WhisperCppBackend:
     # hallucination guard: the binary honors -l, so a garbage forced
     # decode can still be retried with auto detection
     selects_language = True
+    # the seam (plan P1.1): canonical capability declaration. The two
+    # legacy attributes above are kept as aliases (pre-seam consumers);
+    # the contract suite asserts they agree.
+    capabilities = BackendCapabilities(
+        supports_language_select=True,    # -l flag honored
+        supports_language_detect=False,   # not surfaced under auto
+        supports_hotwords=False,          # no vocabulary biasing flag in v1
+        supports_streaming=False,
+        supports_segments=False,          # needs whisper-cli -ml parsing
+        supports_confidence=False,
+        supports_alternatives=False,
+    )
 
     def __init__(self, cfg: dict):
         self.binary = _whispercpp_binary()
@@ -46,7 +58,15 @@ class WhisperCppBackend:
                     f"Settings → Models, whisper.cpp GGUF")
         self.language = effective_language(cfg) or "auto"
 
-    def transcribe(self, wav_path: Path, language: str | None = None) -> dict[str, Any]:
+    def warmup(self) -> None:
+        """No-op: the binary runs a subprocess per transcription, so
+        there is no model memory to preload in-process."""
+
+    def close(self) -> None:
+        """No-op: nothing is held between transcriptions."""
+
+    def transcribe(self, wav_path: Path,
+                   language: str | None = None) -> Transcript:
         lang = language or self.language or "auto"
         args = [self.binary, "-m", self.model, "-f", str(wav_path), "-nt", "-np"]
         if lang != "auto":
@@ -55,7 +75,8 @@ class WhisperCppBackend:
         if proc.returncode != 0:
             raise RuntimeError(f"whisper.cpp failed: {proc.stderr.strip()[:500]}")
         text = " ".join(line.strip() for line in proc.stdout.splitlines() if line.strip())
-        return {"text": text.strip(), "language": None if lang == "auto" else lang,
-                "duration": None,
-                # segments not exposed in v1: needs whisper-cli -ml parsing
-                "segments": []}
+        return Transcript(text=text.strip(),
+                          language=None if lang == "auto" else lang,
+                          duration=None,
+                          # segments not exposed in v1: needs whisper-cli -ml parsing
+                          segments=())
