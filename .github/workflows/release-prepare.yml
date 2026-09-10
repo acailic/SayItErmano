@@ -1,0 +1,192 @@
+name: release-prepare
+
+# Release step 1 of 2 (plan P0.5). Manual only — like every workflow in
+# this repo (house policy: no push triggers, humans dispatch).
+#
+# What this does, in order:
+#   1. clean-tree check on the checked-out branch
+#   2. version sanity: X.Y.Z, strictly newer, pyproject == __init__.py
+#   3. version bump (fluidvoice/__init__.py + pyproject.toml)
+#   4. lint (ruff) + full offline suite with warnings as errors
+#   5. dependency-lock freshness (stale-constraints check)
+#   6. locked package build (pinned Ubuntu 24.04 container + constraints)
+#   7. commit + push the bump; the pushed SHA becomes the release SHA
+#
+# After this succeeds: dispatch CI on that exact commit (Actions → CI →
+# Run workflow → branch `linux`), wait for green, then run
+# release-publish. Full flow: docs/dev/release-gates.md
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to prepare (X.Y.Z, strictly greater than current)"
+        required: true
+        type: string
+
+permissions:
+  contents: write # commit + push the version bump
+
+concurrency:
+  group: release-prepare
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: "gate + bump + locked build + push (v${{ inputs.version }})"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: linux
+          fetch-depth: 0 # the push must be a real fast-forward of history
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Version sanity (semver, strictly newer, no disagreement)
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+              echo "ERROR: version must be X.Y.Z, got '$VERSION'" >&2; exit 1; }
+          python3 - "$VERSION" <<'PY'
+          import re, sys, tomllib
+
+          new = sys.argv[1]
+
+          def key(v):
+              return tuple(int(p) for p in v.split("."))
+
+          with open("pyproject.toml", "rb") as fh:
+              cur = tomllib.load(fh)["project"]["version"]
+          init = re.search(r'^__version__ = "([^"]+)"',
+                           open("fluidvoice/__init__.py").read(),
+                           re.M).group(1)
+          if cur != init:
+              sys.exit(f"ERROR: version disagreement before release: "
+                       f"pyproject={cur} __init__={init} — reconcile first")
+          if key(new) <= key(cur):
+              sys.exit(f"ERROR: {new} is not newer than current {cur}")
+          print(f"version sanity OK: {cur} -> {new}")
+          PY
+
+      - name: Clean-tree check
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+              git status --porcelain
+              echo "ERROR: working tree is not clean" >&2
+              exit 1
+          fi
+
+      - name: Bump version (pyproject.toml + fluidvoice/__init__.py)
+        run: |
+          sed -i "s/^__version__ = \".*\"/__version__ = \"${VERSION}\"/" \
+              fluidvoice/__init__.py
+          sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" pyproject.toml
+          grep -q "^__version__ = \"${VERSION}\"" fluidvoice/__init__.py
+          grep -q "^version = \"${VERSION}\"" pyproject.toml
+          git --no-pager diff
+
+      - name: Install system tools used by the code under test
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xdotool xclip libnotify-bin
+          # optional recorders (package name varies by release)
+          sudo apt-get install -y pulseaudio-utils || true
+          sudo apt-get install -y pipewire-audio-utils \
+              || sudo apt-get install -y pipewire-utils || true
+
+      - name: Install package + dev extra
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: python -m ruff check .
+
+      - name: Offline suite, warnings as errors
+        # Same scope as the local gate (just gate). -W error + the
+        # unhandled-thread-exception filter from [tool.pytest] fail the
+        # release on ANY warning.
+        run: python -m pytest -q -W error tests --ignore=tests/integration
+
+      - name: Dependency-lock freshness (stale-constraints check)
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re, sys, tomllib
+
+          with open("pyproject.toml", "rb") as fh:
+              deps = tomllib.load(fh)["project"]["dependencies"]
+          pins = set()
+          for line in open("packaging/deb/constraints.txt"):
+              line = line.strip()
+              if not line or line.startswith("#"):
+                  continue
+              m = re.match(r"^([A-Za-z0-9_.-]+)==\S+", line)
+              if not m:
+                  sys.exit(f"ERROR: constraints line is not an exact pin: {line!r}")
+              pins.add(m.group(1).lower().replace("_", "-"))
+          missing = []
+          for d in deps:
+              name = re.split(r"[<>=!~\[; ]", d.strip(), 1)[0]
+              name = name.lower().replace("_", "-")
+              if name not in pins:
+                  missing.append(name)
+          if missing:
+              sys.exit("ERROR: stale constraints — runtime deps without an exact "
+                       f"pin in packaging/deb/constraints.txt: {', '.join(missing)}\n"
+                       "       regenerate with: packaging/deb/update-constraints.sh")
+          print(f"constraints OK: all {len(deps)} runtime deps exactly pinned "
+                f"({len(pins)} pins total)")
+          PY
+          # The lock must still SATISFY the current pyproject: resolve the
+          # full dependency tree against it (dry-run installs nothing).
+          pip install --dry-run --quiet --ignore-installed \
+              -c packaging/deb/constraints.txt .
+
+      - name: Locked package build (pinned Ubuntu 24.04 container)
+        run: |
+          set -euo pipefail
+          docker build -t sayit-ermano-deb -f packaging/deb/Dockerfile .
+          mkdir -p dist
+          docker run --rm -v "$PWD/dist:/out" sayit-ermano-deb
+          DEB="dist/sayit-ermano_${VERSION}-1_amd64.deb"
+          [ -f "$DEB" ] || { echo "ERROR: expected $DEB" >&2; ls -la dist; exit 1; }
+          echo "deb control: $(dpkg-deb -f "$DEB" Package) $(dpkg-deb -f "$DEB" Version) $(dpkg-deb -f "$DEB" Architecture)"
+          [ "$(dpkg-deb -f "$DEB" Version)" = "${VERSION}-1" ] || {
+              echo "ERROR: deb version disagrees with ${VERSION}" >&2; exit 1; }
+
+      - name: Upload deb artifact for release-publish
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-v${{ env.VERSION }}
+          path: dist/*.deb
+          if-no-files-found: error
+
+      - name: Commit and push the version bump
+        run: |
+          set -euo pipefail
+          git config user.name "release-prepare"
+          git config user.email "actions@users.noreply.github.com"
+          git add fluidvoice/__init__.py pyproject.toml
+          git commit -m "release: v${VERSION}"
+          git push origin HEAD:linux
+          SHA="$(git rev-parse HEAD)"
+          echo "RELEASE_SHA=$SHA" >> "$GITHUB_ENV"
+          {
+              echo "### release-prepare v${VERSION} — done"
+              echo
+              echo "- release commit: \`${SHA}\` (pushed to \`linux\`)"
+              echo "- deb artifact uploaded: \`deb-v${VERSION}\`"
+              echo "- next: dispatch **CI** on that exact commit (Actions → CI →"
+              echo "  Run workflow → branch \`linux\`), wait for green,"
+              echo "  then \`just release-publish ${VERSION} ${SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Release SHA
+        run: |
+          echo "release SHA = $RELEASE_SHA (dispatch CI on this commit, then release-publish)"
