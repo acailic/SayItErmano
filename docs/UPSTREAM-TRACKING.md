@@ -27,6 +27,7 @@ status lives in [STATUS.md](STATUS.md); this doc faces *upstream*.
 | Upstream commit | `b395a7a` (2026-09-02) — `b395a7af0242b6869867abdd61e245a5a80ec218` |
 | Latest upstream release | `v1.6.9` (2026-08-18) |
 | Port audited against it | 2026-09-02, 5-agent audit + the v0.1.x feature work through `e3bfa37` (295 tests) |
+| Baseline re-verified | 2026-09-10, offline: the repo's fetched `upstream/*` refs still resolve to exactly this baseline (nothing newer has been fetched since 2026-09-02 — moving the baseline forward requires an online `./scripts/upstream-diff.sh` run) |
 | Machine-readable pin | [upstream-baseline.txt](upstream-baseline.txt) (read by `scripts/upstream-diff.sh`) |
 
 The baseline says: everything upstream through `b60a302` was already considered
