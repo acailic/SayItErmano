@@ -38,7 +38,11 @@ parakeet = ["onnxruntime>=1.17"]
 # python-evdev — a privileged path (input group). Insertion itself needs
 # the system tools wtype/ydotool/wl-clipboard, not this extra.
 wayland = ["evdev>=1.6"]
-dev = ["pytest>=8"]
+dev = [
+    "pytest>=8",
+    "pytest-xdist>=3.5",  # parallel suite: just test-parallel (auto workers)
+    "ruff>=0.4",           # lint gate: just lint / ruff check .
+]
 
 [project.scripts]
 sayit-ermano = "fluidvoice.cli:main"
@@ -58,6 +62,11 @@ include = ["fluidvoice*"]
 # (--pdb, breakpoints, -x); the GTK tests need no special scoping under
 # workers (each worker is its own process + XDG-isolated conftest).
 [tool.pytest.ini_options]
+# Bare `pytest` collects only the application suite — adws/*_test.py are
+# agent-factory scripts with their own deps (pydantic) and no place in a
+# pytest run (plan P0.5). Integration tests still need --ignore (they use
+# the real model/mic/GPU).
+testpaths = ["tests"]
 markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')", "integration: real-subsystem tests (mic, GPU, daemon process, network)", "desktop: live-interactive-session tests (X grabs, screen pixels) - excluded from default runs"]
 # P0.4 reliability gate: an unhandled exception in ANY thread the suite
 # spawned (timers, monitors, drain threads) fails the run instead of
@@ -65,10 +74,14 @@ markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')", "integ
 # daemon.py left threading.Timer callbacks firing after their take died.
 filterwarnings = ["error::pytest.PytestUnhandledThreadExceptionWarning"]
 
+# Current ruff layout: linter options live under [tool.ruff.lint] (the
+# top-level `select`/`ignore` keys are deprecated). Minimal, deliberately:
+# the house style keeps broad try/excepts on best-effort paths (preview,
+# tray, doctor) - blind-except style rules would flood. Import order +
+# unused imports only, for now.
 [tool.ruff]
 line-length = 88
 target-version = "py312"
-# Minimal, deliberately: the house style keeps broad try/excepts on
-# best-effort paths (preview, tray, doctor) - blind-except style rules
-# would flood. Import order + unused imports only, for now.
+
+[tool.ruff.lint]
 select = ["I001", "F401"]
