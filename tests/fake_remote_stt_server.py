@@ -130,6 +130,21 @@ def make_handler(mode: str, server_ref: list, verbose: bool = False):
     return Handler
 
 
+class _QuietHTTPServer(ThreadingHTTPServer):
+    """Stays quiet about EXPECTED client disconnects.
+
+    The timeout/retry tests drop their connection mid-request; the slow
+    handler then hits BrokenPipe/ConnectionReset when it finally writes,
+    and stock socketserver.handle_error dumps a traceback per attempt
+    into the test output. Real handler bugs still print."""
+
+    def handle_error(self, request, client_address):
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (BrokenPipeError, ConnectionResetError)):
+            return  # expected: the client timed out and hung up
+        super().handle_error(request, client_address)
+
+
 class FakeRemoteSttServer:
     """Threaded fake with a per-request record; context-managed."""
 
@@ -140,8 +155,8 @@ class FakeRemoteSttServer:
         self.count = 0
         self.lock = threading.Lock()
         ref = [self]
-        self._httpd = ThreadingHTTPServer(("127.0.0.1", port),
-                                          make_handler(mode, ref, verbose))
+        self._httpd = _QuietHTTPServer(("127.0.0.1", port),
+                                        make_handler(mode, ref, verbose))
         self.port = self._httpd.server_address[1]
         self.url = f"http://127.0.0.1:{self.port}"
         self._thread = threading.Thread(target=self._httpd.serve_forever,

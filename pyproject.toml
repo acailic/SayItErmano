@@ -59,6 +59,11 @@ include = ["fluidvoice*"]
 # workers (each worker is its own process + XDG-isolated conftest).
 [tool.pytest.ini_options]
 markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')", "integration: real-subsystem tests (mic, GPU, daemon process, network)", "desktop: live-interactive-session tests (X grabs, screen pixels) - excluded from default runs"]
+# P0.4 reliability gate: an unhandled exception in ANY thread the suite
+# spawned (timers, monitors, drain threads) fails the run instead of
+# surfacing as a pass-with-warning. The first-PCM timer leak this caught:
+# daemon.py left threading.Timer callbacks firing after their take died.
+filterwarnings = ["error::pytest.PytestUnhandledThreadExceptionWarning"]
 
 [tool.ruff]
 line-length = 88

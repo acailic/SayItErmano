@@ -7,6 +7,11 @@ forwards every tool call to the RUNNING daemon through the existing
 unix-socket control channel - no new listener, no TCP, and the daemon's
 warm model does the work (a second model is never loaded).
 
+SECURITY: launching this bridge grants the connected MCP client access to
+local dictation history, transcription files, and dictation control
+(toggle/start-stop takes) on this machine - register it only with clients
+you trust (see README).
+
 Run: `sayit-ermano mcp`. Register with an MCP client, e.g. Claude
 Desktop's config:
 
@@ -23,7 +28,12 @@ from typing import Any, Callable, TextIO
 
 from . import __version__, control
 
-PROTOCOL_VERSION = "2024-11-05"
+# MCP protocol revisions this bridge speaks (stdio framing, tools only).
+# Negotiation (MCP basic/lifecycle): when a client requests a version we
+# do not support we answer with our LATEST supported revision; the client
+# then decides whether to continue or disconnect.
+SUPPORTED_VERSIONS = ("2024-11-05",)
+PROTOCOL_VERSION = SUPPORTED_VERSIONS[-1]
 
 # name -> (description, input schema, control action, arg mapper)
 TOOLS: dict[str, dict[str, Any]] = {
@@ -79,6 +89,69 @@ TOOLS: dict[str, dict[str, Any]] = {
     },
 }
 
+# JSON-RPC 2.0 error codes (https://www.jsonrpc.org/specification)
+PARSE_ERROR = -32700
+INVALID_REQUEST = -32600
+METHOD_NOT_FOUND = -32601
+INVALID_PARAMS = -32602
+# Server error: the bridge could not reach the local daemon
+DAEMON_UNREACHABLE = -32000
+
+
+def _response(msg_id: Any, *, result: Any = None,
+              error: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The one response envelope: every reply is a valid JSON-RPC 2.0
+    object with the mandatory jsonrpc member and the request id echoed
+    (null when the request's id was unusable, e.g. parse errors)."""
+    resp: dict[str, Any] = {"jsonrpc": "2.0", "id": msg_id}
+    if error is not None:
+        resp["error"] = error
+    else:
+        resp["result"] = result
+    return resp
+
+
+def _err(msg_id: Any, code: int, message: str) -> dict[str, Any]:
+    return _response(msg_id, error={"code": code, "message": message})
+
+
+def _usable_id(value: Any) -> bool:
+    """JSON-RPC 2.0: id, if present, is String, Number, or NULL. bool is
+    an int subclass in Python but is NOT a JSON-RPC id."""
+    if value is None or isinstance(value, str):
+        return True
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def validate(msg: Any) -> tuple[dict | None, dict | None]:
+    """Structural JSON-RPC 2.0 validation.
+
+    Returns (request, error): exactly one is None except for a valid
+    notification, which returns (None, None) - no reply at all. Error
+    replies carry the request id when it is usable, null otherwise.
+    """
+    if not isinstance(msg, dict):
+        return None, _err(None, INVALID_REQUEST,
+                          "request must be a JSON object")
+    if "id" in msg and not _usable_id(msg["id"]):
+        return None, _err(None, INVALID_REQUEST,
+                          "id must be a string, number, or null")
+    msg_id = msg.get("id")
+    if msg.get("jsonrpc") != "2.0":
+        return None, _err(msg_id, INVALID_REQUEST,
+                          'missing or non-"2.0" jsonrpc member')
+    method = msg.get("method")
+    if not isinstance(method, str):
+        return None, _err(msg_id, INVALID_REQUEST,
+                          "method must be a string")
+    if "params" in msg and msg["params"] is not None \
+            and not isinstance(msg["params"], (dict, list)):
+        return None, _err(msg_id, INVALID_PARAMS,
+                          "params must be an object or array")
+    if "id" not in msg:
+        return None, None  # structurally valid notification: no reply
+    return msg, None
+
 
 def _tool_call(name: str, arguments: dict,
                request: Callable[..., dict]) -> dict:
@@ -98,43 +171,66 @@ def _tool_call(name: str, arguments: dict,
 def handle_message(msg: dict,
                    request: Callable[..., dict] = control.request) -> dict | None:
     """Route one decoded JSON-RPC message; None for notifications."""
-    method = msg.get("method")
-    msg_id = msg.get("id")
-    is_request = "id" in msg
-    if not is_request:
-        return None  # notifications (initialized, cancelled, ...) get no reply
+    req, err = validate(msg)
+    if err is not None:
+        return err
+    if req is None:
+        return None  # valid notification (initialized, cancelled, ...): no reply
+    method: str = req["method"]
+    msg_id = req["id"]
+    params = req.get("params")
+    if params is None:
+        params = {}
     try:
         if method == "initialize":
-            return {"id": msg_id, "result": {
-                "protocolVersion": PROTOCOL_VERSION,
+            if not isinstance(params, dict):
+                return _err(msg_id, INVALID_PARAMS,
+                            "params must be an object for initialize")
+            requested = params.get("protocolVersion")
+            # MCP version negotiation: echo a supported request; answer an
+            # unsupported one with our latest (the client disconnects if
+            # that is unacceptable to it)
+            version = requested if requested in SUPPORTED_VERSIONS \
+                else PROTOCOL_VERSION
+            return _response(msg_id, result={
+                "protocolVersion": version,
                 "capabilities": {"tools": {}},
                 "serverInfo": {"name": "sayit-ermano",
-                               "version": __version__}}}
+                               "version": __version__}})
         if method == "tools/list":
-            return {"id": msg_id, "result": {"tools": [
+            return _response(msg_id, result={"tools": [
                 {"name": n, "description": t["description"],
                  "inputSchema": t["inputSchema"]}
-                for n, t in TOOLS.items()]}}
+                for n, t in TOOLS.items()]})
         if method == "tools/call":
-            params = msg.get("params") or {}
-            name = str(params.get("name") or "")
-            if name not in TOOLS:
-                return {"id": msg_id, "error": {
-                    "code": -32602, "message": f"unknown tool {name!r}"}}
-            return {"id": msg_id,
-                    "result": _tool_call(name, params.get("arguments")
-                                         or {}, request)}
+            if not isinstance(params, dict):
+                return _err(msg_id, INVALID_PARAMS,
+                            "params must be an object for tools/call "
+                            "(named parameters)")
+            name = params.get("name")
+            if not isinstance(name, str) or name not in TOOLS:
+                return _err(msg_id, INVALID_PARAMS,
+                            f"unknown tool {name!r}")
+            arguments = params.get("arguments")
+            if arguments is not None and not isinstance(arguments, dict):
+                return _err(msg_id, INVALID_PARAMS,
+                            "arguments must be an object")
+            return _response(msg_id,
+                             result=_tool_call(name, arguments or {},
+                                               request))
         if method == "ping":
-            return {"id": msg_id, "result": {}}
-        return {"id": msg_id, "error": {"code": -32601,
-                                        "message": f"unknown method {method!r}"}}
+            return _response(msg_id, result={})
+        return _err(msg_id, METHOD_NOT_FOUND,
+                    f"unknown method {method!r}")
     except control.ControlError as e:
         # daemon unreachable: a protocol-level error the client will show
-        return {"id": msg_id, "error": {"code": -32000, "message": str(e)}}
+        return _err(msg_id, DAEMON_UNREACHABLE, str(e))
 
 
-def serve(stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdout) -> None:
-    """The stdio loop: one JSON object per line in, one reply line out."""
+def serve(stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdout,
+          request: Callable[..., dict] = control.request) -> None:
+    """The stdio loop: one JSON object per line in, one reply line out.
+    `request` is injectable so tests never touch a real daemon socket."""
     for line in stdin:
         line = line.strip()
         if not line:
@@ -142,14 +238,9 @@ def serve(stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdout) -> None:
         try:
             msg = json.loads(line)
         except json.JSONDecodeError:
-            reply = {"id": None, "error": {"code": -32700,
-                                           "message": "parse error"}}
+            reply = _err(None, PARSE_ERROR, "parse error")
         else:
-            if not isinstance(msg, dict):
-                reply = {"id": None, "error": {"code": -32600,
-                                               "message": "invalid request"}}
-            else:
-                reply = handle_message(msg)
+            reply = handle_message(msg, request)
         if reply is not None:
             stdout.write(json.dumps(reply, ensure_ascii=False) + "\n")
             stdout.flush()
