@@ -365,6 +365,35 @@ def test_handler_exception_is_a_payload_and_workers_survive(tmp_path):
             assert _rt_obj(c, {"action": "status"}) == {"ok": True}
 
 
+def test_worker_survives_a_connection_level_error_and_logs(
+        tmp_path, monkeypatch, capsys):
+    """F11: an exception OUTSIDE the handler (the serve path itself)
+    used to be swallowed - the connection dropped with no trace. The
+    worker logs it and keeps serving."""
+    with _server(lambda req: {"ok": True}, tmp_path) as srv:
+        real = srv._serve_connection
+        state = {"boom": True}
+
+        def flaky(conn):
+            if state["boom"]:
+                state["boom"] = False
+                raise RuntimeError("injected connection bug")
+            return real(conn)
+
+        monkeypatch.setattr(srv, "_serve_connection", flaky)
+        with _client(srv.path) as c:  # first connection dies in the worker
+            c.sendall(b'{"action": "status"}\n')
+            try:
+                got = c.recv(65536)
+            except ConnectionResetError:
+                got = b""  # RST from close-with-unread-data: no reply either
+            assert got == b""  # dropped without a reply
+        with _client(srv.path) as c:  # the worker pool still serves
+            assert _rt_obj(c, {"action": "status"}) == {"ok": True}
+    err = capsys.readouterr().err
+    assert "connection dropped" in err
+
+
 # -- accept-loop resilience (F4) --------------------------------------------------
 
 class TestAcceptLoopResilience:

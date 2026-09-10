@@ -21,6 +21,7 @@ import io
 import json
 import os
 import shutil
+import sys
 import tempfile
 import time
 import uuid
@@ -35,6 +36,13 @@ MAX_ENTRIES = 5000
 _TAIL_WINDOW = 128 * 1024  # bytes read from the end for tail()
 _LOCK_SUFFIX = ".lock"     # sidecar flock; never the JSONL fd itself
 _TMP_SUFFIX = ".tmp"       # unique same-dir transaction temp files
+
+
+def _log(msg: str) -> None:
+    """House log idiom (see pipeline.log): stderr, timestamped, quiet -
+    only exceptional history paths ever log (F11)."""
+    print(f"[sayit-ermano] {time.strftime('%H:%M:%S')} history: {msg}",
+          file=sys.stderr, flush=True)
 
 
 def _split_jsonl(text: str) -> list[str]:
@@ -247,7 +255,11 @@ class HistoryStore:
             self._hpath().parent.mkdir(parents=True, exist_ok=True)
         try:
             fd = os.open(self._lock_path(), os.O_RDWR | os.O_CREAT, 0o600)
-        except OSError:
+        except OSError as e:
+            # the transaction proceeds WITHOUT the very lost-update
+            # guarantee this module promises (EROFS/EACCES on the lock
+            # sidecar) - that must be visible, not silent (F11)
+            _log(f"lock unavailable ({e!r}) - proceeding unlocked")
             yield  # nothing to protect: proceed unlocked and tolerant
             return
         try:
@@ -382,6 +394,8 @@ class HistoryStore:
                 # dangling audio path in history (F3 - e.g. a cap-enforce
                 # failure after a successful append line)
                 if copied is not None and not wrote:
+                    _log(f"append failed before the row landed - rolling "
+                         f"back retained audio {copied.name}")
                     with contextlib.suppress(OSError):
                         copied.unlink()
                 raise

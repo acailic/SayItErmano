@@ -155,6 +155,7 @@ class ControlServer:
         """Deterministic shutdown: stop accepting, drop queued connections,
         let in-flight requests finish, and join every thread. Idempotent."""
         self._stopping.set()
+        joined = 0
         try:
             # wake a thread blocked in accept(): close() alone does NOT
             # unblock it on Linux; shutdown() does
@@ -181,11 +182,14 @@ class ControlServer:
         if self._accept_thread is not None \
                 and self._accept_thread is not current:
             self._accept_thread.join(timeout=timeout)
+            joined += 1
         for t in self._workers:
             if t is not current:
                 t.join(timeout=timeout)
+                joined += 1
         self._workers = []
         self._accept_thread = None
+        _log(f"control server: shutdown complete ({joined} threads joined)")
 
     def close(self) -> None:
         """Socket-compatible alias: the old serve() returned a raw socket
@@ -249,7 +253,10 @@ class ControlServer:
                 break
             try:
                 self._serve_connection(conn)
-            except Exception:  # noqa: BLE001 - a dead worker is a capacity leak
+            except Exception as e:  # noqa: BLE001 - a dead worker is a
+                # capacity leak: log it (F11) instead of dying silently
+                _log(f"worker {threading.current_thread().name} hit "
+                     f"{e!r} - connection dropped, worker continues")
                 _close_quietly(conn)
 
     # -- one connection ------------------------------------------------------

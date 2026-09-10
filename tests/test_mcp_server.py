@@ -352,6 +352,15 @@ class TestBridgeSurvivesTransportFailures:
         assert_valid_response(r, 1, error=True)
         assert r["error"]["code"] == -32603
 
+    def test_transport_failure_is_logged(self, capsys):
+        """F11: bridge errors are visible on stderr, not silent."""
+
+        def restarted(action, **kw):
+            raise ConnectionResetError("daemon restarted")
+
+        self._call(restarted)
+        assert "daemon transport failed" in capsys.readouterr().err
+
     def test_serve_loop_survives_a_timeout_and_serves_the_next_line(self):
         # the sweep's exact repro shape: a transcribe_file whose model
         # time exceeds the client timeout used to kill the bridge process

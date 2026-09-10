@@ -25,9 +25,17 @@ from __future__ import annotations
 import json
 import math
 import sys
+import time
 from typing import Any, Callable, Iterator, TextIO
 
 from . import __version__, control
+
+
+def _log(msg: str) -> None:
+    """House log idiom (see pipeline.log): stderr, timestamped, quiet -
+    only bridge-error paths ever log (F11)."""
+    print(f"[sayit-ermano] {time.strftime('%H:%M:%S')} mcp: {msg}",
+          file=sys.stderr, flush=True)
 
 # MCP protocol revisions this bridge speaks (stdio framing, tools only).
 # Negotiation (MCP basic/lifecycle): when a client requests a version we
@@ -305,10 +313,12 @@ def _handle_single(msg: Any,
         # ConnectionResetError from a daemon restarting mid-call, an
         # ENOENT race on the socket path. A clean protocol-level error
         # response - the bridge process itself must survive (F1).
+        _log(f"daemon transport failed: {e!r}")
         return _err(msg_id, DAEMON_UNREACHABLE,
                     f"cannot reach daemon: {e}")
     except Exception as e:  # noqa: BLE001 - one bad call must never kill
         # the bridge: answer with an internal error and keep serving
+        _log(f"internal error handling {method!r}: {e!r}")
         return _err(msg_id, INTERNAL_ERROR, f"internal error: {e}")
 
 
@@ -353,6 +363,7 @@ def serve(stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdout,
             emit(handle_message(msg, request))
         except Exception as e:  # noqa: BLE001 - the loop must survive
             # even a bug inside the bridge itself (F1)
+            _log(f"internal error in the stdio loop: {e!r}")
             emit(_err(None, INTERNAL_ERROR, f"internal error: {e}"))
 
 

@@ -522,6 +522,34 @@ class TestCapPathTolerance:
         assert texts.count("x" * 300) == 599  # only the torn row is gone
 
 
+class TestObservability:
+    """F11: the exceptional history paths are visible on stderr (house
+    log idiom) - a silent unlocked fallback hid the fact that an
+    exclusive transaction ran WITHOUT the lost-update guarantee."""
+
+    def test_unlocked_fallback_is_logged(self, tmp_path, capsys,
+                                         monkeypatch):
+        store = history.HistoryStore(tmp_path / "h.jsonl")
+        monkeypatch.setattr(store, "_lock_path",
+                            lambda: Path("/nonexistent-dir-xyz/lock"))
+        store.append({"ts": 1.0, "text": "unlocked"})
+        assert [e["text"] for e in store.read_all()] == ["unlocked"]
+        assert "proceeding unlocked" in capsys.readouterr().err
+
+    def test_audio_rollback_is_logged(self, hist, tmp_path, monkeypatch,
+                                      capsys):
+        src = write_wav(tmp_path / "src.wav")
+
+        def boom(hpath, line):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(history, "_append_line", boom)
+        with pytest.raises(OSError):
+            history.append({"ts": 1.0, "text": "doomed"}, audio_src=src,
+                           keep_audio=True)
+        assert "rolling back" in capsys.readouterr().err
+
+
 class TestAtomicWriteDurability:
     def test_failed_replace_cleans_tmp_and_keeps_original(self, hist,
                                                           monkeypatch):
