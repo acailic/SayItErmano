@@ -860,7 +860,7 @@ class TestDaemonCommandMode:
         d = self._daemon(cfg, recorder=rec)
         d.start_command()
         assert d.recording is True
-        assert d._command_mode is True
+        assert d._capture.take_mode == "command"
         assert rec.started == 1
         d.cancel()
 
@@ -882,15 +882,15 @@ class TestDaemonCommandMode:
 
         # done-immediately session: turn 1 finishes without a proposal
         d = self._daemon(cfg, pipeline_factory=CapturingPipeline)
-        d._command_session_factory = lambda c, **kw: cm.CommandSession(
+        d._commands.session_factory = lambda c, **kw: cm.CommandSession(
             c, client=StubAIClient([done_reply("nothing")]), **kw)
         d.start_command()
         d.toggle()
         assert self._wait(lambda: seen.get("mode") == "command"
                           and not d.busy
-                          and not d._command_pending)
+                          and not d._commands.pending)
         assert d.last_result["mode"] == "command"
-        assert d._command_mode is False
+        assert d._capture.take_mode == "dictate"
 
     def test_no_audio_resets_flags(self, cfg, quiet_ui):
         ai_ready(cfg)
@@ -915,10 +915,10 @@ class TestDaemonCommandMode:
         d = self._daemon(cfg, recorder=NoAudioRecorder(),
                          pipeline_factory=CapturingPipeline)
         d.start_command()
-        d._rewrite_mode = True  # the pre-existing bug: flag survived no-audio
+        d._capture.take_mode = "rewrite"  # the pre-existing bug: flag survived no-audio
         d.toggle()              # no audio -> early return path
-        assert d._command_mode is False
-        assert d._rewrite_mode is False
+        assert d._capture.take_mode == "dictate"
+        assert d._capture.take_mode == "dictate"
         d.toggle()              # follow-up plain dictation
         d.toggle()
         assert self._wait(lambda: seen.get("modes") == ["dictate"]
@@ -942,8 +942,8 @@ class TestDaemonCommandMode:
         assert d.recording
         d.cancel()
         assert d.recording is False
-        assert d._command_mode is False
-        assert d._rewrite_mode is False
+        assert d._capture.take_mode == "dictate"
+        assert d._capture.take_mode == "dictate"
         d.toggle()
         d.toggle()
         assert self._wait(lambda: seen.get("modes") == ["dictate"])
@@ -988,10 +988,10 @@ class TestDaemonCommandMode:
             return s
 
         d = self._daemon(cfg)
-        d._command_session_factory = factory
+        d._commands.session_factory = factory
         d._command_hotkey = hk
-        d._begin_command("list files")
-        assert self._wait(lambda: d._command_pending), "proposal never landed"
+        d._commands.begin("list files")
+        assert self._wait(lambda: d._commands.pending), "proposal never landed"
         assert pills, "pill never built"
         return d, pills[-1], hk, client, sessions
 
@@ -1009,7 +1009,7 @@ class TestDaemonCommandMode:
         assert "bottom_offset" in pill.kwargs  # panel built with daemon geometry
         assert any("Esc" in (t + b) for t, b in quiet_ui["notify"])
         assert d.busy is False         # waiting for the user, not busy
-        assert d._command_timer is not None
+        assert d._commands.timer is not None
         d.cancel_pending_command()
 
     def test_confirm_executes_and_logs_history(self, cfg, quiet_ui,
@@ -1018,7 +1018,7 @@ class TestDaemonCommandMode:
             cfg, monkeypatch,
             replies=[reply(("echo hello", "greet")), done_reply("all done")])
         d._on_command_hotkey()   # the confirm press
-        assert self._wait(lambda: not d.busy and d._command_session is None)
+        assert self._wait(lambda: not d.busy and d._commands.session is None)
         hist = tmp_path / "test-history.jsonl"
         assert hist.exists()
         import json as _json
@@ -1070,7 +1070,7 @@ class TestDaemonCommandMode:
         # command recording, exactly like the rewrite hotkey after a cancel)
         before = list(quiet_ui["notify"])
         d._on_command_hotkey()
-        assert d._command_pending is False and not d.busy
+        assert d._commands.pending is False and not d.busy
         assert runs == []
         assert quiet_ui["notify"] == before
         d.cancel()
@@ -1078,8 +1078,8 @@ class TestDaemonCommandMode:
 
     def test_confirm_timeout_cancels(self, cfg, quiet_ui, monkeypatch):
         d, pill, hk, client, sessions = self._pending(cfg, monkeypatch)
-        d._on_confirm_timeout()   # deterministic: the timer's callback
-        assert d._command_pending is False
+        d._commands.on_confirm_timeout()   # deterministic: the timer's callback
+        assert d._commands.pending is False
         assert sessions[0].cancelled
         assert any("confirmation timed out" in (t + b)
                    for t, b in quiet_ui["notify"])
@@ -1088,13 +1088,13 @@ class TestDaemonCommandMode:
         ai_ready(cfg)
         d = self._daemon(cfg)
         confirm_calls = []
-        monkeypatch.setattr(d, "_confirm_pending_command",
+        monkeypatch.setattr(d._commands, "confirm_pending",
                             lambda: confirm_calls.append(1))
-        d._command_pending = True
+        d._commands.pending = True
         d._on_command_hotkey()
         assert confirm_calls == [1]
         # not pending -> start_command (guarded: busy makes it a no-op)
-        d._command_pending = False
+        d._commands.pending = False
         d.busy = True
         d._on_command_hotkey()
         assert d.recording is False
@@ -1128,8 +1128,8 @@ class TestDaemonCommandMode:
         assert any("DESTRUCTIVE" in (t + b) for t, b in quiet_ui["notify"])
         d._on_command_hotkey()   # FIRST press: arms, executes nothing
         assert runs == []
-        assert d._command_pending is True
-        assert d._command_destructive_armed is True
+        assert d._commands.pending is True
+        assert d._commands.destructive_armed is True
         _, _, awaiting2 = pill.updates[-1]
         assert awaiting2 and "AGAIN to CONFIRM" in awaiting2
         assert any("AGAIN to CONFIRM" in (t + b)
@@ -1137,8 +1137,8 @@ class TestDaemonCommandMode:
         # second press: the only path to execution
         d._on_command_hotkey()
         assert self._wait(lambda: runs == ["rm -rf /tmp/hold"]), runs
-        assert self._wait(lambda: not d.busy and d._command_session is None)
-        d.cancel_pending_command() if d._command_pending else None
+        assert self._wait(lambda: not d.busy and d._commands.session is None)
+        d.cancel_pending_command() if d._commands.pending else None
 
     def test_destructive_escape_between_presses_executes_nothing(
             self, cfg, quiet_ui, monkeypatch, tmp_path):
@@ -1152,11 +1152,11 @@ class TestDaemonCommandMode:
         d, pill, hk, client, sessions = self._pending_destructive(
             cfg, monkeypatch, runner=runner)
         d._on_command_hotkey()   # first press arms
-        assert d._command_destructive_armed is True
+        assert d._commands.destructive_armed is True
         d.cancel_pending_command()   # Escape between the presses
         assert runs == []
-        assert d._command_pending is False
-        assert d._command_destructive_armed is False
+        assert d._commands.pending is False
+        assert d._commands.destructive_armed is False
         assert sessions[0].cancelled and sessions[0].finished
         hist = tmp_path / "test-history.jsonl"
         assert not hist.exists()
@@ -1175,10 +1175,10 @@ class TestDaemonCommandMode:
         d, pill, hk, client, sessions = self._pending_destructive(
             cfg, monkeypatch, runner=runner)
         d._on_command_hotkey()   # armed
-        d._on_confirm_timeout()  # deterministic: the restarted timer fires
+        d._commands.on_confirm_timeout()  # deterministic: the restarted timer fires
         assert runs == []
-        assert d._command_pending is False
-        assert d._command_destructive_armed is False
+        assert d._commands.pending is False
+        assert d._commands.destructive_armed is False
         assert sessions[0].cancelled
         assert any("confirmation timed out" in (t + b)
                    for t, b in quiet_ui["notify"])
@@ -1199,7 +1199,7 @@ class TestDaemonCommandMode:
         assert "AGAIN" not in (awaiting or "")
         d._on_command_hotkey()
         assert self._wait(lambda: runs == ["echo hello"])
-        assert self._wait(lambda: not d.busy and d._command_session is None)
+        assert self._wait(lambda: not d.busy and d._commands.session is None)
 
     def test_destructive_history_row_flagged(self, cfg, quiet_ui,
                                              monkeypatch, tmp_path):
@@ -1214,7 +1214,7 @@ class TestDaemonCommandMode:
             cfg, monkeypatch, runner=runner)
         d._on_command_hotkey()
         d._on_command_hotkey()   # armed -> executed
-        assert self._wait(lambda: not d.busy and d._command_session is None)
+        assert self._wait(lambda: not d.busy and d._commands.session is None)
         import json as _json
         entries = [_json.loads(ln) for ln in
                    (tmp_path / "test-history.jsonl").read_text().splitlines()
@@ -1231,7 +1231,7 @@ class TestDaemonCommandMode:
         store = cm.CommandContextStore()
         store.record("firefox", cm.CommandOutcome(
             command="ls", success=True, exit_code=0, output="files"))
-        d._command_context = store
+        d._commands.context = store
         calls = []
 
         class CountingClient:
@@ -1239,16 +1239,16 @@ class TestDaemonCommandMode:
                 calls.append(1)
                 return done_reply("x")
 
-        d._command_session_factory = \
+        d._commands.session_factory = \
             lambda c, **kw: cm.CommandSession(c, client=CountingClient(), **kw)
-        d._begin_command("  New Session  ", app="firefox")
-        assert d._command_context.snapshot("firefox", 300.0) is None
+        d._commands.begin("  New Session  ", app="firefox")
+        assert d._commands.context.snapshot("firefox", 300.0) is None
         assert any("context cleared" in (t + b).lower()
                    for t, b in quiet_ui["notify"])
         import time as _t
         _t.sleep(0.15)
         assert calls == []  # no LLM call ever
-        assert not d.busy and not d._command_pending
+        assert not d.busy and not d._commands.pending
 
     def test_new_session_phrase_scoped_to_app(self, cfg, quiet_ui):
         ai_ready(cfg)
@@ -1258,11 +1258,11 @@ class TestDaemonCommandMode:
             command="ls", success=True, exit_code=0, output=""))
         store.record("zed", cm.CommandOutcome(
             command="pwd", success=True, exit_code=0, output=""))
-        d._command_context = store
-        d._command_session_factory = \
+        d._commands.context = store
+        d._commands.session_factory = \
             lambda c, **kw: cm.CommandSession(
                 c, client=StubAIClient([done_reply("x")]), **kw)
-        d._begin_command("new command session", app="firefox")
+        d._commands.begin("new command session", app="firefox")
         assert store.snapshot("firefox", 300.0) is None
         assert store.snapshot("zed", 300.0) is not None
 
@@ -1273,7 +1273,7 @@ class TestDaemonCommandMode:
         store.record("zed", cm.CommandOutcome(
             command="du -sh .", success=True, exit_code=0, output="1.2G	."),
             purpose="checking")
-        d._command_context = store
+        d._commands.context = store
         seen = {}
 
         class Capturing:
@@ -1281,9 +1281,9 @@ class TestDaemonCommandMode:
                 seen["msgs"] = [dict(m) for m in messages]
                 return reply(("echo done", "finish"))
 
-        d._command_session_factory = \
+        d._commands.session_factory = \
             lambda c, **kw: cm.CommandSession(c, client=Capturing(), **kw)
-        d._begin_command("what is biggest", app="zed")
+        d._commands.begin("what is biggest", app="zed")
         assert self._wait(lambda: "msgs" in seen)
         ctx = [m for m in seen["msgs"]
                if m["content"].startswith(cm.CONTEXT_MESSAGE_PREFIX)]
@@ -1307,7 +1307,7 @@ class TestDaemonCommandMode:
                 return {"mode": "command", "text": "do it", "raw": "do it"}
 
         d = self._daemon(cfg, pipeline_factory=CapturingPipeline)
-        d._begin_command = lambda instruction, app=None: got.update(
+        d._commands.begin = lambda instruction, app=None: got.update(
             app=app, instruction=instruction)
         d._process(None, "kitty", mode="command")
         assert got == {"app": "kitty", "instruction": "do it"}
@@ -1351,12 +1351,12 @@ class TestDaemonCommandMode:
             return cm.CommandSession(c, **kw)
 
         d = self._daemon(cfg)
-        d._command_session_factory = factory
+        d._commands.session_factory = factory
         d._command_hotkey = hk
         resp = d.handle_request({"action": "command-rerun",
                                  "command": command, "purpose": purpose})
         assert resp.get("ok") is True, resp
-        assert d._command_pending
+        assert d._commands.pending
         assert pills, "pill never built"
         return d, pills[-1], hk, client, resp
 
@@ -1391,7 +1391,7 @@ class TestDaemonCommandMode:
         d, pill, hk, client, resp = self._rerun(cfg, monkeypatch)
         d._on_command_hotkey()               # the confirm press
         assert self._wait(lambda: not d.busy
-                          and d._command_session is None)
+                          and d._commands.session is None)
         import json as _json
         hist = tmp_path / "test-history.jsonl"
         entries = [_json.loads(ln) for ln in
@@ -1423,7 +1423,7 @@ class TestDaemonCommandMode:
         d._on_command_hotkey()               # second press: executes
         assert self._wait(lambda: runs ==
                           ["rm -rf /tmp/fluidvoice-rerun-test"]
-                          and d._command_session is None)
+                          and d._commands.session is None)
         hist = tmp_path / "test-history.jsonl"
         import json as _json
         entries = [_json.loads(ln) for ln in
@@ -1466,7 +1466,7 @@ class TestDaemonCommandMode:
         r = d.handle_request({"action": "command-rerun",
                               "command": "echo x"})
         assert r["ok"] is False and r["error"]
-        assert not d._command_pending
+        assert not d._commands.pending
 
     def test_restart_and_shutdown_cover_command_hotkey(self, cfg, quiet_ui,
                                                        monkeypatch):

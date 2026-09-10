@@ -81,23 +81,23 @@ def wait_done(d, timeout=5.0):
 def test_countdown_stops_the_take(cfg, tmp_path):
     d, rec = make_daemon(cfg, tmp_path)
     assert d.handle_request({"action": "toggle"})["recording"] is True
-    d._on_send_countdown()
-    assert d._send_countdown_timer is not None
+    d._capture.on_send_countdown()
+    assert d._capture.send_countdown_timer is not None
     deadline = time.monotonic() + 2.0
     while d.recording and time.monotonic() < deadline:
         time.sleep(0.05)
     assert d.recording is False
     assert wait_done(d)
     assert d.last_result.get("text") == "typed text"
-    assert d._send_countdown_timer is None
+    assert d._capture.send_countdown_timer is None
 
 
 def test_resume_cancels_the_timer(cfg, tmp_path):
     d, rec = make_daemon(cfg, tmp_path)
     d.handle_request({"action": "toggle"})
-    d._on_send_countdown()
-    d._on_send_resume()
-    assert d._send_countdown_timer is None
+    d._capture.on_send_countdown()
+    d._capture.on_send_resume()
+    assert d._capture.send_countdown_timer is None
     time.sleep(0.8)  # past the 0.4 s countdown
     assert d.recording is True
     d.handle_request({"action": "cancel"})
@@ -106,14 +106,14 @@ def test_resume_cancels_the_timer(cfg, tmp_path):
 def test_stale_timer_cannot_stop_a_take(cfg, tmp_path):
     d, rec = make_daemon(cfg, tmp_path)
     d.handle_request({"action": "toggle"})
-    d._on_send_countdown()
-    stale = d._send_countdown_timer
-    d._on_send_countdown()  # re-arm (cancels the first timer)
-    fresh = d._send_countdown_timer
+    d._capture.on_send_countdown()
+    stale = d._capture.send_countdown_timer
+    d._capture.on_send_countdown()  # re-arm (cancels the first timer)
+    fresh = d._capture.send_countdown_timer
     assert stale is not fresh
-    d._send_countdown_stop(stale)  # identity check: ignored
+    d._capture.send_countdown_stop(stale)  # identity check: ignored
     assert d.recording is True
-    d._send_countdown_stop(fresh)  # current one stops the take
+    d._capture.send_countdown_stop(fresh)  # current one stops the take
     assert d.recording is False
     assert wait_done(d)
 
@@ -121,9 +121,9 @@ def test_stale_timer_cannot_stop_a_take(cfg, tmp_path):
 def test_vad_auto_stop_cancels_pending_countdown(cfg, tmp_path):
     d, rec = make_daemon(cfg, tmp_path)
     d.handle_request({"action": "toggle"})
-    d._on_send_countdown()
-    timer = d._send_countdown_timer
-    d._vad_auto_stop()
+    d._capture.on_send_countdown()
+    timer = d._capture.send_countdown_timer
+    d._capture.vad_auto_stop()
     assert d.recording is False
     assert not timer.is_alive()
     assert wait_done(d)
@@ -133,8 +133,8 @@ def test_zero_countdown_disables_callbacks(cfg, tmp_path):
     cfg["recording"]["spoken_send_countdown_s"] = 0
     d, rec = make_daemon(cfg, tmp_path)
     d.handle_request({"action": "toggle"})
-    d._on_send_countdown()  # countdown <= 0: no timer armed
-    assert d._send_countdown_timer is None
+    d._capture.on_send_countdown()  # countdown <= 0: no timer armed
+    assert d._capture.send_countdown_timer is None
     assert d.recording is True
     d.handle_request({"action": "cancel"})
 

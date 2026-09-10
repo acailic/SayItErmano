@@ -76,46 +76,46 @@ def h(tmp_path, monkeypatch):
 
 def _start(h):
     with h.d._lock:
-        h.d._start_recording_locked()
+        h.d._capture.start_locked()
     assert h.d.recording is True
-    assert h.d._first_pcm_timer is not None
+    assert h.d._capture.first_pcm_timer is not None
 
 
 class TestFirstPcmTimerLifecycle:
     def test_start_tracks_the_timer(self, h):
         _start(h)
         assert h.rec.started == 1
-        assert h.d._first_pcm_timer.is_alive()
+        assert h.d._capture.first_pcm_timer.is_alive()
 
     def test_stop_cancels_the_timer(self, h):
         _start(h)
-        timer = h.d._first_pcm_timer
+        timer = h.d._capture.first_pcm_timer
         with h.d._lock:
-            h.d._stop_recording_locked()
-        assert h.d._first_pcm_timer is None
+            h.d._capture.stop_locked()
+        assert h.d._capture.first_pcm_timer is None
         assert timer.finished.is_set()  # cancel() fired: it can never run
 
     def test_cancel_cancels_the_timer(self, h):
         _start(h)
-        timer = h.d._first_pcm_timer
+        timer = h.d._capture.first_pcm_timer
         h.d.cancel()  # public path (Escape / socket cancel)
-        assert h.d._first_pcm_timer is None
+        assert h.d._capture.first_pcm_timer is None
         assert timer.finished.is_set()
 
     def test_shutdown_cancels_the_timer(self, h):
         _start(h)
-        timer = h.d._first_pcm_timer
+        timer = h.d._capture.first_pcm_timer
         h.d.shutdown()
-        assert h.d._first_pcm_timer is None
+        assert h.d._capture.first_pcm_timer is None
         assert timer.finished.is_set()
 
     def test_new_take_replaces_the_old_timer(self, h):
         _start(h)
-        first = h.d._first_pcm_timer
+        first = h.d._capture.first_pcm_timer
         with h.d._lock:
-            h.d._stop_recording_locked()
+            h.d._capture.stop_locked()
         _start(h)
-        assert h.d._first_pcm_timer is not first
+        assert h.d._capture.first_pcm_timer is not first
         assert first.finished.is_set()
 
 
@@ -125,9 +125,9 @@ class TestStaleCallbackSafety:
 
     def test_firing_after_cancel_is_noop(self, h):
         _start(h)
-        recorder, wav = h.d._first_pcm_timer.args
+        recorder, wav = h.d._capture.first_pcm_timer.args
         h.d.cancel()
-        h.d._check_first_pcm(recorder, wav)  # the lost race
+        h.d._capture.check_first_pcm(recorder, wav)  # the lost race
         assert h.rec.cancelled == 1  # only cancel(), nothing extra
         assert h.notes == [("SayItErmano", "Cancelled")]
 
@@ -135,28 +135,28 @@ class TestStaleCallbackSafety:
         # the live defect: a recorder without .path raised AttributeError
         # in the timer thread (unhandled -> the 2 baseline warnings)
         _start(h)
-        recorder, wav = h.d._first_pcm_timer.args
-        h.d._check_first_pcm(recorder, wav)
+        recorder, wav = h.d._capture.first_pcm_timer.args
+        h.d._capture.check_first_pcm(recorder, wav)
         assert h.d.recording is True  # live take, healthy: untouched
         assert h.rec.cancelled == 0
         assert h.notes == []
 
     def test_replaced_recorder_is_ignored(self, h):
         _start(h)
-        recorder, wav = h.d._first_pcm_timer.args
+        recorder, wav = h.d._capture.first_pcm_timer.args
         h.d._rebuild_recorder()  # settings change swapped self.recorder
-        h.d._check_first_pcm(recorder, wav)
+        h.d._capture.check_first_pcm(recorder, wav)
         assert h.d.recording is True
         assert h.rec.cancelled == 0
 
     def test_other_takes_wav_is_ignored(self, tmp_path, monkeypatch):
         h = _make(tmp_path, monkeypatch, recorder_cls=PathRecorder)
         _start(h)
-        _old_rec, wav1 = h.d._first_pcm_timer.args
+        _old_rec, wav1 = h.d._capture.first_pcm_timer.args
         with h.d._lock:
-            h.d._stop_recording_locked()
+            h.d._capture.stop_locked()
         _start(h)  # new take: same recorder, different wav
-        h.d._check_first_pcm(h.rec, wav1)  # stale wav: must not match
+        h.d._capture.check_first_pcm(h.rec, wav1)  # stale wav: must not match
         assert h.d.recording is True
         assert h.rec.cancelled == 0
 
@@ -170,9 +170,9 @@ class TestStaleCallbackSafety:
 
         h = _make(tmp_path, monkeypatch, recorder_cls=SilentRecorder)
         _start(h)
-        recorder, wav = h.d._first_pcm_timer.args
-        h.d._check_first_pcm(recorder, wav)  # valid identity, silent file
+        recorder, wav = h.d._capture.first_pcm_timer.args
+        h.d._capture.check_first_pcm(recorder, wav)  # valid identity, silent file
         assert h.d.recording is False
         assert h.rec.cancelled == 1
         assert any("no audio" in (t + b).lower() for t, b in h.notes)
-        assert h.d._first_pcm_timer is None  # consumed by its own firing
+        assert h.d._capture.first_pcm_timer is None  # consumed by its own firing

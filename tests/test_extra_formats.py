@@ -253,7 +253,7 @@ class TestDaemonRewriteMode:
         d.backend = StubBackend("shorten this")
         d.start_rewrite()
         assert d.recording
-        assert d._rewrite_context == "selected words"
+        assert d._capture.rewrite_context == "selected words"
         d.toggle()  # stop -> pipeline thread runs with mode=rewrite
         deadline = time.monotonic() + 5
         while d.busy and time.monotonic() < deadline:

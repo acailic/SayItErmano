@@ -147,22 +147,22 @@ class TestCycleStateMachine:
 
     def test_press_cycle_with_wraparound(self, cfg_fixture, quiet_ui):
         d = make_daemon(self._cfg())
-        seq = [d._cycle_language()["language"] for _ in range(4)]
+        seq = [d._engines.cycle_language()["language"] for _ in range(4)]
         assert seq == ["auto", "en", "sl", "auto"]
-        assert d._cycle_index == 0  # wrapped
+        assert d._engines.cycle_index == 0  # wrapped
 
     def test_initial_state_resolves_from_config(self, cfg_fixture, quiet_ui):
         d = make_daemon(self._cfg())
-        assert d._cycle_index is None
-        lang, source = d._language_detail()
+        assert d._engines.cycle_index is None
+        lang, source = d._engines.language_detail()
         assert lang == "auto" and source == "general"
-        assert d._cycle_runtime() is None
+        assert d._engines.cycle_runtime() is None
 
     def test_empty_list_press_is_noop(self, cfg_fixture, quiet_ui):
         d = make_daemon(self._cfg(cycle=()))
-        out = d._cycle_language()
+        out = d._engines.cycle_language()
         assert out == {"ok": False, "error": "empty cycle"}
-        assert d._cycle_index is None
+        assert d._engines.cycle_index is None
         assert len(quiet_ui["notify"]) == 1
         title, body = quiet_ui["notify"][0]
         assert "Language cycle is empty" in body
@@ -172,22 +172,22 @@ class TestCycleStateMachine:
         cfg = self._cfg(cycle=())
         cfg["hotkey"]["language_key"] = "F7"
         d = make_daemon(cfg)
-        assert d._cycle_language()["ok"] is False
+        assert d._engines.cycle_language()["ok"] is False
 
     def test_shrink_clamps_index(self, cfg_fixture, quiet_ui):
         d = make_daemon(self._cfg())
-        d._cycle_language()  # index 0 (auto)
-        d._cycle_language()  # index 1 (en)
-        d._cycle_language()  # index 2 (sl)
+        d._engines.cycle_language()  # index 0 (auto)
+        d._engines.cycle_language()  # index 1 (en)
+        d._engines.cycle_language()  # index 2 (sl)
         d.cfg["general"]["language_cycle"] = ["de", "fr"]
         # 2 % 2 = 0 -> first entry of the shrunk list
-        assert d._cycle_runtime() == "de"
+        assert d._engines.cycle_runtime() == "de"
 
     def test_emptied_list_disengages(self, cfg_fixture, quiet_ui):
         d = make_daemon(self._cfg())
-        d._cycle_language()
+        d._engines.cycle_language()
         d.cfg["general"]["language_cycle"] = []
-        assert d._cycle_runtime() is None
+        assert d._engines.cycle_runtime() is None
 
     def test_never_persisted(self, cfg_fixture, quiet_ui, monkeypatch):
         import fluidvoice.config as config_mod
@@ -196,7 +196,7 @@ class TestCycleStateMachine:
                             lambda c, path=None: saved.append(1))
         d = make_daemon(self._cfg())
         for _ in range(5):
-            d._cycle_language()
+            d._engines.cycle_language()
         assert saved == []
         assert d.cfg["general"]["language_cycle"] == ["auto", "en", "sl"]
 
@@ -205,15 +205,15 @@ class TestCycleStateMachine:
         cfg = self._cfg()
         cfg["model"]["languages"] = {"small": "de"}
         d = make_daemon(cfg)
-        d._cycle_language()  # auto
-        d._cycle_language()  # en
-        assert d._language_detail() == ("en", "cycle")
+        d._engines.cycle_language()  # auto
+        d._engines.cycle_language()  # en
+        assert d._engines.language_detail() == ("en", "cycle")
 
     def test_locked_daemon_ignores_press(self, cfg_fixture, quiet_ui):
         d = make_daemon(self._cfg())
         d._locked = True
-        assert d._cycle_language() == {"ok": False, "error": "locked"}
-        assert d._cycle_index is None
+        assert d._engines.cycle_language() == {"ok": False, "error": "locked"}
+        assert d._engines.cycle_index is None
 
 
 class TestAnnounce:
@@ -226,9 +226,9 @@ class TestAnnounce:
             def set_badge(self, text):
                 badges.append(text)
 
-        d._preview = (None, FakePill())
-        d._cycle_language()  # auto
-        d._cycle_language()  # en
+        d._capture.preview = (None, FakePill())
+        d._engines.cycle_language()  # auto
+        d._engines.cycle_language()  # en
         assert badges == ["lang: auto", "lang: en"]
 
     def test_notify_fallback_display_show(self, cfg_fixture, quiet_ui):
@@ -239,9 +239,9 @@ class TestAnnounce:
             def show(self, text):
                 shown.append(text)
 
-        d._preview = (None, FakeNotify())
-        d._cycle_language()
-        d._cycle_language()
+        d._capture.preview = (None, FakeNotify())
+        d._engines.cycle_language()
+        d._engines.cycle_language()
         assert shown == ["Language: auto", "Language: en"]
 
     def test_fresh_notify_preview_when_no_display(self, cfg_fixture,
@@ -255,9 +255,9 @@ class TestAnnounce:
 
         monkeypatch.setattr(preview_mod, "NotifyPreview", FakeNotifyPreview)
         d = make_daemon(self._cfg_for_announce())
-        d._preview = None
-        d._cycle_language()
-        d._cycle_language()
+        d._capture.preview = None
+        d._engines.cycle_language()
+        d._engines.cycle_language()
         assert shown == ["Language: auto", "Language: en"]
 
     def test_announce_failure_never_breaks_cycle(self, cfg_fixture, quiet_ui,
@@ -269,8 +269,8 @@ class TestAnnounce:
 
         monkeypatch.setattr(preview_mod, "NotifyPreview", boom)
         d = make_daemon(self._cfg_for_announce())
-        d._preview = None
-        out = d._cycle_language()
+        d._capture.preview = None
+        out = d._engines.cycle_language()
         assert out["ok"] is True and out["language"] == "auto"
 
     @staticmethod
@@ -292,8 +292,8 @@ class TestDaemonWiring:
         assert lang["cycle"] == ["auto", "en", "sl"]
         assert lang["cycle_engaged"] is False
         assert lang["whitelist"] == ["sl", "en"]
-        d._cycle_language()
-        d._cycle_language()
+        d._engines.cycle_language()
+        d._engines.cycle_language()
         lang = d.handle_request({"action": "status"})["language"]
         assert lang == {"effective": "en", "source": "cycle",
                         "cycle": ["auto", "en", "sl"],
@@ -321,9 +321,9 @@ class TestDaemonWiring:
         cfg = copy.deepcopy(DEFAULTS)
         cfg["general"]["language_cycle"] = ["auto", "en", "sl"]
         d = make_daemon(cfg)
-        d._cycle_language()
-        d._cycle_language()
-        d._cycle_language()
+        d._engines.cycle_language()
+        d._engines.cycle_language()
+        d._engines.cycle_language()
         assert "lang: sl" in d._tray_tooltip()
 
     def test_tray_tooltip_no_lang_when_auto_and_disengaged(self, cfg_fixture,
@@ -415,9 +415,9 @@ class TestDaemonWiring:
                       backend_factory=lambda c: backend,
                       use_hotkey=False, use_sounds=False)
         d.backend = backend
-        d._cycle_language()  # auto
-        d._cycle_language()  # en
-        d._cycle_language()  # sl
+        d._engines.cycle_language()  # auto
+        d._engines.cycle_language()  # en
+        d._engines.cycle_language()  # sl
         assert d.toggle() is True
         assert d.toggle() is False
         assert wait_done(d)
@@ -429,8 +429,8 @@ class TestDaemonWiring:
         cfg = copy.deepcopy(DEFAULTS)
         cfg["general"]["language_cycle"] = ["en", "sl"]
         d = make_daemon(cfg)
-        d._cycle_language()  # en
-        assert d._language_detail() == ("en", "cycle")
+        d._engines.cycle_language()  # en
+        assert d._engines.language_detail() == ("en", "cycle")
 
 
 class TestCliLanguageSubcommand:

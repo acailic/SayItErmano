@@ -757,11 +757,11 @@ class TestDaemonLockedGate:
 
     def test_lock_cancels_pending_command(self, lockd):
         h = lockd()
-        h.d._command_pending = True
-        h.d._command_session = SimpleNamespace(cancel=lambda: None)
+        h.d._commands.pending = True
+        h.d._commands.session = SimpleNamespace(cancel=lambda: None)
         h.d._locked = True
         h.d._on_locked(True)
-        assert h.d._command_pending is False
+        assert h.d._commands.pending is False
 
     def test_socket_cancel_still_works_while_locked(self, lockd):
         h = lockd()

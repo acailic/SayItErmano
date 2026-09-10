@@ -1,7 +1,16 @@
 """The SayItErmano daemon: hotkey -> record -> transcribe -> polish -> type.
 
 Structure:
-  Daemon            state machine (idle/recording/busy), hotkey + socket wiring
+  Daemon            composition root + control router: state flags, hotkey/
+                    tray/socket wiring, request dispatch
+  SpeechEngineManager  engine lifecycle: load/warm/reload/idle-unload/
+                    select/delete + language resolution
+                    (fluidvoice/engine_manager.py, P1.2)
+  CommandCoordinator command conversation: proposal, confirmation,
+                    timeout, panel, history (fluidvoice/command_coord.py)
+  CaptureCoordinator take lifecycle: recording state, preview, VAD,
+                    PCM/stall/max-duration timers, media pause, stop and
+                    cancel (fluidvoice/capture.py, P1.2)
   DictationPipeline one utterance: wav -> transcribe -> post-process -> optional
                     AI polish -> insert -> history (lives in fluidvoice/
                     pipeline.py since audit C5a; re-exported below). Every
@@ -10,7 +19,6 @@ Structure:
 """
 from __future__ import annotations
 
-import gc
 import os
 import signal
 import sys
@@ -28,8 +36,10 @@ from . import update as update_mod
 from .ai.client import AIClient, AIError  # noqa: F401 (tests patch dm.AIClient)
 from .audio_utils import duration_seconds, is_silent
 from .backends.base import Transcript
+from .capture import CaptureCoordinator
+from .command_coord import CommandCoordinator
 from .config import load_config
-from .media import MediaController
+from .engine_manager import SpeechEngineManager
 from .micmon import match_priority as micmon_match_priority
 from .pipeline import DictationPipeline, confidence_band, log  # noqa: F401
 from .processing import post_process
@@ -56,55 +66,68 @@ class Daemon:
         self._backend_factory = backend_factory
         self._pipeline_factory = pipeline_factory
         self._command_session_factory = command_session_factory
-        self._command_context = None  # lazily built CommandContextStore
-        self.backend: Any = None  # lazy: loads model on first use
-        self.recording = False
         self.busy = False  # transcription/insertion in flight
         self.last_result: dict = {}
-        self._app_hint: str | None = None
-        self._rewrite_context: str | None = None
-        self._rewrite_mode = False
-        # Command mode: recording flag + the awaiting-confirmation state
-        self._command_mode = False
-        self._command_session = None
-        self._command_pending = False
-        self._command_destructive_armed = False  # 1st press of strong confirm
-        self._command_display = None
-        self._command_entries: list[dict] = []  # panel conversation feed
         # RuntimeTasks: every timer/thread the daemon spawns is named,
         # exception-reported and joined at shutdown (fluidvoice/
         # runtime_tasks.py; plan P1.2). The handles below stay Timer/
         # Thread objects so call sites and tests keep identity checks.
         self._tasks = RuntimeTasks(on_exception=self._on_task_exception)
-        self._command_timer: threading.Timer | None = None
+        self._lock = threading.Lock()  # shared daemon-state lock
+        # SpeechEngineManager: backend load/warm/reload/idle-unload/select/
+        # delete + the runtime language cycle (P1.2). Daemon exposes the
+        # live backend/warmup through properties below.
+        self._engines = SpeechEngineManager(
+            self.cfg, self._tasks,
+            backend_factory=self._backend_factory, lock=self._lock, log=log,
+            notify=lambda title, body: ui.notify(
+                title, body, enabled=self.cfg["notifications"]["enabled"]),
+            is_locked=lambda: self._locked,
+            is_take_active=lambda: self.recording or self.busy,
+            on_unload=self._refresh_tray,
+            on_language_change=lambda lang: (self._capture.announce_language(lang),
+                                             self._refresh_tray()))
+        # CommandCoordinator: the command-conversation state machine
+        # (proposal/confirmation/timeout/panel/history, P1.2). Daemon
+        # routes control actions and hotkey presses to it.
+        self._commands = CommandCoordinator(
+            self.cfg, self._tasks, self._lock,
+            is_busy=lambda: self.busy,
+            set_busy=self._set_busy,
+            is_recording=lambda: self.recording,
+            log=log,
+            notify=lambda title, body: ui.notify(
+                title, body, enabled=self.cfg["notifications"]["enabled"]),
+            session_factory=self._command_session_factory,
+            arm_escape=self._arm_command_escape)
+        # CaptureCoordinator: the take lifecycle - recording state,
+        # preview, VAD, PCM/stall/max-duration timers, media pause, stop
+        # and cancel (P1.2). Daemon exposes the live recording flag
+        # through the property below.
+        self._capture = CaptureCoordinator(
+            self.cfg, self._tasks, self._lock,
+            recorder_provider=lambda: self.recorder,
+            log=log,
+            notify=lambda title, body: ui.notify(
+                title, body, enabled=self.cfg["notifications"]["enabled"]),
+            play_sound=lambda which: ui.play_sound(
+                which, self.cfg["sounds"]["volume"],
+                self.use_sounds and self.cfg["sounds"]["enabled"]),
+            on_recording_change=self._tray_recording,
+            on_take_start=self._on_take_start,
+            on_take_complete=self._on_take_complete,
+            on_activity=self._engines.touch_activity,
+            language_provider=lambda: self._engines.language_detail()[0],
+            backend_provider=lambda: self._engines.backend,
+            on_copy_last=self._copy_last_transcript,
+            on_paste_last=self.paste_last)
         self._command_hotkey = None
         self._paste_hotkey = None
         self._language_hotkey = None
         self._extra_hotkeys: list = []
-        self._profile_override: str | None = None
-        # language cycle: RUNTIME daemon state (hotkey.language_key steps
-        # general.language_cycle); None = not engaged, never persisted
-        self._cycle_index: int | None = None
-        self._watchdog: threading.Timer | None = None
-        self._first_pcm_timer: threading.Timer | None = None
-        self._preview: Any = None
-        self._send_countdown_timer: threading.Timer | None = None
-        self._closing_display: Any = None
         self._tray: Any = None
-        # -- idle model unload (model.idle_unload_s; 0 = off, byte-identical
-        # to the pre-policy behavior) -------------------------------------
-        self._last_activity = time.monotonic()  # last take end / warmup
-        self._idle_unloaded_at: float | None = None
-        self._backend_load_lock = threading.Lock()  # serializes _ensure_backend
-        self._idle_thread: threading.Thread | None = None  # watcher when on
-        self._idle_stop = threading.Event()
-        self._start_warm_thread: threading.Thread | None = None  # run()'s warmup
-        self._media = MediaController(log=log)
         self._micmon: Any = None  # input-device watcher (micmon.MicMonitor)
         self._mic_missing_logged = False  # warn-once latch for reselects
-        self.warmup: dict = {"running": False, "error": None, "model": None}
-        self._warmup_lock = threading.Lock()
-        self._lock = threading.Lock()
         self._hotkey = None
         self._mouse_ptt: Any = None  # MousePTTListener when configured
         self._locked = False  # session locked/suspended (lockmon flips)
@@ -116,6 +139,35 @@ class Daemon:
         self._session = session_mod.probe()  # session type + capabilities
         self._evdev_ptt: Any = None  # optional evdev push-to-talk (wayland)
 
+    # -- engine state (owned by SpeechEngineManager; daemon-visible) -------
+
+    @property
+    def backend(self) -> Any:
+        """The loaded speech backend (None = lazy / idle-unloaded)."""
+        return self._engines.backend
+
+    @backend.setter
+    def backend(self, value: Any) -> None:
+        self._engines.backend = value
+
+    @property
+    def warmup(self) -> dict:
+        """Engine load status dict (running/error/model) for status/UI."""
+        return self._engines.warmup
+
+    @warmup.setter
+    def warmup(self, value: dict) -> None:
+        self._engines.warmup = value
+
+    @property
+    def recording(self) -> bool:
+        """A take is being recorded (owned by CaptureCoordinator)."""
+        return self._capture.recording
+
+    @recording.setter
+    def recording(self, value: bool) -> None:
+        self._capture.recording = value
+
     def _on_task_exception(self, name: str, exc: BaseException) -> None:
         """RuntimeTasks exception reporter: a failed supervised callback
         is logged in full, never raised unhandled in its worker thread
@@ -124,6 +176,20 @@ class Daemon:
             f"{exc.__class__.__name__}: {exc}\n"
             + "".join(traceback.format_exception(exc)).rstrip())
 
+    def _set_busy(self, busy: bool) -> None:
+        """Coordinator hook: flip the daemon's busy flag (callers that
+        need atomicity hold the shared lock)."""
+        self.busy = busy
+
+    def _arm_command_escape(self, active: bool) -> None:
+        """Coordinator hook: arm/disarm the command hotkey's Escape grab
+        while a proposal is pending."""
+        if self._command_hotkey:
+            try:
+                self._command_hotkey.set_recording(active)
+            except Exception:
+                pass
+
     # -- lifecycle -----------------------------------------------------------
 
     def run(self) -> None:
@@ -131,37 +197,9 @@ class Daemon:
         self._session = session_mod.probe()
         self._log_session()
         self._sweep_stale_tmp()
-        try:
-            self.backend = self._backend_factory(self.cfg)
-        except Exception as e:
-            log(f"WARN speech backend not ready yet ({e}); will retry on first use")
-            self.backend = None
-        else:
-            if not self.cfg["model"].get("eager_warmup", True):
-                pass  # warmup disabled (e.g. test isolation on small GPUs)
-            else:
-                # Load the model in the background so the live preview works
-                # from the very first dictation (lazy otherwise). NOTE: the
-                # snapshot lives INSIDE _warm (its frame dies with the
-                # thread) - a run()-level local would pin the backend for
-                # the daemon's whole lifetime and defeat idle unload.
-                def _warm():
-                    ref = self.backend
-                    if ref is None:
-                        return  # dropped before the thread ran; nothing to do
-                    try:
-                        ref.warmup()
-                        log("speech model loaded (preview ready)")
-                        self._touch_activity()
-                    except Exception as e:
-                        log(f"WARN model warmup failed: {e}")
-
-                t = self._tasks.prepare("warmup", _warm)
-                self._start_warm_thread = t
-                if t is not None:
-                    t.start()
+        self._engines.startup_load()
         # Idle unload watcher: only exists when model.idle_unload_s > 0.
-        self._start_idle_watch()
+        self._engines.start_idle_watch()
 
         if self.use_hotkey:
             self._start_hotkey()
@@ -398,8 +436,8 @@ class Daemon:
                 was_recording = self.recording
             if was_recording:
                 self.cancel()  # existing path: watchdog off, discard, notify
-            if self._command_pending:
-                self.cancel_pending_command()
+            if self._commands.pending:
+                self._commands.cancel_pending()
             self._refresh_tray()
         else:
             log("screen unlocked - hotkeys resumed")
@@ -490,7 +528,7 @@ class Daemon:
             else:
                 state = "Ready"
             backend_unloaded = self.backend is None
-            last_activity = self._last_activity
+            last_activity = self._engines.last_activity
         hk = self.cfg["hotkey"].get("key", "")
         hint = f" — {hk} or click to dictate" if hk else ""
         tip = f"SayItErmano: {state}{hint}"
@@ -499,11 +537,11 @@ class Daemon:
             tip += " - hotkey blocked!"
         if self._locked:
             tip += " - paused (locked)"
-        if backend_unloaded and self._idle_threshold() > 0:
+        if backend_unloaded and self._engines.idle_threshold() > 0:
             idle_m = int((time.monotonic() - last_activity) // 60)
             tip += f" - model unloaded (idle {idle_m}m)"
         try:
-            lang, source = self._language_detail()
+            lang, source = self._engines.language_detail()
             if source == "cycle" or lang != "auto":
                 tip += f" — lang: {lang}"
         except Exception:  # noqa: BLE001 - tooltip must never break the tray
@@ -530,20 +568,13 @@ class Daemon:
 
     def shutdown(self) -> None:
         log("shutting down")
-        self._stop_idle_watch()
-        # under the lock: these fields race the hotkey thread's toggle
-        # (N1). The race was benign - callbacks re-validate recorder
+        self._engines.stop_idle_watch()
+        # under the lock: the take-state mutations race the hotkey thread's
+        # toggle (N1). The race was benign - callbacks re-validate recorder
         # identity - but serializing costs nothing and matches
-        # _cancel_locked, which already cancels under this lock.
+        # capture.cancel_locked, which already cancels under this lock.
         with self._lock:
-            if self.recording:
-                self.recorder.cancel()
-                self.recording = False
-            if self._watchdog:
-                self._watchdog.cancel()
-            if self._first_pcm_timer:
-                self._first_pcm_timer.cancel()
-                self._first_pcm_timer = None
+            self._capture.abort_locked()
         if self._micmon:
             self._micmon.stop()
             self._micmon = None
@@ -553,8 +584,8 @@ class Daemon:
         if self._update:
             self._update.stop()
             self._update = None
-        self._stop_preview()
-        self._close_closing_display()
+        self._capture.stop_preview()
+        self._capture.close_closing_display()
         self.cancel_pending_command()  # pill + Escape grab gone before hotkeys
         if self._tray:
             self._tray.stop()
@@ -689,7 +720,7 @@ class Daemon:
             try:
                 self._language_hotkey = HotkeyListener(
                     key=language_key, modifiers=[], mode="toggle",
-                    on_toggle=lambda *_: self._cycle_language(), log=log)
+                    on_toggle=lambda *_: self._engines.cycle_language(), log=log)
                 self._language_hotkey.start()
                 for line in self._language_hotkey.summary:
                     log(line)
@@ -945,210 +976,8 @@ class Daemon:
         if "general.pause_when_locked" in changed:
             _try("lock pause", self._apply_lock_setting)
         if "model.idle_unload_s" in changed:
-            _try("idle unload", self._apply_idle_unload_setting)
+            _try("idle unload", self._engines.apply_idle_unload_setting)
         return {"applied": applied, "errors": errors}
-
-    # -- model warmup / hot-swap (native-app spec: select-model over socket) ----
-
-    def _active_model_name(self) -> str:
-        name = str(self.cfg["model"].get("name", "auto"))
-        if name in ("", "auto"):
-            return backends.resolve_model_name(self.cfg["model"]["name"])
-        return backends.ALIASES.get(name.lower(), name.lower())
-
-    def select_model(self, name: str) -> dict:
-        name = backends.ALIASES.get(name.strip().lower(), name.strip().lower())
-        if name not in backends.FW_MODEL_REPOS:
-            return {"ok": False, "error": f"unknown model '{name}'"}
-        with self._warmup_lock:
-            if self.warmup["running"]:
-                return {"ok": False, "error": "a model download is already running"}
-            self.warmup = {"running": True, "error": None, "model": name}
-        self._tasks.spawn("model-switch", self._warmup_model,
-                          args=(name,))
-        return {"ok": True, "model": name}
-
-    def _warmup_model(self, name: str) -> None:
-        previous = self.cfg["model"].get("name", "auto")
-        # picking a local model turns the remote backend OFF: remote wins
-        # load_backend, so leaving remote_url set would silently keep
-        # dictating over HTTP. Failure below rolls the name back but the
-        # URL stays cleared (documented: the running remote instance
-        # keeps serving until restart).
-        if self.cfg["model"].get("remote_url"):
-            self.cfg["model"]["remote_url"] = ""
-        try:
-            cfg = dict(self.cfg)
-            cfg["model"] = dict(self.cfg["model"], name=name)
-            backend = backends.load_backend(cfg)
-            backend.warmup()
-            # Persist the choice only after the model is verified usable.
-            self.cfg["model"]["name"] = name
-            from .config import save_config
-            save_config(self.cfg)
-            self.backend = backend  # hot-swap into the running daemon
-            self._idle_unloaded_at = None
-            self._touch_activity()
-            self.warmup = {"running": False, "error": None, "model": name}
-            log(f"model switched to {name} (hot-swapped)")
-        except Exception as e:  # noqa: BLE001 - surfaced in the UI
-            self.cfg["model"]["name"] = previous  # rollback, keep usable
-            self.warmup = {"running": False, "error": str(e)[:300], "model": name}
-            log(f"model switch to {name} failed: {e}")
-
-    def _reload_backend(self) -> None:
-        """Rebuild the loaded backend after engine-option changes. Config
-        stays saved even on failure - the running backend keeps its last
-        working state until the next try."""
-        model = self._active_model_name()
-        try:
-            backend = backends.load_backend(self.cfg)
-            backend.warmup()
-            self.backend = backend
-            self._idle_unloaded_at = None
-            self._touch_activity()
-            self.warmup = {"running": False, "error": None, "model": model}
-        except Exception as e:  # noqa: BLE001 - surfaced in the UI
-            self.warmup = {"running": False, "error": str(e)[:300], "model": model}
-
-    # -- idle model unload (model.idle_unload_s) ------------------------------
-
-    def _idle_threshold(self) -> int:
-        """Current policy in seconds; 0 = never unload."""
-        try:
-            return int((self.cfg.get("model", {}) or {})
-                       .get("idle_unload_s", 0) or 0)
-        except (TypeError, ValueError):
-            return 0
-
-    def _touch_activity(self) -> None:
-        """Record dictation activity (resets the idle clock). Called from
-        take start/stop, transcription end, successful warmups and policy
-        changes - deliberately NOT from status/preview/history reads."""
-        self._last_activity = time.monotonic()
-
-    def _maybe_idle_unload(self, now: float | None = None) -> None:
-        """Drop the loaded backend once no dictation activity happened for
-        model.idle_unload_s seconds. `now` is injectable for tests. Never
-        fires while recording/busy/warming up; the drop itself happens
-        outside self._lock (backend destructors can take ~100 ms), but
-        inside _backend_load_lock so a load can never land mid-drop."""
-        if now is None:
-            now = time.monotonic()
-        t = self._idle_threshold()
-        if t <= 0:
-            return
-        with self._backend_load_lock:
-            with self._lock:
-                if self.backend is None or self.recording or self.busy:
-                    return
-                if self.warmup.get("running"):
-                    return  # a model switch/download is in flight
-                warm = self._start_warm_thread
-                if warm is not None and warm.is_alive():
-                    return  # eager startup warmup still running
-                idle_s = now - self._last_activity
-                if idle_s < t:
-                    return
-                backend = self.backend
-                self.backend = None
-                self._idle_unloaded_at = now
-            try:
-                backend.close()
-            except Exception:  # noqa: BLE001 - teardown is best-effort
-                pass
-            del backend  # release before gc so cycles die here too
-            gc.collect()
-        log(f"model idle {int(idle_s // 60)}m >= {t}s - unloaded "
-            "(reloads on the next dictation)")
-        self._refresh_tray()
-
-    def _idle_watch_loop(self) -> None:
-        while not self._idle_stop.wait(
-                max(5.0, min(60.0, self._idle_threshold() / 4.0))):
-            try:
-                self._maybe_idle_unload()
-            except Exception as e:  # noqa: BLE001 - the watcher must survive
-                log(f"WARN idle-unload check failed: {e}")
-
-    def _start_idle_watch(self) -> None:
-        """Start the watcher thread iff the policy is on. With
-        idle_unload_s = 0 nothing runs - behavior is identical to the
-        pre-policy daemon."""
-        if self._idle_threshold() <= 0:
-            self._idle_thread = None
-            return
-        if self._idle_thread is not None and self._idle_thread.is_alive():
-            return
-        self._idle_stop = threading.Event()
-        t = self._tasks.prepare("idle-unload", self._idle_watch_loop)
-        self._idle_thread = t
-        if t is not None:
-            t.start()
-
-    def _stop_idle_watch(self) -> None:
-        self._idle_stop.set()
-        self._tasks.join("idle-unload", timeout=2)
-
-    def _apply_idle_unload_setting(self) -> None:
-        """model.idle_unload_s flipped live: restart (or stop) the watcher.
-        Setting the policy counts as activity, so a just-enabled window
-        never fires immediately."""
-        self._stop_idle_watch()
-        self._touch_activity()
-        self._start_idle_watch()
-
-    def _reload_backend_bg(self) -> None:
-        """Take-start reload after an idle unload (or a failed startup
-        load): the model loads while the user speaks; _process's
-        synchronous _ensure_backend remains the guaranteed - and
-        gracefully failing - path."""
-        try:
-            self._ensure_backend()
-        except Exception as e:  # noqa: BLE001 - logged, retried at stop
-            log(f"WARN background model reload failed: {e}")
-
-    def delete_model(self, kind: str, name: str) -> dict:
-        """Remove one cached model (Settings → Models pruning). The target
-        is resolved from kind+name under the managed cache root - a client
-        path is never trusted; the active model and in-flight loads are
-        refused."""
-        import shutil
-
-        from . import model_catalog
-        name = name.strip()
-        if not name:
-            return {"ok": False, "error": "missing model name"}
-        try:
-            target = model_catalog.cache_entry_path(kind, name)
-        except ValueError as e:
-            return {"ok": False, "error": str(e)}
-        if not target.exists():
-            return {"ok": False,
-                    "error": f"{name} is not in the models cache"}
-        root = paths.models_dir().resolve()
-        t = target.resolve()
-        if t == root or not t.is_relative_to(root):
-            return {"ok": False,
-                    "error": "refusing to delete outside the models cache"}
-        active = backends.backend_model_key(self.backend) \
-            or backends.config_model_key(self.cfg)
-        if name == active:
-            return {"ok": False,
-                    "error": f"{name} is the active model (switch models first)"}
-        if self.warmup.get("running"):
-            return {"ok": False,
-                    "error": "a model load is in progress - try again once "
-                             "it finishes"}
-        freed = (model_catalog._dir_size(t) if t.is_dir()
-                else t.stat().st_size)
-        if t.is_dir():
-            shutil.rmtree(t)
-        else:
-            t.unlink()
-        log(f"deleted cached model {kind} {name} "
-            f"(freed {model_catalog.human_bytes(freed)}): {t}")
-        return {"ok": True, "path": str(t), "bytes": freed}
 
     # -- control protocol ----------------------------------------------------
 
@@ -1164,21 +993,22 @@ class Daemon:
             ok, detail = self.paste_last()
             return {"ok": ok, "error": detail if not ok else None}
         if action == "cycle-language":
-            return {"ok": True, **self._cycle_language()}
+            return {"ok": True, **self._engines.cycle_language()}
         if action == "insert-text":
             ok, detail = self.insert_text_action(str(req.get("text", "")))
             return {"ok": ok, "error": detail if not ok else None}
         if action == "command-rerun":
             purpose = req.get("purpose")
-            return self._rerun_command(str(req.get("command", "")),
+            return self._commands.rerun(str(req.get("command", "")),
                                        str(purpose) if purpose else None)
         if action == "status":
             upd = self._update_status()
             with self._lock:
                 model_state = {
-                    "policy_s": self._idle_threshold(),
+                    "policy_s": self._engines.idle_threshold(),
                     "loaded": self.backend is not None,
-                    "idle_s": round(time.monotonic() - self._last_activity, 1),
+                    "idle_s": round(time.monotonic()
+                                     - self._engines.last_activity, 1),
                 }
             return {"ok": True, "recording": self.recording, "busy": self.busy,
                     "backend": self.backend.name if self.backend else None,
@@ -1213,7 +1043,7 @@ class Daemon:
                     "capabilities": session_mod.capabilities(
                         self._session, cfg=self.cfg),
                     "warmup": dict(self.warmup),
-                    "active_model": self._active_model_name(),
+                    "active_model": self._engines.active_model_name(),
                     "active_model_key": backends.backend_model_key(self.backend)
                                        or backends.config_model_key(self.cfg),
                     "today": history_mod.today_stats(history_mod.read_all()),
@@ -1228,7 +1058,7 @@ class Daemon:
                     "model_state": model_state,
                     # language cycle + guard state (doctor/CLI/GTK read
                     # this; additive key - JSON consumers unaffected)
-                    "language": self._language_status()}
+                    "language": self._engines.language_status()}
         if action == "shutdown":
             self._quit_gracefully()
             return {"ok": True}
@@ -1244,9 +1074,9 @@ class Daemon:
         if action == "set-config":
             return self._set_config(req.get("config") or {})
         if action == "select-model":
-            return self.select_model(str(req.get("name", "")))
+            return self._engines.select_model(str(req.get("name", "")))
         if action == "model-delete":
-            return self.delete_model(str(req.get("kind", "")),
+            return self._engines.delete_model(str(req.get("kind", "")),
                                      str(req.get("name", "")))
         if action == "mics":
             from .tray import list_microphones
@@ -1278,16 +1108,11 @@ class Daemon:
             applied = feedback.get("applied", [])
             errors = feedback.get("errors", [])
         if any(k in ENGINE_KEYS for k in changed):
-            with self._warmup_lock:
-                if not self.warmup["running"]:
-                    self.warmup = {"running": True, "error": None,
-                                   "model": self._active_model_name()}
-                    self._tasks.spawn("engine-reload",
-                                      self._reload_backend)
-                    applied.append("speech engine (reloading)")
-                else:
-                    errors.append("speech engine: a load is already running - "
-                                  "save again once it finishes")
+            if self._engines.start_engine_reload():
+                applied.append("speech engine (reloading)")
+            else:
+                errors.append("speech engine: a load is already running - "
+                              "save again once it finishes")
         note = ("restart the daemon to apply: " + ", ".join(restart)) \
             if restart else ""
         return {"ok": not rejected, "changed": changed, "rejected": rejected,
@@ -1309,10 +1134,9 @@ class Daemon:
             except Exception as e:
                 log(f"selection capture failed: {e}")
                 context = ""
-            self._rewrite_mode = True
-            self._rewrite_context = context or None
             log(f"rewrite mode (context: {len(context or '')} chars)")
-            self._start_recording_locked()
+            self._capture.start_locked(mode="rewrite",
+                                       rewrite_context=context or None)
 
     def start_command(self) -> None:
         """Command hotkey: start recording the spoken instruction."""
@@ -1320,7 +1144,7 @@ class Daemon:
             return  # session locked: hotkey entries ignored
         from . import command as command_mod
         with self._lock:
-            if self.recording or self.busy or self._command_pending:
+            if self.recording or self.busy or self._commands.pending:
                 return
         ready = command_mod.command_mode_ready(self.cfg)
         if ready:
@@ -1329,17 +1153,20 @@ class Daemon:
                       enabled=self.cfg["notifications"]["enabled"])
             return
         with self._lock:
-            self._command_mode = True
             log("command mode")
-            self._start_recording_locked()
+            self._capture.start_locked(mode="command")
 
     def _on_command_hotkey(self) -> None:
         """Command hotkey router: a second press CONFIRMS a pending proposal
         (the only execution trigger); otherwise it starts a recording."""
-        if self._command_pending:
-            self._confirm_pending_command()
+        if self._commands.pending:
+            self._commands.confirm_pending()
         else:
             self.start_command()  # guards make this a no-op mid-recording
+
+    def cancel_pending_command(self) -> None:
+        """Escape/shutdown/lock on a pending proposal: nothing executes."""
+        self._commands.cancel_pending()
 
     def toggle(self) -> bool:
         if self._locked:
@@ -1348,412 +1175,34 @@ class Daemon:
             return False
         with self._lock:
             if self.recording:
-                self._stop_recording_locked()
+                self._capture.stop_locked()
                 return False
             if self.busy:
                 log("still processing previous dictation; ignoring toggle")
                 return False
-            self._start_recording_locked()
+            self._capture.start_locked()
             return self.recording
 
-    def _start_recording_locked(self) -> None:
-        self._app_hint = insertion.active_window_class()
-        fd, tmp = tempfile.mkstemp(prefix="sayitermano-", suffix=".wav")
-        os.close(fd)
-        try:
-            self.recorder.start(Path(tmp))
-        except RecorderError as e:
-            log(f"recorder error: {e}")
-            ui.notify("SayItErmano", f"Recording failed: {e}",
-                      enabled=self.cfg["notifications"]["enabled"])
-            Path(tmp).unlink(missing_ok=True)
-            return
-        self.recording = True
-        self._touch_activity()
-        if self.backend is None:
-            # Take-start reload (after an idle unload, or a failed startup
-            # load): the model loads while the user speaks.
-            self._tasks.spawn("reload", self._reload_backend_bg)
-        self._tray_recording(True)
-        if self.cfg["recording"].get("pause_media", True):
-            self._media.pause_if_playing()  # upstream: only what's playing
-        ui.play_sound("start", self.cfg["sounds"]["volume"],
-                      self.use_sounds and self.cfg["sounds"]["enabled"])
-        log(f"recording (app={self._app_hint or '?'})")
-        max_s = float(self.cfg["recording"].get("max_seconds", 300))
-        t = self._tasks.prepare_timer("watchdog", self._auto_stop, max_s)
-        self._watchdog = t
-        if t is not None:
-            t.start()
-        # Upstream firstPCMTimeout (2s): a live-but-silent source (muted mic,
-        # wrong device, Bluetooth glitch) should fail fast, not record air
-        # until max_seconds.
-        self._start_preview(getattr(self.recorder, "raw_path", None))
-        pcm_timeout = float(self.cfg["recording"].get("first_pcm_timeout", 2.0))
-        if pcm_timeout > 0:
-            # tracked + cancelled by every take-end path (stop/cancel/
-            # shutdown): the callback re-validates identity anyway, but a
-            # cancelled timer is the guarantee it never even fires stale
-            self._cancel_first_pcm_timer_locked()
-            t = self._tasks.prepare_timer(
-                "first-pcm", self._check_first_pcm, pcm_timeout,
-                args=(self.recorder, Path(tmp)))
-            self._first_pcm_timer = t
-            if t is not None:
-                t.start()
-        # mid-take stall watchdog (upstream #852): frozen capture stream
-        # cancels the take with a clear error
-        stall_s = float(self.cfg["recording"].get("stall_timeout_s", 8.0)
-                        or 0.0)
-        raw = getattr(self.recorder, "raw_path", None)
-        if stall_s > 0 and raw is not None:
-            self._tasks.spawn("stall", self._stall_monitor,
-                              args=(Path(raw), stall_s))
+    def cancel(self) -> None:
+        """Escape/socket cancel: discard the take (CaptureCoordinator)."""
+        self._capture.cancel()
 
-    def _start_preview(self, raw_path) -> None:
-        """Live transcription preview while recording (best-effort).
+    def _on_take_start(self) -> None:
+        """Capture hook: a take started while no backend is loaded - spawn
+        the background reload (the model loads while the user speaks)."""
+        if self._engines.backend is None:
+            self._tasks.spawn("reload", self._engines.reload_backend_bg)
 
-        Segmented engine first (constant per-tick decode cost, streaming
-        preview on every backend, trailing-silence VAD auto-stop); the
-        legacy whole-buffer engine stays as the faster-whisper fallback."""
-        rcfg = self.cfg["recording"]
-        if not rcfg.get("preview_enabled", True) or raw_path is None:
-            return
-        try:
-            from .overlay import FluidOverlay
-            from .preview import (
-                NotifyPreview,
-                PreviewEngine,
-                SegmentedPreviewEngine,
-                faster_whisper_transcriber,
-                preview_transcriber,
-            )
-            mode = rcfg.get("preview_mode", "auto")
-            if mode in ("auto", "overlay"):
-                # FluidOverlay itself falls back to notifications when the
-                # display/pill stack is unavailable.
-                accent = "rewrite" if self._rewrite_mode \
-                    else "command" if self._command_mode else "dictate"
-                chips = {"copy_last": self._copy_last_transcript,
-                         "paste_last": lambda: self.paste_last(),
-                         "cancel": self.cancel}
-                if not rcfg.get("overlay_chips", True):
-                    chips = None
-                display = FluidOverlay(
-                    raw_path=Path(raw_path),
-                    bottom_offset=int(rcfg.get("preview_bottom_offset", 64)),
-                    size=rcfg.get("preview_overlay_size", "medium"),
-                    mode=accent,
-                    actions=chips)
-                actual = "overlay" if display.using_overlay else "notify"
-            else:
-                display = NotifyPreview()
-                actual = "notify"
-            # captures the language at take start (a mid-take cycle press
-            # re-resolves only the FINAL decode, in _process)
-            language = self._language_detail()[0]
-            engine = None
-            kind = None
-            if rcfg.get("preview_segmented", True):
-                made = preview_transcriber(self.cfg, self.backend, language)
-                if made is not None:
-                    transcriber, bname = made
-                    # track the last shown text so the send-countdown
-                    # notice can be swapped out again on resume
-                    shown = {"text": ""}
-
-                    def _show(text: str, stable_chars=0,
-                              _d=display, _s=shown) -> None:
-                        _s["text"] = text
-                        _s["stable"] = stable_chars
-                        try:
-                            _d.show(text, stable_chars)
-                        except TypeError:  # single-arg display
-                            _d.show(text)
-
-                    engine = SegmentedPreviewEngine(
-                        Path(raw_path), transcriber, _show,
-                        interval=float(rcfg.get("preview_interval", 1.2)),
-                        min_audio=float(rcfg.get("preview_min_audio", 1.0)),
-                        segment_s=float(rcfg.get("preview_segment_s", 2.0)),
-                        vad_silence_s=float(
-                            rcfg.get("preview_vad_silence_s", 2.0)),
-                        on_silence=self._vad_auto_stop,
-                        send_phrase=(
-                            str(rcfg.get("spoken_send_phrase", "send it"))
-                            if rcfg.get("spoken_send_enabled") else ""),
-                        send_countdown_s=float(
-                            rcfg.get("spoken_send_countdown_s", 0.0) or 0.0),
-                        on_send_countdown=self._on_send_countdown,
-                        on_send_resume=self._on_send_resume)
-                    kind = f"segmented/{bname}"
-            if engine is None:
-                model = getattr(self.backend, "_model", None)
-                if self.backend is None or model is None:
-                    display.close()
-                    return  # not a ready faster-whisper backend
-                engine = PreviewEngine(
-                    Path(raw_path),
-                    faster_whisper_transcriber(model, language),
-                    display.show,
-                    interval=float(rcfg.get("preview_interval", 1.2)),
-                    min_audio=float(rcfg.get("preview_min_audio", 1.0)))
-                kind = "legacy/faster-whisper"
-            display.start()
-            engine.start()
-            self._preview = (engine, display)
-            log(f"preview started ({actual}, {kind})")
-        except Exception as e:
-            log(f"WARN preview unavailable: {e}")
-
-    def _stop_preview(self, finishing: bool = False) -> None:
-        preview, self._preview = self._preview, None
-        self._cancel_send_countdown()
-        if preview is None:
-            return
-        engine, display = preview
-        engine.stop()
-        stats = getattr(engine, "stats", None)
-        if stats and stats.get("decodes"):
-            mean_ms = stats["decode_ms_sum"] / stats["decodes"]
-            lag = max(0.0, stats["audio_s"] - stats["covered_s"])
-            log(f"preview stats: decodes={stats['decodes']} "
-                f"commits={stats['commits']} mean_decode_ms={mean_ms:.0f} "
-                f"ticks={stats['ticks']} audio_s={stats['audio_s']:.1f} "
-                f"lag_s={lag:.1f} tail_rewrites="
-                f"{stats.get('tail_rewrites', 0)}"
-                + (f" suppressed={stats['suppressed']}"
-                   if stats.get("suppressed") else ""))
-        if finishing:
-            # Keep the pill up in its processing state (flat bars + shimmer,
-            # like the Mac) until the final text is inserted.
-            display.set_state("processing")
-            self._closing_display = display
-        else:
-            display.close()
-
-    def _vad_auto_stop(self) -> None:
-        # Trailing-silence VAD (segmented preview thread): same finish path
-        # as the max-duration watchdog, just a different reason. Re-check
-        # under the lock - the user may have stopped the take just now.
-        self._cancel_send_countdown()
-        with self._lock:
-            if not self.recording:
-                return
-            log("trailing silence detected, stopping")
-            self._stop_recording_locked()
-
-    # -- spoken-send quiet countdown (B7) -----------------------------------
-
-    def _on_send_countdown(self) -> None:
-        """Preview engine armed: phrase said + 0.5 s quiet. Show the notice
-        (the engine pauses text emission while armed) and start the timer
-        that finishes the take unless the user speaks again."""
-        countdown = float(self.cfg["recording"].get(
-            "spoken_send_countdown_s", 0.0) or 0.0)
-        if countdown <= 0:
-            return
-        self._cancel_send_countdown()
-        log("spoken-send quiet countdown armed "
-            f"({countdown:.1f} s - speak to cancel)")
-        display = self._preview[1] if self._preview else None
-        if display is not None:
-            try:
-                display.show("⏎ sending… (speak to cancel)")
-            except Exception:
-                pass
-        holder: dict[str, threading.Timer] = {}
-
-        def _fire() -> None:
-            self._send_countdown_stop(holder["t"])
-
-        timer = self._tasks.prepare_timer("send-countdown", _fire,
-                                          countdown)
-        holder["t"] = timer
-        self._send_countdown_timer = timer
-        if timer is not None:
-            timer.start()
-
-    def _on_send_resume(self) -> None:
-        """Speech resumed inside the countdown window: back to recording."""
-        self._cancel_send_countdown()
-        log("spoken-send countdown cancelled (speech resumed)")
-        display = self._preview[1] if self._preview else None
-        engine = self._preview[0] if self._preview else None
-        last = getattr(engine, "last_text", "") if engine else ""
-        if display is not None and last:
-            try:
-                display.show(last[-getattr(engine, "char_limit", 160):]
-                             if len(last) > getattr(engine, "char_limit", 160)
-                             else last)
-            except Exception:
-                pass
-
-    def _cancel_send_countdown(self) -> None:
-        timer, self._send_countdown_timer = \
-            getattr(self, "_send_countdown_timer", None), None
-        if timer is not None:
-            timer.cancel()
-
-    def _send_countdown_stop(self, timer: threading.Timer) -> None:
-        # Identity check first: a stale timer from an earlier take must
-        # never stop the current one.
-        if timer is not getattr(self, "_send_countdown_timer", None):
-            return
-        self._cancel_send_countdown()
-        with self._lock:
-            if not self.recording:
-                return
-            log("spoken-send quiet countdown elapsed, stopping")
-            self._stop_recording_locked()
-
-    def _close_closing_display(self) -> None:
-        display, self._closing_display = self._closing_display, None
-        if display is not None:
-            display.close()
-
-    def _cancel_first_pcm_timer_locked(self) -> None:
-        """Drop the first-PCM timer (caller holds self._lock): it must
-        never outlive the take that created it."""
-        timer, self._first_pcm_timer = self._first_pcm_timer, None
-        if timer is not None:
-            timer.cancel()
-
-    def _check_first_pcm(self, recorder, wav: Path) -> None:
-        # Identity check first, through the CAPTURED recorder object: a
-        # timer that outlived its take (stop raced the firing, or a
-        # settings change replaced self.recorder) must be a silent no-op
-        # and never touch attributes of the CURRENT recorder. getattr
-        # keeps this safe even for recorders without .path (test stubs).
-        with self._lock:
-            self._cancel_first_pcm_timer_locked()
-            if not self.recording or self.recorder is not recorder:
-                return
-            take = getattr(recorder, "path", None)
-            if take is None or Path(take) != wav:
-                return
-            # audio streams into the RAW file during recording (the WAV is
-            # only written at stop); fall back to the wav for stub recorders
-            probe = getattr(recorder, "raw_path", None) or wav
-            try:
-                got_pcm = probe is not None and probe.exists() \
-                    and probe.stat().st_size > 2048
-            except OSError:
-                got_pcm = False
-            if not got_pcm:
-                if self._watchdog:
-                    self._watchdog.cancel()
-                    self._watchdog = None
-                self.recorder.cancel()
-                self.recording = False
-                self._tray_recording(False)
-                self._media.resume()
-                msg = "microphone produced no audio (muted or wrong device?) - stopped"
-                log(msg)
-                ui.notify("SayItErmano", msg, enabled=self.cfg["notifications"]["enabled"])
-
-    def _auto_stop(self) -> None:
-        # Re-check under the lock: cancel()/shutdown() may have finished in
-        # between the timer firing and now - never start anything new here.
-        with self._lock:
-            if not self.recording:
-                return
-            log("max duration reached, stopping")
-            self._stop_recording_locked()
-
-    def _stop_recording_locked(self) -> None:
-        if self._watchdog:
-            self._watchdog.cancel()
-            self._watchdog = None
-        self._cancel_first_pcm_timer_locked()
-        self._stop_preview(finishing=True)
-        # Stop cue fires at capture stop (upstream behavior), before waiting
-        # for the recorder process to flush and exit.
-        ui.play_sound("stop", self.cfg["sounds"]["volume"],
-                      self.use_sounds and self.cfg["sounds"]["enabled"])
-        wav = self.recorder.stop()
-        self.recording = False
-        self._touch_activity()
-        self._tray_recording(False)
-        self._media.resume()
-        if wav is None or not Path(wav).exists() or Path(wav).stat().st_size < 200:
-            log("no audio captured")
-            self._rewrite_mode = False
-            self._command_mode = False
-            self._close_closing_display()
-            if wav:
-                Path(wav).unlink(missing_ok=True)
-            return
-        mode = "rewrite" if self._rewrite_mode else \
-            "command" if self._command_mode else "dictate"
-        context = self._rewrite_context
-        self._rewrite_mode = False
-        self._command_mode = False
-        self._rewrite_context = None
+    def _on_take_complete(self, wav: Path, app_hint: str | None,
+                          mode: str,
+                          rewrite_context: str | None) -> None:
+        """Capture hook: a finished take - spawn the processing thread."""
         t = self._tasks.prepare(
             "process", self._process,
-            args=(Path(wav), self._app_hint, mode, context))
+            args=(wav, app_hint, mode, rewrite_context))
         self._process_thread = t
         if t is not None:
             t.start()
-
-    def cancel(self) -> None:
-        with self._lock:
-            if not self.recording:
-                return
-            self._cancel_locked()
-        log("cancelled")
-        ui.notify("SayItErmano", "Cancelled", enabled=self.cfg["notifications"]["enabled"])
-
-    def _cancel_locked(self) -> None:
-        """Cancel-the-take body (caller holds self._lock): no transcription,
-        media resumed, mode flags cleared."""
-        if self._watchdog:
-            self._watchdog.cancel()
-            self._watchdog = None
-        self._cancel_first_pcm_timer_locked()
-        self._stop_preview()
-        self.recorder.cancel()
-        self.recording = False
-        self._tray_recording(False)
-        self._media.resume()
-        self._rewrite_mode = False
-        self._command_mode = False
-        self._profile_override = None
-
-    _STALL_CHECK_S = 2.0
-
-    def _stall_monitor(self, raw_path: Path, timeout_s: float) -> None:
-        """Mid-take stream-stall watchdog (upstream #852): the capture file
-        must keep growing while recording; frozen for timeout_s means the
-        source died (PipeWire glitch, device vanished) - cancel the take
-        with a clear error instead of recording air until max_seconds."""
-        check = self._STALL_CHECK_S
-        last, frozen = -1, 0.0
-        while True:
-            time.sleep(check)
-            with self._lock:
-                if not self.recording:
-                    return
-            try:
-                size = raw_path.stat().st_size
-            except OSError:
-                size = last  # vanished mid-take: treat as frozen
-            if size != last:
-                last, frozen = size, 0.0
-                continue
-            frozen += check
-            if frozen >= timeout_s:
-                with self._lock:
-                    if not self.recording:
-                        return
-                    log(f"audio stream stalled ({timeout_s:.0f}s without "
-                        "new data) - cancelling")
-                    self._cancel_locked()
-                ui.notify("SayItErmano",
-                          "Audio stream stalled — dictation cancelled",
-                          enabled=self.cfg["notifications"]["enabled"])
-                return
 
     def _maybe_first_run_onboard(self) -> None:
         """Open onboarding once on first launch (macOS parity: the app opens
@@ -1807,8 +1256,8 @@ class Daemon:
             if audio != path:
                 converted_dir = audio.parent
             try:
-                result = Transcript.of(self._ensure_backend().transcribe(
-                    audio, self._language_detail()[0]) or {})
+                result = Transcript.of(self._engines.ensure_backend().transcribe(
+                    audio, self._engines.language_detail()[0]) or {})
             finally:
                 if converted_dir is not None:
                     _shutil.rmtree(converted_dir, ignore_errors=True)
@@ -1873,9 +1322,9 @@ class Daemon:
             if is_silent(Path(wav)):
                 return {"ok": False, "duration_s": duration,
                         "error": "audio was silent - is the mic muted?"}
-            backend = self._ensure_backend()
+            backend = self._engines.ensure_backend()
             result = Transcript.of(backend.transcribe(
-                Path(wav), self._language_detail()[0]) or {})
+                Path(wav), self._engines.language_detail()[0]) or {})
             return {"ok": True, "duration_s": round(duration, 1),
                     "text": result.text}
         except Exception as e:
@@ -1891,9 +1340,10 @@ class Daemon:
         per-shortcut AI-prompt picker). The override clears when the
         take finishes or is cancelled."""
         if not self.recording:
-            self._profile_override = profile or None
-            if self._profile_override:
-                log(f"take starts with prompt profile '{self._profile_override}'")
+            self._capture.profile_override = profile or None
+            if self._capture.profile_override:
+                log(f"take starts with prompt profile "
+                    f"'{self._capture.profile_override}'")
         self.toggle()
 
     def _on_paste_hotkey(self) -> None:
@@ -1937,97 +1387,7 @@ class Daemon:
             log(f"insert-text failed: {e}")
             return False, str(e)
 
-    # -- language cycle (hotkey.language_key / general.language_cycle) ------
-
-    def _cycle_list(self) -> list[str]:
-        """The ordered cycle list, read LIVE on every use so Settings edits
-        apply without a restart. Empty list = the feature is off even when
-        the key is bound."""
-        return list(((self.cfg.get("general", {}) or {})
-                     .get("language_cycle")) or []) \
-            if isinstance(self.cfg, dict) else []
-
-    def _cycle_runtime(self) -> str | None:
-        """The runtime cycle override for the next take: the cycle entry at
-        the engaged index (clamped modulo a shrunk list), or None when the
-        cycle is not engaged or the list was emptied underneath it."""
-        cycle = self._cycle_list()
-        if self._cycle_index is None or not cycle:
-            return None
-        return cycle[self._cycle_index % len(cycle)]
-
-    def _language_detail(self) -> tuple[str, str]:
-        """(effective language, source) for status/doctor/tooltip. The lazy
-        backend may be None; language_detail resolves via the config key."""
-        return backends.language_detail(self.cfg, self.backend,
-                                        self._cycle_runtime() or "")
-
-    def _cycle_language(self) -> dict:
-        """Language-cycle hotkey handler: engage at index 0 on the first
-        press, advance (with wrap-around) afterwards. The override is pure
-        runtime state - never written to config. A mid-take press announces
-        immediately; the final decode re-resolves at stop time (the preview
-        engine keeps the language it captured at take start)."""
-        if self._locked:
-            return {"ok": False, "error": "locked"}  # session locked
-        cycle = self._cycle_list()
-        if not cycle:
-            log("WARN language cycle: general.language_cycle is empty")
-            ui.notify("SayItErmano",
-                      "Language cycle is empty — set "
-                      "general.language_cycle in Settings",
-                      enabled=self.cfg["notifications"]["enabled"])
-            return {"ok": False, "error": "empty cycle"}
-        self._cycle_index = 0 if self._cycle_index is None \
-            else (self._cycle_index + 1) % len(cycle)
-        lang, source = self._language_detail()
-        log(f"language cycle -> {lang} ({source})")
-        self._announce_language(lang)
-        self._refresh_tray()
-        return {"ok": True, "language": lang, "source": source}
-
-    def _announce_language(self, lang: str) -> None:
-        """Eyes-free feedback on every cycle press: the live pill's badge
-        while recording, the notify-fallback display's show(), or a fresh
-        notify bubble. Never raises - an announcement must not break the
-        cycle."""
-        try:
-            display = self._preview[1] if self._preview else None
-            if display is not None:
-                if callable(getattr(display, "set_badge", None)):
-                    display.set_badge(f"lang: {lang}")
-                    return
-                if callable(getattr(display, "show", None)):
-                    display.show(f"Language: {lang}")
-                    return
-            from .preview import NotifyPreview
-            NotifyPreview().show(f"Language: {lang}")
-        except Exception as e:  # noqa: BLE001 - best-effort feedback only
-            log(f"WARN language announce failed: {e}")
-
-    def _language_status(self) -> dict:
-        """The additive \"language\" status block (CLI/GTK client/doctor)."""
-        lang, source = self._language_detail()
-        return {"effective": lang, "source": source,
-                "cycle": self._cycle_list(),
-                "cycle_engaged": self._cycle_runtime() is not None,
-                "whitelist": list(((self.cfg.get("general", {}) or {})
-                                   .get("language_whitelist")) or [])}
-
     # -- pipeline ------------------------------------------------------------
-
-    def _ensure_backend(self):
-        """Load the backend on demand (first take, take after an idle
-        unload, onboarding tryout). The load lock serializes concurrent
-        callers - the take-start background reload can race _process's
-        synchronous load without double-loading."""
-        with self._backend_load_lock:
-            if self.backend is None:
-                self.backend = self._backend_factory(self.cfg)
-                log(f"speech backend: {self.backend.name}")
-                self._idle_unloaded_at = None
-                self._touch_activity()
-        return self.backend
 
     def _process(self, wav: Path, app_hint: str | None,
                  mode: str = "dictate", rewrite_context: str | None = None) -> None:
@@ -2035,7 +1395,7 @@ class Daemon:
         out: dict = {}
         try:
             try:
-                backend = self._ensure_backend()
+                backend = self._engines.ensure_backend()
             except Exception as e:
                 log(f"transcription failed: {e}")
                 ui.notify("SayItErmano", f"Transcription failed: {e}",
@@ -2043,19 +1403,19 @@ class Daemon:
                 wav.unlink(missing_ok=True)
                 return
             pipeline = self._pipeline_factory(self.cfg, backend)
-            pipeline._profile_override = self._profile_override
+            pipeline._profile_override = self._capture.profile_override
             # sticky runtime cycle override (unlike the profile override,
             # deliberately NOT cleared in the finally below: cycle state
             # persists until cycled away or the daemon restarts)
-            pipeline._language_override = self._cycle_runtime()
+            pipeline._language_override = self._engines.cycle_runtime()
             out = pipeline.run(wav, app_hint, mode=mode,
                                rewrite_context=rewrite_context) or {}
             self.last_result = out
         finally:
             self.busy = False
-            self._touch_activity()
-            self._profile_override = None
-            display, self._closing_display = self._closing_display, None
+            self._engines.touch_activity()
+            self._capture.profile_override = None
+            display = self._capture.take_closing_display()
             if display is not None:
                 if mode == "command":
                     display.close()  # the panel takes over the conversation
@@ -2070,322 +1430,4 @@ class Daemon:
         # Turn 1 runs AFTER busy clears, so there is no busy-flag race with
         # the hotkey-confirm handoff below.
         if mode == "command" and out.get("mode") == "command":
-            self._begin_command(str(out.get("text", "")), app=app_hint)
-
-    # -- command mode ---------------------------------------------------------
-
-    def _begin_command(self, instruction: str,
-                       app: str | None = None) -> None:
-        """Turn 1: ask the model for the first proposal (background thread;
-        the user is not blocked - not even by the LLM latency). `app` scopes
-        the follow-up context store (last results in the SAME focused app)."""
-        from . import command as command_mod
-        if instruction.strip().lower() in command_mod.NEW_SESSION_PHRASES:
-            if self._command_context is not None:
-                self._command_context.clear(app)
-            log("command context cleared (spoken 'new session')")
-            ui.notify("SayItErmano", "Command context cleared",
-                      enabled=self.cfg["notifications"]["enabled"])
-            return
-        self._command_entries = [{"kind": "user", "text": instruction}]
-        self._command_panel(self._command_entries, status="Working...",
-                            awaiting=None)
-
-        def _work():
-            factory = self._command_session_factory or command_mod.CommandSession
-            if self._command_context is None:
-                self._command_context = command_mod.CommandContextStore()
-            session = factory(self.cfg, context_store=self._command_context,
-                              app=app)
-            try:
-                proposal = session.start(instruction)
-            except command_mod.CommandError as e:
-                with self._lock:
-                    self.busy = False
-                log(f"command mode failed: {e}")
-                ui.notify("SayItErmano", f"Command mode failed: {e}",
-                          enabled=self.cfg["notifications"]["enabled"])
-                return
-            if proposal is None:
-                with self._lock:
-                    self.busy = False
-                ui.notify("SayItErmano",
-                          session.summary or "Command mode: nothing to run.",
-                          enabled=self.cfg["notifications"]["enabled"])
-                return
-            with self._lock:                 # atomic handoff to the pending state
-                self._command_session = session
-                self._command_pending = True
-                self.busy = False            # waiting for the user, not busy
-            self._present_proposal(session, proposal)
-
-        def _guarded():
-            try:
-                _work()
-            except Exception as e:  # noqa: BLE001 - never strand `busy`
-                log(f"command mode failed: {e}")
-                ui.notify("SayItErmano", f"Command mode failed: {e}",
-                          enabled=self.cfg["notifications"]["enabled"])
-                self._end_command_session()
-
-        with self._lock:
-            if self.busy or self._command_pending:
-                return
-            self.busy = True
-        self._tasks.spawn("command", _guarded)
-
-    def _rerun_command(self, command: str,
-                       purpose: str | None = None) -> dict:
-        """History Commands view 'Re-run' (v2): re-post the exact stored
-        command as a PENDING proposal - the user confirms with the hotkey
-        exactly like a fresh voice proposal (strong confirm included when
-        destructive). NOTHING executes here: this only ever creates a
-        pending proposal; CommandSession.confirm() stays the single
-        execution site. No LLM call is needed to propose."""
-        from . import command as command_mod
-        with self._lock:
-            if self.recording or self.busy or self._command_pending:
-                return {"ok": False, "error": "daemon busy"}
-        ready = command_mod.command_mode_ready(self.cfg)
-        if ready:
-            return {"ok": False, "error": ready}
-        if self._command_context is None:
-            self._command_context = command_mod.CommandContextStore()
-        factory = self._command_session_factory or command_mod.CommandSession
-        session = factory(self.cfg, context_store=self._command_context)
-        try:
-            proposal = session.preset(command, purpose)
-        except command_mod.CommandError as e:
-            return {"ok": False, "error": str(e)}
-        self._command_entries = [{"kind": "user",
-                                  "text": session.instruction or ""}]
-        with self._lock:                 # atomic handoff to the pending state
-            self._command_session = session
-            self._command_pending = True
-            self.busy = False            # waiting for the user, not busy
-        self._present_proposal(session, proposal)
-        return {"ok": True, "pending": True, "command": proposal.command}
-
-    def _command_panel(self, entries: list[dict], status: str | None,
-                       awaiting: str | None):
-        """Live conversation panel (best-effort). Reuses the running panel
-        when present; falls back to None headlessly."""
-        try:
-            from .overlay import CommandPanel
-            panel = self._command_display
-            if panel is not None and panel.using_overlay:
-                panel.update(entries, status=status, awaiting=awaiting)
-                return panel
-            rcfg = self.cfg["recording"]
-            panel = CommandPanel(
-                bottom_offset=int(rcfg.get("preview_bottom_offset", 64)))
-            if not panel.using_overlay:
-                panel.close()
-                return None
-            panel.update(entries, status=status, awaiting=awaiting)
-            panel.start()
-            self._command_display = panel
-            return panel
-        except Exception as e:  # noqa: BLE001 - never block the agent loop
-            log(f"WARN command panel unavailable: {e}")
-            return None
-
-    def _present_proposal(self, session, proposal) -> None:
-        """Awaiting-confirmation UX: conversation panel, armed Escape grab,
-        notification, confirm watchdog. Call with no lock held. A
-        destructive proposal arms the STRONG confirmation (two presses,
-        amber pill warning) - the first press only arms."""
-        self._command_destructive_armed = False
-        try:
-            entry = {"kind": "proposal", "text": proposal.command,
-                     "sub": proposal.purpose}
-            awaiting = "run: command key · Esc"
-            if proposal.destructive:
-                entry["destructive"] = True
-                awaiting = "⚠ destructive — press command key AGAIN to run · Esc"
-            self._command_entries = (self._command_entries + [entry])[-8:]
-            self._command_panel(self._command_entries, status=None,
-                                awaiting=awaiting)
-        except Exception as e:  # noqa: BLE001 - never block confirmation
-            log(f"WARN command pill unavailable: {e}")
-        if self._command_hotkey:
-            try:
-                self._command_hotkey.set_recording(True)  # arm Escape grab
-            except Exception:
-                pass
-        purpose = proposal.purpose or ""
-        body = (f"{purpose}\n" if purpose else "") \
-            + f"$ {proposal.command}\n" \
-            + "Press the command hotkey to run · Esc to cancel"
-        if proposal.destructive:
-            body = "⚠ DESTRUCTIVE\n" + body
-        ui.notify("SayItErmano — run this command?", body,
-                  enabled=self.cfg["notifications"]["enabled"])
-        timer = self._tasks.prepare_timer(
-            "command-confirm", self._on_confirm_timeout,
-            float(self.cfg["command"].get("confirm_timeout_s", 120.0)))
-        self._command_timer = timer
-        if timer is not None:
-            timer.start()
-
-    def _confirm_pending_command(self) -> None:
-        """Hotkey-confirmed: execute (the only path into
-        CommandSession.confirm), then either present the next proposal or
-        finish. Destructive proposals need the STRONG confirmation: the
-        first press only arms (fresh hint + restarted watchdog); the second
-        takes this normal path. Non-destructive: single press, as always."""
-        arm = False
-        with self._lock:
-            if not self._command_pending or self.busy or self.recording:
-                return
-            session = self._command_session
-            proposal = session.pending if session is not None else None
-            if proposal is not None and proposal.destructive \
-                    and not self._command_destructive_armed:
-                self._command_destructive_armed = True
-                arm = True
-            else:
-                self._command_destructive_armed = False
-                self._command_pending = False
-                self.busy = True                 # atomic with the flag clear
-        if arm:
-            self._arm_destructive_confirm(proposal)
-            return
-        session = self._command_session      # never None while pending
-        # the conversation panel survives the pending-UX teardown
-        panel, self._command_display = self._command_display, None
-        self._teardown_pending_ux()
-        self._command_display = panel
-
-        def _work():
-            from . import command as command_mod
-            try:
-                proposal = session.confirm()
-            except command_mod.CommandError as e:
-                log(f"command mode failed: {e}")
-                ui.notify("SayItErmano", f"Command mode failed: {e}",
-                          enabled=self.cfg["notifications"]["enabled"])
-                self._end_command_session()
-                return
-            outcome = session.executed[-1] if session.executed else None
-            if outcome is not None:          # result via notification + history
-                brief = (outcome.output or outcome.error or "").strip()[:200]
-                ui.notify("SayItErmano",
-                          f"$ {outcome.command} → exit {outcome.exit_code}"
-                          + (f"\n{brief}" if brief else ""),
-                          enabled=self.cfg["notifications"]["enabled"])
-                self._command_entries = (self._command_entries + [
-                    {"kind": "ok" if outcome.success else "fail",
-                     "text": f"$ {outcome.command} · "
-                             f"exit {outcome.exit_code}"}])[-8:]
-            if proposal is None:
-                self._command_entries = (self._command_entries + [
-                    {"kind": "summary",
-                     "text": session.summary or "Command finished."}])[-8:]
-                self._command_panel(self._command_entries, status=None,
-                                    awaiting=None)
-                ui.notify("SayItErmano",
-                          (session.summary or "Command finished.")
-                          + (" (step limit reached)" if session.exhausted
-                             else ""),
-                          enabled=self.cfg["notifications"]["enabled"])
-                self._tasks.schedule("command-panel-close",
-                                     self._close_command_panel, 8.0)
-                self._end_command_session(close_panel=False)
-                return
-            self._command_panel(self._command_entries, status="Working...",
-                                awaiting=None)
-            with self._lock:
-                self._command_pending = True
-                self.busy = False
-            self._present_proposal(session, proposal)
-
-        def _guarded():
-            try:
-                _work()
-            except Exception as e:  # noqa: BLE001 - never strand `busy`
-                log(f"command mode failed: {e}")
-                ui.notify("SayItErmano", f"Command mode failed: {e}",
-                          enabled=self.cfg["notifications"]["enabled"])
-                self._end_command_session()
-
-        self._tasks.spawn("command", _guarded)
-
-    def _arm_destructive_confirm(self, proposal) -> None:
-        """First press on a destructive proposal: NOTHING executes. Refresh
-        the pill to the again-to-CONFIRM hint, re-notify and restart the
-        confirm watchdog (the old timer is cancelled - never stacked)."""
-        if self._command_timer:
-            self._command_timer.cancel()
-            self._command_timer = None
-        self._command_panel(
-            self._command_entries, status=None,
-            awaiting="⚠ press command key AGAIN to CONFIRM · Esc cancels")
-        purpose = proposal.purpose or ""
-        body = (f"{purpose}\n" if purpose else "") \
-            + f"$ {proposal.command}\n" \
-            + "⚠ destructive: press the command hotkey AGAIN to CONFIRM " \
-              "· Esc to cancel"
-        ui.notify("SayItErmano — ⚠ destructive", body,
-                  enabled=self.cfg["notifications"]["enabled"])
-        timer = self._tasks.prepare_timer(
-            "command-confirm", self._on_confirm_timeout,
-            float(self.cfg["command"].get("confirm_timeout_s", 120.0)))
-        self._command_timer = timer
-        if timer is not None:
-            timer.start()
-
-    def cancel_pending_command(self) -> None:
-        """Escape on a pending proposal (or a test): nothing executes."""
-        with self._lock:
-            if not self._command_pending:
-                return
-            self._command_pending = False
-        session, self._command_session = self._command_session, None
-        self._teardown_pending_ux()
-        if session is not None:
-            session.cancel()
-        ui.notify("SayItErmano", "Command cancelled",
-                  enabled=self.cfg["notifications"]["enabled"])
-
-    def _on_confirm_timeout(self) -> None:
-        if self._command_pending:
-            self.cancel_pending_command()
-            ui.notify("SayItErmano", "Command mode: confirmation timed out",
-                      enabled=self.cfg["notifications"]["enabled"])
-
-    def _teardown_pending_ux(self) -> None:
-        self._command_destructive_armed = False
-        if self._command_timer:
-            self._command_timer.cancel()
-            self._command_timer = None
-        if self._command_hotkey:
-            try:
-                self._command_hotkey.set_recording(False)
-            except Exception:
-                pass
-        display, self._command_display = self._command_display, None
-        if display is not None:
-            try:
-                display.close()
-            except Exception:
-                pass
-
-    def _close_command_panel(self) -> None:
-        if self._command_session is not None:
-            return  # a new command session reused the panel - leave it up
-        panel, self._command_display = self._command_display, None
-        if panel is not None:
-            try:
-                panel.close()
-            except Exception:
-                pass
-
-    def _end_command_session(self, close_panel: bool = True) -> None:
-        with self._lock:
-            self._command_pending = False
-            self._command_destructive_armed = False
-            self.busy = False
-        self._command_session = None
-        if close_panel:
-            self._teardown_pending_ux()
+            self._commands.begin(str(out.get("text", "")), app=app_hint)
