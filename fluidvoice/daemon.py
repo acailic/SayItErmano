@@ -78,6 +78,7 @@ class Daemon:
         # general.language_cycle); None = not engaged, never persisted
         self._cycle_index: int | None = None
         self._watchdog: threading.Timer | None = None
+        self._first_pcm_timer: threading.Timer | None = None
         self._preview: Any = None
         self._send_countdown_timer: threading.Timer | None = None
         self._closing_display: Any = None
@@ -517,6 +518,9 @@ class Daemon:
             self.recording = False
         if self._watchdog:
             self._watchdog.cancel()
+        if self._first_pcm_timer:
+            self._first_pcm_timer.cancel()
+            self._first_pcm_timer = None
         if self._micmon:
             self._micmon.stop()
             self._micmon = None
@@ -1355,9 +1359,15 @@ class Daemon:
         self._start_preview(getattr(self.recorder, "raw_path", None))
         pcm_timeout = float(self.cfg["recording"].get("first_pcm_timeout", 2.0))
         if pcm_timeout > 0:
-            t = threading.Timer(pcm_timeout, self._check_first_pcm, args=(Path(tmp),))
+            # tracked + cancelled by every take-end path (stop/cancel/
+            # shutdown): the callback re-validates identity anyway, but a
+            # cancelled timer is the guarantee it never even fires stale
+            self._cancel_first_pcm_timer_locked()
+            t = threading.Timer(pcm_timeout, self._check_first_pcm,
+                                args=(self.recorder, Path(tmp)))
             t.daemon = True
             t.start()
+            self._first_pcm_timer = t
         # mid-take stall watchdog (upstream #852): frozen capture stream
         # cancels the take with a clear error
         stall_s = float(self.cfg["recording"].get("stall_timeout_s", 8.0)
@@ -1568,13 +1578,29 @@ class Daemon:
         if display is not None:
             display.close()
 
-    def _check_first_pcm(self, wav: Path) -> None:
+    def _cancel_first_pcm_timer_locked(self) -> None:
+        """Drop the first-PCM timer (caller holds self._lock): it must
+        never outlive the take that created it."""
+        timer, self._first_pcm_timer = self._first_pcm_timer, None
+        if timer is not None:
+            timer.cancel()
+
+    def _check_first_pcm(self, recorder, wav: Path) -> None:
+        # Identity check first, through the CAPTURED recorder object: a
+        # timer that outlived its take (stop raced the firing, or a
+        # settings change replaced self.recorder) must be a silent no-op
+        # and never touch attributes of the CURRENT recorder. getattr
+        # keeps this safe even for recorders without .path (test stubs).
         with self._lock:
-            if not self.recording or self.recorder.path != wav:
+            self._cancel_first_pcm_timer_locked()
+            if not self.recording or self.recorder is not recorder:
+                return
+            take = getattr(recorder, "path", None)
+            if take is None or Path(take) != wav:
                 return
             # audio streams into the RAW file during recording (the WAV is
             # only written at stop); fall back to the wav for stub recorders
-            probe = getattr(self.recorder, "raw_path", None) or wav
+            probe = getattr(recorder, "raw_path", None) or wav
             try:
                 got_pcm = probe is not None and probe.exists() \
                     and probe.stat().st_size > 2048
@@ -1605,6 +1631,7 @@ class Daemon:
         if self._watchdog:
             self._watchdog.cancel()
             self._watchdog = None
+        self._cancel_first_pcm_timer_locked()
         self._stop_preview(finishing=True)
         # Stop cue fires at capture stop (upstream behavior), before waiting
         # for the recorder process to flush and exit.
@@ -1648,6 +1675,7 @@ class Daemon:
         if self._watchdog:
             self._watchdog.cancel()
             self._watchdog = None
+        self._cancel_first_pcm_timer_locked()
         self._stop_preview()
         self.recorder.cancel()
         self.recording = False
