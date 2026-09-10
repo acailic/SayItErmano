@@ -443,6 +443,87 @@ class TestAcceptLoopResilience:
         assert "accept thread exiting" in capsys.readouterr().err
 
 
+# -- backpressure (F8) ------------------------------------------------------------
+
+class TestBackpressure:
+    """The accept queue is bounded (reject-and-close with a structured
+    busy error beyond it) and the idle deadline is a per-REQUEST total
+    read budget - not per recv - so slow-drip clients cannot hold workers
+    forever (8 of them used to freeze the whole control plane, and a
+    frozen status made probe_live report the daemon dead)."""
+
+    def test_drip_feed_clients_cannot_starve_status(self, tmp_path):
+        # one dripper per worker; each sends a partial line every 90 ms -
+        # faster than the old per-recv 500 ms timeout, so under per-recv
+        # semantics they NEVER time out and hold their worker forever
+        with _server(lambda req: {"ok": True}, tmp_path, workers=8,
+                     idle_timeout=0.5) as srv:
+            stop = threading.Event()
+
+            def drip():
+                c = _client(srv.path, timeout=5)
+                try:
+                    while not stop.is_set():
+                        c.sendall(b"{")  # partial JSON, never a full line
+                        time.sleep(0.09)
+                except OSError:
+                    pass  # server ended the drip: expected
+                finally:
+                    c.close()
+
+            drips = [threading.Thread(target=drip, daemon=True)
+                     for _ in range(8)]
+            for t in drips:
+                t.start()
+            time.sleep(0.3)  # all eight workers now occupied by dribblers
+            t0 = time.monotonic()
+            with _client(srv.path, timeout=10) as c:
+                resp = _rt_obj(c, {"action": "status"})
+            elapsed = time.monotonic() - t0
+            assert resp == {"ok": True}
+            # bounded by the 0.5 s read budget (+ margin): per-recv
+            # semantics would have starved status indefinitely
+            assert elapsed < 5, f"status waited {elapsed:.1f}s behind drips"
+            stop.set()
+            for t in drips:
+                t.join(timeout=5)
+
+    def test_drip_feeder_gets_the_structured_timeout_error(self, tmp_path):
+        with _server(lambda req: {"ok": True}, tmp_path,
+                     idle_timeout=0.4) as srv:
+            with _client(srv.path, timeout=5) as c:
+                c.sendall(b'{"action": ')  # partial, then go quiet
+                line = _read_line(c)
+            resp = json.loads(line.decode())
+            assert resp["ok"] is False
+            assert "timed out" in resp["error"]
+
+    def test_queue_overflow_rejects_with_busy_error(self, tmp_path):
+        entered = threading.Event()
+        release = threading.Event()
+
+        def handler(req):
+            entered.set()
+            release.wait(5)
+            return {"ok": True}
+
+        with _server(handler, tmp_path, workers=1) as srv:
+            # queue bound: workers * _QUEUE_PER_WORKER = 4
+            first = _client(srv.path)
+            first.sendall(b'{"action": "status"}\n')
+            assert entered.wait(5)  # the one worker sits inside our handler
+            queued = [_client(srv.path) for _ in range(4)]  # fills the queue
+            beyond = _client(srv.path, timeout=5)  # beyond the bound...
+            resp = _roundtrip(beyond, b'{"action": "status"}\n')
+            assert resp["ok"] is False and "busy" in resp["error"]
+            release.set()
+            assert json.loads(_read_line(first)) == {"ok": True}
+            first.close()
+            beyond.close()
+            for c in queued:
+                c.close()
+
+
 # -- module facade compatibility ---------------------------------------------------
 
 def test_serve_facade_round_trip(tmp_path, monkeypatch):
