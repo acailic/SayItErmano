@@ -1,89 +1,49 @@
-"""Unix-socket control channel (`sayit-ermano toggle|cancel|status`)."""
+"""Unix-socket control channel (`sayit-ermano toggle|cancel|status`).
+
+Server side now lives in ``control_server.ControlServer`` (one accept
+thread + eight workers, bounded/validated, deterministic shutdown);
+this module keeps the historical ``serve()``/``request()`` API - and the
+byte-identical JSON-line protocol - for the daemon, CLI and tests.
+"""
 from __future__ import annotations
 
 import json
 import socket
-import threading
 from pathlib import Path
+from threading import Event
 from typing import Callable
 
 from . import paths
+from .control_server import (
+    IDLE_TIMEOUT_S,
+    MAX_REQUEST_BYTES,
+    MAX_RESPONSE_BYTES,
+    SOCKET_MODE,
+    WORKERS,
+    ControlError,
+    ControlServer,
+    probe_live,
+)
 
+__all__ = ["ControlError", "ControlServer", "serve", "request",
+           "probe_live", "MAX_REQUEST_BYTES", "MAX_RESPONSE_BYTES",
+           "IDLE_TIMEOUT_S", "SOCKET_MODE", "WORKERS"]
 
-class ControlError(RuntimeError):
-    pass
-
-
-def _probe_live(path: Path) -> bool:
-    """True when a daemon ANSWERS at path (read-only status probe)."""
-    try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-            s.settimeout(1.0)
-            s.connect(str(path))
-            s.sendall(b'{"action": "status"}\n')
-            buf = b""
-            while b"\n" not in buf:
-                chunk = s.recv(65536)
-                if not chunk:
-                    break
-                buf += chunk
-        return buf.strip().startswith(b"{")
-    except OSError:
-        return False
+# the probe lived here before ControlServer moved it
+_probe_live = probe_live
 
 
 def serve(handler: Callable[[dict], dict], path: Path | None = None,
-          ready: threading.Event | None = None) -> socket.socket:
-    """Start a background thread serving JSON-line requests. Returns the socket."""
-    path = path or paths.socket_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists() and _probe_live(path):
-        # never steal a socket a LIVE daemon is answering: sandboxed
-        # second instances (isolated XDG_CONFIG_HOME, shared runtime dir)
-        # would otherwise unlink the production daemon's control channel
-        raise ControlError(
-            f"another sayit-ermano daemon is answering at {path} - "
-            "refusing to steal its control socket (point "
-            "SAYITERMANO_SOCKET elsewhere for a second instance)")
-    path.unlink(missing_ok=True)
-    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    srv.bind(str(path))
-    srv.listen(8)
+          ready: Event | None = None) -> ControlServer:
+    """Start a background ControlServer serving JSON-line requests.
 
-    def _loop() -> None:
-        while True:
-            try:
-                conn, _ = srv.accept()
-            except OSError:
-                break  # socket closed -> shutdown
-            with conn:
-                try:
-                    conn.settimeout(10)
-                    buf = b""
-                    while b"\n" not in buf:
-                        chunk = conn.recv(65536)
-                        if not chunk:
-                            break
-                        buf += chunk
-                    if not buf.strip():
-                        continue
-                    try:
-                        req = json.loads(buf.decode())
-                    except json.JSONDecodeError:
-                        resp = {"ok": False, "error": "invalid JSON"}
-                    else:
-                        try:
-                            resp = dict(handler(req))
-                        except Exception as e:  # noqa: BLE001
-                            resp = {"ok": False, "error": str(e)}
-                    conn.sendall(json.dumps(resp).encode() + b"\n")
-                except OSError:
-                    pass
-
-    threading.Thread(target=_loop, name="fluidvoice-control", daemon=True).start()
-    if ready is not None:
-        ready.set()
-    return srv
+    Returns the server: ``shutdown()`` (or the socket-style ``close()``)
+    stops it deterministically, joining the accept thread and every
+    worker. Callers that only ever called ``.close()`` on the old raw
+    listening socket keep working unchanged."""
+    server = ControlServer(handler, path or paths.socket_path())
+    server.start(ready=ready)
+    return server
 
 
 def request(action: str, **kwargs) -> dict:
