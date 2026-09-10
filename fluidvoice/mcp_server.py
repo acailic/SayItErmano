@@ -23,6 +23,7 @@ stdlib only - the no-new-dependency rule holds.
 from __future__ import annotations
 
 import json
+import math
 import sys
 from typing import Any, Callable, TextIO
 
@@ -118,10 +119,23 @@ def _err(msg_id: Any, code: int, message: str) -> dict[str, Any]:
 
 def _usable_id(value: Any) -> bool:
     """JSON-RPC 2.0: id, if present, is String, Number, or NULL. bool is
-    an int subclass in Python but is NOT a JSON-RPC id."""
+    an int subclass in Python but is NOT a JSON-RPC id, and non-finite
+    floats (NaN/Infinity) are not JSON at all - they must never be
+    echoed into wire output (F6)."""
     if value is None or isinstance(value, str):
         return True
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    return math.isfinite(value)
+
+
+def _reject_constant(name: str) -> Any:
+    """parse_constant hook for json.loads: NaN/Infinity/-Infinity are
+    NOT valid JSON (RFC 8259) even though Python's json module accepts
+    them by default. Refuse them at parse (F6) so a NaN id can never be
+    echoed raw - strict client parsers (JavaScript JSON.parse) throw on
+    it."""
+    raise ValueError(f"{name} is not valid JSON")
 
 
 def validate(msg: Any) -> tuple[dict | None, dict | None]:
@@ -165,8 +179,16 @@ def _tool_call(name: str, arguments: dict,
                              "text": str(resp.get("error", "failed"))}],
                 "isError": True}
     payload = {k: v for k, v in resp.items() if k != "ok"}
-    return {"content": [{"type": "text",
-                         "text": json.dumps(payload, ensure_ascii=False)}]}
+    try:
+        text = json.dumps(payload, ensure_ascii=False, allow_nan=False)
+    except ValueError:
+        # a non-finite number in the daemon payload would embed invalid
+        # JSON inside the result text (F6): report it as a tool error
+        return {"content": [{"type": "text",
+                             "text": "daemon response contained a "
+                                     "non-finite number"}],
+                "isError": True}
+    return {"content": [{"type": "text", "text": text}]}
 
 
 def handle_message(msg: dict,
@@ -248,8 +270,8 @@ def serve(stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdout,
         if not line:
             continue
         try:
-            msg = json.loads(line)
-        except json.JSONDecodeError:
+            msg = json.loads(line, parse_constant=_reject_constant)
+        except (json.JSONDecodeError, ValueError):  # incl. NaN/Infinity
             reply = _err(None, PARSE_ERROR, "parse error")
         else:
             try:
@@ -258,7 +280,16 @@ def serve(stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdout,
                 # even a bug inside the bridge itself (F1)
                 reply = _err(None, INTERNAL_ERROR, f"internal error: {e}")
         if reply is not None:
-            stdout.write(json.dumps(reply, ensure_ascii=False) + "\n")
+            try:
+                out = json.dumps(reply, ensure_ascii=False, allow_nan=False)
+            except ValueError:
+                # never emit invalid JSON (F6): a non-finite number that
+                # slipped into a payload degrades to a valid envelope
+                msg_id = reply.get("id") if isinstance(reply, dict) else None
+                out = json.dumps(
+                    _err(msg_id, INTERNAL_ERROR,
+                         "non-finite number in response"), allow_nan=False)
+            stdout.write(out + "\n")
             stdout.flush()
 
 

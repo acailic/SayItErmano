@@ -300,6 +300,62 @@ class TestBridgeSurvivesTransportFailures:
         assert replies[1]["result"] == {}  # still serving after the failure
 
 
+# ---------------------------------------------------------------------------
+# Non-finite numbers (F6): NaN/Infinity are not valid JSON (RFC 8259)
+# ---------------------------------------------------------------------------
+
+class TestNonFiniteNumbers:
+    """Python's json accepts NaN/Infinity literals by default; the old
+    lenient parse let id: NaN through and json.dumps echoed it raw -
+    wire output no strict client (e.g. JavaScript JSON.parse) can read."""
+
+    @staticmethod
+    def _strict_loads(line: str):
+        # a parse that rejects NaN/Infinity anywhere, like a real client
+        return json.loads(
+            line, parse_constant=lambda s: (_ for _ in ()).throw(
+                AssertionError(f"non-finite literal {s} on the wire")))
+
+    def test_nan_id_line_gets_parse_error(self):
+        out = io.StringIO()
+        serve(io.StringIO(
+            '{"jsonrpc": "2.0", "id": NaN, "method": "ping"}\n'), out,
+            request=lambda a, **k: {"ok": True})
+        r = self._strict_loads(out.getvalue())
+        assert_valid_response(r, None, error=True)
+        assert r["error"]["code"] == -32700
+
+    def test_infinity_anywhere_gets_parse_error(self):
+        out = io.StringIO()
+        serve(io.StringIO(
+            '{"jsonrpc": "2.0", "id": 1, "method": "ping", '
+            '"params": {"x": Infinity}}\n'), out,
+            request=lambda a, **k: {"ok": True})
+        r = self._strict_loads(out.getvalue())
+        assert r["error"]["code"] == -32700
+
+    def test_nonfinite_id_rejected_at_validation_too(self):
+        # direct handle_message callers bypass json.loads: validation
+        # must reject a non-finite id just the same
+        for bad in (float("nan"), float("inf"), float("-inf")):
+            msg = {"jsonrpc": "2.0", "id": bad, "method": "ping"}
+            r = assert_valid_response(handle_message(msg), None, error=True)
+            assert r["error"]["code"] == -32600, bad
+
+    def test_nan_in_daemon_payload_degrades_to_valid_json(self):
+        def nan_daemon(action, **kw):
+            return {"ok": True, "score": float("nan")}
+
+        out = io.StringIO()
+        serve(io.StringIO(json.dumps(
+            rpc("tools/call", name="status", arguments={})) + "\n"), out,
+            request=nan_daemon)  # explicit: never touch a real daemon
+        line = out.getvalue().strip()
+        r = self._strict_loads(line)  # still strictly parseable
+        assert r["result"]["isError"] is True  # a visible tool error, not
+        # invalid JSON embedded in the result text
+
+
 class TestInspectorHandshake:
     """The full MCP Inspector flow over the stdio loop: initialize ->
     notifications/initialized -> tools/list -> tools/call, with response
