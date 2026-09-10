@@ -2,7 +2,6 @@
 
 Run with:  pytest -m slow tests/test_e2e_transcribe.py
 """
-import ssl
 import urllib.request
 from pathlib import Path
 

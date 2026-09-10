@@ -16,9 +16,10 @@ from pathlib import Path
 
 import pytest
 
-from fluidvoice import backends, config as config_mod
-from fluidvoice.config import DEFAULTS, KNOWN_LANGUAGES
+from fluidvoice import backends
+from fluidvoice import config as config_mod
 from fluidvoice import daemon as dm
+from fluidvoice.config import DEFAULTS, KNOWN_LANGUAGES
 
 
 class FakeModelBackend:
@@ -450,8 +451,8 @@ class TestCliLanguageSubcommand:
         assert "cycled -> en (cycle)" in capsys.readouterr().out
 
     def test_dispatch_json_output(self, cfg_fixture, monkeypatch, capsys):
-        from fluidvoice import cli
         import fluidvoice.control as control_mod
+        from fluidvoice import cli
         monkeypatch.setattr(control_mod, "request",
                             lambda action, **kw: {"ok": False,
                                                   "error": "empty cycle"})
@@ -623,11 +624,10 @@ class TestGuard:
 
 class TestBackendCapabilities:
     def test_capability_flags(self):
-        from fluidvoice.backends.faster_whisper_backend \
-            import FasterWhisperBackend
+        from fluidvoice.backends.faster_whisper_backend import FasterWhisperBackend
+        from fluidvoice.backends.parakeet_onnx import ParakeetOnnxBackend
         from fluidvoice.backends.torch_whisper import TorchWhisperBackend
         from fluidvoice.backends.whisper_cpp import WhisperCppBackend
-        from fluidvoice.backends.parakeet_onnx import ParakeetOnnxBackend
         assert FasterWhisperBackend.surfaces_detected_language is True
         assert TorchWhisperBackend.surfaces_detected_language is True
         assert WhisperCppBackend.surfaces_detected_language is False
@@ -809,8 +809,6 @@ def loop():
 class TestSettingsUI:
     @staticmethod
     def _window(loop):
-        import gi
-        from gi.repository import GLib
         from fluidvoice.gtkui.settings_window import SettingsWindow
         from tests.test_gtkui import StubClient, pump
         c = StubClient()

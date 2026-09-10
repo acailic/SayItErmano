@@ -13,10 +13,13 @@ import numpy as np
 import pytest
 
 from fluidvoice import model_catalog
-from fluidvoice.backends.parakeet_onnx import (LogMelFeaturizer,
-                                               ParakeetOnnxBackend,
-                                               TdtGreedyDecoder, detokenize,
-                                               load_tokens_txt, slaney_mel_fb)
+from fluidvoice.backends.parakeet_onnx import (
+    LogMelFeaturizer,
+    ParakeetOnnxBackend,
+    TdtGreedyDecoder,
+    detokenize,
+    load_tokens_txt,
+)
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -296,8 +299,9 @@ def sessions_stub(_model_dir):
 
 
 def cfg(**model_overrides):
-    from fluidvoice.config import DEFAULTS
     import copy
+
+    from fluidvoice.config import DEFAULTS
     c = copy.deepcopy(DEFAULTS)
     c["model"].update(model_overrides)
     return c

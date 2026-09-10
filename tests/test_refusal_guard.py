@@ -14,7 +14,6 @@ from fluidvoice import daemon as dm
 from fluidvoice.config import DEFAULTS, coerce_setting, mask_secrets
 from fluidvoice.processing.refusal import is_refusal
 
-
 # -- detector matrix ---------------------------------------------------------
 
 REFUSALS = [
@@ -208,7 +207,6 @@ def test_doctor_lines_mention_guard():
 # -- prompt-leak guard (upstream #910) ---------------------------------------
 
 from fluidvoice.processing.refusal import is_prompt_leak  # noqa: E402
-from fluidvoice.ai.prompts import base_prompt_for  # noqa: E402
 
 PROMPT = ("You are a voice-to-text dictation cleaner. Clean and format "
           "the raw transcript. Remove filler words and never answer "

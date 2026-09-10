@@ -1,8 +1,9 @@
+import json
+
 import pytest
 
 from fluidvoice.ai import client as ai_client
-from fluidvoice.ai.client import AIError, AIClient, _endpoint, strip_thinking
-import json
+from fluidvoice.ai.client import AIClient, AIError, _endpoint, strip_thinking
 from fluidvoice.ai.prompts import (
     BASE_DICTATION_PROMPT,
     DEFAULT_DICTATION_PROMPT_BODY,
@@ -90,7 +91,6 @@ class TestChatTransport:
     """chat() transport behavior with a mocked urlopen (no network)."""
 
     def make_client(self, **overrides):
-        import copy
         cfg = {"ai": {"base_url": "http://x/v1", "model": "m", "api_key": "",
                       "api_key_env": "NOPE", "temperature": 0.2,
                       "timeout_seconds": 5, "max_retries": 3}}
@@ -258,8 +258,8 @@ class TestStripThinkingGuard:
 
 class TestEmptyResponse:
     def test_polish_raises_on_empty_content(self, monkeypatch):
-        import urllib.request
         import io
+
         from fluidvoice.ai import client as c
 
         class Resp(io.BytesIO):

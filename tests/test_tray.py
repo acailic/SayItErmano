@@ -1,8 +1,14 @@
 """Tray icon tests (headless - no D-Bus session needed)."""
 from __future__ import annotations
 
-from fluidvoice.tray import (TRAY_SIZE, KIND_CHECK, KIND_SEPARATOR,
-                             TrayIcon, list_microphones, render_pixmaps)
+from fluidvoice.tray import (
+    KIND_CHECK,
+    KIND_SEPARATOR,
+    TRAY_SIZE,
+    TrayIcon,
+    list_microphones,
+    render_pixmaps,
+)
 
 
 class TestPixmaps:
@@ -129,8 +135,8 @@ class TestMenuModel:
     def test_menu_orders_mics_by_priority(self, monkeypatch):
         import copy
 
-        import fluidvoice.tray as tray_mod
         import fluidvoice.daemon as dm
+        import fluidvoice.tray as tray_mod
         from fluidvoice.config import DEFAULTS
         from tests.test_daemon import StubRecorder
 

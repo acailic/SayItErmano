@@ -15,9 +15,14 @@ import pytest
 
 from fluidvoice import backends
 from fluidvoice.audio_utils import raw_to_wav_bytes
-from fluidvoice.config import (DEFAULTS, apply_settings, coerce_setting,
-                               mask_secrets, save_config, load_config)
-
+from fluidvoice.config import (
+    DEFAULTS,
+    apply_settings,
+    coerce_setting,
+    load_config,
+    mask_secrets,
+    save_config,
+)
 from tests.fake_remote_stt_server import FakeRemoteSttServer
 
 SECRET = "sk-test-DO-NOT-PRINT-9f1c"
@@ -447,8 +452,8 @@ class TestStandaloneServer:
         server. Run the real CLI and expect a listening line + a refusal."""
         import subprocess
         import sys
-        import urllib.request
         import urllib.error
+        import urllib.request
         proc = subprocess.Popen(
             [sys.executable, str(Path(__file__).parent /
                                  "fake_remote_stt_server.py"),
@@ -468,3 +473,4 @@ class TestStandaloneServer:
         finally:
             proc.terminate()
             proc.wait(timeout=5)
+            proc.stdout.close()  # -W error gate: no unclosed-pipe ResourceWarning

@@ -3,7 +3,6 @@ handle_request (direct dispatch, stub backend — no network/audio)."""
 from __future__ import annotations
 
 import copy
-import json
 import math
 import struct
 import wave

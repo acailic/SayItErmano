@@ -4,8 +4,7 @@ import time
 
 import pytest
 
-from fluidvoice import control
-from fluidvoice import paths
+from fluidvoice import control, paths
 
 pytestmark = [pytest.mark.integration]
 
@@ -41,7 +40,6 @@ class TestDaemonProcess:
         assert resp["ok"] is False and "nothing" in (resp.get("error") or "")
 
     def test_shutdown_cleans_socket(self, daemon_process):
-        import subprocess
         socket = paths.socket_path()
         assert socket.exists()
         daemon_process.send_signal(2)  # SIGINT -> graceful shutdown

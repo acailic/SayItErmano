@@ -1,14 +1,10 @@
 """Real audio subsystems: pw-record capture, raw->WAV, GPU transcription,
 streaming preview engine with the real model."""
-import subprocess
 import time
-from pathlib import Path
 
 import pytest
 
-from fluidvoice import backends
 from fluidvoice.audio_utils import duration_seconds, raw_to_wav_file
-from fluidvoice.config import load_config
 from fluidvoice.preview import PreviewEngine, faster_whisper_transcriber
 
 pytestmark = [pytest.mark.integration, pytest.mark.slow]
@@ -86,6 +82,7 @@ class TestRealPreviewEngine:
         """Segmented engine on the real model: same transcript reach as the
         legacy engine, commit windows decoded exactly once."""
         import wave
+
         from fluidvoice.preview import SegmentedPreviewEngine, preview_transcriber
         with wave.open(str(jfk_wav)) as wf:
             pcm = wf.readframes(wf.getnframes())

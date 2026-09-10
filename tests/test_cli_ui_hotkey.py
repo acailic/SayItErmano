@@ -186,7 +186,7 @@ class TestHotkeyListenerConstruction:
                               cancel_key="F10 ")._resolve_cancel() == "F10"
 
     def test_modifier_mask_summed(self):
-        from fluidvoice.hotkey import HotkeyListener, MODIFIER_MASKS
+        from fluidvoice.hotkey import MODIFIER_MASKS, HotkeyListener
         listener = HotkeyListener("space", ["ctrl", "shift"], "hold", on_toggle=lambda: None)
         assert listener._mods == MODIFIER_MASKS["ctrl"] | MODIFIER_MASKS["shift"]
 
@@ -216,8 +216,14 @@ class TestHoldClassification:
 
     def test_classification_table(self):
         from Xlib import X
-        from fluidvoice.hotkey import (_HOLD_ABORT, _HOLD_END, _HOLD_IGNORE,
-                                       _HOLD_REPLAY, classify_hold_event)
+
+        from fluidvoice.hotkey import (
+            _HOLD_ABORT,
+            _HOLD_END,
+            _HOLD_IGNORE,
+            _HOLD_REPLAY,
+            classify_hold_event,
+        )
         hotkey, escape, other, modifier = 67, 9, 38, 50  # F9, Esc, 'a', Shift
         cases = [
             # hotkey release ends the hold
@@ -343,7 +349,6 @@ class TestHoldCycle:
 
     def _run(self, events=(), keymaps=(), ungrab_error=None,
              escape_keycode=9, close_pending=False, escape_grab_error=None):
-        from Xlib import X
         toggles, cancels = [], []
         listener = _hold_listener(toggles, cancels)
         listener._escape_keycode = escape_keycode
@@ -413,7 +418,6 @@ class TestHoldCycle:
         assert cancels == []
 
     def test_no_escape_keycode_skips_escape_grab(self):
-        from Xlib import X
         _, toggles, cancels, d = self._run(keymaps=[(self.HOTKEY,), ()],
                                            escape_keycode=None)
         assert toggles == [1, 1]

@@ -13,8 +13,12 @@ import threading
 import time
 from pathlib import Path
 
-from fluidvoice.preview import (SegmentedPreviewEngine, join_tail,
-                                preview_transcriber, trailing_silence_s)
+from fluidvoice.preview import (
+    SegmentedPreviewEngine,
+    join_tail,
+    preview_transcriber,
+    trailing_silence_s,
+)
 
 RATE = 16000
 BPS = RATE * 2  # s16 mono bytes per second
@@ -565,6 +569,7 @@ class TestFirstWordCapture:
 class TestDoctorPreviewLines:
     def test_defaults_show_segmented_engine(self):
         import copy
+
         from fluidvoice import doctor
         from fluidvoice.config import DEFAULTS
         lines = doctor._preview_lines(copy.deepcopy(DEFAULTS))
@@ -574,6 +579,7 @@ class TestDoctorPreviewLines:
 
     def test_disabled_and_off_variants(self):
         import copy
+
         from fluidvoice import doctor
         from fluidvoice.config import DEFAULTS
         cfg = copy.deepcopy(DEFAULTS)
@@ -606,6 +612,7 @@ class TestDaemonWiring:
 
     def make_daemon(self, tmp_path, monkeypatch, recorder):
         import copy
+
         from fluidvoice import daemon as dm
         from fluidvoice.config import DEFAULTS
         cfg = copy.deepcopy(DEFAULTS)
@@ -655,7 +662,7 @@ class TestDaemonWiring:
 
     def test_vad_auto_stop_stops_the_take(self, tmp_path, monkeypatch):
         import wave as wave_mod
-        from fluidvoice import daemon as dm
+
 
         class Rec:
             def __init__(self):
@@ -693,6 +700,7 @@ class TestDaemonWiring:
         wav, never a window mosaic. A future refactor that swaps stop-time
         transcription to concatenated preview windows fails here."""
         import wave as wave_mod
+
         from fluidvoice import daemon as dm
 
         take_s = 3.0  # > the 2 s preview window: a mosaic would truncate

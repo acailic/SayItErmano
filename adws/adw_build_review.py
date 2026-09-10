@@ -23,8 +23,7 @@ import argparse
 import sys
 
 from adw_modules import agents, gates, session, utils
-from adw_modules.data_types import (AgentCall, BuildOutput, PhaseParams,
-                                    ReviewOutput)
+from adw_modules.data_types import AgentCall, BuildOutput, PhaseParams, ReviewOutput
 
 REQUIRED_AGENTS = ["builder", "reviewer"]
 MAX_REVISION_LOOPS = 3

@@ -8,9 +8,13 @@ import threading
 import pytest
 
 from fluidvoice.config import DEFAULTS
-from fluidvoice.micmon import (MicMonitor, list_source_names,
-                               match_priority, priority_rank,
-                               sort_by_priority)
+from fluidvoice.micmon import (
+    MicMonitor,
+    list_source_names,
+    match_priority,
+    priority_rank,
+    sort_by_priority,
+)
 
 BLUEZ = "bluez_source.00_11_22_33_44_55.headset-mono"
 USBCAM = "alsa_input.usb-Cam.mono-fallback"

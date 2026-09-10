@@ -2,14 +2,16 @@ import pytest
 
 from fluidvoice.processing.dictionary import apply_custom_dictionary
 from fluidvoice.processing.fillers import remove_filler_words
-from fluidvoice.processing.slash import (MENTION_REJECTED_TOKENS,
-                                         SLASH_REJECTED_TOKENS,
-                                         SLASH_SPOKEN_LEAD_IN_WORDS,
-                                         squeeze_mentions,
-                                         squeeze_slash_commands,
-                                         squeeze_slash_mentions,
-                                         squeeze_spoken_mentions,
-                                         squeeze_spoken_slash_commands)
+from fluidvoice.processing.slash import (
+    MENTION_REJECTED_TOKENS,
+    SLASH_REJECTED_TOKENS,
+    SLASH_SPOKEN_LEAD_IN_WORDS,
+    squeeze_mentions,
+    squeeze_slash_commands,
+    squeeze_slash_mentions,
+    squeeze_spoken_mentions,
+    squeeze_spoken_slash_commands,
+)
 
 
 class TestFillers:
@@ -193,9 +195,10 @@ class TestSpokenSqueeze:
 
 class TestPipelineOrder:
     def test_fillers_then_dictionary_then_punctuation(self, ):
-        from fluidvoice.processing import post_process
-        from fluidvoice.config import DEFAULTS
         import copy
+
+        from fluidvoice.config import DEFAULTS
+        from fluidvoice.processing import post_process
         cfg = copy.deepcopy(DEFAULTS)
         cfg["processing"]["dictionary"] = [
             {"triggers": ["fluid voice"], "replacement": "FluidVoice"}]

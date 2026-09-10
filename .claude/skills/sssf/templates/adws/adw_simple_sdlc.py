@@ -45,9 +45,15 @@ import argparse
 import sys
 
 from adw_modules import agents, changes, gates, git_helper, quality, session, utils
-from adw_modules.data_types import (AgentCall, BuildOutput, ChangeCapture,
-                                    DocumentOutput, PhaseParams, PlanOutput,
-                                    ReviewOutput)
+from adw_modules.data_types import (
+    AgentCall,
+    BuildOutput,
+    ChangeCapture,
+    DocumentOutput,
+    PhaseParams,
+    PlanOutput,
+    ReviewOutput,
+)
 
 REQUIRED_AGENTS = ["planner", "builder", "reviewer", "documenter"]
 MAX_FIX_LOOPS = 3

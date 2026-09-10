@@ -17,11 +17,10 @@ from . import backends, insertion, ui
 from . import history as history_mod
 from .ai.client import AIError
 from .ai.prompts import base_prompt_for
-from .audio_utils import (duration_seconds, is_digital_silence, is_silent)
+from .audio_utils import duration_seconds, is_digital_silence, is_silent
 from .processing import post_process
 from .processing.per_app import match_app_prompt, system_prompt_for
-from .processing.refusal import (is_overcorrection, is_prompt_leak,
-                                 is_refusal)
+from .processing.refusal import is_overcorrection, is_prompt_leak, is_refusal
 from .processing.slash import squeeze_slash_mentions
 
 

@@ -43,7 +43,9 @@ class Backend:
 
 @pytest.fixture()
 def env(tmp_path, monkeypatch):
-    import wave, struct, math
+    import math
+    import struct
+    import wave
 
     with wave.open(str(tmp_path / "utt.wav"), "wb") as wf:
         wf.setnchannels(1)

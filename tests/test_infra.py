@@ -1,6 +1,5 @@
 import json
 import sys
-import threading
 from pathlib import Path
 
 import pytest
@@ -149,6 +148,7 @@ class TestDoctorFormattingLines:
 
     def test_disabled_shows_off(self):
         import copy
+
         from fluidvoice import doctor
         cfg = copy.deepcopy(DEFAULTS)
         cfg["processing"]["slash_mention_squeeze"] = False
@@ -159,6 +159,7 @@ class TestDoctorFormattingLines:
 
     def test_empty_list_counts_zero(self):
         import copy
+
         from fluidvoice import doctor
         cfg = copy.deepcopy(DEFAULTS)
         cfg["general"]["terminal_apps"] = []
@@ -180,6 +181,7 @@ class TestDoctorInsertionLines:
 
     def test_disabled_shows_off(self):
         import copy
+
         from fluidvoice import doctor
         cfg = copy.deepcopy(DEFAULTS)
         cfg["insertion"]["verify_paste"] = False
@@ -188,6 +190,7 @@ class TestDoctorInsertionLines:
 
     def test_custom_key_shown(self):
         import copy
+
         from fluidvoice import doctor
         cfg = copy.deepcopy(DEFAULTS)
         cfg["insertion"]["terminal_paste_key"] = "ctrl+alt+v"
@@ -213,6 +216,7 @@ class TestDoctorCommandModeLines:
 
     def test_ready_line_with_model(self):
         import copy
+
         from fluidvoice import doctor
         cfg = copy.deepcopy(DEFAULTS)
         cfg["ai"].update(enabled=True, base_url="http://x:11434/v1",
@@ -228,6 +232,7 @@ class TestDoctorCommandModeLines:
 
     def test_pattern_counts_builtin_plus_user(self):
         import copy
+
         from fluidvoice import doctor
         cfg = copy.deepcopy(DEFAULTS)
         cfg["command"]["destructive_patterns"] = ["git push", "shutdown"]
@@ -237,6 +242,7 @@ class TestDoctorCommandModeLines:
 
     def test_context_window_default_and_disabled(self):
         import copy
+
         from fluidvoice import doctor
         lines = doctor._command_mode_lines(DEFAULTS)
         assert any("context window: 300 s" in l
@@ -312,6 +318,7 @@ class TestDoctorHistoryLines:
 
     def test_seeded_history_counts_size_oldest_warning(self):
         import time
+
         from fluidvoice import doctor
         self._seed([
             {"ts": 1000000000.0, "text": "old"},

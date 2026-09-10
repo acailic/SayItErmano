@@ -162,7 +162,7 @@ def daemon_blocked_hotkey(isolated_env, tmp_path):
     BadAccess x8), then spawns the daemon logging to a file. Yielded handle:
     .proc (the daemon) and .release() (drops the conflicting grabs by
     closing the holder's X connection - X frees its passive grabs)."""
-    from Xlib import X, XK
+    from Xlib import XK, X
     from Xlib.display import Display
 
     from fluidvoice.hotkey import _LOCK_MASKS

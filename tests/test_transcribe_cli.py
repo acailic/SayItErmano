@@ -11,7 +11,6 @@ from fluidvoice import backends, cli
 from fluidvoice.cli import LARGE_INPUT_BYTES
 from fluidvoice.config import DEFAULTS
 from fluidvoice.processing import post_process
-
 from tests.test_daemon import StubBackend, make_wav
 
 
@@ -146,7 +145,6 @@ class TestWarningsAndErrors:
         assert len(patched.calls) == 1
 
     def test_conversion_tempdir_cleaned(self, monkeypatch, tmp_path, capsys):
-        import shutil
 
         made = {"n": 0}
 

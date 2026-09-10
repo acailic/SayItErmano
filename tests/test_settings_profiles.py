@@ -23,8 +23,13 @@ if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
 
 from gi.repository import GLib  # noqa: E402
 
-from fluidvoice.config import (DEFAULTS, apply_settings, coerce_setting,  # noqa: E402
-                               load_config, save_config)
+from fluidvoice.config import (  # noqa: E402
+    DEFAULTS,
+    apply_settings,
+    coerce_setting,
+    load_config,
+    save_config,
+)
 from fluidvoice.gtkui.client import Client  # noqa: E402
 
 
@@ -217,6 +222,7 @@ class TestProfilesCrud:
     def test_file_is_0600_and_valid_json(self, tmp_path):
         import json
         import os
+
         from fluidvoice.ai import profiles
         p = tmp_path / "prompt-profiles.json"
         profiles.save_named("n", "p", path=p)
@@ -291,6 +297,7 @@ class TestProfilesCrud:
 
     def test_non_str_values_dropped(self, tmp_path):
         import json
+
         from fluidvoice.ai import profiles
         p = tmp_path / "p.json"
         p.write_text(json.dumps({"ok": "yes", "num": 5, "": "empty name"}))

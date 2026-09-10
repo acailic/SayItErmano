@@ -103,7 +103,7 @@ class TestHoldPassthroughLive:
             self, daemon_hold_hotkey):
         from tests.integration.conftest import skip_if_gpu_busy
         skip_if_gpu_busy()  # the take is transcribed (real model) after the hold
-        from Xlib import X, XK
+        from Xlib import XK, X
         from Xlib.display import Display
 
         d = Display()
@@ -320,6 +320,7 @@ class TestSelectionHoldLive:
 class TestOverlayLive:
     def test_pill_overlay_renders_text_pixels(self):
         from PIL import Image
+
         from fluidvoice.overlay import BOTTOM_OFFSET, PILL_H, FluidOverlay
         overlay = FluidOverlay()
         assert overlay.using_overlay, "expected the X11 pill overlay on this display"
@@ -516,11 +517,11 @@ class TestMousePTTLive:
             pass
 
     def test_blocked_arm_then_recovery(self, daemon_mouse_ptt, tmp_path):
-        from tests.integration.conftest import _spawn_and_wait, _stop_daemon
         from Xlib import X
         from Xlib.display import Display
 
         from fluidvoice.hotkey import _LOCK_MASKS
+        from tests.integration.conftest import _spawn_and_wait, _stop_daemon
 
         # 1. tear the fixture's daemon down FIRST (it holds the button-8
         #    grabs); its X connection drop frees them

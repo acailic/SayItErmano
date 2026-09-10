@@ -4,12 +4,10 @@ from __future__ import annotations
 import shutil
 import subprocess
 import wave
-from pathlib import Path
 
 import pytest
 
-from fluidvoice.audio_utils import AudioFormatError, SUPPORTED_AUDIO_EXTS, ensure_wav
-
+from fluidvoice.audio_utils import SUPPORTED_AUDIO_EXTS, AudioFormatError, ensure_wav
 from tests.test_daemon import make_wav
 
 

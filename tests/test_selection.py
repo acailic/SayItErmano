@@ -5,9 +5,13 @@ from types import SimpleNamespace
 import pytest
 
 from fluidvoice import selection
-from fluidvoice.selection import (MAX_HOLD_BYTES, SelectionHold,
-                                  SelectionUnavailable, _is_text_target,
-                                  _new_reader)
+from fluidvoice.selection import (
+    MAX_HOLD_BYTES,
+    SelectionHold,
+    SelectionUnavailable,
+    _is_text_target,
+    _new_reader,
+)
 
 
 class TestPureHelpers:

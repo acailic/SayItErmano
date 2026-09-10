@@ -186,8 +186,7 @@ class TestUsageStats:
         assert s["best_streak"] == 3 and s["streak"] == 2
 
     def test_minutes_saved_formula_and_empty(self):
-        from fluidvoice.history import (DICTATION_WPM, TYPING_WPM,
-                                        usage_stats)
+        from fluidvoice.history import DICTATION_WPM, TYPING_WPM, usage_stats
         now = self.at("2026-09-05", 23)
         s = usage_stats([self.e("2026-09-05")], now)  # 2 words
         assert s["minutes_saved"] == 2 * (1 / TYPING_WPM - 1 / DICTATION_WPM)

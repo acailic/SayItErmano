@@ -9,10 +9,9 @@ queued callbacks the way the real Display delivers errors.
 """
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import copy
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from Xlib import XK
