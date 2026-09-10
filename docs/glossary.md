@@ -64,6 +64,24 @@ remote (OpenAI-compatible endpoint; outbound only, never a listener).
 `model.backend = "auto"` picks by availability; the remote URL, while
 set, wins over every local choice. Lives in `fluidvoice/backends/`.
 
+**context provider** — The P2 seam behind one insertion-time read:
+`read_focus_context()` returns a `FocusContext` (app identity,
+accessible role, selection, bounded preceding text, stale/missing
+flags). X11 adapter (WM_CLASS identity only) and AT-SPI adapter (lazy
+import, bounded tree walk, identity fallback marked stale); the
+factory hands the pipeline a one-shot callable, never a handle.
+Read ONCE immediately before insertion; nothing persisted anywhere
+(off by default until the smoke matrices pass). Lives in
+`fluidvoice/context/`.
+
+**behavior profile** — Per-app dictation policy in `[profiles] rules`:
+`match` patterns → `terminal`, `prompt_profile`/`instructions`,
+`insertion_mode`, `formatting_mode` (gaav), `spoken_send`
+(on/off). Canonical rules win over the legacy `terminal_apps` /
+`per_app_prompts` keys, which remain read as fallback until v1.0 and
+migrate into rules on the first settings save. Lives in
+`fluidvoice/profiles.py`.
+
 **PTT (push-to-talk)** — Hold-style activation: press starts the take,
 release stops and transcribes. Keyboard holds release the XGrabKey
 activation so other keys pass through natively; mouse PTT
