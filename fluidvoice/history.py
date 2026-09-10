@@ -645,16 +645,6 @@ def scrub_test_entries(*, apply: bool = False) -> tuple[int, int, Path | None]:
     return _store.scrub_test_entries(apply=apply)
 
 
-def _rewrite(keep, drop_audio: bool) -> int:
-    """Pre-P0.3 internal entry point, kept as a locked transaction."""
-    return _store.rewrite(keep, drop_audio)
-
-
-def _enforce_entry_cap(hpath: Path) -> None:
-    with HistoryStore(hpath)._locked(exclusive=True):
-        _enforce_entry_cap_unlocked(hpath)
-
-
 # -- test-row scrub -------------------------------------------------------------
 
 # The exact command strings the suite's command-mode tests wrote into live

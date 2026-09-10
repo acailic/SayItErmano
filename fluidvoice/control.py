@@ -29,9 +29,6 @@ __all__ = ["ControlError", "ControlServer", "serve", "request",
            "probe_live", "MAX_REQUEST_BYTES", "MAX_RESPONSE_BYTES",
            "IDLE_TIMEOUT_S", "SOCKET_MODE", "WORKERS"]
 
-# the probe lived here before ControlServer moved it
-_probe_live = probe_live
-
 
 def serve(handler: Callable[[dict], dict], path: Path | None = None,
           ready: Event | None = None) -> ControlServer:

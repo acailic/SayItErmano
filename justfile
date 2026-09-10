@@ -65,7 +65,7 @@ validate-requests:
 # prepare bumps the version, runs the full gate + locked deb build, commits
 # and pushes. You then dispatch CI for the produced SHA from the Actions
 # tab, and publish verifies that green CI run for the EXACT SHA before
-# tagging/uploading. Full flow: docs/release-gates.md
+# tagging/uploading. Full flow: docs/dev/release-gates.md
 
 # dispatch release-prepare for VERSION (e.g. just release-prepare 0.8.2)
 release-prepare VERSION:
