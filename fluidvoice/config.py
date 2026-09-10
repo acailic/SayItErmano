@@ -1,13 +1,23 @@
 """Configuration: TOML file at ~/.config/fluidvoice/config.toml.
 
 Every key has a default; the file only needs to contain overrides.
+
+P1.3 — one configuration registry. ``REGISTRY`` is the single source of
+truth for every setting: its default, validation/coercion, persistence
+(saved to file? settable over the socket?), apply mode (immediate /
+engine reload / daemon restart), secret masking, and the commented
+template are all DERIVED from it. The public surface stays compatible:
+``DEFAULTS``, ``load_config``'s dict shape, ``save_config`` whitelisting,
+``apply_settings`` semantics, and the legacy ``SETTING_*`` tables keep
+their names and behavior — they are just derived from the registry now.
 """
 from __future__ import annotations
 
 import copy
 import tomllib
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from . import paths
 
@@ -26,817 +36,182 @@ KNOWN_LANGUAGES: list[str] = [
     "hu", "ro", "bg", "el", "tr", "zh", "ja", "ko", "ar", "hi",
 ]
 
-DEFAULTS: dict[str, Any] = {
-    "general": {
-        "language": "auto",  # whisper language code or "auto"
-        # ordered codes the cycle hotkey steps through (may include "auto");
-        # empty = the cycle feature is off even when hotkey.language_key
-        # is bound. Read live by the daemon; the cycle STATE is runtime-only
-        # and never persisted.
-        "language_cycle": [],
-        # wrong-language guard: when auto-detection lands outside these
-        # codes, one re-decode with the first entry. Empty = off.
-        "language_whitelist": [],
-        "copy_to_clipboard": False,  # upstream copyTranscriptionToClipboard
-        "tray_enabled": True,  # panel/tray icon while the daemon runs
-        # case-insensitive WM_CLASS substrings: spoken-send never presses
-        # Enter here and typed insertions gain a trailing autocomplete space
-        "terminal_apps": [
-            "gnome-terminal", "kgx", "konsole", "xterm", "alacritty",
-            "kitty", "wezterm", "ghostty", "foot", "tilix", "terminator",
-            "guake", "yakuake", "st-256color", "warp",
-        ],
-        # hotkeys ignored + active dictation cancelled while the session is
-        # locked/suspended (logind lock watch, see fluidvoice/lockmon.py)
-        "pause_when_locked": True,
-    },
-    "hotkey": {
-        # X11 keysym name. Modifier-only keys (Right_Control, Right_Alt,
-        # Right_Shift, Super_R...) work in "toggle" mode only.
-        "key": "Right_Control",
-        "modifiers": [],  # any of: ctrl, alt, shift, super
-        # toggle | hold | both (hold/both need a non-modifier key; keys
-        # typed during a hold pass through to the focused app natively -
-        # the keyboard is freed for the duration; swallowed only if freeing
-        # it fails). "both" = upstream Automatic: a quick tap toggles, a
-        # held key talks (250 ms disambiguation window).
-        "mode": "toggle",
-        # macOS parity: Escape cancels an in-progress dictation (discards,
-        # nothing typed). Grabbed ONLY while recording; "none" disables.
-        "cancel_key": "Escape",
-        "rewrite_key": "",  # optional keysym for Rewrite mode (needs [ai])
-        "command_key": "",  # optional keysym for Command mode (needs [ai])
-        "paste_key": "",  # optional keysym: re-type the last transcription
-        # optional keysym: cycles the runtime language override through
-        # general.language_cycle ("" = off; the cycle state itself is
-        # never persisted)
-        "language_key": "",
-        # up to 2 EXTRA dictation shortcuts (3 total with the primary),
-        # each optionally bound to a named prompt profile (ai/profiles):
-        # extra_shortcuts = [{key = "F8", profile = "Terse notes"}]
-        "extra_shortcuts": [],
-        # Wayland (no global grabs): optional physical push-to-talk read
-        # straight from /dev/input (PRIVILEGED: needs the input group and
-        # python-evdev, `pip install 'sayit-ermano[wayland]'`). Off by
-        # default; the DE-shortcut assist is the primary wayland hotkey.
-        "wayland_evdev": False,
-        "wayland_evdev_device": "",  # device-name substring, e.g. "Keyboard"
-        "wayland_evdev_key": "KEY_RIGHTCTRL",  # ecodes KEY_* name
-    },
-    "recording": {
-        "command": "auto",  # auto | pw-record | parecord
-        "device": "",  # optional PipeWire target / PulseAudio device
-        "mic_priority": [],  # ordered name patterns for auto mic switching
-        "max_seconds": 300,
-        "skip_silent": False,  # skip obviously-silent recordings <= 4s
-        "first_pcm_timeout": 2.0,  # fail fast if the mic sends no audio (0 = off)
-        # mid-take stall watchdog (upstream #852): a frozen capture stream
-        # (device glitch/route change) cancels the take with a clear error
-        # instead of recording air until max_seconds; 0 = off
-        "stall_timeout_s": 8.0,
-        "sample_rate": 16000,
-        # Spoken-send: a trailing phrase strips and presses Enter after typing
-        "spoken_send_enabled": False,
-        "spoken_send_phrase": "send it",
-        "spoken_send_key": "enter",  # enter | shift+enter | ctrl+enter
-        # quiet countdown after the phrase (B7): 0.5 s of silence with the
-        # phrase at the end arms a countdown of this many seconds, then the
-        # dictation finishes by itself (speak again to cancel); 0 = off
-        "spoken_send_countdown_s": 1.2,
-        # Live transcription preview while recording
-        "preview_enabled": True,
-        "preview_mode": "auto",   # auto (pill, falls back) | overlay | notify
-        "preview_interval": 1.2,   # seconds between partial passes
-        "preview_min_audio": 1.0,  # seconds before the first partial
-        "preview_bottom_offset": 64,  # pill px above the screen bottom edge
-        "preview_overlay_size": "medium",  # pill | small | medium | large (macOS sizes)
-        # Segmented streaming preview: fixed windows (50% hop), one decode
-        # per tick instead of re-decoding the whole take; the trailing-
-        # silence VAD auto-stops the take after vad_silence_s of quiet.
-        "preview_segmented": True,
-        "preview_segment_s": 2.0,      # window length in seconds
-        "preview_vad_silence_s": 2.0,  # 0 disables the auto-stop
-        "overlay_chips": True,   # hover action chips above the pill (X11)
-        "pause_media": True,  # pause MPRIS players while dictating (resume after)
-        # mouse push-to-talk: "button8"/"b8" (6-255; 1-5 refused - they would
-        # break the desktop). Empty = off. Independent of hotkey.mode - the
-        # button is always hold-style.
-        "push_to_talk_button": "",
-        # extra modifiers to require for the button (any of ctrl/alt/shift/super)
-        "push_to_talk_modifiers": [],
-    },
-    "model": {
-        "backend": "auto",  # auto | faster-whisper | whisper-torch | whisper.cpp | parakeet
-        "name": "auto",  # auto -> small (CUDA) / base (CPU); tiny...large-v3-turbo; parakeet catalog names for backend="parakeet"
-        "device": "auto",  # auto | cuda | cpu
-        "compute": "auto",  # auto | float16 | int8
-        "whispercpp_model": "",  # catalog name (ggml-base.bin...) or path to a ggml/gguf model for whisper.cpp
-        "eager_warmup": True,  # load the model at daemon start (preview-ready)
-        # seconds with NO dictation activity before the loaded model is
-        # released (RAM/VRAM freed); 0 = never unload. 30..86400 when set.
-        # The first dictation after an unload pays the model load time.
-        "idle_unload_s": 0,
-        # per-model language overrides: {model_key: code} across all
-        # catalogs; missing key / "" inherits general.language, "auto"
-        # forces detection for that model (read per-dictation, applies live)
-        "languages": {},
-        # Remote OpenAI-compatible STT server (local-first: OFF unless a
-        # URL is set). The recorded WAV is POSTed as multipart to
-        # <remote_url>/v1/audio/transcriptions (LAN vLLM/whisper.cpp/NIM...)
-        "remote_url": "",  # empty = local models only; http(s)://host[:port]
-        "remote_model": "whisper-large-v3",  # name sent in the form
-        "remote_api_key": "",  # optional bearer token (masked, never logged)
-        "remote_timeout_s": 30,  # per-request timeout (5..600)
-        # custom vocabulary BOOSTING (upstream #916): words to bias the
-        # decoder toward (names, jargon) - NOT replacements; fed to
-        # faster-whisper as hotwords, to whisper-torch/preview as
-        # initial_prompt. Changing it reloads the speech engine.
-        "hotwords": [],
-    },
-    "processing": {
-        "remove_filler_words": True,
-        "filler_words": list(DEFAULT_FILLERS),
-        "punctuation_enabled": True,
-        "punctuation_prefix": "literal",  # spoken prefix, e.g. "literal comma"
-        # extra spoken formatting-action trigger aliases (B4): action name
-        # -> aliases, on top of the built-ins. Example:
-        # formatting_action_triggers = {new_line = ["nova vrstica"]}
-        "formatting_action_triggers": {},
-        "dictionary": [],  # [{ triggers = ["miro board"], replacement = "Miro board" }]
-        # GAAV: casual/search-field formatting of the final text
-        "gaav_enabled": False,
-        "gaav_lowercase_first": True,
-        "gaav_remove_trailing_period": True,
-        # chat-app literal squeeze: "/ fix" -> "/fix", "@ John Smith" ->
-        # "@John Smith" (upstream DictationLiteralFormatting, literal forms)
-        "slash_mention_squeeze": True,
-    },
-    "ai": {
-        # OpenAI-compatible chat endpoint (OpenAI, Groq, Ollama /v1, LM Studio, llama.cpp server...)
-        "enabled": False,
-        "base_url": "http://localhost:11434/v1",
-        "model": "",
-        "api_key": "",  # preferred: leave empty and use api_key_env
-        "api_key_env": "SAYITERMANO_API_KEY",
-        "temperature": 0.2,
-        "timeout_seconds": 120,
-        "max_retries": 3,
-        # upstream per-app prompt sets: [{"apps": ["zed"], "instructions": "..."}]
-        "per_app_prompts": [],
-        # custom base prompt for AI polish (empty = the built-in dictation
-        # prompt; Settings → AI can save named presets of it)
-        "base_prompt": "",
-        # refusal guardrail (D5): a polish reply that reads as an LLM
-        # refusal ("I'm sorry, I can't assist...") never reaches the doc -
-        # the raw transcript is typed instead, with a notification
-        "refusal_guard": True,
-    },
-    "insertion": {
-        "mode": "typed",  # typed | paste | auto (typed, falls back to paste)
-        "type_delay_ms": 8,
-        "paste_threshold_chars": 1200,  # longer texts use clipboard paste
-        "terminal_autocomplete_space": True,  # one trailing space in terminals
-        # Verify the paste landed (selection read) before restoring the
-        # clipboard; false = legacy fixed-delay restore
-        "verify_paste": True,
-        # Keystroke used to paste in terminal apps (general.terminal_apps);
-        # X11 terminals need ctrl+shift+v
-        "terminal_paste_key": "ctrl+shift+v",
-        # Wayland typing tool: auto | wtype | ydotool. auto prefers wtype
-        # (wlroots/KDE) and skips it on GNOME (no virtual-keyboard
-        # protocol), falling back to ydotool (needs ydotoold + uinput).
-        "wayland_tool": "auto",
-    },
-    "sounds": {
-        "enabled": True,
-        "volume": 1.0,  # 0.0 - 1.0
-    },
-    "notifications": {
-        "enabled": True,
-    },
-    "updates": {
-        # check GitHub releases for a newer version (once per daemon start
-        # + daily; see fluidvoice/update.py). The updater NEVER installs
-        # anything - it notifies and prints the upgrade command.
-        "check": True,
-        "notify": True,  # desktop notification when a newer release appears
-    },
-    "history": {
-        "save": True,
-        "save_audio": False,
-        "audio_budget_gb": 4.0,
-    },
-    "command": {
-        "max_turns": 4,           # agent loop bound (upstream: 20)
-        "working_dir": "",       # "" -> $HOME
-        "timeout_seconds": 60.0,  # per-command subprocess timeout
-        "confirm_timeout_s": 120.0,  # auto-cancel a pending confirmation
-        "destructive_patterns": [],  # user additions to the built-in list
-        "context_window_s": 300.0,   # follow-up context window (0 = off)
-    },
-}
-
-
-def _deep_merge(base: dict, override: dict) -> dict:
-    out = copy.deepcopy(base)
-    for k, v in override.items():
-        if isinstance(v, dict) and isinstance(out.get(k), dict):
-            out[k] = _deep_merge(out[k], v)
-        else:
-            out[k] = copy.deepcopy(v)
-    return out
-
-
-def load_config(path: Path | None = None) -> dict:
-    """Load config, deep-merged over DEFAULTS. Unknown keys are kept."""
-    path = path or paths.config_file()
-    user: dict = {}
-    if path.exists():
-        with open(path, "rb") as fh:
-            user = tomllib.load(fh)
-    user.pop("server", None)  # retired web UI section (spec: strip silently)
-    return _deep_merge(DEFAULTS, user)
-
-
-TEMPLATE = """\
-# SayItErmano configuration.
-# Delete any line to fall back to the built-in default.
-
-[general]
-# Whisper language code ("auto" detects, or "en", "de", ...)
-language = "auto"
-# Ordered language codes the cycle hotkey steps through, e.g.
-# ["auto", "en", "sl"] - may include "auto"; empty = cycle key off.
-# The cycle override is RUNTIME daemon state and never persisted.
-language_cycle = []
-# Wrong-language guard: when language = "auto" detects a language NOT in
-# this list, the take is re-decoded once with the first entry, e.g.
-# ["sl", "en"]. Empty = off.
-language_whitelist = []
-# Also copy every transcription to the clipboard
-copy_to_clipboard = false
-# Case-insensitive WM_CLASS substrings identifying terminals. In these apps
-# spoken-send never presses Enter (a half-typed shell line would EXECUTE)
-# and typed insertions gain one trailing space so autocomplete commits.
-terminal_apps = ["gnome-terminal", "kgx", "konsole", "xterm", "alacritty", "kitty", "wezterm", "ghostty", "foot", "tilix", "terminator", "guake", "yakuake", "st-256color", "warp"]
-# Ignore hotkeys and cancel an active dictation while the session is
-# locked/suspended (logind lock watch; tray notes "paused (locked)")
-pause_when_locked = true
-
-[hotkey]
-# X11 keysym name of the dictation hotkey. Examples:
-#   "Right_Control", "Right_Alt", "F9", "space", "Pause"
-# Modifier-only keys (Right_Control / Right_Alt / Right_Shift / Super_R)
-# only work with mode = "toggle".
-key = "Right_Control"
-# Extra modifiers to require, e.g. ["ctrl", "shift"]
-modifiers = []
-# "toggle": tap to start, tap again to stop & transcribe.
-# "hold":   push-to-talk (non-modifier key only). Other keys typed during
-#           the hold pass through to the focused app natively (the keyboard
-#           is freed for the hold's duration; swallowed only if freeing it
-#           fails). The held hotkey's auto-repeats also reach the app.
-mode = "toggle"
-# Optional extra key that cancels a running recording (keysym name, "" = off)
-cancel_key = ""
-# Optional keysym that cycles the language at runtime (steps through
-# general.language_cycle; the cycle state is never persisted)
-language_key = ""
-# Wayland push-to-talk via evdev (privileged: needs the input group +
-# python-evdev). wayland_evdev_device matches /dev/input device names
-# by substring; wayland_evdev_key is an ecodes KEY_* name.
-wayland_evdev = false
-wayland_evdev_device = ""
-wayland_evdev_key = "KEY_RIGHTCTRL"
-
-[recording]
-# auto | pw-record | parecord
-command = "auto"
-# Optional PipeWire node target (pw-record --target) / PulseAudio source.
-device = ""
-# Ordered microphone priority patterns — case-insensitive substrings of
-# the PulseAudio/PipeWire source name, first match wins, e.g.
-#   ["bluez", "usb-cam"]   # Bluetooth headset first, then a USB webcam
-# When the configured `device` above disappears, FluidVoice switches to
-# the first available match and notifies you. Switching never happens
-# mid-dictation: the take finishes on the still-open stream and the
-# fallback applies within a few seconds after it. With device = ""
-# ("auto") the system default is followed and never overridden.
-mic_priority = []
-max_seconds = 300
-# Skip recordings <= 4s that are pure silence
-skip_silent = false
-# Stop early when the microphone sends no audio at all (muted/wrong device)
-first_pcm_timeout = 2.0
-# Cancel the take when the capture stream freezes mid-dictation for this
-# many seconds (device glitch/route change) - 0 = off
-stall_timeout_s = 8.0
-# Mouse push-to-talk: hold this button to dictate (always hold-style,
-# independent of hotkey.mode). "button8"/"b8"/"8" - buttons 6-255 only;
-# 1-5 (click/scroll) are refused, they would break the desktop. Thumb
-# buttons are usually 8/9 (6/7 on some mice). Empty = off.
-push_to_talk_button = ""
-# Extra modifiers to require for the button, e.g. ["ctrl"]
-push_to_talk_modifiers = []
-# Spoken-send quiet countdown: after the send phrase ends the dictation
-# and you go quiet (0.5 s), a countdown of this many seconds finishes
-# the take by itself (speak again to cancel); 0 = off. Needs
-# spoken_send_enabled (Settings -> Recording).
-# spoken_send_countdown_s = 1.2
-
-[model]
-# auto | faster-whisper | whisper-torch | whisper.cpp | parakeet
-backend = "auto"
-# auto -> "small" when CUDA is available, "base" otherwise.
-# Or one of: tiny, base, small, medium, large-v3, large-v3-turbo
-# with backend="parakeet": parakeet-tdt-0.6b-v2 | parakeet-tdt-0.6b-v3
-name = "auto"
-device = "auto"   # auto | cuda | cpu
-compute = "auto"  # auto | float16 | int8
-# ggml/gguf model for the whisper.cpp backend: a catalog name
-# (ggml-base.bin, ggml-small.en.bin, ...) or a path to a file
-whispercpp_model = ""
-# Per-model language overrides, e.g. languages = { small = "de", "ggml-base.en.bin" = "en" }
-# "auto" = always detect for that model; a missing key follows general.language
-languages = {}
-# Remote STT server (OpenAI-compatible /v1/audio/transcriptions) - local-first:
-# nothing leaves this machine while remote_url is empty. Point it at a LAN
-# GPU box (vLLM/whisper.cpp server/NIM/DGX Spark) or any compatible cloud.
-# remote_url = "http://192.168.1.50:8000"
-# remote_model = "whisper-large-v3"
-# remote_api_key = ""            # optional bearer; masked everywhere
-# remote_timeout_s = 30
-# Custom vocabulary biasing (words to ADD - names, jargon; the dictionary
-# is for replacements): fed to the decoder as hints. Changing this key
-# reloads the speech engine.
-# hotwords = ["SayItErmano", "PipeWire"]  # <=20 focused words: long
-#                                          # lists over-bias the decoder
-# Unload the speech model after this many idle seconds to free RAM/VRAM
-# (0 = keep it loaded forever; range 30..86400 when set). The next
-# dictation after an unload pays the model load time again.
-# idle_unload_s = 300
-
-[processing]
-remove_filler_words = true
-# Filler words removed before punctuation formatting
-filler_words = ["um", "uh", "er", "ah", "eh", "umm", "uhh", "err", "ahh", "ehh", "hmm", "hm", "mm", "mmm", "erm", "urm", "ugh"]
-punctuation_enabled = true
-# Spoken commands require this prefix word: "literal comma" -> ","
-punctuation_prefix = "literal"
-# Custom dictionary: [[ { triggers = ["miro board"], replacement = "Miro board" } ]]
-dictionary = []
-# Chat-app literal squeeze: "/ fix the deploy" -> "/fix the deploy",
-# "@ John Smith" -> "@John Smith" (runs after AI cleanup, before GAAV)
-slash_mention_squeeze = true
-
-[ai]
-# Optional AI polish of the raw transcript (FluidVoice's headline feature).
-# Any OpenAI-compatible /v1/chat/completions endpoint works:
-#   OpenAI   https://api.openai.com/v1
-#   Groq     https://api.groq.com/openai/v1
-#   Ollama   http://localhost:11434/v1
-#   LM Studio http://localhost:1234/v1
-enabled = false
-base_url = "http://localhost:11434/v1"
-model = ""
-api_key = ""             # preferred: leave empty and export the env var below
-api_key_env = "SAYITERMANO_API_KEY"
-temperature = 0.2
-timeout_seconds = 120
-max_retries = 3
-# Custom base prompt for AI polish (empty = built-in). Settings → AI can
-# save named presets of it (prompt profiles).
-# base_prompt = ""
-# Refusal guardrail: a polish reply that reads as a model refusal is
-# dropped (raw transcript typed instead + a notification). false = trust
-# the model blindly.
-# refusal_guard = true
-
-[insertion]
-# typed: simulate keystrokes (xdotool type)
-# paste: clipboard + Ctrl+V (restores your clipboard afterwards)
-# auto: typed, falling back to paste for very long texts
-mode = "auto"
-type_delay_ms = 8
-paste_threshold_chars = 1200
-# One trailing space after typed insertions in terminal apps (general.
-# terminal_apps) so the shell's autocomplete commits the last token
-terminal_autocomplete_space = true
-# Verify the paste landed (selection read by the target) before restoring
-# the clipboard; false = legacy fixed-delay restore
-verify_paste = true
-# Keystroke used to paste in terminal apps (general.terminal_apps); X11
-# terminals pass ctrl+v through to the app, they need ctrl+shift+v
-terminal_paste_key = "ctrl+shift+v"
-# Wayland typing tool: auto | wtype | ydotool (wtype needs wlroots/KDE;
-# ydotool works everywhere but needs ydotoold + /dev/uinput access).
-# Ignored on X11 sessions.
-wayland_tool = "auto"
-
-[sounds]
-enabled = true
-volume = 1.0
-
-[notifications]
-enabled = true
-
-[updates]
-# Check GitHub releases for a newer version (once per daemon start +
-# daily) and notify when one appears. `sayit-ermano update` prints the
-# copy-paste upgrade command for this install method; nothing is ever
-# installed automatically. Set check = false to disable every probe
-# (SAYITERMANO_SKIP_UPDATE_CHECK=1 does the same per-run).
-check = true
-# Desktop notification when a newer release is first seen
-notify = true
-
-[history]
-save = true
-save_audio = false
-audio_budget_gb = 4.0
-
-[command]
-# Command mode additions to the built-in destructive-command list (rm, mv,
-# sudo, kill, chmod, chown, dd, mkfs, truncate, shred, pipes into rm/sudo,
-# ...). A command MATCHING any of these substrings case-insensitively needs
-# the strong confirmation: the command hotkey twice (distinct amber warning)
-# instead of once. Examples:
-# destructive_patterns = ["git push", "shutdown"]
-destructive_patterns = []
-# Follow-up context: seconds the last 5 executed command results stay
-# available to the next voice command in the SAME focused app (0 disables,
-# 300 is the default). Say "new session" to clear it immediately; nothing
-# is persisted, a daemon restart starts cold.
-context_window_s = 300.0
-"""
-
-
-def _write_private(path: Path, text: str) -> None:
-    """Atomic write with 0600 - the file may contain an API key."""
-    import os
-    import tempfile
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".fluidvoice-")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(text)
-        os.chmod(tmp, 0o600)
-        os.replace(tmp, path)
-    except BaseException:
-        os.unlink(tmp)
-        raise
-
-
-def write_template(path: Path | None = None) -> Path:
-    path = path or paths.config_file()
-    _write_private(path, TEMPLATE)
-    return path
-
-
 # ---------------------------------------------------------------------------
-# Saving (used by the settings UI). Only whitelisted keys are written; values
-# for keys the UI does not manage (like ai.api_key) are carried over from the
-# existing file so a save never loses them.
+# The registry
 # ---------------------------------------------------------------------------
 
-_SAVE_WHITELIST: dict[str, list[str]] = {
-    "general": ["language", "language_cycle", "language_whitelist",
-                "copy_to_clipboard", "tray_enabled",
-                "terminal_apps", "pause_when_locked"],
-    "hotkey": ["key", "modifiers", "mode", "cancel_key", "rewrite_key", "paste_key",
-                  "extra_shortcuts", "language_key",
-                "command_key", "wayland_evdev", "wayland_evdev_device",
-                "wayland_evdev_key"],
-    "recording": ["command", "device", "mic_priority", "max_seconds",
-                  "skip_silent",
-                  "first_pcm_timeout", "stall_timeout_s",
-                  "spoken_send_enabled", "spoken_send_phrase",
-                  "spoken_send_key", "spoken_send_countdown_s",
-                  "preview_enabled", "preview_mode",
-                  "preview_interval", "preview_min_audio",
-                  "preview_bottom_offset", "preview_overlay_size",
-                  "preview_segmented", "preview_segment_s",
-                  "preview_vad_silence_s", "overlay_chips",
-                  "pause_media", "push_to_talk_button",
-                  "push_to_talk_modifiers"],
-    "model": ["backend", "name", "device", "compute", "whispercpp_model",
-              "eager_warmup", "idle_unload_s", "languages", "hotwords",
-              "remote_url", "remote_model", "remote_api_key",
-              "remote_timeout_s"],
-    "processing": ["remove_filler_words", "filler_words", "punctuation_enabled",
-                   "punctuation_prefix", "dictionary",
-                   "formatting_action_triggers", "gaav_enabled",
-                   "gaav_lowercase_first", "gaav_remove_trailing_period",
-                   "slash_mention_squeeze"],
-    "ai": ["enabled", "base_url", "model", "api_key", "api_key_env", "temperature",
-           "timeout_seconds", "max_retries", "per_app_prompts", "base_prompt",
-           "refusal_guard"],
-    "insertion": ["mode", "type_delay_ms", "paste_threshold_chars",
-                  "terminal_autocomplete_space", "verify_paste",
-                  "terminal_paste_key", "wayland_tool"],
-    "sounds": ["enabled", "volume"],
-    "notifications": ["enabled"],
-    "updates": ["check", "notify"],
-    "history": ["save", "save_audio", "audio_budget_gb"],
-    "command": ["max_turns", "working_dir", "timeout_seconds",
-                "confirm_timeout_s", "destructive_patterns",
-                "context_window_s"],
-}
+#: A coercer validates AND normalizes one candidate value:
+#: ``coerce(value) -> (ok, coerced)``. Factory-made coercers carry
+#: metadata attributes (``kind`` and ``bounds``/``range_rule``/``options``)
+#: from which the legacy SETTING_* tables and widget bounds are derived.
+Coercer = Callable[[Any], tuple[bool, Any]]
+
+#: persistence modes: "save" = written by save_config (settings UI owns
+#: the key); "settable" = accepted by apply_settings (socket / UI edits).
+PERSIST = frozenset({"save", "settable"})
+PERSIST_SAVE_ONLY = frozenset({"save"})       # file-carried, never socket-set
+PERSIST_NONE = frozenset()                    # in DEFAULTS, managed by nobody
 
 
-# Keys where an EMPTY value is meaningful (not "keep the saved value"):
-# ai.base_prompt = "" restores the built-in prompt, so a cleared editor
-# must actually clear the file instead of carrying the old value over.
-_EMPTY_IS_MEANINGFUL = {("ai", "base_prompt"),
-                         # an empty button spec turns mouse PTT off
-                         ("recording", "push_to_talk_button"),
-                         # an empty remote URL turns the remote STT backend
-                         # off - clearing it in the UI must persist "off"
-                         ("model", "remote_url")}
-
-
-def _toml_value(value: Any) -> str:
-    import json
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, (int, float)):
-        return str(value)
-    if isinstance(value, str):
-        return json.dumps(value, ensure_ascii=False)  # JSON escaping is valid TOML
-    if isinstance(value, list):
-        return "[" + ", ".join(_toml_value(v) for v in value) + "]"
-    if isinstance(value, dict):
-        import re as _re
-        parts = []
-        for k, v in value.items():
-            # bare TOML keys only for safe chars; anything else (e.g. the
-            # dotted "ggml-base.bin") MUST be quoted or it round-trips
-            # as a nested table
-            k_str = str(k)
-            key_repr = (k_str if _re.fullmatch(r"[A-Za-z0-9_-]+", k_str)
-                        else json.dumps(k_str, ensure_ascii=False))
-            parts.append(f"{key_repr} = {_toml_value(v)}")
-        return "{ " + ", ".join(parts) + " }"
-    raise ValueError(f"cannot serialize {type(value).__name__} to TOML")
-
-
-def save_config(cfg: dict, path: Path | None = None) -> Path:
-    """Persist the whitelisted config keys as TOML, carrying over api_key."""
-    path = path or paths.config_file()
-    carry: dict = {}
-    if path.exists():
-        try:
-            with open(path, "rb") as fh:
-                carry = tomllib.load(fh)
-        except tomllib.TOMLDecodeError:
-            carry = {}
-    lines: list[str] = ["# SayItErmano configuration (managed by the settings UI)",
-                        ""]
-    for section, keys in _SAVE_WHITELIST.items():
-        values = cfg.get(section, {})
-        carried = carry.get(section, {})
-        lines.append(f"[{section}]")
-        for key in keys:
-            value = values.get(key)
-            if value in ("", None) and key in carried \
-                    and (section, key) not in _EMPTY_IS_MEANINGFUL:
-                value = carried[key]  # e.g. keep an existing api_key
-            if value not in ("", None):
-                lines.append(f"{key} = {_toml_value(value)}")
-        lines.append("")
-    _write_private(path, "\n".join(lines).rstrip() + "\n")
-    return path
-
-
-# ---------------------------------------------------------------------------
-# Settings validation - single source of truth for the web UI, the socket
-# API and the native GTK app (moved from webui.py per the native-app spec).
-# ---------------------------------------------------------------------------
-
-# (section, key) -> ("float"|"int", (lo, hi)) | ("str", max_len)
-SETTING_RANGES: dict[tuple[str, str], Any] = {
-    ("recording", "first_pcm_timeout"): ("float", (0.0, 60.0)),
-    ("recording", "stall_timeout_s"): ("float", (0.0, 300.0)),
-    ("recording", "preview_interval"): ("float", (0.3, 10.0)),
-    ("recording", "preview_min_audio"): ("float", (0.3, 10.0)),
-    ("recording", "preview_bottom_offset"): ("int", (0, 400)),
-    ("recording", "preview_segment_s"): ("float", (1.0, 6.0)),
-    ("recording", "preview_vad_silence_s"): ("float", (0.0, 10.0)),
-    ("hotkey", "key"): ("str", 64),
-    ("hotkey", "cancel_key"): ("str", 64),
-    ("hotkey", "rewrite_key"): ("str", 64),
-    ("hotkey", "paste_key"): ("str", 64),
-    ("hotkey", "command_key"): ("str", 64),
-    ("hotkey", "language_key"): ("str", 64),
-    ("hotkey", "wayland_evdev_device"): ("str", 128),
-    ("hotkey", "wayland_evdev_key"): ("str", 64),
-    ("command", "max_turns"): ("int", (1, 20)),
-    ("command", "working_dir"): ("str", 4096),
-    ("command", "timeout_seconds"): ("float", (1, 3600)),
-    ("command", "confirm_timeout_s"): ("float", (5, 600)),
-    ("command", "context_window_s"): ("float", (0, 86400)),
-    ("recording", "device"): ("str", 256),
-    ("recording", "max_seconds"): ("float", (1, 86400)),
-    ("recording", "spoken_send_phrase"): ("str", 64),
-    ("model", "whispercpp_model"): ("str", 4096),
-    ("model", "remote_model"): ("str", 256),
-    ("model", "remote_timeout_s"): ("float", (5.0, 600.0)),
-    ("processing", "punctuation_prefix"): ("str", 32),
-    ("ai", "base_url"): ("str", 2048),
-    ("ai", "model"): ("str", 256),
-    ("ai", "api_key_env"): ("str", 128),
-    ("ai", "temperature"): ("float", (0.0, 2.0)),
-    ("ai", "timeout_seconds"): ("float", (1, 3600)),
-    ("insertion", "type_delay_ms"): ("int", (0, 1000)),
-    ("insertion", "paste_threshold_chars"): ("int", (1, 1_000_000)),
-    ("insertion", "terminal_paste_key"): ("str", 32),
-    ("sounds", "volume"): ("float", (0.0, 1.0)),
-    ("history", "audio_budget_gb"): ("float", (0.0, 1024.0)),
-}
-SETTING_ENUMS: dict[tuple[str, str], set] = {
-    ("recording", "preview_mode"): {"auto", "notify", "overlay"},
-    ("recording", "preview_overlay_size"): {"pill", "small", "medium", "large"},
-    ("hotkey", "mode"): {"toggle", "hold", "both"},
-    ("model", "backend"): {"auto", "faster-whisper", "whisper-torch",
-                           "whisper.cpp", "parakeet", "remote"},
-    ("model", "device"): {"auto", "cuda", "cpu"},
-    ("model", "compute"): {"auto", "float16", "int8"},
-    ("insertion", "mode"): {"auto", "typed", "paste"},
-    ("insertion", "wayland_tool"): {"auto", "wtype", "ydotool"},
-    ("recording", "command"): {"auto", "pw-record", "parecord"},
-    ("recording", "spoken_send_key"): {"enter", "shift+enter", "ctrl+enter"},
-}
-SETTING_BOOLS = {("general", "copy_to_clipboard"), ("general", "tray_enabled"),
-                 ("general", "pause_when_locked"),
-                 ("recording", "pause_media"), ("recording", "preview_enabled"),
-                 ("recording", "preview_segmented"),
-                 ("recording", "overlay_chips"),
-                 ("recording", "skip_silent"),
-                 ("recording", "spoken_send_enabled"),
-                 ("processing", "remove_filler_words"),
-                 ("processing", "punctuation_enabled"),
-                 ("processing", "gaav_enabled"),
-                 ("processing", "gaav_lowercase_first"),
-                 ("processing", "gaav_remove_trailing_period"),
-                 ("processing", "slash_mention_squeeze"),
-                 ("ai", "enabled"), ("ai", "refusal_guard"),
-                 ("sounds", "enabled"),
-                 ("notifications", "enabled"),
-                 ("updates", "check"), ("updates", "notify"),
-                 ("history", "save"), ("history", "save_audio"),
-                 ("insertion", "terminal_autocomplete_space"),
-                 ("insertion", "verify_paste"),
-                 ("hotkey", "wayland_evdev"),
-                 ("model", "eager_warmup")}
-# list-valued pass-through keys the UI owns
-SETTING_LISTS = (("processing", "filler_words"), ("processing", "dictionary"),
-                 ("hotkey", "modifiers"), ("recording", "mic_priority"),
-                 ("recording", "push_to_talk_modifiers"))
-ALLOWED_SETTINGS: dict[str, set] = {
-    "general": {"language", "language_cycle", "language_whitelist",
-                "copy_to_clipboard", "tray_enabled",
-                "terminal_apps", "pause_when_locked"},
-    "hotkey": {"key", "modifiers", "mode", "cancel_key", "rewrite_key", "paste_key",
-                 "extra_shortcuts", "language_key",
-               "command_key", "wayland_evdev", "wayland_evdev_device",
-               "wayland_evdev_key"},
-    "recording": {"command", "device", "mic_priority", "max_seconds",
-                  "skip_silent",
-                  "first_pcm_timeout", "stall_timeout_s",
-                  "spoken_send_enabled",
-                  "spoken_send_phrase", "spoken_send_key",
-                  "spoken_send_countdown_s",
-                  "preview_enabled", "preview_mode", "preview_interval",
-                  "preview_min_audio", "preview_bottom_offset",
-                  "preview_overlay_size", "pause_media",
-                  "preview_segmented", "preview_segment_s",
-                  "preview_vad_silence_s", "overlay_chips",
-                  "push_to_talk_button", "push_to_talk_modifiers"},
-    "model": {"backend", "name", "device", "compute", "whispercpp_model",
-              "eager_warmup", "idle_unload_s", "languages", "hotwords",
-              "remote_url", "remote_model", "remote_api_key",
-              "remote_timeout_s"},
-    "processing": {"remove_filler_words", "filler_words",
-                   "punctuation_enabled", "punctuation_prefix", "dictionary",
-                   "formatting_action_triggers",
-                   "gaav_enabled", "gaav_lowercase_first",
-                   "gaav_remove_trailing_period", "slash_mention_squeeze"},
-    "ai": {"enabled", "base_url", "model", "api_key_env", "temperature",
-           "timeout_seconds", "max_retries", "per_app_prompts", "base_prompt",
-           "refusal_guard"},
-    "insertion": {"mode", "type_delay_ms", "paste_threshold_chars",
-                  "terminal_autocomplete_space", "verify_paste",
-                  "terminal_paste_key", "wayland_tool"},
-    "sounds": {"enabled", "volume"},
-    "notifications": {"enabled"},
-    "updates": {"check", "notify"},
-    "history": {"save", "save_audio", "audio_budget_gb"},
-    "command": {"max_turns", "working_dir", "timeout_seconds",
-                "confirm_timeout_s", "destructive_patterns",
-                "context_window_s"},
-}
-RESTART_REQUIRED = {"model.eager_warmup"}
-ENGINE_KEYS = {"model.backend", "model.name", "model.device",
-               "model.compute", "model.whispercpp_model", "model.hotwords",
-               "model.remote_url", "model.remote_model",
-               "model.remote_api_key", "model.remote_timeout_s"}
-
-
-def coerce_setting(section: str, key: str, value: Any) -> tuple[bool, Any]:
-    """Validate one value. Returns (ok, coerced)."""
-    import re as _re
-
-    if (section, key) in SETTING_BOOLS:
+def _bool() -> Coercer:
+    def coerce(value: Any) -> tuple[bool, Any]:
         return (isinstance(value, bool), value)
-    if (section, key) in SETTING_ENUMS:
-        enums = SETTING_ENUMS[(section, key)]
-        return (isinstance(value, str) and value in enums, value)
-    if (section, key) == ("general", "language"):
-        ok = isinstance(value, str) and bool(
-            _re.fullmatch(r"auto|[a-z]{2,3}(-[A-Za-z0-9]{2,8})?", value.strip()))
-        return (ok, value.strip() if ok else value)
-    if (section, key) == ("general", "language_cycle"):
-        return _coerce_language_cycle(value)
-    if (section, key) == ("general", "language_whitelist"):
-        return _coerce_language_whitelist(value)
-    if (section, key) == ("model", "idle_unload_s"):
-        # 0 (never unload) or 30..86400 s; bool is an int subclass - reject
-        ok = isinstance(value, int) and not isinstance(value, bool) \
-            and (value == 0 or 30 <= value <= 86400)
-        return (ok, value)
-    if (section, key) == ("recording", "spoken_send_countdown_s"):
-        # 0 (feature off) or 0.3..5.0 s of countdown after quiet + phrase
-        try:
-            f = float(value)
-        except (TypeError, ValueError):
+    coerce.kind = "bool"  # type: ignore[attr-defined]
+    return coerce
+
+
+def _enum(*options: str) -> Coercer:
+    allowed = frozenset(options)
+    order = tuple(options)
+
+    def coerce(value: Any) -> tuple[bool, Any]:
+        return (isinstance(value, str) and value in allowed, value)
+    coerce.kind = "enum"  # type: ignore[attr-defined]
+    coerce.options = allowed  # type: ignore[attr-defined]
+    coerce.option_order = order  # type: ignore[attr-defined]
+    return coerce
+
+
+def _str(max_len: int, allow_empty: bool = False) -> Coercer:
+    def coerce(value: Any) -> tuple[bool, Any]:
+        if not isinstance(value, str) or len(value) > max_len:
             return (False, value)
-        return (f == 0 or 0.3 <= f <= 5.0, f)
-    if (section, key) == ("ai", "per_app_prompts"):
-        return _coerce_per_app_prompts(value)
-    if (section, key) == ("processing", "formatting_action_triggers"):
-        return _coerce_action_triggers(value)
-    if (section, key) == ("hotkey", "extra_shortcuts"):
-        return _coerce_extra_shortcuts(value)
-    if (section, key) == ("ai", "base_prompt"):
-        # empty IS valid here (clearing the editor restores the built-in
-        # prompt), unlike the str-range rule below which rejects ""
-        return (isinstance(value, str) and len(value) <= 8000, value)
-    if (section, key) == ("recording", "push_to_talk_button"):
-        return _coerce_button_spec(value)
-    if (section, key) == ("model", "remote_url"):
-        return _coerce_remote_url(value)
-    if (section, key) == ("model", "hotwords"):
-        return _coerce_hotwords(value)
-    if (section, key) == ("model", "remote_api_key"):
-        # any string incl. "" (clearing is done by editing the file or
-        # setting remote_url empty); never logged, masked in socket reads
-        return (isinstance(value, str) and len(value) <= 4096, value)
-    if (section, key) == ("recording", "device"):
-        # "" = system default (the mic dropdown's "Auto" option), the
-        # documented default value — not a bad value
-        return (isinstance(value, str) and len(value) <= 256, value)
-    rule = SETTING_RANGES.get((section, key))
-    if rule:
-        kind, bound = rule
-        if kind == "str":
-            ok = isinstance(value, str) and 0 < len(value) <= bound \
-                and not value.startswith("-")
-            return (ok, value)
+        if not allow_empty and (not value or value.startswith("-")):
+            return (False, value)  # empty / option-injection dash reject
+        return (True, value)
+    coerce.kind = "str"  # type: ignore[attr-defined]
+    coerce.range_rule = ("str", max_len)  # type: ignore[attr-defined]
+    return coerce
+
+
+def _num(kind: str, lo: float, hi: float) -> Coercer:
+    def coerce(value: Any) -> tuple[bool, Any]:
         try:
             num = float(value) if kind == "float" else int(value)
-            if isinstance(value, bool) or not (bound[0] <= num <= bound[1]):
+            if isinstance(value, bool) or not (lo <= num <= hi):
                 return (False, value)
             return (True, num)
         except (TypeError, ValueError):
             return (False, value)
-    if (section, key) == ("recording", "mic_priority"):
-        return _coerce_mic_priority(value)
-    if (section, key) == ("model", "languages"):
-        return _coerce_model_languages(value)
-    if (section, key) == ("general", "terminal_apps"):
-        return _coerce_terminal_apps(value)
-    if (section, key) == ("command", "destructive_patterns"):
-        return _coerce_destructive_patterns(value)
-    if (section, key) in SETTING_LISTS:
+    coerce.kind = kind  # type: ignore[attr-defined]
+    coerce.bounds = (lo, hi)  # type: ignore[attr-defined]
+    coerce.range_rule = (kind, (lo, hi))  # type: ignore[attr-defined]
+    return coerce
+
+
+def _reject(reason: str) -> Coercer:
+    """For settings that are neither socket-settable nor UI-owned: the
+    registry still knows their default (DEFAULTS must stay complete), but
+    no caller may change them through the validated paths."""
+    def coerce(value: Any) -> tuple[bool, Any]:
+        return (False, value)
+    coerce.reject_reason = reason  # type: ignore[attr-defined]
+    return coerce
+
+
+def _modifiers() -> Coercer:
+    allowed = ("ctrl", "alt", "shift", "super")
+
+    def coerce(value: Any) -> tuple[bool, Any]:
+        if not isinstance(value, list) \
+                or any(m not in allowed for m in value):
+            return (False, value)
+        return (True, value)
+    coerce.kind = "list"  # type: ignore[attr-defined]
+    return coerce
+
+
+def _filler_words() -> Coercer:
+    def coerce(value: Any) -> tuple[bool, Any]:
         if not isinstance(value, list):
             return (False, value)
-        if (section, key) in (("hotkey", "modifiers"),
-                              ("recording", "push_to_talk_modifiers")) \
-                and any(m not in ("ctrl", "alt", "shift", "super")
-                        for m in value):
+        if any(not isinstance(w, str) or len(w) > 64 or not w.strip()
+               for w in value):
             return (False, value)
-        if key == "filler_words" and any(not isinstance(w, str) or len(w) > 64
-                                         or not w.strip() for w in value):
-            return (False, value)
-        if key == "dictionary":
-            for entry in value:
-                if (not isinstance(entry, dict)
-                        or not isinstance(entry.get("triggers", []), list)
-                        or not isinstance(entry.get("replacement", ""), str)
-                        or len(entry.get("replacement", "")) > 512):
-                    return (False, value)
         return (True, value)
-    return (False, value)  # unknown key -> reject
+    coerce.kind = "list"  # type: ignore[attr-defined]
+    return coerce
+
+
+def _dictionary() -> Coercer:
+    def coerce(value: Any) -> tuple[bool, Any]:
+        if not isinstance(value, list):
+            return (False, value)
+        for entry in value:
+            if (not isinstance(entry, dict)
+                    or not isinstance(entry.get("triggers", []), list)
+                    or not isinstance(entry.get("replacement", ""), str)
+                    or len(entry.get("replacement", "")) > 512):
+                return (False, value)
+        return (True, value)
+    coerce.kind = "list"  # type: ignore[attr-defined]
+    return coerce
+
+
+def _coerce_language(value: Any) -> tuple[bool, Any]:
+    """general.language: "auto" or a Whisper code — permissive grammar on
+    purpose (a saved out-of-table code stays legal; the Settings picker
+    appends it as "(saved)")."""
+    import re as _re
+    ok = isinstance(value, str) and bool(
+        _re.fullmatch(r"auto|[a-z]{2,3}(-[A-Za-z0-9]{2,8})?", value.strip()))
+    return (ok, value.strip() if ok else value)
+
+
+def _coerce_model_name(value: Any) -> tuple[bool, Any]:
+    """model.name: "auto", a faster-whisper catalog key (aliases apply) or
+    a Parakeet catalog name (catalogs checked at call time — importing
+    backends/model_catalog at module import would be circular)."""
+    from . import backends, model_catalog
+    value = backends.ALIASES.get(str(value).strip().lower(),
+                                 str(value).strip().lower())
+    ok = (value in backends.FW_MODEL_REPOS or value == "auto"
+          or value in model_catalog.PARAKEET_CATALOG)
+    return (ok, value)
+
+
+def _coerce_max_retries(value: Any) -> tuple[bool, Any]:
+    """ai.max_retries: 0..10; ints and floats both accepted, normalized
+    to int (bool rejected — it is an int subclass)."""
+    try:
+        ok = isinstance(value, (int, float)) and not isinstance(value, bool) \
+            and 0 <= int(value) <= 10
+        return (ok, int(value))
+    except (TypeError, ValueError):
+        return (False, value)
+_coerce_max_retries.bounds = (0, 10)  # type: ignore[attr-defined]
+
+
+def _coerce_idle_unload(value: Any) -> tuple[bool, Any]:
+    """model.idle_unload_s: 0 (never unload) or 30..86400 s; bool is an
+    int subclass - reject."""
+    ok = isinstance(value, int) and not isinstance(value, bool) \
+        and (value == 0 or 30 <= value <= 86400)
+    return (ok, value)
+_coerce_idle_unload.bounds = (0, 86400)  # type: ignore[attr-defined]
+
+
+def _coerce_spoken_send_countdown(value: Any) -> tuple[bool, Any]:
+    """recording.spoken_send_countdown_s: 0 (feature off) or 0.3..5.0 s of
+    countdown after quiet + phrase."""
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return (False, value)
+    return (f == 0 or 0.3 <= f <= 5.0, f)
+_coerce_spoken_send_countdown.bounds = (0.0, 5.0)  # type: ignore[attr-defined]
+
+
+def _coerce_base_prompt(value: Any) -> tuple[bool, Any]:
+    # empty IS valid here (clearing the editor restores the built-in
+    # prompt), unlike the str-range rule which rejects ""
+    return (isinstance(value, str) and len(value) <= 8000, value)
+
+
+def _coerce_remote_api_key(value: Any) -> tuple[bool, Any]:
+    # any string incl. "" (clearing is done by editing the file or
+    # setting remote_url empty); never logged, masked in socket reads
+    return (isinstance(value, str) and len(value) <= 4096, value)
 
 
 def _coerce_remote_url(value: Any) -> tuple[bool, Any]:
@@ -895,6 +270,7 @@ def _coerce_mic_priority(value: Any) -> tuple[bool, Any]:
     if len(cleaned) > 20:
         return (False, value)
     return (True, cleaned)
+_coerce_mic_priority.kind = "list"  # type: ignore[attr-defined]
 
 
 def _coerce_extra_shortcuts(value: Any) -> tuple[bool, Any]:
@@ -1069,8 +445,8 @@ def _coerce_terminal_apps(value: Any) -> tuple[bool, Any]:
 
 def _coerce_destructive_patterns(value: Any) -> tuple[bool, Any]:
     """command.destructive_patterns: user additions to the built-in
-    destructive-command list, matched case-insensitively anywhere in the
-    command (same convention as general.terminal_apps). Entries are
+    destructive-command list, matched case-insensitively anywhere in
+    the command (same convention as general.terminal_apps). Entries are
     stripped and empties dropped; >128-char entries or >32 patterns reject
     the whole list; duplicates (case-insensitive) keep the first."""
     if not isinstance(value, list) \
@@ -1108,47 +484,721 @@ def _coerce_per_app_prompts(value: Any) -> tuple[bool, Any]:
     return (True, rules)
 
 
+@dataclass(frozen=True)
+class SettingSpec:
+    """One configuration key: everything the daemon, the file writer, the
+    socket API and the GTK widgets need to know about it. All derived
+    policy (defaults dict, save whitelist, allowed keys, validation
+    tables, restart/reload sets, secret masking, template docs) comes
+    from REGISTRY — never from a second list.
+
+    - persistence: frozenset over {"save", "settable"} (see PERSIST*).
+    - apply_mode: "immediate" (live), "engine" (speech engine reloads on
+      change), "restart" (needs a daemon restart to take effect).
+    - secret: masked (bool) in every config read that crosses a boundary.
+    - empty_meaningful: an EMPTY value is a real setting (not "keep the
+      saved file value") when the settings UI saves.
+    """
+
+    section: str
+    key: str
+    default: Any
+    coercer: Coercer
+    persistence: frozenset[str] = PERSIST
+    apply_mode: str = "immediate"
+    secret: bool = False
+    description: str = ""
+    empty_meaningful: bool = False
+
+
+#: The one registry, in template/save order: (section, key) -> spec.
+REGISTRY: dict[tuple[str, str], SettingSpec] = {}
+
+
+def _spec(section: str, key: str, default: Any, coercer: Coercer, **kw: Any
+          ) -> None:
+    REGISTRY[(section, key)] = SettingSpec(section, key, default, coercer,
+                                           **kw)
+
+
+# -- [general] ---------------------------------------------------------------
+
+_spec("general", "language", "auto", _coerce_language,
+      description='Whisper language code ("auto" detects, or "en", "de", ...)')
+_spec("general", "language_cycle", [], _coerce_language_cycle,
+      description='Ordered language codes the cycle hotkey steps through, e.g.\n'
+                  '["auto", "en", "sl"] - may include "auto"; empty = the cycle\n'
+                  'key is off. The cycle override is RUNTIME daemon state and\n'
+                  'never persisted.')
+_spec("general", "language_whitelist", [], _coerce_language_whitelist,
+      description='Wrong-language guard: when language = "auto" detects a\n'
+                  'language NOT in this list, the take is re-decoded once with\n'
+                  'the first entry, e.g. ["sl", "en"]. Empty = off.')
+_spec("general", "copy_to_clipboard", False, _bool(),
+      description="Also copy every transcription to the clipboard")
+_spec("general", "tray_enabled", True, _bool(),
+      description="Panel/tray icon while the daemon runs")
+_spec("general", "terminal_apps", [
+    "gnome-terminal", "kgx", "konsole", "xterm", "alacritty",
+    "kitty", "wezterm", "ghostty", "foot", "tilix", "terminator",
+    "guake", "yakuake", "st-256color", "warp",
+], _coerce_terminal_apps,
+      description="Case-insensitive WM_CLASS substrings identifying\n"
+                  "terminals. In these apps spoken-send never presses Enter\n"
+                  "(a half-typed shell line would EXECUTE) and typed\n"
+                  "insertions gain one trailing space so autocomplete\n"
+                  "commits.")
+_spec("general", "pause_when_locked", True, _bool(),
+      description="Ignore hotkeys and cancel an active dictation while the\n"
+                  "session is locked/suspended (logind lock watch; the tray\n"
+                  'notes "paused (locked)")')
+
+# -- [hotkey] ----------------------------------------------------------------
+
+_spec("hotkey", "key", "Right_Control", _str(64),
+      description='X11 keysym name of the dictation hotkey, e.g.\n'
+                  '"Right_Control", "F9", "space", "Pause". Modifier-only\n'
+                  'keys (Right_Control / Right_Alt / Right_Shift / Super_R)\n'
+                  'only work with mode = "toggle".')
+_spec("hotkey", "modifiers", [], _modifiers(),
+      description='Extra modifiers to require, e.g. ["ctrl", "shift"]')
+_spec("hotkey", "mode", "toggle", _enum("toggle", "hold", "both"),
+      description='"toggle": tap to start, tap again to stop & transcribe.\n'
+                  '"hold": push-to-talk (non-modifier key only). Other keys\n'
+                  "typed during the hold pass through to the focused app\n"
+                  "natively (the keyboard is freed for the hold's duration).\n"
+                  '"both": a quick tap toggles, a held key talks (250 ms\n'
+                  "disambiguation window).")
+_spec("hotkey", "cancel_key", "Escape", _str(64),
+      description="macOS parity: this key cancels an in-progress dictation\n"
+                  '(discards, nothing typed). Grabbed ONLY while recording;\n'
+                  '"none" disables.')
+_spec("hotkey", "rewrite_key", "", _str(64),
+      description="Optional keysym for Rewrite mode (needs [ai])")
+_spec("hotkey", "command_key", "", _str(64),
+      description="Optional keysym for Command mode (needs [ai])")
+_spec("hotkey", "paste_key", "", _str(64),
+      description="Optional keysym: re-type the last transcription")
+_spec("hotkey", "language_key", "", _str(64),
+      description="Optional keysym that cycles the runtime language override\n"
+                  "through general.language_cycle (the cycle state itself is\n"
+                  "never persisted)")
+_spec("hotkey", "extra_shortcuts", [], _coerce_extra_shortcuts,
+      description="Up to 2 EXTRA dictation shortcuts (3 total with the\n"
+                  "primary), each optionally bound to a named prompt profile\n"
+                  '(ai/profiles), e.g. extra_shortcuts = [{key = "F8",\n'
+                  'profile = "Terse notes"}]')
+_spec("hotkey", "wayland_evdev", False, _bool(),
+      description="Wayland (no global grabs): optional physical push-to-talk\n"
+                  "read straight from /dev/input (PRIVILEGED: needs the input\n"
+                  "group and python-evdev). Off by default; the DE-shortcut\n"
+                  "assist is the primary wayland hotkey.")
+_spec("hotkey", "wayland_evdev_device", "", _str(128),
+      description='Device-name substring matching /dev/input devices, e.g.\n'
+                  '"Keyboard"')
+_spec("hotkey", "wayland_evdev_key", "KEY_RIGHTCTRL", _str(64),
+      description="ecodes KEY_* name held for evdev push-to-talk")
+
+# -- [recording] -------------------------------------------------------------
+
+_spec("recording", "command", "auto", _enum("auto", "pw-record", "parecord"),
+      description="auto | pw-record | parecord")
+_spec("recording", "device", "", _str(256, allow_empty=True),
+      description="Optional PipeWire node target (pw-record --target) /\n"
+                  'PulseAudio source; "" = system default (the mic\n'
+                  'dropdown\'s "Auto" option)')
+_spec("recording", "mic_priority", [], _coerce_mic_priority,
+      description="Ordered microphone priority patterns - case-insensitive\n"
+                  "substrings of the source name, first match wins, e.g.\n"
+                  '["bluez", "usb-cam"] (Bluetooth headset first, then a USB\n'
+                  "webcam). When the configured `device` above disappears,\n"
+                  "FluidVoice switches to the first available match and\n"
+                  "notifies you; switching never happens mid-dictation.")
+_spec("recording", "max_seconds", 300, _num("float", 1, 86400),
+      description="Maximum recording duration in seconds")
+_spec("recording", "skip_silent", False, _bool(),
+      description="Skip recordings <= 4s that are pure silence")
+_spec("recording", "first_pcm_timeout", 2.0, _num("float", 0.0, 60.0),
+      description="Stop early when the microphone sends no audio at all\n"
+                  "(muted/wrong device); 0 = off")
+_spec("recording", "stall_timeout_s", 8.0, _num("float", 0.0, 300.0),
+      description="Cancel the take when the capture stream freezes\n"
+                  "mid-dictation for this many seconds (device glitch/route\n"
+                  "change) - 0 = off")
+_spec("recording", "sample_rate", 16000,
+      _reject("fixed hardware constant (16 kHz mono FLAC)"),
+      persistence=PERSIST_NONE,
+      description="Fixed hardware capture rate - the whisper models want\n"
+                  "16 kHz mono; not UI-settable")
+_spec("recording", "spoken_send_enabled", False, _bool(),
+      description="Spoken-send: a trailing phrase strips and presses Enter\n"
+                  "after typing")
+_spec("recording", "spoken_send_phrase", "send it", _str(64),
+      description="Trailing phrase that strips and presses Enter")
+_spec("recording", "spoken_send_key", "enter",
+      _enum("enter", "shift+enter", "ctrl+enter"),
+      description="Key pressed by spoken-send: enter | shift+enter |\n"
+                  "ctrl+enter")
+_spec("recording", "spoken_send_countdown_s", 1.2,
+      _coerce_spoken_send_countdown,
+      description="Quiet countdown after the phrase: with the phrase at the\n"
+                  "end and 0.5 s of silence, a countdown of this many seconds\n"
+                  "finishes the take by itself (speak again to cancel);\n"
+                  "0 = off. Needs spoken_send_enabled.")
+_spec("recording", "preview_enabled", True, _bool(),
+      description="Live transcription preview while recording")
+_spec("recording", "preview_mode", "auto",
+      _enum("auto", "overlay", "notify"),
+      description="auto (pill, falls back) | overlay | notify")
+_spec("recording", "preview_interval", 1.2, _num("float", 0.3, 10.0),
+      description="Seconds between partial passes")
+_spec("recording", "preview_min_audio", 1.0, _num("float", 0.3, 10.0),
+      description="Seconds before the first partial")
+_spec("recording", "preview_bottom_offset", 64, _num("int", 0, 400),
+      description="Pill px above the screen bottom edge")
+_spec("recording", "preview_overlay_size", "medium",
+      _enum("pill", "small", "medium", "large"),
+      description="pill | small | medium | large (macOS sizes)")
+_spec("recording", "preview_segmented", True, _bool(),
+      description="Segmented streaming preview: fixed windows (50% hop), one\n"
+                  "decode per tick instead of re-decoding the whole take")
+_spec("recording", "preview_segment_s", 2.0, _num("float", 1.0, 6.0),
+      description="Segment window length in seconds")
+_spec("recording", "preview_vad_silence_s", 2.0, _num("float", 0.0, 10.0),
+      description="Trailing-silence VAD auto-stops the take after this many\n"
+                  "seconds of quiet; 0 disables the auto-stop (the hotkey\n"
+                  "stops every take)")
+_spec("recording", "overlay_chips", True, _bool(),
+      description="Hover action chips above the pill (X11)")
+_spec("recording", "pause_media", True, _bool(),
+      description="Pause MPRIS players while dictating (resume after)")
+_spec("recording", "push_to_talk_button", "", _coerce_button_spec,
+      empty_meaningful=True,
+      description="Mouse push-to-talk: hold this button to dictate (always\n"
+                  'hold-style, independent of hotkey.mode). "button8"/"b8"/"8"\n'
+                  "- buttons 6-255 only; 1-5 (click/scroll) are refused, they\n"
+                  "would break the desktop. Thumb buttons are usually 8/9\n"
+                  '(6/7 on some mice). Empty = off.')
+_spec("recording", "push_to_talk_modifiers", [], _modifiers(),
+      description='Extra modifiers to require for the button, e.g. ["ctrl"]')
+
+# -- [model] -----------------------------------------------------------------
+
+_spec("model", "backend", "auto",
+      _enum("auto", "faster-whisper", "whisper-torch", "whisper.cpp",
+            "parakeet", "remote"),
+      apply_mode="engine",
+      description="auto | faster-whisper | whisper-torch | whisper.cpp |\n"
+                  "parakeet")
+_spec("model", "name", "auto", _coerce_model_name,
+      apply_mode="engine",
+      description='auto -> "small" when CUDA is available, "base" otherwise;\n'
+                  "or one of tiny, base, small, medium, large-v3,\n"
+                  'large-v3-turbo; with backend="parakeet": parakeet catalog\n'
+                  "names")
+_spec("model", "device", "auto", _enum("auto", "cuda", "cpu"),
+      apply_mode="engine", description="auto | cuda | cpu")
+_spec("model", "compute", "auto", _enum("auto", "float16", "int8"),
+      apply_mode="engine", description="auto | float16 | int8")
+_spec("model", "whispercpp_model", "", _str(4096),
+      apply_mode="engine",
+      description="ggml/gguf model for the whisper.cpp backend: a catalog\n"
+                  "name (ggml-base.bin, ggml-small.en.bin, ...) or a path to\n"
+                  "a file")
+_spec("model", "eager_warmup", True, _bool(),
+      apply_mode="restart",
+      description="Load the model at daemon start (preview-ready). Changing\n"
+                  "this needs a daemon restart.")
+_spec("model", "idle_unload_s", 0, _coerce_idle_unload,
+      description="Unload the speech model after this many idle seconds to\n"
+                  "free RAM/VRAM (0 = keep it loaded forever; range 30..86400\n"
+                  "when set). The next dictation after an unload pays the\n"
+                  "model load time again.")
+_spec("model", "languages", {}, _coerce_model_languages,
+      description='Per-model language overrides, e.g.\n'
+                  'languages = { small = "de", "ggml-base.en.bin" = "en" }.\n'
+                  '"auto" = always detect for that model; a missing key\n'
+                  "follows general.language (read per-dictation, applies\n"
+                  "live).")
+_spec("model", "remote_url", "", _coerce_remote_url,
+      apply_mode="engine", empty_meaningful=True,
+      description="Remote STT server (OpenAI-compatible\n"
+                  "/v1/audio/transcriptions) - local-first: nothing leaves\n"
+                  'this machine while remote_url is empty. Point it at a LAN\n'
+                  "GPU box (vLLM/whisper.cpp server/NIM/DGX Spark) or any\n"
+                  'compatible cloud, e.g. "http://192.168.1.50:8000".')
+_spec("model", "remote_model", "whisper-large-v3", _str(256),
+      apply_mode="engine", description="Model name sent in the remote form")
+_spec("model", "remote_api_key", "", _coerce_remote_api_key,
+      apply_mode="engine", secret=True,
+      description="Optional bearer token for the remote server (masked,\n"
+                  "never logged)")
+_spec("model", "remote_timeout_s", 30, _num("float", 5.0, 600.0),
+      apply_mode="engine", description="Per-request timeout (5..600)")
+_spec("model", "hotwords", [], _coerce_hotwords,
+      apply_mode="engine",
+      description="Custom vocabulary biasing (upstream #916 - words to ADD,\n"
+                  "unlike the dictionary's replacements): fed to the decoder\n"
+                  'as hints, e.g. ["SayItErmano", "PipeWire"] - <=20 focused\n'
+                  "words: long lists over-bias the decoder. Changing this key\n"
+                  "reloads the speech engine.")
+
+# -- [processing] ------------------------------------------------------------
+
+_spec("processing", "remove_filler_words", True, _bool(),
+      description="Remove filler words (um, uh, hmm...) before punctuation\n"
+      "formatting")
+_spec("processing", "filler_words", list(DEFAULT_FILLERS), _filler_words(),
+      description="Filler words removed before punctuation formatting")
+_spec("processing", "punctuation_enabled", True, _bool(),
+      description="Spoken punctuation commands enabled")
+_spec("processing", "punctuation_prefix", "literal", _str(32),
+      description='Spoken commands require this prefix word: "literal comma"\n'
+                  '-> ","')
+_spec("processing", "formatting_action_triggers", {}, _coerce_action_triggers,
+      description="Extra spoken formatting-action trigger aliases (action\n"
+                  "name -> aliases, on top of the built-ins), e.g.\n"
+                  'formatting_action_triggers = {new_line = ["nova vrstica"]}')
+_spec("processing", "dictionary", [], _dictionary(),
+      description='Custom dictionary: phrases replaced on insert, e.g.\n'
+                  '[[{ triggers = ["miro board"], replacement = "Miro board" }]]')
+_spec("processing", "gaav_enabled", False, _bool(),
+      description="GAAV: casual/search-field formatting of the final text")
+_spec("processing", "gaav_lowercase_first", True, _bool(),
+      description="Lowercase the first letter (GAAV)")
+_spec("processing", "gaav_remove_trailing_period", True, _bool(),
+      description="Remove the trailing period (GAAV)")
+_spec("processing", "slash_mention_squeeze", True, _bool(),
+      description='Chat-app literal squeeze: "/ fix the deploy" -> "/fix the\n'
+                  'deploy", "@ John Smith" -> "@John Smith" (runs after AI\n'
+                  "cleanup, before GAAV)")
+
+# -- [ai] --------------------------------------------------------------------
+
+_spec("ai", "enabled", False, _bool(),
+      description="Optional AI polish of the raw transcript (FluidVoice's\n"
+      "headline feature). Any OpenAI-compatible /v1/chat/completions\n"
+      "endpoint works: OpenAI, Groq, Ollama, LM Studio, ...")
+_spec("ai", "base_url", "http://localhost:11434/v1", _str(2048),
+      description="OpenAI-compatible chat endpoint, e.g.\n"
+      "http://localhost:11434/v1 (Ollama) or http://localhost:1234/v1\n"
+      "(LM Studio)")
+_spec("ai", "model", "", _str(256),
+      description="Chat model name, e.g. qwen3:8b")
+_spec("ai", "api_key", "", _reject("env/file only - never socket-settable"),
+      persistence=PERSIST_SAVE_ONLY, secret=True,
+      description="API key (preferred: leave empty and export the env var\n"
+      "below). Socket-settable it is NOT: edit the file or use the env\n"
+      "var - a save carries the stored key over.")
+_spec("ai", "api_key_env", "SAYITERMANO_API_KEY", _str(128),
+      description="Environment variable holding the API key")
+_spec("ai", "temperature", 0.2, _num("float", 0.0, 2.0),
+      description="Sampling temperature")
+_spec("ai", "timeout_seconds", 120, _num("float", 1, 3600),
+      description="Request timeout")
+_spec("ai", "max_retries", 3, _coerce_max_retries,
+      description="Retries per request")
+_spec("ai", "per_app_prompts", [], _coerce_per_app_prompts,
+      description='Upstream per-app prompt sets: [{"apps": ["zed"],\n'
+                  '"instructions": "..."}] (first match wins)')
+_spec("ai", "base_prompt", "", _coerce_base_prompt,
+      empty_meaningful=True,
+      description="Custom base prompt for AI polish (empty = the built-in\n"
+      "dictation prompt; Settings -> AI can save named presets of it)")
+_spec("ai", "refusal_guard", True, _bool(),
+      description="Refusal guardrail: a polish reply that reads as a model\n"
+      'refusal ("I\'m sorry, I can\'t assist...") never reaches the doc -\n'
+      "the raw transcript is typed instead, with a notification. false =\n"
+      "trust the model blindly.")
+
+# -- [insertion] -------------------------------------------------------------
+
+_spec("insertion", "mode", "typed", _enum("auto", "typed", "paste"),
+      description="typed: simulate keystrokes (xdotool type). paste:\n"
+      "clipboard + Ctrl+V (restores your clipboard afterwards). auto:\n"
+      "typed, falling back to paste for very long texts")
+_spec("insertion", "type_delay_ms", 8, _num("int", 0, 1000),
+      description="Delay between simulated keystrokes")
+_spec("insertion", "paste_threshold_chars", 1200,
+      _num("int", 1, 1_000_000),
+      description="Longer texts use clipboard paste")
+_spec("insertion", "terminal_autocomplete_space", True, _bool(),
+      description="One trailing space after typed insertions in terminal\n"
+      "apps (general.terminal_apps) so the shell's autocomplete commits\n"
+      "the last token")
+_spec("insertion", "verify_paste", True, _bool(),
+      description="Verify the paste landed (selection read by the target)\n"
+      "before restoring the clipboard; false = legacy fixed-delay restore")
+_spec("insertion", "terminal_paste_key", "ctrl+shift+v", _str(32),
+      description="Keystroke used to paste in terminal apps\n"
+      "(general.terminal_apps); X11 terminals pass ctrl+v through to the\n"
+      "app, they need ctrl+shift+v")
+_spec("insertion", "wayland_tool", "auto", _enum("auto", "wtype", "ydotool"),
+      description="Wayland typing tool: auto | wtype | ydotool (wtype needs\n"
+      "wlroots/KDE; ydotool works everywhere but needs ydotoold +\n"
+      "/dev/uinput access). Ignored on X11 sessions.")
+
+# -- [sounds] / [notifications] / [updates] ----------------------------------
+
+_spec("sounds", "enabled", True, _bool(),
+      description="Play start/stop sounds")
+_spec("sounds", "volume", 1.0, _num("float", 0.0, 1.0),
+      description="0.0 - 1.0")
+
+_spec("notifications", "enabled", True, _bool(),
+      description="Desktop notifications")
+
+_spec("updates", "check", True, _bool(),
+      description="Check GitHub releases for a newer version (once per\n"
+      "daemon start + daily). The updater NEVER installs anything - it\n"
+      "notifies and prints the upgrade command. Set check = false to\n"
+      "disable every probe (SAYITERMANO_SKIP_UPDATE_CHECK=1 does the same\n"
+      "per-run).")
+_spec("updates", "notify", True, _bool(),
+      description="Desktop notification when a newer release is first seen")
+
+# -- [history] ---------------------------------------------------------------
+
+_spec("history", "save", True, _bool(),
+      description="Save transcriptions to history")
+_spec("history", "save_audio", False, _bool(),
+      description="Store the recording with each entry")
+_spec("history", "audio_budget_gb", 4.0, _num("float", 0.0, 1024.0),
+      description="Retained-audio budget in GB")
+
+# -- [command] ---------------------------------------------------------------
+
+_spec("command", "max_turns", 4, _num("int", 1, 20),
+      description="Command-mode agent loop bound (upstream: 20)")
+_spec("command", "working_dir", "", _str(4096),
+      description="Working directory for commands (empty = $HOME)")
+_spec("command", "timeout_seconds", 60.0, _num("float", 1, 3600),
+      description="Per-command subprocess timeout")
+_spec("command", "confirm_timeout_s", 120.0, _num("float", 5, 600),
+      description="Auto-cancel a pending confirmation after this many\n"
+      "seconds")
+_spec("command", "destructive_patterns", [], _coerce_destructive_patterns,
+      description="Additions to the built-in destructive-command list (rm,\n"
+      "mv, sudo, kill, chmod, chown, dd, mkfs, truncate, shred, pipes into\n"
+      "rm/sudo, ...): commands MATCHING any of these substrings\n"
+      "case-insensitively need the strong confirmation (the command hotkey\n"
+      'twice). e.g. destructive_patterns = ["git push", "shutdown"]')
+_spec("command", "context_window_s", 300.0, _num("float", 0, 86400),
+      description="Follow-up context: seconds the last 5 executed command\n"
+      "results stay available to the next voice command in the SAME\n"
+      'focused app (0 disables). Say "new session" to clear it\n'
+      "immediately; nothing is persisted, a daemon restart starts cold.")
+
+
+# ---------------------------------------------------------------------------
+# Registry lookups
+# ---------------------------------------------------------------------------
+
+def default(section: str, key: str) -> Any:
+    """The registered default for one setting (None if unknown)."""
+    spec = REGISTRY.get((section, key))
+    return None if spec is None else spec.default
+
+
+def coerce_setting(section: str, key: str, value: Any) -> tuple[bool, Any]:
+    """Validate one value through its registry spec.
+    Returns (ok, coerced); unknown keys reject."""
+    spec = REGISTRY.get((section, key))
+    if spec is None:
+        return (False, value)
+    return spec.coercer(value)
+
+
+#: Registry-style alias used by new callers (coerce_setting keeps its
+#: historical name for compatibility).
+coerce = coerce_setting
+
+
+def validate(section: str, key: str, value: Any) -> bool:
+    """ok-only form of coerce_setting."""
+    return coerce_setting(section, key, value)[0]
+
+
+def is_secret(section: str, key: str) -> bool:
+    spec = REGISTRY.get((section, key))
+    return spec is not None and spec.secret
+
+
+def enum_options(section: str, key: str) -> tuple[str, ...] | None:
+    """The ordered enum options for a setting (None if not an enum) -
+    widgets derive their combo values from this instead of hardcoding."""
+    spec = REGISTRY.get((section, key))
+    if spec is None:
+        return None
+    return getattr(spec.coercer, "option_order", None)
+
+
+def ui_range(section: str, key: str) -> tuple[float, float] | None:
+    """Numeric bounds for a setting (widgets derive spin-button ranges
+    from this instead of hardcoding). None when the setting has no
+    numeric range (bools, enums, structured values)."""
+    spec = REGISTRY.get((section, key))
+    if spec is None:
+        return None
+    return getattr(spec.coercer, "bounds", None)
+
+
+def save_keys() -> dict[str, list[str]]:
+    """Ordered section -> keys the settings UI owns (persists to file)."""
+    out: dict[str, list[str]] = {}
+    for (section, key), spec in REGISTRY.items():
+        if "save" in spec.persistence:
+            out.setdefault(section, []).append(key)
+    return out
+
+
+def restart_keys() -> set[str]:
+    """'section.key' strings that need a daemon restart to take effect."""
+    return {f"{s}.{k}" for (s, k), spec in REGISTRY.items()
+            if spec.apply_mode == "restart"}
+
+
+def reload_keys() -> set[str]:
+    """'section.key' strings whose change hot-reloads the speech engine."""
+    return {f"{s}.{k}" for (s, k), spec in REGISTRY.items()
+            if spec.apply_mode == "engine"}
+
+
+def masked(cfg: dict) -> dict:
+    """Deep copy with every secret replaced by a bool (api-key rule)."""
+    safe = copy.deepcopy(cfg)
+    for (section, key) in SECRET_KEYS:
+        val = safe.get(section, {}).get(key, "")
+        safe.setdefault(section, {})[key] = bool(val)
+    return safe
+
+
+# Historical alias (the daemon and client call mask_secrets).
+mask_secrets = masked
+
+
+# ---------------------------------------------------------------------------
+# Tables DERIVED from the registry (names kept for compatibility)
+# ---------------------------------------------------------------------------
+
+DEFAULTS: dict[str, Any] = {}
+for _spec_obj in REGISTRY.values():
+    DEFAULTS.setdefault(_spec_obj.section, {})[_spec_obj.key] = _spec_obj.default
+del _spec_obj
+
+#: Keys the socket API / settings UI may set (apply_settings whitelist).
+ALLOWED_SETTINGS: dict[str, set] = {}
+for (_sec, _key), _sp in REGISTRY.items():
+    if "settable" in _sp.persistence:
+        ALLOWED_SETTINGS.setdefault(_sec, set()).add(_key)
+del _sec, _key, _sp
+
+#: Ordered section -> keys save_config writes (policy: values for keys
+#: the UI does not manage are carried over from the existing file).
+_SAVE_WHITELIST: dict[str, list[str]] = save_keys()
+
+#: (section, key) -> ("float"|"int"|"str", bound-or-range) for every
+#: factory-made range coercer in the registry.
+SETTING_RANGES: dict[tuple[str, str], Any] = {
+    (s, k): c.range_rule
+    for (s, k), spec in REGISTRY.items()
+    for c in [spec.coercer] if hasattr(c, "range_rule")
+}
+
+SETTING_ENUMS: dict[tuple[str, str], set] = {
+    (s, k): set(spec.coercer.options)
+    for (s, k), spec in REGISTRY.items()
+    if getattr(spec.coercer, "kind", None) == "enum"
+}
+
+SETTING_BOOLS = {(s, k) for (s, k), spec in REGISTRY.items()
+                 if getattr(spec.coercer, "kind", None) == "bool"}
+
+#: list-valued pass-through keys the UI owns
+SETTING_LISTS = tuple(
+    (s, k) for (s, k), spec in REGISTRY.items()
+    if getattr(spec.coercer, "kind", None) == "list"
+)
+
+#: settings whose change requires a daemon restart
+RESTART_REQUIRED: set[str] = restart_keys()
+
+#: settings whose change reloads the speech engine (live)
+ENGINE_KEYS: set[str] = reload_keys()
+
+#: Keys where an EMPTY value is meaningful (not "keep the saved value"):
+#: e.g. ai.base_prompt = "" restores the built-in prompt, so a cleared
+#: editor must actually clear the file instead of carrying the old value.
+_EMPTY_IS_MEANINGFUL = {(s, k) for (s, k), spec in REGISTRY.items()
+                        if spec.empty_meaningful}
+
+#: (section, key) pairs masked in every config read crossing a boundary
+SECRET_KEYS = frozenset((s, k) for (s, k), spec in REGISTRY.items()
+                        if spec.secret)
+
+
+# ---------------------------------------------------------------------------
+# Loading
+# ---------------------------------------------------------------------------
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    out = copy.deepcopy(base)
+    for k, v in override.items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = _deep_merge(out[k], v)
+        else:
+            out[k] = copy.deepcopy(v)
+    return out
+
+
+def load_config(path: Path | None = None) -> dict:
+    """Load config, deep-merged over DEFAULTS. Unknown keys are kept."""
+    path = path or paths.config_file()
+    user: dict = {}
+    if path.exists():
+        with open(path, "rb") as fh:
+            user = tomllib.load(fh)
+    user.pop("server", None)  # retired web UI section (spec: strip silently)
+    return _deep_merge(DEFAULTS, user)
+
+
+# ---------------------------------------------------------------------------
+# The commented template — DERIVED from the registry
+# ---------------------------------------------------------------------------
+
+def _toml_value(value: Any) -> str:
+    import json
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)  # JSON escaping is valid TOML
+    if isinstance(value, list):
+        return "[" + ", ".join(_toml_value(v) for v in value) + "]"
+    if isinstance(value, dict):
+        import re as _re
+        parts = []
+        for k, v in value.items():
+            # bare TOML keys only for safe chars; anything else (e.g. the
+            # dotted "ggml-base.bin") MUST be quoted or it round-trips
+            # as a nested table
+            k_str = str(k)
+            key_repr = (k_str if _re.fullmatch(r"[A-Za-z0-9_-]+", k_str)
+                        else json.dumps(k_str, ensure_ascii=False))
+            parts.append(f"{key_repr} = {_toml_value(v)}")
+        return "{ " + ", ".join(parts) + " }"
+    raise ValueError(f"cannot serialize {type(value).__name__} to TOML")
+
+
+def template_text() -> str:
+    """Render the fully commented example config from the registry: one
+    [section] per registry section, every key with its description as
+    comments and its registered default as the value. The result is
+    valid TOML (every line active) — deleting lines falls back to the
+    same defaults."""
+    lines = [
+        "# SayItErmano configuration.",
+        "# Delete any line to fall back to the built-in default.",
+        "",
+    ]
+    by_section: dict[str, list[SettingSpec]] = {}
+    for spec in REGISTRY.values():
+        by_section.setdefault(spec.section, []).append(spec)
+    for section, specs in by_section.items():
+        lines.append(f"[{section}]")
+        for spec in specs:
+            if spec.description:
+                for ln in spec.description.splitlines():
+                    lines.append(f"# {ln}".rstrip())
+            lines.append(f"{spec.key} = {_toml_value(spec.default)}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+#: The commented template (write_template writes this; derived — do not
+#: edit by hand, change the registry descriptions/defaults instead).
+TEMPLATE = template_text()
+
+
+def _write_private(path: Path, text: str) -> None:
+    """Atomic write with 0600 - the file may contain an API key."""
+    import os
+    import tempfile
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".fluidvoice-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, path)
+    except BaseException:
+        os.unlink(tmp)
+        raise
+
+
+def write_template(path: Path | None = None) -> Path:
+    path = path or paths.config_file()
+    _write_private(path, TEMPLATE)
+    return path
+
+
+# ---------------------------------------------------------------------------
+# Saving (used by the settings UI). Only whitelisted keys are written; values
+# for keys the UI does not manage (like ai.api_key) are carried over from the
+# existing file so a save never loses them. The whitelist is derived from
+# the registry (save_keys()).
+# ---------------------------------------------------------------------------
+
+def save_config(cfg: dict, path: Path | None = None) -> Path:
+    """Persist the whitelisted config keys as TOML, carrying over api_key."""
+    path = path or paths.config_file()
+    carry: dict = {}
+    if path.exists():
+        try:
+            with open(path, "rb") as fh:
+                carry = tomllib.load(fh)
+        except tomllib.TOMLDecodeError:
+            carry = {}
+    lines: list[str] = ["# SayItErmano configuration (managed by the settings UI)",
+                        ""]
+    for section, keys in _SAVE_WHITELIST.items():
+        values = cfg.get(section, {})
+        carried = carry.get(section, {})
+        lines.append(f"[{section}]")
+        for key in keys:
+            value = values.get(key)
+            if value in ("", None) and key in carried \
+                    and (section, key) not in _EMPTY_IS_MEANINGFUL:
+                value = carried[key]  # e.g. keep an existing api_key
+            if value not in ("", None):
+                lines.append(f"{key} = {_toml_value(value)}")
+        lines.append("")
+    _write_private(path, "\n".join(lines).rstrip() + "\n")
+    return path
+
+
+# ---------------------------------------------------------------------------
+# Settings validation - single source of truth for the socket API, the
+# GTK app and file-only saves (moved from webui.py per the native-app
+# spec; registry-driven since P1.3).
+# ---------------------------------------------------------------------------
+
 def apply_settings(cfg: dict, body: dict) -> tuple[list[str], list[str]]:
     """Whitelisted, validated merge of {section: {key: value}} into cfg
     (mutates cfg; no save). Returns (changed, rejected) as 'section.key'
     strings. Unknown keys and bad types are rejected, never half-applied."""
-    from . import backends, model_catalog
-
     changed: list[str] = []
     rejected: list[str] = []
-    for section, keys in ALLOWED_SETTINGS.items():
-        for key in keys:
-            if section in body and key in body[section]:
-                value = body[section][key]
-                if (section, key) == ("model", "name"):
-                    value = backends.ALIASES.get(str(value).strip().lower(),
-                                                 str(value).strip().lower())
-                    ok = (value in backends.FW_MODEL_REPOS or value == "auto"
-                          or value in model_catalog.PARAKEET_CATALOG)
-                elif (section, key) == ("ai", "max_retries"):
-                    try:
-                        ok = isinstance(value, (int, float)) \
-                            and not isinstance(value, bool) \
-                            and 0 <= int(value) <= 10
-                        value = int(value)
-                    except (TypeError, ValueError):
-                        ok = False
-                else:
-                    ok, value = coerce_setting(section, key, value)
-                if not ok:
-                    rejected.append(f"{section}.{key}")
-                    continue
-                if cfg.get(section, {}).get(key) != value:
-                    changed.append(f"{section}.{key}")
-                cfg.setdefault(section, {})[key] = value
+    for (section, key), spec in REGISTRY.items():
+        if "settable" not in spec.persistence:
+            continue  # e.g. ai.api_key (env/file only), recording.sample_rate
+        if section in body and key in body[section]:
+            ok, value = spec.coercer(body[section][key])
+            if not ok:
+                rejected.append(f"{section}.{key}")
+                continue
+            if cfg.get(section, {}).get(key) != value:
+                changed.append(f"{section}.{key}")
+            cfg.setdefault(section, {})[key] = value
     return changed, rejected
-
-
-def mask_secrets(cfg: dict) -> dict:
-    """Deep copy with secrets replaced by booleans (api-key rule)."""
-    safe = copy.deepcopy(cfg)
-    key = safe.get("ai", {}).get("api_key", "")
-    safe.setdefault("ai", {})["api_key"] = bool(key)
-    key = safe.get("model", {}).get("remote_api_key", "")
-    safe.setdefault("model", {})["remote_api_key"] = bool(key)
-    return safe

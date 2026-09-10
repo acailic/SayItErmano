@@ -49,7 +49,7 @@ class GeneralPageMixin:
 
         sounds = Adw.PreferencesGroup(title="Sounds")
         sounds.add(self._switch("sounds", "enabled", "Sounds"))
-        sounds.add(self._spin("sounds", "volume", "Volume", 0.0, 1.0, 0.05, digits=2))
+        sounds.add(self._spin("sounds", "volume", "Volume", 0.05, digits=2))
         page.add(sounds)
 
         page.add(self._save_group())

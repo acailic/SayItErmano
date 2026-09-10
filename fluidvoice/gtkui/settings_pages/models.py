@@ -8,6 +8,7 @@ from gi.repository import Adw, GLib, Gtk
 
 from ... import backends, model_catalog, model_download
 from ...config import KNOWN_LANGUAGES as LANGUAGES
+from ...config import ui_range
 from ..client import ClientError
 from .common import _ListProxy, _PasswordProxy
 
@@ -48,7 +49,11 @@ class ModelsPageMixin:
             title="Memory",
             description="Free RAM/VRAM between dictations (applies live)",
         )
-        adj = Gtk.Adjustment(value=0, lower=0, upper=1440, step_increment=1)
+        # 0..1440 minutes derives from the registry's 0..86400 seconds.
+        _idle_bounds = ui_range("model", "idle_unload_s") or (0, 86400)
+        adj = Gtk.Adjustment(
+            value=0, lower=0, upper=_idle_bounds[1] // 60, step_increment=1
+        )
         self._idle_unload_row = Adw.SpinRow(
             title="Unload model after idle (minutes)",
             subtitle="0 = keep the model loaded (fastest first word); "
@@ -69,14 +74,6 @@ class ModelsPageMixin:
                 "model",
                 "backend",
                 "Backend",
-                [
-                    ("auto", "auto"),
-                    ("faster-whisper", "faster-whisper"),
-                    ("whisper-torch", "whisper-torch"),
-                    ("whisper.cpp", "whisper.cpp"),
-                    ("parakeet", "parakeet"),
-                    ("remote", "remote"),
-                ],
             )
         )
         engine.add(
@@ -84,7 +81,6 @@ class ModelsPageMixin:
                 "model",
                 "device",
                 "Device",
-                [("auto", "auto"), ("cuda", "cuda"), ("cpu", "cpu")],
             )
         )
         engine.add(
@@ -92,7 +88,6 @@ class ModelsPageMixin:
                 "model",
                 "compute",
                 "Compute",
-                [("auto", "auto"), ("float16", "float16"), ("int8", "int8")],
             )
         )
         engine.add(
@@ -142,8 +137,6 @@ class ModelsPageMixin:
                 "model",
                 "remote_timeout_s",
                 "Timeout (seconds)",
-                5,
-                600,
                 1,
                 digits=0,
                 subtitle="per-request; retry once on transient network errors",

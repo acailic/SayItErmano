@@ -25,8 +25,6 @@ class HistoryPageMixin:
                 "history",
                 "audio_budget_gb",
                 "Audio budget (GB)",
-                0.0,
-                1024.0,
                 0.5,
                 digits=1,
             )

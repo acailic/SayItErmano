@@ -990,6 +990,71 @@ class TestSettingsWindow:
             "backend": "parakeet", "name": "parakeet-tdt-0.6b-v2"}
         pump(loop, 1300)  # let the scheduled warmup poll run once and stop
 
+class TestRegistryDrivenWidgets:
+    """P1.3: settings widgets query the config REGISTRY for defaults and
+    validation policy instead of duplicating it. Layouts stay hand-built;
+    these tests pin the derivation: spin-button bounds come from the
+    registry's validation range, combo options from its enum, and the
+    load fallbacks from its defaults."""
+
+    @pytest.fixture(autouse=True)
+    def _fresh(self, settings_win, loop):
+        reset_settings(settings_win, loop)
+
+    def test_spin_bounds_come_from_the_registry(self, settings_win):
+        from fluidvoice.config import ui_range
+        w = settings_win
+        spins = [(k, r) for k, r in w._rows.items()
+                 if isinstance(r, Adw.SpinRow)]
+        assert len(spins) >= 15  # every numeric settings row
+        for (sec, key), row in spins:
+            bounds = ui_range(sec, key)
+            assert bounds is not None, f"{sec}.{key} spin lacks a range"
+            adj = row.get_adjustment()
+            assert adj.get_lower() == bounds[0], (sec, key)
+            assert adj.get_upper() == bounds[1], (sec, key)
+
+    def test_combo_options_come_from_the_registry(self, settings_win):
+        from fluidvoice.config import enum_options
+        w = settings_win
+        # dynamic combos build their own lists (mics, languages + saved)
+        dynamic = {("general", "language"), ("recording", "device")}
+        combos = [(k, v) for k, v in w._combo_values.items()
+                  if k not in dynamic]
+        assert len(combos) >= 9  # every enum-backed combo
+        for (sec, key), values in combos:
+            options = enum_options(sec, key)
+            assert options is not None, f"{sec}.{key} combo lacks an enum"
+            assert list(values) == list(options), (sec, key)
+
+    def test_widget_ranges_can_no_longer_disagree(self, settings_win):
+        """The old hardcoded widgets disagreed with validation in two
+        places (max_seconds capped at 3600 s, paste_threshold_chars at
+        100k) — the registry derivation removes the whole class of bug:
+        whatever the daemon accepts, the spin now allows."""
+        w = settings_win
+        adj = w._rows[("recording", "max_seconds")].get_adjustment()
+        assert (adj.get_lower(), adj.get_upper()) == (1, 86400)
+        adj = w._rows[("insertion", "paste_threshold_chars")].get_adjustment()
+        assert (adj.get_lower(), adj.get_upper()) == (1, 1_000_000)
+
+    def test_idle_unload_minutes_derive_from_seconds_range(self, settings_win):
+        # 0..1440 minutes = the registry's 0..86400 seconds (// 60)
+        w = settings_win
+        adj = w._idle_unload_row.get_adjustment()
+        assert adj.get_lower() == 0 and adj.get_upper() == 1440
+
+    def test_load_falls_back_to_registry_defaults(self, settings_win):
+        from fluidvoice.config import default
+        w = settings_win
+        # a config missing a key entirely (daemon merged an old file)
+        # loads the registry default, not a widget-local constant
+        w.cfg = {"sounds": {}, "recording": {}}
+        w._from_daemon = True
+        val = w.cfg.get("sounds", {}).get("volume", default("sounds", "volume"))
+        assert val == 1.0
+
+
 class TestDictionarySuggestions:
     """Settings -> Dictation "Suggested words" group (dict_learn):
     suggest-only, threshold-2, permanent dismiss, Accept merges through

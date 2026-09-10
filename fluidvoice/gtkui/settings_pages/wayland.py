@@ -71,7 +71,6 @@ class WaylandPageMixin:
                 "insertion",
                 "wayland_tool",
                 "Typing tool",
-                [("auto", "auto"), ("wtype", "wtype"), ("ydotool", "ydotool")],
                 subtitle="auto: wtype (wlroots/KDE) then ydotool (anywhere); "
                 "GNOME has no virtual-keyboard protocol for wtype",
             )

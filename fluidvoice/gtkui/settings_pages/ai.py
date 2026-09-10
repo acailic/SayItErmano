@@ -28,9 +28,9 @@ class AIPageMixin:
         grp.add(url_row)
         grp.add(self._entry("ai", "model", "Model — e.g. qwen3:8b"))
         grp.add(self._entry("ai", "api_key_env", "API key env var (preferred)"))
-        grp.add(self._spin("ai", "temperature", "Temperature", 0.0, 2.0, 0.1, digits=1))
-        grp.add(self._spin("ai", "timeout_seconds", "Timeout (s)", 1, 3600, 5))
-        grp.add(self._spin("ai", "max_retries", "Max retries", 0, 10, 1))
+        grp.add(self._spin("ai", "temperature", "Temperature", 0.1, digits=1))
+        grp.add(self._spin("ai", "timeout_seconds", "Timeout (s)", 5))
+        grp.add(self._spin("ai", "max_retries", "Max retries", 1))
         grp.add(
             self._switch(
                 "ai",

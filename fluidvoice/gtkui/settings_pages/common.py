@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from gi.repository import Adw, Gdk, Gtk
 
-from ...config import DEFAULTS
+from ... import config
 
 _KEY_REMAP = {
     "Control_L": "Left_Control",
@@ -170,7 +170,8 @@ class _InstructionRow(Adw.PreferencesRow):
 
 
 def _default(section: str, key: str):
-    return DEFAULTS.get(section, {}).get(key)
+    """The registered default for a setting (config registry lookup)."""
+    return config.default(section, key)
 
 
 def _keyname(keyval) -> str:
