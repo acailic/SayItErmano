@@ -495,6 +495,13 @@ chunk); `process: true` runs the standard filler/punctuation chain.
 ) and the tools `transcribe_file` / `history` / `status` / `toggle` are
 forwarded to the running daemon — your warm model does the work.
 
+**Security note:** launching the MCP bridge grants the connected client
+the reach of the daemon itself — it can read your **local dictation
+history**, run arbitrary local files through **transcription**, and
+**start/stop dictation takes** (`toggle`). Register `sayit-ermano mcp`
+only with agents you actually trust; any client configured with it
+inherits that access for as long as the bridge runs.
+
 Disable the checks entirely:
 
 ```toml
