@@ -1,5 +1,9 @@
 Lock-watch session resolution must work when the daemon runs under the systemd USER unit - live bug observed 2026-09-05 02:50 on the daily-driver machine: daemon started via `systemctl --user start sayit-ermano` logs "lock watch: session lookup failed (DBusException: org.freedesktop.login1.NoSessionForPID: PID 1288740 does not belong to any known session)" then "lock watch unavailable (no logind session for this process - headless?)" - pause-when-locked is inert.
 
+STATUS: SHIPPED
+
+<!-- shipped in 87f2b2c -->
+
 Cause: processes under the user manager live in user.slice (user@1000.service), NOT in a session-XX.scope, so resolving the logind session BY THE DAEMON'S OWN PID (GetSessionByPID(self_pid) or the session D-Bus path for it) finds nothing. The lookup works only for session-scoped launches (the old GNOME autostart). The daemon may be started both ways; lock suppression must work in both.
 
 Scope:

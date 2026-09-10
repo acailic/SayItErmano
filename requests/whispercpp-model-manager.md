@@ -1,5 +1,9 @@
 Plan the implementation of whisper.cpp model auto-download and a model manager - UPSTREAM-TRACKING row "whisper.cpp GGUF auto-download; model manager" (docs/STATUS.md "not started" list).
 
+STATUS: SHIPPED
+
+<!-- shipped in ae0fc66 -->
+
 Today: the whisper.cpp backend (fluidvoice/backends/whisper_cpp.py) requires model.whispercpp_model to be a manual local path to a ggml/gguf file, and the Models section of the GTK app (fluidvoice/gtkui/settings_window.py + fluidvoice/model_catalog.py) only knows faster-whisper models. Goal: choosing and using whisper.cpp becomes as easy as faster-whisper.
 
 Scope:

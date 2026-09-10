@@ -1,5 +1,9 @@
 Streaming finalization pass - engine-agnostic rewrite of the live pipeline so the preview stops re-decoding the whole take and immediate-stop becomes possible. Roadmap links these explicitly: the spoken-send row notes "Immediate-stop countdown needs streaming VAD", and docs/UPSTREAM-TRACKING.md lists Parakeet Realtime / Nemotron streaming as the unlock for "tighter live preview". This request is the FIRST phase of that story only: segmented finalization on the existing whisper/parakeet backends. True streaming engines (NeMo/Riva, community streaming exports) stay out - the segmented rewrite is the right foundation regardless of which engine lands later, and it is dependency-free. External validation (2026-09-05 upstream-reviews sweep, docs/research/2026-09-05-fluidvoice-reviews.md): streaming live preview is upstream users' single most-praised feature, and upstream bug #833 is precisely the re-transcribe-whole-buffer-per-tick failure mode item 2 below forbids; their Windows beta streams the preview overlay but inserts only the final transcript - same shape as this design.
 
+STATUS: SHIPPED
+
+<!-- shipped in 9126cb2 -->
+
 Today: the live preview (fluidvoice/preview.py + the daemon's rolling pass, ~1.2 s cadence per docs/STATUS.md) transcribes a growing raw-PCM buffer from the take's start on every pass - decode cost grows with take length, so long takes get progressively laggier, and there is no notion of finalized segments; the final transcript comes from one full re-decode at stop. There is no VAD gate: silence at the tail still waits for the human to stop.
 
 Scope:

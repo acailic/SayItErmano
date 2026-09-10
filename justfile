@@ -57,6 +57,10 @@ gate:
     {{python}} -m pytest -q -W error tests --ignore=tests/integration
     echo "gate: clean tree, lint clean, suite green, zero warnings"
 
+# every requests/*.md brief carries exactly one valid STATUS: OPEN|SHIPPED|SUPERSEDED
+validate-requests:
+    {{python}} scripts/validate_requests.py
+
 # ── application: release dispatch (manual-only, like all CI here) ───────────
 # prepare bumps the version, runs the full gate + locked deb build, commits
 # and pushes. You then dispatch CI for the produced SHA from the Actions

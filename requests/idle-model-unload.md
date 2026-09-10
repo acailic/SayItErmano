@@ -1,5 +1,9 @@
 Idle model unload / keep-warm policy (C-track leapfrog; docs/research/2026-09-05-fluidvoice-reviews.md insight 4: upstream pins ~3.4 GB models in memory forever, freezing 8 GB machines - issue #548 "please stop pretending this is a design choice", discussion #854 - and the maintainer REFUSES time-based unload for latency; #922 asks for a configurable keep-awake window. On Linux with mixed consumer hardware a user-visible policy is a cheap differentiator: upstream will not ship it). SayItErmano today: models stay loaded after first use; warm-up path exists (eager_warmup, warmup() throwaway inference, warm-toggle probe work) - planner verifies where backend instances live and what "unload" means per backend (whisper.cpp process exit, faster-whisper/parakeet model object drop, reference clears + gc).
 
+STATUS: SHIPPED
+
+<!-- shipped in 923001e -->
+
 Scope:
 1) Config: model.idle_unload_s (int seconds, default 0 = off) - after this much time with NO dictation activity (last take end OR daemon start with eager warmup counted as activity), release the active model's memory. model.idle_unload_s applies to the active backend only. Validation 30..86400 when non-zero.
 2) Lifecycle: a daemon-side idle timer (reset on take start/end and on manual warm-up; NOT reset by preview ticks, history reads, or status polls) fires the unload: drop the backend instance through the existing model-manager seam so the NEXT take re-loads through the existing load path (first-take-after-unload pays load time - that is the documented trade-off; status/doctor show "model: unloaded (idle 12m)"). Re-load trigger: the existing recording-start path (planner verifies the load-on-demand seam; the take must FAIL gracefully, not hang silently, if reload errors).

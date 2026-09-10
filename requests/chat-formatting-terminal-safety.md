@@ -1,5 +1,9 @@
 Contextual formatting for chat apps + terminal safety - roadmap "Later" items "Slash-command/mention literal formatting + terminal autocomplete spacing" and the spoken-send terminal blocklist noted ⏳ in docs/UPSTREAM-TRACKING.md line 69. Upstream-parity work; every semantic below must be verified against the upstream Swift source (github.com/altic-dev/Fluid-oss, text-processing files) during planning, same as the punctuation port was (docs/BEHAVIOR-SPEC.md §2).
 
+STATUS: SHIPPED
+
+<!-- shipped in c42879b -->
+
 Today: post_process (fluidvoice/processing/__init__.py) runs fillers -> dictionary -> punctuation -> extra_formats; there is no slash/mention handling, so dictating "/ fix the deploy" inserts "/ fix the deploy" and Slack needs the slash joined to fire the command. Spoken-send (daemon.py:149-157, parse_spoken_send) strips the phrase and presses Enter unconditionally - in a terminal that EXECUTES a half-typed shell line; upstream blocks Enter in a terminal blocklist.
 
 Scope:

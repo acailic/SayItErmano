@@ -1,4 +1,6 @@
-STATUS 2026-09-06: SHIPPED in 86fad3e - hotkey.mode 'both' with a 250 ms tap/hold disambiguation window, _hold_cycle refactored into _free_keyboard/_hold_until_release helpers (incl. the passthrough-restore fix). This brief is done; do not re-open.
+STATUS: SHIPPED
+
+Shipped in 86fad3e — hotkey.mode 'both' with a 250 ms tap/hold disambiguation window, _hold_cycle refactored into _free_keyboard/_hold_until_release helpers (incl. the passthrough-restore fix). This brief is done; do not re-open.
 
 Activation mode "both" (B3, macOS parity: upstream v1.5.14 ships Toggle / Hold / Automatic; the "both" ask is the common hybrid - short tap toggles, press-and-hold talks). Today config.py hotkey.mode is toggle | hold (hold-passthrough shipped earlier: keys typed during a hold pass through to the focused app natively, keyboard freed, swallowed only if freeing fails; modifier-only keys work in toggle mode only). ROADMAP B3 row: "activation mode both (tap toggles, hold talks)".
 

@@ -1,5 +1,9 @@
 UI science uplift — make the pill and history feel measurably better, grounded in the verified HCI literature collected in docs/research/ui-hci-papers.md (33 verified sources; section numbers below refer to it). Research-derived, not upstream-parity work: every change must keep the upstream look (black stadium, mode accents, Mac choreography) while fixing the moments the literature says matter most.
 
+STATUS: SHIPPED
+
+<!-- shipped in 4bc9e14 + d1805b6 (+71495e3) -->
+
 Phase 1 — Pill lifecycle motion (fluidvoice/overlay.py, daemon.py wiring; tests in tests/test_overlay.py):
 - Fade-IN on appear, symmetric to the existing `_fade_out` (overlay.py:871): ramp alpha 0→1 over ~4 frames (~130 ms at FPS=30) and start the waveform immediately. Research §1/§6: state change must land inside the 0.1 s "instant" band (Card 1991) and transitions at 100-300 ms (practitioner convention, consistent with Card/Miller — cite as convention). Today the window pops into existence on first blit.
 - Success beat ("done" moment): today `_close_closing_display` (daemon.py:962) fades the pill out right after insert — the interaction ends on a vanish. Add an overlay `done` state rendered by PillRenderer: badge "✓" (reuse the send-badge slot, `set_badge`) + accent-green tint hold ~400 ms, then the existing fade. Research §7 peak-end (Kahneman 1993): the insert beat is the peak-end of every dictation cycle and is where polish budget pays. Upstream parity preserved: the done frame reuses the exact pill geometry, only badge+accent change.

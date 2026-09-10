@@ -1,5 +1,9 @@
 Settings depth pack - three visible Settings gaps from the roadmap: user-editable prompt profiles (the last open v0.2 row, docs/ROADMAP.md "User-editable prompt profiles (named presets of the base prompt)"), per-model language selection (v0.4 row "Per-model language selection"), and model-manager pruning (v0.4 row "Model manager ... prune/freeing stays open"). All three have upstream references for semantics; this is additive UI + config plumbing over editors and stores that already exist.
 
+STATUS: SHIPPED
+
+<!-- shipped in 93e21b2 -->
+
 Today: the AI base prompt is a single global string edited in Settings -> AI (gtkui/settings_window.py, config key ai.base_prompt); there is no way to save/switch variants. Model entries (model_catalog.py, model_download.py, Settings -> Models) have no per-model language and no disk-space management - stale model dirs in the models cache can only be removed by hand. Config round-trips go through the validated set-config socket path (control.py), which is the only write path new UI should use.
 
 Scope:

@@ -1,5 +1,9 @@
 History integrity - the test suite must not write into the live history database, and the stats features must stop counting test rows. Measured 2026-09-04 on the daily-driver machine: 724 of 738 entries in ~/.local/share/sayit-ermano/history.jsonl are command-mode TEST rows (commands "true 1", "true 2", "exit 3", purpose "fail"/"p", duration_ms 0-1) written by the suite across 2026-09-03/04. Result: `sayit-ermano status` printed "today: 333 dictations" when at most 1 was real; the History window list, the today header line, `history --export` ZIPs, and dictionary auto-learning counts all consumed polluted data.
 
+STATUS: SHIPPED
+
+<!-- shipped in 634dbca -->
+
 Today: tests/conftest.py isolates XDG_CONFIG_HOME (so tests coexist with the live daemon's config/lock) but NOT the data dir - fluidvoice/paths.py resolves history/audio under ~/.local/share/sayit-ermano unconditionally, so every test that appends history (command-mode tests are the heaviest writer: 724 rows) writes to production. There is no scrub path and no regression guard.
 
 Scope:
