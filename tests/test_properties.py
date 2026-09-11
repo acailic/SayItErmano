@@ -18,6 +18,7 @@ domain, not generic math:
 from __future__ import annotations
 
 import copy
+import sys
 
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
@@ -159,7 +160,12 @@ class TestMetricProperties:
     def test_mean_within_extremes(self, values):
         m = M.mean(values)
         if values:
-            assert min(values) <= m <= max(values)
+            # sum/len can land one ULP outside the range at large
+            # magnitudes (e.g. three identical 699050.7087230051s) —
+            # allow exactly that floating error, no more
+            lo, hi = min(values), max(values)
+            ulps = (abs(lo) + abs(hi)) * sys.float_info.epsilon * len(values)
+            assert lo - ulps <= m <= hi + ulps
         else:
             assert m is None
 
