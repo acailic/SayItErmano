@@ -81,7 +81,7 @@ jobs:
         # that skips — no display, missing GTK — fails the lane instead of
         # silently narrowing what CI proved (E6).
         run: >-
-          xvfb-run -a env SAYIT_TEST_REQUIRE_MARKERS=needs_display
+          xvfb-run -a env GSK_RENDERER=cairo SAYIT_TEST_REQUIRE_MARKERS=needs_display
           cienv/bin/python -m pytest -q -W error -ra --strict-markers
           --strict-config --timeout=300
           --junitxml=build/test-results/gtk.xml

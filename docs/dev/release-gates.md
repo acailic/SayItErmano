@@ -24,7 +24,7 @@ matter what the dev machine happens to have installed.
 | `just lint` | `ruff check .` (config: `[tool.ruff.lint]` in pyproject.toml) |
 | `just test` | unit/contract tier, serial: pytest `-m "<unit filter>"` |
 | `just test-parallel` | same scope on pytest-xdist `-n auto` (~4–5× faster) |
-| `just test-ui` | display/GTK tier: `-m needs_display` (real display or Xvfb) |
+| `just test-ui` | display/GTK tier on a VIRTUAL display by default (xvfb-run + GSK_RENDERER=cairo + `-n auto`, ~6 s, nothing flashes on the real desktop); `SAYIT_TEST_REAL_DISPLAY=1` opts onto the live display |
 | `just test-integration` | real model/mic/daemon: `tests/integration` |
 | `just test-process` | MODEL-FREE process lane (Q7): real daemon/socket/CLI subprocesses, no GPU/model/network — works headless or under `xvfb-run -a just test-process` |
 | `just coverage` / `just coverage-ui` | branch coverage per tier (Q5 baseline: docs/research/2026-09-12-coverage-baseline.md) |

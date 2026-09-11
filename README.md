@@ -648,8 +648,10 @@ just test               # unit/contract tier (offline: the conftest network
                         # no model/display, tests deselected by DECLARED
                         # requirement — needs_model/needs_display/etc.)
 just test-parallel      # same scope on pytest-xdist (~4-5x faster)
-just test-ui            # display/GTK tier: real display or Xvfb; a skip
-                        # FAILS in CI's provisioned gtk-x11 lane
+just test-ui            # display/GTK tier on a VIRTUAL display (Xvfb +
+                        # cairo renderer + parallel workers): nothing flashes
+                        # on your desktop; SAYIT_TEST_REAL_DISPLAY=1 for the
+                        # live display. A skip FAILS in CI's gtk-x11 lane
 just test-process       # model-free process lane: real daemon/socket/CLI
                         # subprocesses, works headless or under xvfb-run
 just test-integration   # real model + mic + GPU (needs hardware + the

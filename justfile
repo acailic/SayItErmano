@@ -52,10 +52,22 @@ test *ARGS:
 test-parallel *ARGS:
     {{python}} -m pytest -q -n auto tests --ignore=tests/integration -m "{{tier_unit}}" {{ARGS}}
 
-# display/GTK tier (real display or Xvfb; skips headless — use
-# SAYIT_TEST_REQUIRE_MARKERS=needs_display to make skips fail, like CI does)
+# display/GTK tier — VIRTUAL display by default: xvfb-run + GTK's cairo
+# software renderer, so nothing flashes on the real desktop, on pytest-xdist
+# workers (~4x faster: 154 tests, 6s vs 25s serial). Skips headless only
+# when xvfb-run is missing; SAYIT_TEST_REAL_DISPLAY=1 opts onto the live
+# display (real-renderer debugging — windows WILL appear).
 test-ui *ARGS:
-    {{python}} -m pytest -q tests -m "needs_display" {{ARGS}}
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "${SAYIT_TEST_REAL_DISPLAY:-0}" = "1" ] \
+            || ! command -v xvfb-run >/dev/null 2>&1; then
+        {{python}} -m pytest -q tests -m "needs_display" {{ARGS}}
+    else
+        xvfb-run -a env GSK_RENDERER=cairo \
+            {{python}} -m pytest -q -n auto -W error --timeout=300 \
+            tests -m "needs_display" {{ARGS}}
+    fi
 
 # real-model/real-mic/daemon-process tier (needs the shared venv + hardware;
 # excluded from every offline gate by --ignore AND by the marker)
@@ -84,16 +96,25 @@ coverage *ARGS:
         --cov-report=xml:build/coverage/unit.xml \
         tests --ignore=tests/integration -m "{{tier_unit}}" {{ARGS}}
 
-# display/GTK tier coverage (same rules, its own XML)
+# display/GTK tier coverage (same Xvfb isolation as test-ui, its own XML)
 coverage-ui *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p build/coverage
-    {{python}} -m pytest -q -n auto -W error --strict-markers --timeout=300 \
-        --cov=fluidvoice --cov-branch \
-        --cov-report=term-missing \
-        --cov-report=xml:build/coverage/display.xml \
-        tests -m "needs_display" {{ARGS}}
+    if command -v xvfb-run >/dev/null 2>&1; then
+        xvfb-run -a env GSK_RENDERER=cairo \
+            {{python}} -m pytest -q -n auto -W error --strict-markers --timeout=300 \
+            --cov=fluidvoice --cov-branch \
+            --cov-report=term-missing \
+            --cov-report=xml:build/coverage/display.xml \
+            tests -m "needs_display" {{ARGS}}
+    else
+        {{python}} -m pytest -q -n auto -W error --strict-markers --timeout=300 \
+            --cov=fluidvoice --cov-branch \
+            --cov-report=term-missing \
+            --cov-report=xml:build/coverage/display.xml \
+            tests -m "needs_display" {{ARGS}}
+    fi
 
 # focused type check (Q12): the typed seam modules (config in pyproject
 # [tool.mypy] — grow the list as modules earn annotations)
