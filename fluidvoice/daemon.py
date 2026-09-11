@@ -430,6 +430,12 @@ class Daemon:
         """lockmon callback - transitions only (the monitor dedups). The
         transition logs once here; per-press gating in toggle() stays
         quiet so a locked screen with a stuck hotkey cannot spam."""
+        # flip the gate FIRST: toggle()'s `if self._locked` guard and the
+        # take-cancelling below must be one consistent transition. This
+        # assignment was missing (the Q6 sequence test caught it: the
+        # callback cancelled the active take but hotkeys never actually
+        # paused — test_lock_suppression had been setting _locked by hand).
+        self._locked = locked
         if locked:
             log("screen locked - hotkeys paused")
             with self._lock:
