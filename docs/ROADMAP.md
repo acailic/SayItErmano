@@ -3,43 +3,55 @@
 Everything on this page is **not built yet**. What already shipped lives
 in [STATUS.md](STATUS.md); the reasoning behind locked decisions lives
 in [adr/](adr/) (index: [adr/README.md](adr/README.md)); the evidence
-base is [research/](research/), especially the
+base is [research/](research/), especially
 [reliability-first improvement program](research/2026-09-10-reliability-first-improvement-program.md)
-(the "plan" below), whose P2/P3 sections are the current prioritized
-backlog.
+(the "plan" below). **Reconciled 2026-09-11 (phase 0, plan item 1):**
+plan P1 and the P2 code work are complete and in tree (unreleased,
+shaping v0.8.2+); the current prioritized backlog is the **live Wayland
++ context smoke matrices** and the **plan P3 capability backlog** below.
 
 Terminology follows the [glossary](glossary.md). Request briefs carry a
 `STATUS:` header (`just validate-requests` enforces it).
 
-## In flight — plan P1 (v0.9: architecture and measurement)
+## Shipped in tree — plan P1 (v0.9: architecture and measurement)
 
-The 2026-09-10 P1 wave; details in the plan §P1:
+The 2026-09-10 P1 wave landed 2026-09-10 and is in tree, unreleased
+(evidence: merges `49452fb` eval, `4230b38` config, `5d6d6b3` seam,
+`de2e045`+`9cec4c9` RuntimeTasks, `309896e` EngineManager/Command/
+Capture coordinators; STATUS.md "P1 wave 1" header). Items kept here
+only as history — do not re-implement:
 
 - **Speech-backend seam** — `SpeechBackend` / capabilities / typed
-  `Transcript` across all five adapters, one shared contract suite.
+  `Transcript` across all five adapters, one shared contract suite
+  (`fluidvoice/backends/base.py`, `tests/test_backend_contract.py`).
 - **Daemon ownership decomposition** — SpeechEngineManager,
   CaptureCoordinator, CommandCoordinator, `RuntimeTasks`
-  (the ownership invariant is already decided: [ADR-0003](adr/ADR-0003-runtime-task-ownership.md)).
+  ([ADR-0003](adr/ADR-0003-runtime-task-ownership.md)).
 - **Configuration registry** — every key derived from one
-  `SettingSpec`; widgets and the template stop duplicating policy.
-- **Local evaluation harness** — WER/CER/hotword-recall/latency/guard
-  metrics on a committed fixture manifest; representative-model eval
-  before speech-pipeline releases.
+  `SettingSpec` (`fluidvoice/config.py`, `tests/test_config_registry.py`).
+- **Local evaluation harness** — `fluidvoice/evalharness/` +
+  [docs/eval](eval/README.md) (synthetic CC0 corpus only; representative
+  real-speech corpus is open work — see the P3 backlog and the
+  product-excellence plan).
 
-## Next — plan P2 (v0.10: contextual dictation)
+## Next — plan P2 live validation (gates both Wayland parity and the context default)
 
-- `ContextProvider` seam: X11 and AT-SPI adapters returning app
-  identity, accessible role, selection and bounded preceding text.
-- Per-app behavior profiles (prompt profile, insertion mode,
-  formatting mode, spoken-send policy) with legacy-key migration.
-- Context-aware sentence capitalization/spacing, GAAV continuous
-  dictation, terminal safety, Wayland app hints — always preserving
-  behavior when accessibility data is missing.
-- **Wayland live smoke matrices** before declaring Wayland parity —
-  blocked on a real Wayland session on the dev machine (noted 2026-09-08:
-  no compositor installed, GNOME runs X11 there; unit coverage is
-  complete in `tests/test_wayland_capabilities.py`). Per compositor,
-  GNOME-Wayland first, then sway:
+The P2 code shipped 2026-09-10 in tree, **prototype OFF by default**
+(`context.enabled = false`), merged `b1e9011` (seam `e7fa15c`, profiles
+`fdbcf73`, take-path consumers `e47f763`; STATUS.md "Contextual
+dictation seam"):
+
+- ~~`ContextProvider` seam: X11 and AT-SPI adapters~~ — shipped.
+- ~~Per-app behavior profiles with legacy-key migration~~ — shipped.
+- ~~Context-aware sentence capitalization/spacing, GAAV, terminal
+  safety, Wayland app hints~~ — shipped behind `context.enabled`.
+
+What remains open, REQUIRED-BEFORE-PARITY, is the live matrices —
+[dev/wayland-smoke-matrix.md](dev/wayland-smoke-matrix.md) has the full
+case list ("Runs: none yet"). Blocked on a real Wayland session on the
+dev machine (noted 2026-09-08: no compositor installed, GNOME runs X11
+there; unit coverage is complete in `tests/test_wayland_capabilities.py`).
+Per compositor, GNOME-Wayland first, then sway:
   1. Baseline, no tools installed: daemon starts foreground AND under
      the systemd user unit; tray/socket/`status` alive; a dictation
      transcribes and lands in history; the "no insertion tool"
@@ -79,9 +91,9 @@ The 2026-09-10 P1 wave; details in the plan §P1:
 
 ## Small standing items (pre-program threads)
 
-- AT-SPI caret-context smart typing / preceding-text capture (also the
-  GAAV-continuous-formatting prerequisite, plan P2).
-- AT-SPI insertion fallback (grouped with the above).
+- AT-SPI insertion fallback (the context seam's AT-SPI adapter now
+  supplies identity/role/preceding text — shipped with P2 above — but
+  *insertion* itself still has no AT-SPI route).
 - Settings drag-to-reorder rows for the mic-priority list (up/down
   buttons ship today).
 
