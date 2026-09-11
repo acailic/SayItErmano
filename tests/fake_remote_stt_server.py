@@ -203,7 +203,7 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError:  # http500/http401/bad_json: no JSON payload to quote
         print(f"responds with: {body!r}", flush=True)
     print("ready-to-paste config:", flush=True)
-    print(f'  [model]')
+    print('  [model]')
     print(f'  remote_url = "{srv.url}"')
     print("  remote_model = \"whisper-large-v3\"   # any string; echoed in the "
           "request log")

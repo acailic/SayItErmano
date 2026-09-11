@@ -95,6 +95,11 @@ coverage-ui *ARGS:
         --cov-report=xml:build/coverage/display.xml \
         tests -m "needs_display" {{ARGS}}
 
+# focused type check (Q12): the typed seam modules (config in pyproject
+# [tool.mypy] — grow the list as modules earn annotations)
+typecheck:
+    {{python}} -m mypy
+
 # THE canonical unit/contract gate (Q1): python -m pytest, warnings as
 # errors, unknown markers rejected, every skip listed, JUnit artifact,
 # bounded per-test timeout, request validation. CI's unit job and

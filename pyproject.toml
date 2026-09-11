@@ -44,6 +44,7 @@ dev = [
     "pytest-timeout>=2.3",  # bounded per-test timeout in the gate (Q1)
     "pytest-cov>=5",      # branch coverage baseline/ratchet (Q5)
     "hypothesis>=6",      # property tests at pure boundaries (Q5)
+    "mypy>=1.10",         # focused typing at the seam modules (Q12)
     "ruff>=0.4",           # lint gate: just lint / ruff check .
 ]
 
@@ -102,8 +103,21 @@ target-version = "py311"  # matches requires-python ">=3.11" (F10): the
 # only automated 3.11 guard — py312 here would let 3.12-only syntax
 # (PEP 695, f-string grammar changes) sail past lint into 3.11 users
 
+# Ruff scope (Q12): import order + the correctness-focused Pyflakes
+# subset with the observed backlog FIXED: unused imports (F401),
+# placeholderless f-strings (F541), literal `is` comparisons (F632),
+# unused locals (F841). The remaining Pyflakes codes stay a later
+# ratchet: F811 (redefined-while-unused) has 134 sites of deliberate
+# test-double redefinitions in tests/ and vendored .claude templates —
+# and zero in production code — so enabling it now would flood without
+# buying correctness. adws/** and .claude/** are vendored SSSF factory
+# assets, exempt from the new codes so template updates don't churn.
 [tool.ruff.lint]
-select = ["I001", "F401"]
+select = ["I001", "F401", "F541", "F632", "F841"]
+
+[tool.ruff.lint.per-file-ignores]
+"adws/**" = ["F541", "F632", "F841"]
+".claude/**" = ["F541", "F632", "F841"]
 
 # Branch coverage for the Q5 baseline/ratchet: `just coverage` (unit
 # tier) and CI's unit job write XML here; tiers are measured separately
@@ -115,3 +129,20 @@ source = ["fluidvoice"]
 
 [tool.coverage.report]
 skip_empty = true
+
+# Focused type checking (Q12): the typed SEAM modules only — backend
+# contract, task runtime, chunk reconciliation, and the release/lock
+# tooling. Deliberately NOT repo-wide (no mass ignores, no rewrite);
+# imported modules are followed silently so their untyped bodies don't
+# flood. Grow `files` as more modules get honest annotations.
+[tool.mypy]
+python_version = "3.11"
+files = [
+    "fluidvoice/backends/base.py",
+    "fluidvoice/runtime_tasks.py",
+    "fluidvoice/chunking.py",
+    "packaging/deb/locklib.py",
+    "scripts/release_verify.py",
+]
+follow_imports = "silent"
+warn_unused_ignores = true

@@ -514,7 +514,6 @@ class TestDaemonWiring:
         assert d._update is None
 
     def test_start_checker_uses_injected_notify(self, monkeypatch):
-        notified: list = []
         created = {}
 
         class FakeChecker:
@@ -624,7 +623,7 @@ class TestDoctorUpdate:
     def test_offline_unknown_line(self):
         lines = doctor._update_lines(copy.deepcopy(DEFAULTS),
                                      check=lambda: None)
-        assert lines[0].startswith(f"version: ") and "latest unknown" in lines[0]
+        assert lines[0].startswith("version: ") and "latest unknown" in lines[0]
         assert "offline or GitHub API error" in lines[0]
         assert any("install:" in l for l in lines)
 

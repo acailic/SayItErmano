@@ -1106,7 +1106,6 @@ class FluidOverlay:
     # -- per-frame ------------------------------------------------------------
 
     def _tick(self, state: str) -> None:
-        X = self._X
         with self._lock:
             text = self._text
             mode = self._mode
@@ -1453,7 +1452,6 @@ class CommandPanel(FluidOverlay):
         pass
 
     def _tick(self, state: str) -> None:
-        X = self._X
         with self._lock:
             entries, status, awaiting = (self._entries, self._status,
                                          self._awaiting)

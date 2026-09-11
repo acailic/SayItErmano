@@ -1212,9 +1212,9 @@ class TestGuardSweep:
 
     def test_markdown_sweep_absence_note(self, tmp_path):
         m = write_manifest(tmp_path, RUNNER_MANIFEST)
-        report = run_eval(load_manifest(m), fake_transcriber,
-                          out_dir=tmp_path / "o5", manifests=[m],
-                          split="heldout")
+        run_eval(load_manifest(m), fake_transcriber,
+                 out_dir=tmp_path / "o5", manifests=[m],
+                 split="heldout")
         md = (tmp_path / "o5" / "report.md").read_text()
         assert "## Guard sweep" in md
         assert "Not computed" in md

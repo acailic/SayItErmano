@@ -108,6 +108,12 @@ jobs:
         run: |
           pip install ruff
           ruff check .
+      - name: Focused type check (mypy, Q12)
+        # same gate as `just typecheck`; the typed seam modules listed in
+        # pyproject [tool.mypy] — grow deliberately, no repo-wide sweep
+        run: |
+          pip install mypy
+          python -m mypy
       - name: Request briefs carry a valid STATUS (same as `just gate`)
         run: python scripts/validate_requests.py
       - name: Byte-compile everything

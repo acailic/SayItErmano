@@ -49,7 +49,7 @@ import sys
 import threading
 import time
 import traceback
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 __all__ = ["RuntimeTasks", "PENDING", "RUNNING", "CANCELLED", "DONE",
            "TERMINAL_STATES"]
@@ -75,7 +75,17 @@ class _TaskState:
     runtime is notified (``_task_terminal``) only with NO task lock held,
     and the runtime only ever acquires a task lock while already holding
     its registry lock (one direction, no cycles).
+
+    Mixin contract: every host (``_TaskTimer``/``_TaskThread``) is a
+    ``threading.Thread`` subclass; the members below belong to the host
+    and are declared here for the type checker only.
     """
+
+    if TYPE_CHECKING:
+        _started: threading.Event
+
+        def join(self, timeout: float | None = None) -> None: ...
+        def is_alive(self) -> bool: ...
 
     def _init_task_state(self, task_name: str, deadline: float) -> None:
         self.task_name = task_name
@@ -131,7 +141,7 @@ class _TaskTimer(_TaskState, threading.Timer):
             self.finished.set()
             self._runtime._task_terminal(self)
 
-    def cancel(self) -> bool:
+    def cancel(self) -> bool:  # type: ignore[override]  # bool beats None
         """Timer-compatible cancel(): sets ``finished`` and marks the
         task cancelled. True iff a pending callback was actually stopped
         (False once it fired or was already cancelled)."""

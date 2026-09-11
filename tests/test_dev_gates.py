@@ -22,8 +22,9 @@ def _pyproject() -> dict:
 class TestLintTargetsOldestPython:
     """F10: ruff must lint for the OLDEST supported interpreter
     (requires-python ">=3.11"). target-version py312 would not flag
-    3.12-only syntax that breaks 3.11 users, and the CI matrix does not
-    build 3.11 — lint is the only automated 3.11 guard."""
+    3.12-only syntax that breaks 3.11 users. Lint is the FAST guard;
+    CI's unit matrix also builds 3.11 (ci.yml) — the two agree via this
+    test and ci.yml's matrix list."""
 
     def test_ruff_target_version_matches_requires_python_floor(self):
         cfg = _pyproject()

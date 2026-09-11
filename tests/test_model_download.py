@@ -379,7 +379,6 @@ class TestCancelMidDownload:
             return FakeResp([b"data"], length=4)
 
         monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
-        dest = model_catalog.gguf_path("ggml-small.bin")
         with pytest.raises(model_download.DownloadCancelled):
             model_download.download_gguf("ggml-small.bin", cancel=ev)
         assert list(model_catalog.gguf_dir().iterdir()) == []

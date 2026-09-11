@@ -85,7 +85,10 @@ def _probe_duration(path: Path) -> float | None:
     try:
         import av  # deferred; see audio_utils._pyav_decodable
         with av.open(str(path)) as container:
-            d = float(container.duration) / 1e6  # microseconds
+            dur_us = container.duration  # Optional per the stubs
+            if dur_us is None:
+                return None
+            d = float(dur_us) / 1e6  # microseconds
             if d > 0:
                 return d
     except Exception:

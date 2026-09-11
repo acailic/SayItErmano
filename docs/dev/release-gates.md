@@ -157,7 +157,8 @@ the local evaluation harness is required (`docs/eval/README.md`):
    notes; WER/CER/hotword-recall regressions and any guard
    false-positive/false-negative change block the release until
    explained.
-3. Soak (same policy doc): a **2-hour soak** before major releases,
+3. Soak (same policy doc): a **2-hour soak** before every release that
+   changes the speech pipeline (and before majors),
    and a documented **24-hour run** for lifecycle changes (idle-unload,
    model reload/hot-swap, memory work) — `scripts/soak.py` CSV embedded
    with `evalharness run --soak-csv`.

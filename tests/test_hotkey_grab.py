@@ -267,7 +267,7 @@ class _StubListener:
 
     def __init__(self, **kw):
         self.hotkey_grabbed = _StubListener.grabbed
-        self.summary = [f"hotkey stub = keycode 67, mode toggle"]
+        self.summary = ["hotkey stub = keycode 67, mode toggle"]
         self.started = False
 
     def start(self):

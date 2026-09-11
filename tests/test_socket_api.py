@@ -124,7 +124,6 @@ class TestTranscribeRoute:
 class TestHistoryRoute:
     def test_limit_and_rows(self, env):
         d, _b, _tmp = env
-        hf = dm.history_mod.paths.history_file()
         for i in range(5):
             dm.history_mod.append({"ts": 1000.0 + i, "text": f"row {i}",
                                    "raw": f"row {i}", "ai": False,

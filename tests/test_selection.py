@@ -260,7 +260,6 @@ class TestEventRecording:
         disp.events += [a, b]
         known = hold.quiesce(0)
         assert known == {0xAAA, 0xBBB}
-        assert [(r for _, r, _ in hold.events)] is not None
         assert len(hold.events) == 2
 
     def test_selection_clear_sets_lost_ownership(self, monkeypatch):

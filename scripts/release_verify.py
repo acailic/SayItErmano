@@ -155,28 +155,34 @@ def load_manifest(path: Path) -> dict:
 
 
 def verify_manifest(m: dict, *, version: str) -> None:
-    def need(cond: bool, what: str) -> None:
+    def need(cond: object, what: str) -> None:  # any truthable condition
         if not cond:
             raise ReleaseError(f"manifest invalid: {what}")
 
     need(m.get("schema") == SCHEMA, f"schema {m.get('schema')!r} != {SCHEMA}")
     need(m.get("version") == version,
          f"version {m.get('version')!r} != expected {version!r}")
+    # early isinstance raises: they narrow the type for every later
+    # access AND give the missing-block case its own clear message
     pkg = m.get("package")
-    need(isinstance(pkg, dict) and pkg.get("name") == PACKAGE_NAME,
-         "package.name missing/wrong")
+    if not isinstance(pkg, dict):
+        raise ReleaseError("manifest invalid: package block missing")
+    need(pkg.get("name") == PACKAGE_NAME, "package.name missing/wrong")
     for key in ("file", "sha256", "size", "control_version"):
-        need(isinstance(pkg, dict) and pkg.get(key),
+        need(pkg.get(key) is not None and pkg.get(key) != "",
              f"package.{key} missing")
     need(pkg["control_version"] == f"{version}-1",
          f"package.control_version {pkg.get('control_version')!r} wrong")
     src = m.get("source")
-    need(isinstance(src, dict)
-         and all(src.get(k) for k in ("prepare_head", "source_digest",
-                                      "lock_sha256")),
+    if not isinstance(src, dict):
+        raise ReleaseError("manifest invalid: source block missing")
+    need(all(src.get(k) for k in ("prepare_head", "source_digest",
+                                  "lock_sha256")),
          "source block incomplete")
     wf = m.get("workflow")
-    need(isinstance(wf, dict) and wf.get("path") == PREPARE_WORKFLOW
+    if not isinstance(wf, dict):
+        raise ReleaseError("manifest invalid: workflow block missing")
+    need(wf.get("path") == PREPARE_WORKFLOW
          and wf.get("run_id") and wf.get("head_sha"),
          "workflow block incomplete or not release-prepare")
     need(wf["head_sha"] == src["prepare_head"],
@@ -383,11 +389,11 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "verify-publish":
             evidence = (args.evidence_file.read_text(encoding="utf-8")
                         if args.evidence_file else "")
-            m = verify_publish(args.repo, args.manifest, args.deb,
-                               version=args.version, evidence=evidence)
+            verified = verify_publish(args.repo, args.manifest, args.deb,
+                                      version=args.version, evidence=evidence)
             print(f"publish chain verified for v{args.version}: package "
-                  f"{m['package']['sha256'][:16]}… == built bytes, source "
-                  f"digest matches this checkout, lock matches")
+                  f"{verified['package']['sha256'][:16]}… == built bytes, "
+                  f"source digest matches this checkout, lock matches")
         elif args.cmd == "select-prepare-run":
             runs = json.loads(args.runs_f.read_text(encoding="utf-8"))
             runs = runs.get("workflow_runs", runs)

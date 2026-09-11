@@ -207,7 +207,7 @@ def _worst_cases_lines(worst: list[dict[str, Any]]) -> list[str]:
 def render_markdown(report: dict[str, Any]) -> str:
     """Human-readable report.md body."""
     lines: list[str] = []
-    lines.append(f"# Speech evaluation report")
+    lines.append("# Speech evaluation report")
     lines.append("")
     conv = report.get("conventions") or {}
     rtf_note = conv.get("real_time_factor", "see docs/eval/README.md")

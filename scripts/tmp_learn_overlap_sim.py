@@ -69,7 +69,7 @@ def main():
         rec = {"wav": wav.name, "s": round(total, 1), "final": final}
 
         # -- current engine: no-overlap tiling, seg=2, text ctx prompt
-        committed, rewrites2 = [], 0
+        committed, _rewrites2 = [], 0
         for k in range(int(total / 2.0)):
             segs = decode_span(m, a, 16000, k * 2.0, k * 2.0 + 2.0)
             committed.append(" ".join(s.text.strip() for s in segs))
@@ -79,7 +79,7 @@ def main():
         # -- overlap re-commit: seg=2 windows with 1s left overlap,
         #    timestamps slice the new region; overlapping region may
         #    correct the previous commit tail
-        hop, seg, ov = 1.0, 2.0, 1.0
+        _hop, seg, ov = 1.0, 2.0, 1.0  # hop kept for the math below
         pieces = []          # committed pieces, newest last
         rewrites = 0
         pos = 0.0
