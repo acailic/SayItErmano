@@ -1,0 +1,209 @@
+{
+  "_read_me": [
+    "Recording batch manifest for the SayItErmano real-speech corpus",
+    "(docs/eval/corpus-spec.md). Scaffold a copy with:",
+    "  python -m scripts.corpus init <batch-name>",
+    "This file, the audio and the signed consents live OUTSIDE git",
+    "(eval-private/... is gitignored); never commit any of them.",
+    "Validate as you record: python -m scripts.corpus validate <file>",
+    "Export to the harness format once recorded:",
+    "  python -m scripts.corpus export <file>",
+    "Case status: planned (not recorded yet) / recorded (final take",
+    "selected — one file per utterance) / rejected (do not use)."
+  ],
+  "manifest_schema": 1,
+  "batch": "<batch-name>",
+  "created": "<YYYY-MM-DD>",
+  "license": "private — do not redistribute",
+  "recorder": {
+    "name": "pw-record",
+    "version": "<capture tool version>",
+    "backend": {
+      "type": "pipewire",
+      "version": "<backend version>"
+    },
+    "settings": {
+      "master_format": "48 kHz FLAC (lossless archive)",
+      "eval_copy_format": "16 kHz mono s16 WAV",
+      "lead_in_out_silence_s": 1.0
+    }
+  },
+  "taxonomy_targets": {
+    "t1-short-commands": 40,
+    "t2-chat-messages": 60,
+    "t3-jargon": 45,
+    "t4-names-numbers": 30,
+    "t5-long-form": 20,
+    "t6-developer-prompts": 45
+  },
+  "negative_target": 30,
+  "speakers": [
+    {
+      "id": "S01",
+      "l1": "en",
+      "accent": "en-US (self-described)",
+      "languages": [
+        "en"
+      ],
+      "mic_classes": [
+        "laptop-array",
+        "headset-usb"
+      ],
+      "consent_ref": "S01 consent <YYYY-MM-DD> (signed form kept at ~/.local/share/sayit-ermano-eval/consent/)"
+    }
+  ],
+  "cases": [
+    {
+      "id": "S01-T1-EN-001",
+      "speaker": "S01",
+      "language": "en",
+      "accent": "en-US (self-described)",
+      "taxonomy": "t1-short-commands",
+      "mic_class": "headset-usb",
+      "mic_model": "<e.g. Logitech H390>",
+      "snr_db": null,
+      "environment": "home-office",
+      "session_date": "<YYYY-MM-DD>",
+      "consent_ref": "S01 consent <YYYY-MM-DD>",
+      "status": "planned",
+      "audio": "",
+      "reference_text": null,
+      "tags": [],
+      "expected_guard": "ok",
+      "license": "private — do not redistribute",
+      "notes": "replace this row per take (spec §5: >=1 s silence lead-in/out, retakes allowed, final selection recorded here)"
+    },
+    {
+      "id": "S01-T2-EN-001",
+      "speaker": "S01",
+      "language": "en",
+      "taxonomy": "t2-chat-messages",
+      "mic_class": "headset-usb",
+      "status": "planned",
+      "audio": "",
+      "reference_text": null,
+      "tags": [],
+      "expected_guard": "ok",
+      "license": "private — do not redistribute"
+    },
+    {
+      "id": "S01-T3-ENCS-001",
+      "speaker": "S01",
+      "language": "en",
+      "taxonomy": "t3-jargon",
+      "mic_class": "headset-usb",
+      "status": "planned",
+      "audio": "",
+      "reference_text": null,
+      "tags": [],
+      "expected_guard": "ok",
+      "license": "private — do not redistribute"
+    },
+    {
+      "id": "S01-T4-EN-001",
+      "speaker": "S01",
+      "language": "en",
+      "taxonomy": "t4-names-numbers",
+      "mic_class": "headset-usb",
+      "status": "planned",
+      "audio": "",
+      "reference_text": null,
+      "tags": [],
+      "expected_guard": "ok",
+      "license": "private — do not redistribute",
+      "notes": "T4 items are read verbatim; tag the name/number tokens (hotword recall convention G7)"
+    },
+    {
+      "id": "S01-T5-EN-001",
+      "speaker": "S01",
+      "language": "en",
+      "taxonomy": "t5-long-form",
+      "mic_class": "headset-usb",
+      "status": "planned",
+      "audio": "",
+      "reference_text": null,
+      "tags": [],
+      "expected_guard": "ok",
+      "license": "private — do not redistribute"
+    },
+    {
+      "id": "S01-T6-EN-001",
+      "speaker": "S01",
+      "language": "en",
+      "taxonomy": "t6-developer-prompts",
+      "mic_class": "headset-usb",
+      "status": "planned",
+      "audio": "",
+      "reference_text": null,
+      "tags": [],
+      "expected_guard": "ok",
+      "license": "private — do not redistribute"
+    },
+    {
+      "id": "N1-SIL-001",
+      "speaker": "",
+      "language": "zxx",
+      "taxonomy": "negative-silence",
+      "mic_class": "headset-usb",
+      "status": "planned",
+      "audio": "",
+      "reference_text": "",
+      "tags": [],
+      "expected_guard": "flag",
+      "license": "private — do not redistribute"
+    },
+    {
+      "id": "N2-ROOM-001",
+      "speaker": "",
+      "language": "zxx",
+      "taxonomy": "negative-room-tone",
+      "mic_class": "headset-usb",
+      "status": "planned",
+      "audio": "",
+      "reference_text": "",
+      "tags": [],
+      "expected_guard": "flag",
+      "license": "private — do not redistribute"
+    },
+    {
+      "id": "N3-NOISE-001",
+      "speaker": "",
+      "language": "zxx",
+      "taxonomy": "negative-noise",
+      "mic_class": "headset-usb",
+      "status": "planned",
+      "audio": "",
+      "reference_text": "",
+      "tags": [],
+      "expected_guard": "flag",
+      "license": "private — do not redistribute",
+      "notes": "keyboard/fan/street/cafe at 2 levels (spec §4 N3)"
+    },
+    {
+      "id": "N4-FAINT-001",
+      "speaker": "",
+      "language": "zxx",
+      "taxonomy": "negative-faint-speech",
+      "mic_class": "headset-usb",
+      "status": "planned",
+      "audio": "",
+      "reference_text": "",
+      "tags": [],
+      "expected_guard": "flag",
+      "license": "private — do not redistribute"
+    },
+    {
+      "id": "N5-COUGH-001",
+      "speaker": "",
+      "language": "zxx",
+      "taxonomy": "negative-non-speech",
+      "mic_class": "headset-usb",
+      "status": "planned",
+      "audio": "",
+      "reference_text": "",
+      "tags": [],
+      "expected_guard": "flag",
+      "license": "private — do not redistribute"
+    }
+  ]
+}
