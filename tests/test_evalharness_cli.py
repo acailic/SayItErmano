@@ -217,6 +217,31 @@ class TestCli:
         assert captured.err.count("STUB") == 1
         assert (out / "report.json").exists()
 
+    def test_run_split_label_stamped_on_report(self, tmp_path, manifest):
+        import json
+        out = tmp_path / "split-report"
+        rc = harness_main(["run", "--manifest", str(manifest),
+                           "--out", str(out), "--split", "train"])
+        assert rc == 0
+        report = json.loads((out / "report.json").read_text())
+        assert report["split"] == "train"
+        assert "Split: **train**" in (out / "report.md").read_text()
+
+    def test_run_split_defaults_to_full(self, tmp_path, manifest):
+        import json
+        out = tmp_path / "full-report"
+        rc = harness_main(["run", "--manifest", str(manifest),
+                           "--out", str(out)])
+        assert rc == 0
+        report = json.loads((out / "report.json").read_text())
+        assert report["split"] == "full"
+
+    def test_run_split_rejects_unknown_labels(self, tmp_path, manifest,
+                                              capsys):
+        with pytest.raises(SystemExit):
+            harness_main(["run", "--manifest", str(manifest),
+                          "--out", str(tmp_path / "x"), "--split", "val"])
+
     def test_module_execution_smoke(self, manifest):
         # prove `python -m fluidvoice.evalharness` works as a process
         venv_python = Path(sys.executable)
