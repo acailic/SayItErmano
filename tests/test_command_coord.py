@@ -182,6 +182,7 @@ class TestBegin:
         assert "Esc" in awaiting
         assert any("run this command?" in (t + b)
                    for t, b in calls["notify"])
+        coord.cancel_pending()  # hygiene: never leave the confirm watchdog
 
     def test_begin_none_proposal_releases_busy(self):
         coord, session, state, calls = make()
@@ -222,6 +223,7 @@ class TestRerun:
         assert session.started == []  # NO LLM call to propose
         entries = panel.built[-1].updates[-1][0]
         assert entries[-1]["kind"] == "proposal"
+        coord.cancel_pending()  # hygiene: never leave the confirm watchdog
 
     def test_rerun_guards(self):
         coord, _, state, _ = make()
@@ -266,6 +268,7 @@ class TestConfirm:
         # summary entry landed, panel close scheduled, grab disarmed
         assert panel.built[-1].updates[-1][0][-1]["kind"] == "summary"
         assert coord.timer is None or coord.timer.finished.is_set()
+        coord._tasks.cancel("command-panel-close")  # hygiene: no 8 s leftover
 
     def test_busy_press_is_ignored(self, panel):
         coord, session, state, _ = self._pending(panel)
@@ -274,6 +277,7 @@ class TestConfirm:
         time.sleep(0.1)
         assert session.executed == []  # nothing ran
         state["busy"] = False
+        coord.cancel_pending()  # hygiene: never leave the confirm watchdog
 
     def test_destructive_needs_two_presses(self, panel):
         coord, session, state, _ = self._pending(panel, destructive=True)
@@ -286,6 +290,7 @@ class TestConfirm:
         coord.confirm_pending()  # second press: executes
         assert wait_until(lambda: session.executed)
         assert wait_until(lambda: coord.session is None)
+        coord._tasks.cancel("command-panel-close")  # hygiene: no 8 s leftover
 
     def test_escape_between_presses_executes_nothing(self, panel):
         coord, session, state, _ = self._pending(panel, destructive=True)
@@ -312,6 +317,7 @@ class TestConfirm:
         assert coord.session is session  # same conversation continues
         entries = panel.built[-1].updates[-1][0]
         assert entries[-1]["kind"] == "proposal"
+        coord.cancel_pending()  # hygiene: never leave the confirm watchdog
 
 
 # ---------------------------------------------------------------------------
@@ -335,3 +341,4 @@ class TestTeardown:
         coord.begin("x")
         assert wait_until(lambda: coord.pending)
         assert coord.display is None  # headless: no panel, no crash
+        coord.cancel_pending()  # hygiene: never leave the confirm watchdog

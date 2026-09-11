@@ -11,7 +11,9 @@ import atexit
 import hashlib
 import os
 import shutil
+import subprocess
 import tempfile
+import threading
 from pathlib import Path
 
 import pytest
@@ -64,6 +66,7 @@ _warm_pillow_freetype()
 # (they run later). tests/integration/conftest.py isolates its own env per
 # test on top of this; it is untouched.
 from fluidvoice import paths as _paths
+from fluidvoice import runtime_tasks as _rt_mod
 
 # Snapshot the REAL resolved paths BEFORE the override: these are the
 # production locations the guard below watches (and what
@@ -121,3 +124,105 @@ def _real_data_untouched():
         assert after[name] == was, (
             f"suite wrote to the real {name} file "
             f"({_GUARDED_REAL_FILES[name]}): {was} -> {after[name]}")
+
+
+# ---------------------------------------------------------------------------
+# Runner hygiene — nothing a test starts may outlive the test.
+# ---------------------------------------------------------------------------
+# Phase-0 baseline (docs/research/2026-09-11-phase0-baseline-run.md): the
+# suite printed "3310 passed" and then stayed alive for ~5 minutes before
+# exiting 0. Tests that started a take through a real RuntimeTasks and
+# never shut it down left the capture watchdog pending — a NON-daemon
+# threading.Timer (default recording.max_seconds = 300 s) — so Python's
+# threading._shutdown blocked interpreter exit until every leaked
+# watchdog fired, each printing "max duration reached, stopping" / "no
+# audio captured" AFTER the summary line, and the last one walked a
+# stop→transcribe path against a None backend:
+#     transcription failed: 'NoneType' object has no attribute 'name'
+#
+# Both leak classes are constructed inside production code under test
+# (Daemon.__init__ builds its RuntimeTasks; recorder pipes and test
+# servers are subprocess.Popen objects), so a per-test fixture written in
+# any single test module cannot see them from the outside. The
+# import-time seam below (same pattern as the XDG isolation above:
+# conftest loads before any test module) tracks every RuntimeTasks
+# instance and every real Popen the session creates; the autouse sweep
+# after each test then guarantees teardown:
+#   * RuntimeTasks → shutdown(timeout=5): cancels pending timers, joins
+#     supervised threads (already-shut-down runtimes are no-ops);
+#   * Popen → kill()+wait() when still running at teardown.
+# A test that leaked live tasks is reaped AND recorded; the session-end
+# gate in tests/test_runner_hygiene.py turns the list into a failing
+# run, so a future leak reads as a red test instead of a 5-minute
+# post-exit hang with mystery output.
+_HYGIENE_LOCK = threading.Lock()
+RUNTIME_TASKS: list = []   # every RuntimeTasks constructed this session
+SPAWNED_PROCS: list = []   # every real subprocess.Popen this session
+TEST_LEAKS: list = []      # (test node id, what was still alive)
+
+_RT_ORIG_INIT = _rt_mod.RuntimeTasks.__init__
+_POPEN_ORIG_INIT = subprocess.Popen.__init__
+
+
+def _tracked_rt_init(self, *args, **kwargs) -> None:
+    _RT_ORIG_INIT(self, *args, **kwargs)
+    with _HYGIENE_LOCK:
+        RUNTIME_TASKS.append(self)
+
+
+def _tracked_popen_init(self, *args, **kwargs) -> None:
+    _POPEN_ORIG_INIT(self, *args, **kwargs)
+    with _HYGIENE_LOCK:
+        SPAWNED_PROCS.append(self)
+
+
+_rt_mod.RuntimeTasks.__init__ = _tracked_rt_init
+subprocess.Popen.__init__ = _tracked_popen_init
+
+
+def live_task_handles(runtime) -> list:
+    """The still-live (joinable) task handles of one RuntimeTasks."""
+    return [h for h in getattr(runtime, "_live", []) if h.is_alive()]
+
+
+@pytest.fixture(autouse=True)
+def _reap_test_processes(request):
+    """Guaranteed per-test teardown of every RuntimeTasks instance and
+    real subprocess the test created. Autouse with no dependencies, so
+    it sets up first and tears down LAST — after the test body and every
+    other function-scoped fixture finalizer; code under test never
+    observes it. Leaks are reaped, not forgiven: each is recorded for
+    the session-end gate (tests/test_runner_hygiene.py)."""
+    tasks_from = len(RUNTIME_TASKS)
+    procs_from = len(SPAWNED_PROCS)
+    yield
+    node = request.node.nodeid
+    for rt in RUNTIME_TASKS[tasks_from:]:
+        # A leak is a task that would have outlived the test on its own:
+        # a timer still PENDING at teardown (shutdown() had to cancel it
+        # — left alone it would fire after the test, the baseline's 300 s
+        # watchdog class) or a handle that missed the join deadline. A
+        # thread that is merely winding down (stall monitor between
+        # checks, a background reload) and joins cleanly is NOT a leak.
+        report = rt.shutdown(timeout=5.0) if not rt.shut_down else {}
+        offenders = sorted(set(report.get("cancelled", ()))
+                           | set(report.get("timed_out", ())))
+        for handle in live_task_handles(rt):
+            if handle.task_name not in offenders:
+                offenders.append(handle.task_name)
+        if offenders:
+            TEST_LEAKS.append(
+                (node, f"RuntimeTasks tasks outlived the test: {offenders}"))
+    for proc in SPAWNED_PROCS[procs_from:]:
+        if proc.poll() is None:
+            TEST_LEAKS.append((node, f"subprocess pid={proc.pid} alive"))
+            proc.kill()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+    # prune reaped entries so the registries stay small over 3300+ tests
+    with _HYGIENE_LOCK:
+        RUNTIME_TASKS[:] = [rt for rt in RUNTIME_TASKS
+                            if not rt.shut_down or live_task_handles(rt)]
+        SPAWNED_PROCS[:] = [p for p in SPAWNED_PROCS if p.poll() is None]

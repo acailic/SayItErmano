@@ -245,6 +245,7 @@ class TestFirstPcm:
         coord.check_first_pcm(recorder, wav)
         assert coord.recording is True
         assert rec.cancelled == 0 and new.cancelled == 0
+        coord.cancel()  # hygiene: never leave the take's watchdog pending
 
     def test_zero_disables_the_timer(self):
         cfg = copy.deepcopy(DEFAULTS)
@@ -254,6 +255,7 @@ class TestFirstPcm:
         with coord._lock:
             coord.start_locked()
         assert coord.first_pcm_timer is None
+        coord.cancel()  # hygiene: never leave the take's watchdog pending
 
 
 # ---------------------------------------------------------------------------
@@ -339,6 +341,7 @@ class TestSpokenSendCountdown:
         coord, _, _ = self._armed()
         coord.on_send_resume()
         assert coord.send_countdown_timer is None
+        coord.cancel()  # hygiene: never leave the take's watchdog pending
 
     def test_zero_countdown_disables_callbacks(self):
         cfg = copy.deepcopy(DEFAULTS)

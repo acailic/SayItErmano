@@ -86,6 +86,7 @@ class TestFirstPcmTimerLifecycle:
         _start(h)
         assert h.rec.started == 1
         assert h.d._capture.first_pcm_timer.is_alive()
+        h.d.cancel()  # hygiene: never leave the take's timers pending
 
     def test_stop_cancels_the_timer(self, h):
         _start(h)
@@ -117,6 +118,7 @@ class TestFirstPcmTimerLifecycle:
         _start(h)
         assert h.d._capture.first_pcm_timer is not first
         assert first.finished.is_set()
+        h.d.cancel()  # hygiene: never leave the take's timers pending
 
 
 class TestStaleCallbackSafety:
@@ -140,6 +142,7 @@ class TestStaleCallbackSafety:
         assert h.d.recording is True  # live take, healthy: untouched
         assert h.rec.cancelled == 0
         assert h.notes == []
+        h.d.cancel()  # hygiene: never leave the take's timers pending
 
     def test_replaced_recorder_is_ignored(self, h):
         _start(h)
@@ -148,6 +151,7 @@ class TestStaleCallbackSafety:
         h.d._capture.check_first_pcm(recorder, wav)
         assert h.d.recording is True
         assert h.rec.cancelled == 0
+        h.d.cancel()  # hygiene: never leave the take's timers pending
 
     def test_other_takes_wav_is_ignored(self, tmp_path, monkeypatch):
         h = _make(tmp_path, monkeypatch, recorder_cls=PathRecorder)
@@ -159,6 +163,7 @@ class TestStaleCallbackSafety:
         h.d._capture.check_first_pcm(h.rec, wav1)  # stale wav: must not match
         assert h.d.recording is True
         assert h.rec.cancelled == 0
+        h.d.cancel()  # hygiene: never leave the take's timers pending
 
     def test_silent_mic_still_stops_its_own_take(self, tmp_path, monkeypatch):
         # the watchdog's actual job still works when identity is valid:

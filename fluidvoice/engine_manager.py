@@ -126,7 +126,12 @@ class SpeechEngineManager:
         with self._backend_load_lock:
             if self.backend is None:
                 self.backend = self._backend_factory(self.cfg)
-                self._log(f"speech backend: {self.backend.name}")
+                # None-safe: test stub factories return None (load_backend
+                # itself raises instead); logging .name on None crashed as
+                # "transcription failed: 'NoneType' object has no attribute
+                # 'name'" when a leaked watchdog stopped a take post-teardown
+                if self.backend is not None:
+                    self._log(f"speech backend: {self.backend.name}")
                 self.idle_unloaded_at = None
                 self.touch_activity()
         return self.backend

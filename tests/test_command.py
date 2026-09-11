@@ -1039,6 +1039,7 @@ class TestDaemonCommandMode:
             pass
         assert summary[-1][2] is None
         assert hk.armed[-1] is False and True in hk.armed  # disarmed after run
+        d._commands._tasks.cancel("command-panel-close")  # hygiene: no 8 s leftover
 
     def test_escape_cancel_executes_nothing(self, cfg, quiet_ui, monkeypatch,
                                             tmp_path):
@@ -1138,7 +1139,7 @@ class TestDaemonCommandMode:
         d._on_command_hotkey()
         assert self._wait(lambda: runs == ["rm -rf /tmp/hold"]), runs
         assert self._wait(lambda: not d.busy and d._commands.session is None)
-        d.cancel_pending_command() if d._commands.pending else None
+        d._commands._tasks.cancel("command-panel-close")  # hygiene: no 8 s leftover
 
     def test_destructive_escape_between_presses_executes_nothing(
             self, cfg, quiet_ui, monkeypatch, tmp_path):
@@ -1222,6 +1223,7 @@ class TestDaemonCommandMode:
         cmds = [e for e in entries if e.get("mode") == "command"]
         assert len(cmds) == 1
         assert cmds[0]["destructive"] is True
+        d._commands._tasks.cancel("command-panel-close")  # hygiene: no 8 s leftover
 
     # -- follow-up context (v2) ---------------------------------------------
 
@@ -1402,6 +1404,7 @@ class TestDaemonCommandMode:
         assert cmds[0]["purpose"] == "checking"
         assert "exit 0" in " ".join(t + b for t, b in quiet_ui["notify"])
         assert client.calls                   # the one post-execution turn ran
+        d._commands._tasks.cancel("command-panel-close")  # hygiene: no 8 s leftover
 
     def test_rerun_destructive_needs_two_presses(self, cfg, quiet_ui,
                                                   monkeypatch, tmp_path):
@@ -1430,6 +1433,7 @@ class TestDaemonCommandMode:
                    hist.read_text().splitlines() if ln.strip()]
         assert [e for e in entries if e.get("mode") == "command"][0][
             "destructive"] is True
+        d._commands._tasks.cancel("command-panel-close")  # hygiene: no 8 s leftover
 
     def test_rerun_guards(self, cfg, quiet_ui, monkeypatch):
         runs = []
