@@ -120,6 +120,40 @@ def state_label(mode: str, state: str) -> str:
                             STATE_LABELS[("dictate", "recording")])
 
 
+DOWNLOADING_LABEL = "Downloading"
+DOWNLOAD_POLL_S = 0.5  # filesystem-scan throttle for the pill's hint
+_DL_HINT: tuple[float, "tuple[str, float] | None"] = (0.0, None)
+
+
+def download_hint(now: float | None = None) -> tuple[str, float] | None:
+    """(badge_text, fraction_done) while a model download is observable
+    in the shared models cache, else None - the pill's F-02 hook. The
+    daemon downloads (faster-whisper via huggingface_hub, or this
+    package's streaming fetches) while the pill merely watches the same
+    directory, so no daemon plumbing is needed. Throttled to ~2 Hz."""
+    global _DL_HINT
+    if now is None:
+        now = time.monotonic()
+    last, hint = _DL_HINT
+    if now - last < DOWNLOAD_POLL_S:
+        return hint
+    try:
+        from . import model_catalog, model_download
+        dl = model_download.observe_downloads()
+        if dl:
+            top = dl[0]  # the biggest transfer is the model itself
+            pct = top.percent
+            badge = (f"\u2193 {pct}%" if pct is not None else
+                     f"\u2193 {model_catalog.human_bytes(top.done_bytes)}")
+            hint = (badge, (pct / 100.0) if pct is not None else 0.0)
+        else:
+            hint = None
+    except Exception:  # noqa: BLE001 - observation must never kill the pill
+        hint = None
+    _DL_HINT = (now, hint)
+    return hint
+
+
 def processing_label(base: str, elapsed: float | None) -> str:
     """Processing label with the elapsed cue: "Transcribing · 3 s" past
     2 s (research §1: unexplained waits feel longer; ≥4 s also pulses)."""
@@ -371,7 +405,8 @@ class PillRenderer:
                mode: str = "dictate", state: str | None = None,
                badge: str | None = None, elapsed: float | None = None,
                confidence: int | None = None,
-               stable_chars: int | None = None):
+               stable_chars: int | None = None,
+               downloading: bool = False):
         """One frame -> (RGBA image, (w, h)).
 
         `mode` picks the accent color (dictate/rewrite/command); `state`
@@ -380,7 +415,10 @@ class PillRenderer:
         `badge` is a short status chip (e.g. the spoken-send indicator)
         right of the label. `elapsed` (processing only) adds the "· N s"
         cue and the still-working pulse; `confidence` (done only) flips
-        the success color from green to amber at band 0.
+        the success color from green to amber at band 0. `downloading`
+        (processing only) swaps the label to "Downloading": the first
+        take on a cold model spends minutes in a model download and the
+        pill must say so instead of shimmering "Transcribing" (F-02).
         """
         from PIL import Image
         if state is None:
@@ -390,7 +428,8 @@ class PillRenderer:
         accent = MODE_ACCENTS.get(mode, MODE_ACCENTS["dictate"])
         if done:
             accent = DONE_LOW if confidence == 0 else DONE_OK
-        label = state_label(mode, state)
+        label = DOWNLOADING_LABEL if (downloading and processing) \
+            else state_label(mode, state)
         if processing:
             label = processing_label(label, elapsed)
         label_alpha = LABEL_ALPHA
@@ -1029,7 +1068,11 @@ class FluidOverlay:
                 now = time.monotonic()
                 if state == "processing" and \
                         now - self._state_since > PROCESSING_CAP:
-                    break
+                    # a verifiably-active model download is progress, not a
+                    # hang: hold the cap while bytes keep landing (F-02 - a
+                    # cold first take can legally spend minutes here)
+                    if download_hint(now) is None:
+                        break
                 if state == "done" and now - self._state_since > DONE_HOLD:
                     break  # done beat over -> fade below
                 try:
@@ -1073,6 +1116,17 @@ class FluidOverlay:
             self._levels.update(self._read_pcm_tail())
         self._phase += 1.0 / self.FPS
 
+        # F-02: while processing, surface an observable model download
+        # (label "Downloading", badge "↓ N%") instead of a silent
+        # shimmer that reads as a hang on the very first take.
+        downloading = False
+        if state == "processing":
+            hint = download_hint()
+            if hint is not None:
+                downloading = True
+                if badge is None:
+                    badge = hint[0]
+
         # -- hover chips (A2): poll the pointer; no grabs, no focus.
         show_chips = (state == "recording" and self._actions
                       and self._chips_ok and self._update_hover())
@@ -1088,7 +1142,8 @@ class FluidOverlay:
         img, (w, h) = self._renderer.render(
             self._levels.levels(), text, phase=self._phase,
             alpha=fade_alpha, mode=mode, state=state, badge=badge,
-            elapsed=elapsed, confidence=conf, stable_chars=stable)
+            elapsed=elapsed, confidence=conf, stable_chars=stable,
+            downloading=downloading)
         if show_chips:
             img, w, h = self._compose_chips(img, w, h)
         sig = (w, h, state, mode, text, badge,
