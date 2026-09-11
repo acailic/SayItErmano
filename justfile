@@ -62,6 +62,31 @@ test-ui *ARGS:
 test-integration *ARGS:
     {{python}} -m pytest -q tests/integration {{ARGS}}
 
+# unit/contract tier branch coverage (Q5): terminal summary + XML for CI.
+# Tiers are measured separately (this is the unit tier only; the display
+# tier runs the same command with -m needs_display). Baseline:
+# docs/research/2026-09-12-coverage-baseline.md — ratchet upward only.
+coverage *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p build/coverage
+    {{python}} -m pytest -q -n auto -W error --strict-markers --timeout=300 \
+        --cov=fluidvoice --cov-branch \
+        --cov-report=term-missing \
+        --cov-report=xml:build/coverage/unit.xml \
+        tests --ignore=tests/integration -m "{{tier_unit}}" {{ARGS}}
+
+# display/GTK tier coverage (same rules, its own XML)
+coverage-ui *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p build/coverage
+    {{python}} -m pytest -q -n auto -W error --strict-markers --timeout=300 \
+        --cov=fluidvoice --cov-branch \
+        --cov-report=term-missing \
+        --cov-report=xml:build/coverage/display.xml \
+        tests -m "needs_display" {{ARGS}}
+
 # THE canonical unit/contract gate (Q1): python -m pytest, warnings as
 # errors, unknown markers rejected, every skip listed, JUnit artifact,
 # bounded per-test timeout, request validation. CI's unit job and

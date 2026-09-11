@@ -1179,7 +1179,14 @@ def _toml_value(value: Any) -> str:
     if isinstance(value, (int, float)):
         return str(value)
     if isinstance(value, str):
-        return json.dumps(value, ensure_ascii=False)  # JSON escaping is valid TOML
+        # JSON escaping is valid TOML basic-string escaping EXCEPT DEL
+        # (U+007F), which JSON happily leaves raw and TOML forbids — a
+        # value carrying it made the saved config unparseable (found by
+        # the Q5 save->load->save property test)
+        out = json.dumps(value, ensure_ascii=False)
+        if "\x7f" in value:
+            out = out.replace("\x7f", "\\u007F")
+        return out
     if isinstance(value, list):
         return "[" + ", ".join(_toml_value(v) for v in value) + "]"
     if isinstance(value, dict):

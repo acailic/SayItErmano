@@ -35,9 +35,15 @@ jobs:
         # display, no model, no outbound network (the conftest network
         # guard enforces the last one in-process). Warnings, unknown
         # markers, hangs (--timeout) and the JUnit artifact all apply.
+        # Q5: branch coverage attached per run; the recorded baseline
+        # (docs/research/2026-09-12-coverage-baseline.md) is the ratchet
+        # floor — a regression is a review blocker.
         run: >-
           python -m pytest -q -W error -ra --strict-markers --strict-config
           --timeout=300 --junitxml=build/test-results/unit.xml
+          --cov=fluidvoice --cov-branch
+          --cov-report=term-missing
+          --cov-report=xml:build/coverage/unit.xml
           tests --ignore=tests/integration
           -m "not integration and not desktop and not needs_display and not needs_model and not needs_network"
       - name: Upload test results
@@ -45,7 +51,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: junit-unit-py${{ matrix.python }}
-          path: build/test-results/*.xml
+          path: |
+            build/test-results/*.xml
+            build/coverage/*.xml
           if-nothing-found: ignore
 
   gtk-x11:

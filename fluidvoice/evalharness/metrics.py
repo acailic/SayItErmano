@@ -62,6 +62,7 @@ Conventions (documented once here; reports repeat the short form):
 """
 from __future__ import annotations
 
+import math
 import re
 import unicodedata
 from collections.abc import Iterable, Sequence
@@ -142,8 +143,13 @@ def levenshtein(a: Sequence[T], b: Sequence[T]) -> int:
     return prev[-1]
 
 
-def _ratio(distance: int, ref_len: int, ref: str, hyp: str) -> float:
-    """Distance over reference length, with the empty-reference rule."""
+def _ratio(distance: int, ref_len: int, hyp: Sequence) -> float:
+    """Distance over reference length, with the empty-reference rule.
+
+    Emptiness is judged on the NORMALIZED hypothesis (found by the Q5
+    property tests: punctuation-only text normalizes to zero words on
+    both sides, but the old raw-string check scored identical input as
+    WER 1.0)."""
     if ref_len == 0:
         return 0.0 if not hyp else 1.0
     return distance / ref_len
@@ -337,13 +343,13 @@ def sentence_start_capital_accuracy(reference: str,
 def wer(reference: str, hypothesis: str) -> float:
     """Word error rate (see module docstring for the convention)."""
     ref, hyp = normalize_words(reference), normalize_words(hypothesis)
-    return _ratio(levenshtein(ref, hyp), len(ref), reference, hypothesis)
+    return _ratio(levenshtein(ref, hyp), len(ref), hyp)
 
 
 def cer(reference: str, hypothesis: str) -> float:
     """Character error rate over the normalized character stream."""
     ref, hyp = normalize_chars(reference), normalize_chars(hypothesis)
-    return _ratio(levenshtein(ref, hyp), len(ref), reference, hypothesis)
+    return _ratio(levenshtein(ref, hyp), len(ref), hyp)
 
 
 def hotword_recall(hypothesis: str, hotwords: Iterable[str],
@@ -373,9 +379,16 @@ def real_time_factor(audio_duration_s: float | None,
     a zero-second "processing time" is a measurement artifact, not
     infinite speed.
     """
-    if not audio_duration_s or not processing_time_s:
+    # scoreable only when BOTH inputs are finite and positive: NaN/inf
+    # measurements are artifacts too (the Q5 property tests caught NaN
+    # slipping through the falsy/<=0 checks and scoring nan)
+    try:
+        ok = (math.isfinite(audio_duration_s)
+              and math.isfinite(processing_time_s)
+              and audio_duration_s > 0 and processing_time_s > 0)
+    except TypeError:  # non-numeric garbage
         return None
-    if audio_duration_s <= 0 or processing_time_s <= 0:
+    if not ok:
         return None
     return audio_duration_s / processing_time_s
 
