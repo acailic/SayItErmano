@@ -26,6 +26,8 @@ matter what the dev machine happens to have installed.
 | `just test-parallel` | same scope on pytest-xdist `-n auto` (~4–5× faster) |
 | `just test-ui` | display/GTK tier: `-m needs_display` (real display or Xvfb) |
 | `just test-integration` | real model/mic/daemon: `tests/integration` |
+| `just test-process` | MODEL-FREE process lane (Q7): real daemon/socket/CLI subprocesses, no GPU/model/network — works headless or under `xvfb-run -a just test-process` |
+| `just coverage` / `just coverage-ui` | branch coverage per tier (Q5 baseline: docs/research/2026-09-12-coverage-baseline.md) |
 | `just gate` | clean tree (tracked) + lint + request validation + unit tier with `-W error -ra --strict-markers --strict-config --timeout=300 --junitxml` |
 | `just gate-release` | `just gate` + untracked files also refused (what release-prepare checks) |
 | `just validate-requests` | every `requests/*.md` brief carries one valid `STATUS: OPEN\|SHIPPED\|SUPERSEDED` header |

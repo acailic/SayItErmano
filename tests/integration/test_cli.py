@@ -1,6 +1,10 @@
-"""Real CLI invocations through the actual console script."""
+"""Real CLI invocations through `python -m fluidvoice` (Q7/E7: the
+console script only exists in the main tree's venv — isolated worktrees
+share the venv by policy, so the interpreter running the tests launches
+THIS checkout's package)."""
 import os
 import subprocess
+import sys
 
 import pytest
 
@@ -8,12 +12,12 @@ from tests.integration.conftest import REPO
 
 pytestmark = pytest.mark.integration
 
-FV = str(REPO / ".venv/bin/fluidvoice")
-
 
 def run_cli(args, env=None, timeout=300):
-    return subprocess.run([FV, *args], capture_output=True, text=True,
-                          timeout=timeout, env={**os.environ, **(env or {})})
+    return subprocess.run([sys.executable, "-m", "fluidvoice", *args],
+                          capture_output=True, text=True, timeout=timeout,
+                          cwd=str(REPO),
+                          env={**os.environ, **(env or {})})
 
 
 class TestCli:
@@ -45,6 +49,8 @@ class TestCli:
         out = run_cli(["config", "print"])
         assert 'key = "F9"' in out.stdout
 
+    @pytest.mark.needs_model
+    @pytest.mark.needs_network  # jfk.flac download
     def test_transcribe_one_shot(self, isolated_env, jfk_wav):
         from tests.integration.conftest import skip_if_gpu_busy
         skip_if_gpu_busy()

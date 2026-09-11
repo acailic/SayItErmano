@@ -62,6 +62,14 @@ test-ui *ARGS:
 test-integration *ARGS:
     {{python}} -m pytest -q tests/integration {{ARGS}}
 
+# MODEL-FREE process lane (Q7): real daemon/socket/CLI subprocesses, no
+# GPU/model/network — runs in any checkout (spawns `sys.executable -m
+# fluidvoice` from THIS tree), works under Xvfb:
+#   xvfb-run -a just test-process
+test-process *ARGS:
+    {{python}} -m pytest -q tests/integration \
+        -m "integration and not needs_model and not needs_network and not desktop" {{ARGS}}
+
 # unit/contract tier branch coverage (Q5): terminal summary + XML for CI.
 # Tiers are measured separately (this is the unit tier only; the display
 # tier runs the same command with -m needs_display). Baseline:
