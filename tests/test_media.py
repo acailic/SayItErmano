@@ -139,6 +139,7 @@ class TestDaemonWiring:
                       use_hotkey=False, use_sounds=False)
         d.toggle()
         assert calls == []  # never invoked
+        d.cancel()  # hygiene: never leave the take's watchdog pending
 
     def test_config_default_on(self):
         assert DEFAULTS["recording"]["pause_media"] is True

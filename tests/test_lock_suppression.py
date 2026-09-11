@@ -734,6 +734,7 @@ class TestDaemonLockedGate:
         h.d._on_locked(False)
         h.d._locked = False
         assert h.d.toggle() is True
+        h.d.cancel()  # hygiene: never leave the take's watchdog pending
         assert h.rec.started == 1
 
     def test_lock_logs_each_transition_once(self, lockd):
@@ -784,6 +785,7 @@ class TestDaemonLockedGate:
         h.d._locked = True  # even a stale state cannot gate
         h.d._locked = False
         assert h.d.toggle() is True
+        h.d.cancel()  # hygiene: never leave the take's watchdog pending
 
     def test_disabled_setting_logs_nothing(self, lockd):
         h = lockd(pause_when_locked=False)
