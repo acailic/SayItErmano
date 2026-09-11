@@ -237,6 +237,10 @@ from the worktree root. The future offline baseline command is:
 The next session should execute **phase 0 only**, then begin phase 1 against
 that baseline:
 
+> **Phase 0 executed 2026-09-11** by a 3-agent team — see the
+> [phase 0 report](2026-09-11-phase0-report.md) for the verified baseline,
+> the five findings, and the three OPEN briefs it produced.
+
 1. Rebase the investigation context on the current `linux` SHA and record
    what changed since `68ef282`; reconcile the roadmap with shipped work.
 2. Run existing offline checks and save failures/skips/warnings with environment
