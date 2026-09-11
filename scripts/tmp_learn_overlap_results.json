@@ -188,5 +188,55 @@
   "ov2": "... or can't fix it. Thank you.",
   "ov2_f": 0.0,
   "ov2_rewrites": 5
+ },
+ {
+  "wav": "20260911-032745-1789090065.wav",
+  "s": 10.8,
+  "final": "Also let's work on the servants and make them some demons.",
+  "tile2": " So we're going to save things. I'm making some demo. Thank you. Thank you.",
+  "tile2_f": 0.08,
+  "ov2": "Let's work on the surface.",
+  "ov2_f": 0.5,
+  "ov2_rewrites": 0
+ },
+ {
+  "wav": "20260911-032942-1789090182.wav",
+  "s": 6.1,
+  "final": "Moshe Leshaf-Turbski",
+  "tile2": "  Thank you.",
+  "tile2_f": 0.0,
+  "ov2": "Thank you.",
+  "ov2_f": 0.0,
+  "ov2_rewrites": 2
+ },
+ {
+  "wav": "20260911-033050-1789090250.wav",
+  "s": 6.1,
+  "final": "Well, that'll be so tricky.",
+  "tile2": "Well, I don't know what he says. Thank you. Thank you.",
+  "tile2_f": 0.13,
+  "ov2": "Well, I don't know what he says. Thank you.",
+  "ov2_f": 0.14,
+  "ov2_rewrites": 6
+ },
+ {
+  "wav": "20260911-033059-1789090259.wav",
+  "s": 6.1,
+  "final": "Dalek O'Rourke",
+  "tile2": "Dalek always.  Thank you.",
+  "tile2_f": 0.33,
+  "ov2": "Dalek always. Thank you.",
+  "ov2_f": 0.33,
+  "ov2_rewrites": 2
+ },
+ {
+  "wav": "20260911-033210-1789090330.wav",
+  "s": 7.1,
+  "final": "Keep going.",
+  "tile2": "Keep going. Thank you. Thank you.",
+  "tile2_f": 0.5,
+  "ov2": "Keep going. going. Thank you.",
+  "ov2_f": 0.57,
+  "ov2_rewrites": 0
  }
 ]
