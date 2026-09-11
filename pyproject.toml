@@ -41,6 +41,7 @@ wayland = ["evdev>=1.6"]
 dev = [
     "pytest>=8",
     "pytest-xdist>=3.5",  # parallel suite: just test-parallel (auto workers)
+    "pytest-timeout>=2.3",  # per-test bound in the tier script (hanging test fails its tier)
     "ruff>=0.4",           # lint gate: just lint / ruff check .
 ]
 
@@ -68,7 +69,25 @@ include = ["fluidvoice*"]
 # pytest run (plan P0.5). Integration tests still need --ignore (they use
 # the real model/mic/GPU).
 testpaths = ["tests"]
-markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')", "integration: real-subsystem tests (mic, GPU, daemon process, network)", "desktop: live-interactive-session tests (X grabs, screen pixels) - excluded from default runs"]
+# Capability markers (quality plan Q1): the tier selection in
+# scripts/run_test_tier.sh is the ONE canonical consumer — never duplicate
+# the -m expression elsewhere. `slow` describes DURATION only and must never
+# stand in for an environmental requirement; the capability markers do that:
+#   model     real downloaded STT model (download/decode)
+#   network   outbound internet (model/audio downloads, live AI endpoints)
+#   packaging packaging toolchain (dpkg-deb, one-shot installer build)
+#   gtk       GTK4/libadwaita + a display — the provisioned GUI lane
+# `integration`/`desktop` predate the plan and keep their meaning.
+markers = [
+    "slow: duration marker — long-running tests, deselected from the every-change unit gate",
+    "integration: real-subsystem tests (mic, GPU, daemon process, network) — tests/integration/",
+    "desktop: live-interactive-session tests (X grabs, screen pixels) - excluded from default runs",
+    "model: needs a real downloaded STT model",
+    "network: needs outbound internet",
+    "packaging: needs the packaging toolchain (dpkg-deb, installer build)",
+    "gtk: needs GTK4/libadwaita + a display (provisioned GUI lane)",
+]
+addopts = "--strict-markers"  # unknown marker = collection error, in every run
 # P0.4 reliability gate: an unhandled exception in ANY thread the suite
 # spawned (timers, monitors, drain threads) fails the run instead of
 # surfacing as a pass-with-warning. The first-PCM timer leak this caught:

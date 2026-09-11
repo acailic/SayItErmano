@@ -91,6 +91,15 @@ atexit.register(shutil.rmtree, TEST_XDG_ROOT, ignore_errors=True)
 os.environ["XDG_SESSION_TYPE"] = "x11"
 os.environ.pop("WAYLAND_DISPLAY", None)
 
+# Unit-tier network guard (quality plan Q1): under the canonical tier
+# runner (FLUIDVOICE_TEST_TIER=unit), any outbound non-loopback socket
+# raises before bytes hit the wire. Import-time install covers module
+# scope and every thread the suite spawns; loopback fake servers are
+# exempt. See tests/_network_guard.py for the full contract.
+from tests import _network_guard as _net_guard
+
+_net_guard._install()
+
 
 def _fingerprint(p: Path):
     """None when the file is missing, else (mtime_ns, size, sha256) —

@@ -7,7 +7,8 @@ import pytest
 
 from tests.integration.conftest import REPO
 
-pytestmark = [pytest.mark.integration, pytest.mark.slow]
+pytestmark = [pytest.mark.integration, pytest.mark.slow,
+              pytest.mark.packaging, pytest.mark.network]
 
 SKIP_NET = pytest.mark.skipif(
     os.environ.get("SAYITERMANO_SKIP_NET") == "1",

@@ -107,11 +107,24 @@ jobs:
       - name: Lint (ruff)
         run: python -m ruff check .
 
-      - name: Offline suite, warnings as errors
-        # Same scope as the local gate (just gate). -W error + the
-        # unhandled-thread-exception filter from [tool.pytest] fail the
-        # release on ANY warning.
-        run: python -m pytest -q -W error tests --ignore=tests/integration
+      - name: Brief status validation
+        run: python scripts/validate_requests.py
+
+      - name: Unit tier, warnings as errors (canonical gate)
+        # The exact tier command `just gate` runs locally
+        # (scripts/run_test_tier.sh is the single source of truth):
+        # offline — the network guard fails any outbound socket — plus
+        # -W error, --strict-markers, per-test timeout, JUnit artifact.
+        # Headless here: the GUI lane is ci.yml's provisioned gtk job.
+        run: python3 scripts/run_test_tier.sh unit
+
+      - name: Upload test report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-prepare
+          path: .junit/*.xml
+          if-nothing-found: error
 
       - name: Dependency-lock freshness (stale-constraints check)
         run: |

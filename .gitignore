@@ -21,3 +21,6 @@ adws/adw_data/sssf.db*
 # uv run artifact from the factory drivers
 uv.lock
 .omc/
+
+# tier JUnit artifacts (scripts/run_test_tier.sh)
+.junit/

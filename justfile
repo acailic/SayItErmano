@@ -27,25 +27,45 @@ python := env_var_or_default("SAYIT_PY", `[ -x .venv/bin/python ] && echo .venv/
 default:
     @just --list
 
-# ── application: developer gates (plan P0.5) ────────────────────────────────
-# The complete local gate is `just gate`; releases run the same checks in
-# .github/workflows/release-prepare.yml. Suite scope is always
-# `tests --ignore=tests/integration` (integration needs the real model).
+# ── application: developer gates (plan P0.5; tiers per quality plan Q1) ─────
+# The canonical per-tier commands live in scripts/run_test_tier.sh — ONE
+# source of truth shared with CI (ci.yml) and release-prepare.yml. These
+# recipes and the release workflows only call that script.
 
 # ruff lint (config: [tool.ruff.lint] in pyproject.toml)
 lint:
     {{python}} -m ruff check .
 
-# offline unit suite, serial (plain pytest stays single-process: --pdb, -x)
+# dev convenience: whole suite minus integration, serial (plain pytest
+# stays single-process: --pdb, -x). Includes the gtk/slow-marked tests —
+# they skip headless. The canonical gate is `just test-unit`.
 test *ARGS:
     {{python}} -m pytest -q tests --ignore=tests/integration {{ARGS}}
 
-# offline unit suite on pytest-xdist auto workers (~4-5x faster)
+# dev convenience on pytest-xdist auto workers (~4-5x faster)
 test-parallel *ARGS:
     {{python}} -m pytest -q -n auto tests --ignore=tests/integration {{ARGS}}
 
-# the complete local gate: clean tree, lint, suite with warnings as errors
-# (unhandled thread exceptions are already errors via [tool.pytest])
+# canonical unit/contract gate (Q1): offline, no model/display/network
+# (loopback guard on), -W error, strict markers, junit artifact, timeout
+test-unit *ARGS:
+    bash scripts/run_test_tier.sh unit {{ARGS}}
+
+# provisioned GUI lane (Q1): GTK4/libadwaita + display; skips FAIL the tier
+test-gtk *ARGS:
+    bash scripts/run_test_tier.sh gtk {{ARGS}}
+
+# real subsystems: daemon processes, model, mic — never in `just gate`
+test-integration *ARGS:
+    bash scripts/run_test_tier.sh integration {{ARGS}}
+
+# every requests/*.md brief carries exactly one valid STATUS: OPEN|SHIPPED|SUPERSEDED
+validate-requests:
+    {{python}} scripts/validate_requests.py
+
+# the complete local gate: clean tree, lint, valid briefs, unit tier green
+# (warnings as errors, network guard, bounded timeout); the GUI lane runs
+# too when a display is present, and SAYS SO when it cannot.
 gate:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -54,12 +74,30 @@ gate:
         exit 1
     fi
     {{python}} -m ruff check .
-    {{python}} -m pytest -q -W error tests --ignore=tests/integration
-    echo "gate: clean tree, lint clean, suite green, zero warnings"
-
-# every requests/*.md brief carries exactly one valid STATUS: OPEN|SHIPPED|SUPERSEDED
-validate-requests:
     {{python}} scripts/validate_requests.py
+    bash scripts/run_test_tier.sh unit
+    if [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
+        bash scripts/run_test_tier.sh gtk
+    else
+        echo "gate: GUI lane not run (no display) — 'just test-gtk' inside a session for GUI coverage"
+    fi
+    echo "gate: clean tree, lint clean, briefs valid, unit tier green"
+
+# release-grade cleanliness (Q1): everything `gate` checks, but the tree
+# must be fully clean INCLUDING untracked files — what release-prepare
+# verifies on the checked-out SHA.
+gate-release:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "$(git status --porcelain)" ]; then
+        git status --porcelain
+        echo "gate-release: working tree not fully clean (incl. untracked)" >&2
+        exit 1
+    fi
+    {{python}} -m ruff check .
+    {{python}} scripts/validate_requests.py
+    bash scripts/run_test_tier.sh unit
+    echo "gate-release: tree fully clean, lint clean, briefs valid, unit tier green"
 
 # ── application: release dispatch (manual-only, like all CI here) ───────────
 # prepare bumps the version, runs the full gate + locked deb build, commits

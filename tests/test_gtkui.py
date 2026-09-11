@@ -12,6 +12,11 @@ import time
 
 import pytest
 
+# GUI lane (quality plan Q1): needs GTK4/libadwaita + a display. The unit
+# tier deselects this marker; `just test-gtk` (xvfb-run on CI) runs it, and
+# a skip there is an unmet prerequisite that FAILS the tier, not a green.
+pytestmark = pytest.mark.gtk
+
 gi = pytest.importorskip("gi", reason="PyGObject not installed")
 try:
     gi.require_version("Gtk", "4.0")

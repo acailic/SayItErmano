@@ -26,11 +26,16 @@ lost; uncommitted work was.
 2. Never `git restore`/`checkout --` files you did not create. If the
    tree contains someone else's WIP, either leave it alone or coordinate;
    discarding it destroys their work.
-3. Tests: run from your worktree root with the shared venv —
-   `/home/nistrator/Documents/github/FluidVoiceLinux/.venv/bin/python -m
-   pytest -q tests --ignore=tests/integration` (cwd first on sys.path, so
-   your worktree's `fluidvoice/` is the copy under test). Never bare
-   `pytest`; integration tests need the real model and are excluded.
+3. Tests: run the canonical unit tier from your worktree root —
+   `SAYIT_PY=/home/nistrator/Documents/github/FluidVoiceLinux/.venv/bin/python
+   bash scripts/run_test_tier.sh unit` (the script resolves the shared
+   venv via SAYIT_PY; cwd first on sys.path, so your worktree's
+   `fluidvoice/` is the copy under test). It is offline-only: a network
+   guard fails any outbound socket, model/GTK/network-marked tests are
+   deselected. Never bare `pytest`. GUI lane: `... run_test_tier.sh gtk`
+   (needs a display). Integration (`... run_test_tier.sh integration`)
+   needs the real model/mic and grabs hotkeys — coordinate with the live
+   daemon before running it on this desktop.
 4. Merge-back: commit on `agent/linux` (fast-forward it onto `linux` when
    clear: `git -C <main> merge --ff-only agent/linux`), or cherry-pick.
    Push `linux`; do not push `origin/main` (mirrors upstream) and do not

@@ -13,7 +13,7 @@ from fluidvoice.ai.client import AIClient
 from fluidvoice.config import DEFAULTS
 from fluidvoice.rewrite import RewriteError, run_rewrite
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.network]
 
 TIMEOUT = 180
 

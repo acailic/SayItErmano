@@ -13,7 +13,8 @@ import pytest
 
 from fluidvoice import model_catalog
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.network,
+              pytest.mark.model]
 
 FIXTURE = Path(__file__).parent / "fixtures" / "parakeet_v2_0.wav"
 GOLDEN = ("Well, I don't wish it any more, observed Phebe, turning away her "

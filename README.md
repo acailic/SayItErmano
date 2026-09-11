@@ -643,12 +643,22 @@ the upstream macOS repo for reference only and is **never** updated with port
 work; to see what moved upstream, run `scripts/upstream-diff.sh`.
 
 ```bash
-.venv/bin/python -m pytest tests -m "not slow and not integration"  # unit: offline, fast
-.venv/bin/python -m pytest tests -m "integration and not desktop"   # real subsystems, deterministic
-.venv/bin/python -m pytest tests -m desktop                          # live session (grabs, pixels)
-.venv/bin/python -m pytest tests -m "not desktop"                    # deterministic everything
-.venv/bin/python -m pytest -n auto tests --ignore=tests/integration  # parallel via pytest-xdist (~4-5x; skip -n for --pdb debugging)
+just test-unit          # canonical unit/contract gate (Q1): offline — the network
+                        # guard fails any outbound socket — no model/display,
+                        # -W error, strict markers, JUnit + per-test timeout
+just test-gtk           # provisioned GUI lane: GTK4/Adw + display; a skip
+                        # FAILS the lane (unmet prerequisite, not a green)
+just test-integration   # real subsystems: model, mic, daemon processes, .deb
+just gate               # clean tree + lint + brief validation + unit tier
+                        # (+ gtk tier when a display is present)
+just test               # dev convenience: whole suite minus integration
+just test-parallel      # same scope on pytest-xdist (~4-5x faster)
 ```
+
+All tier commands live in **one place** — `scripts/run_test_tier.sh` —
+shared verbatim by the justfile, CI and release-prepare, so local and CI
+run the same selection (capability markers: `model`, `network`, `desktop`,
+`packaging`, `gtk`, plus `slow` for duration only).
 
 The test suite — **1782 automated tests** at v0.8.1 (`-n auto` runs it in
 ~19 s):

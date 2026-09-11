@@ -17,16 +17,31 @@ live under the `factory-` prefix and are unchanged.
 | Recipe | What it runs |
 |---|---|
 | `just lint` | `ruff check .` (config: `[tool.ruff.lint]` in pyproject.toml) |
-| `just test` | offline suite, serial: `pytest -q tests --ignore=tests/integration` |
+| `just test-unit` | **canonical unit/contract gate** (quality plan Q1): `scripts/run_test_tier.sh unit` — offline (a conftest network guard fails any outbound socket), no model/display/GTK, `-W error`, `--strict-markers`, JUnit artifact, per-test timeout |
+| `just test-gtk` | provisioned GUI lane (`run_test_tier.sh gtk`): GTK4/Adw + display; a **skip fails the tier** — unmet prerequisites are not a green |
+| `just test-integration` | real subsystems (`run_test_tier.sh integration`): model, mic, daemon processes, packaging — never in any automatic gate |
+| `just test` | dev convenience: whole suite minus integration, serial |
 | `just test-parallel` | same scope on pytest-xdist `-n auto` (~4–5× faster) |
-| `just gate` | clean-tree check + lint + suite with `-W error` |
+| `just gate` | clean-tree check + lint + brief validation + unit tier (+ gtk tier when a display is present) |
+| `just gate-release` | `gate`'s checks but fully-clean tree including untracked files |
 | `just validate-requests` | every `requests/*.md` brief carries one valid `STATUS: OPEN\|SHIPPED\|SUPERSEDED` header |
 
 Notes:
 
+- **One source of truth for tiers**: every tier command lives in
+  `scripts/run_test_tier.sh`; the justfile, `ci.yml` and
+  `release-prepare.yml` only call it. Never copy the pytest selection
+  string anywhere else. CI's unit job and release-prepare run the exact
+  command `just test-unit` runs (E6 closed).
+- Capability markers (`model`, `network`, `desktop`, `packaging`, `gtk`,
+  plus duration-only `slow`) select tests out of the unit gate; the
+  real-download e2e transcription test moved under `tests/integration/`
+  with `network`+`model` marks (E1 closed: the "offline" suite no longer
+  downloads a model).
 - The interpreter resolves to `.venv/bin/python` if present, else
   `$SAYIT_PY`, else `python3`. Worktrees that share the main tree's venv
-  set `SAYIT_PY=/path/to/main/tree/.venv/bin/python` (see AGENTS.md).
+  set `SAYIT_PY=/path/to/main/tree/.venv/bin/python` (see AGENTS.md). \
+  The tier script resolves the interpreter the same way.
 - `just gate` fails on **any** warning: `-W error` plus the
   unhandled-thread-exception error filter in `[tool.pytest.ini_options]`
   (added by the lifecycle work, P0.4).
@@ -36,7 +51,7 @@ Notes:
   (`tests/integration/`) still need the real model and stay excluded
   from every offline gate via `--ignore`.
 - Dev dependencies (`pip install -e ".[dev]"`): `pytest`, `pytest-xdist`,
-  `ruff`.
+  `pytest-timeout`, `ruff`.
 - The deb's Ubuntu 24.04 / x86_64 / Python 3.12 target and the pinned
   container build are a decision, not a setting —
   [ADR-0004](../adr/ADR-0004-ubuntu-deb-contract.md).
@@ -72,8 +87,10 @@ Manual dispatch with the version. In order:
    to "fix" a disagreement by bumping over it).
 2. **Clean-tree check** — `git status --porcelain` must be empty.
 3. **Version bump** — both files, then re-verified.
-4. **Lint + offline suite with warnings as errors** — the same scope and
-   `-W error` strictness as `just gate`.
+4. **Lint + unit tier with warnings as errors** — the exact canonical
+   gate `just test-unit` runs (same script, same selection), plus brief
+   status validation; headless on the runner, so GUI coverage is the
+   provisioned gtk lane in ci.yml.
 5. **Dependency-lock freshness** — every runtime dependency in
    `pyproject.toml` must have an exact `==` pin in
    `packaging/deb/constraints.txt`, and a `pip install --dry-run -c

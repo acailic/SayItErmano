@@ -6,8 +6,9 @@ on:
 
 jobs:
   unit:
-    name: unit tests (py${{ matrix.python }})
+    name: unit tier (py${{ matrix.python }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 45   # bounded job: a hanging suite fails, never parks
     strategy:
       fail-fast: false
       matrix:
@@ -28,19 +29,52 @@ jobs:
       - name: Install package
         run: |
           python -m pip install --upgrade pip
-          pip install -e . pytest
-      - name: Unit tests (offline)
-        # testpaths is pinned to tests/ in [tool.pytest.ini_options], so bare
-        # pytest no longer collects adws/*_test.py (agent-factory scripts).
-        run: pytest tests -m "not slow and not integration" -q
-      - name: Upload test log on failure
+          pip install -e . pytest pytest-timeout
+      - name: Unit tier (canonical gate)
+        # The exact tier command `just test-unit` runs locally
+        # (scripts/run_test_tier.sh is the single source of truth):
+        # offline — the network guard fails any outbound socket — plus
+        # -W error, --strict-markers, per-test timeout, JUnit artifact.
+        run: python3 scripts/run_test_tier.sh unit
+      - name: Upload test report on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: pytest-log-py${{ matrix.python }}
-          path: |
-            .pytest_cache/
-          if-nothing-found: ignore
+          name: junit-unit-py${{ matrix.python }}
+          path: .junit/*.xml
+          if-nothing-found: error
+
+  gtk:
+    name: gtk tier (provisioned GUI lane)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Provision GTK4/libadwaita + virtual display
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb \
+              gir1.2-gtk-4.0 gir1.2-libadwaita-1 \
+              libgirepository1.0-dev libcairo2-dev pkg-config gcc
+      - name: Install package + PyGObject
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . pytest pytest-timeout PyGObject
+      - name: GTK tier under xvfb
+        # Same command as `just test-gtk`. Prerequisite skips FAIL this
+        # lane (scripts/_tier_skip_check.py): a green run proves the GUI
+        # modules actually executed, not that they skipped headless.
+        run: xvfb-run -a python3 scripts/run_test_tier.sh gtk
+      - name: Upload test report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-gtk
+          path: .junit/*.xml
+          if-nothing-found: error
 
   lint-compile:
     name: compile + metadata checks

@@ -12,6 +12,9 @@ import time
 
 import pytest
 
+# GUI lane (Q1): provisioned tier — unit tier deselects this marker
+pytestmark = pytest.mark.gtk
+
 gi = pytest.importorskip("gi", reason="PyGObject not installed")
 try:
     gi.require_version("Gtk", "4.0")

@@ -7,7 +7,8 @@ import pytest
 from fluidvoice.audio_utils import duration_seconds, raw_to_wav_file
 from fluidvoice.preview import PreviewEngine, faster_whisper_transcriber
 
-pytestmark = [pytest.mark.integration, pytest.mark.slow]
+pytestmark = [pytest.mark.integration, pytest.mark.slow,
+              pytest.mark.model]
 
 
 class TestRealRecorder:
