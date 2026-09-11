@@ -1,6 +1,8 @@
 """End-to-end transcription test (downloads a ~75 MB model + 1 MB sample).
 
-Run with:  pytest -m slow tests/test_e2e_transcribe.py
+Real-model + real-network work, so it lives in tests/integration (Q1/E1):
+the offline unit gate must never download anything. Run explicitly with:
+  pytest -m integration tests/integration/test_e2e_transcribe.py
 """
 import urllib.request
 from pathlib import Path
@@ -11,7 +13,8 @@ from fluidvoice import backends
 from fluidvoice.config import DEFAULTS
 from fluidvoice.processing import post_process
 
-pytestmark = pytest.mark.slow
+pytestmark = [pytest.mark.integration, pytest.mark.slow,
+             pytest.mark.needs_model, pytest.mark.needs_network]
 
 JFK_URL = "https://github.com/openai/whisper/raw/main/tests/jfk.flac"
 

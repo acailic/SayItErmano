@@ -15,14 +15,19 @@ backend:
 
 tests/conftest.py now tracks every RuntimeTasks instance and every real
 subprocess.Popen the session creates (import-time seam — both are built
-inside production code under test) and reaps them after each test. This
-module pins that machinery:
+inside production code under test) and reaps them after each test. The
+session-end gate lives in the conftest TOO (Q2/E2: a gate inside a test
+module is only loaded when that module is collected — focused and
+loadfile-distributed runs could leak silently). This module pins the
+machinery:
 
 * mid-session, the registries never hold a live task or a live process
   (the per-test sweeps keep them clean, so these pass wherever they run
   in a single session — they do not rely on running last);
-* the session-end gate fails the run listing every leaking test;
-* the process table holds no child of this interpreter;
+* tests/test_leak_gate_meta.py drives REAL pytest subprocesses to pin the
+  exit-status behaviour of the conftest gate (single-file and -n 2 runs);
+* the per-test sweep finalizes AFTER every other function-scoped fixture
+  (so nothing tears down into a half-reaped world);
 * ensure_backend() is None-safe for None-returning factories — the
   exact code path behind the baseline's error line (load_backend never
   returns None in production; test stubs do).
@@ -31,6 +36,8 @@ from __future__ import annotations
 
 import copy
 import os
+import subprocess
+import sys
 import threading
 
 import pytest
@@ -38,7 +45,7 @@ import pytest
 from fluidvoice import engine_manager
 from fluidvoice.config import DEFAULTS
 from fluidvoice.runtime_tasks import RuntimeTasks
-from tests.conftest import RUNTIME_TASKS, SPAWNED_PROCS, TEST_LEAKS, live_task_handles
+from tests.conftest import RUNTIME_TASKS, SPAWNED_PROCS, live_task_handles
 
 
 def _child_pids() -> list[int]:
@@ -81,37 +88,31 @@ class TestRegistryCleanMidSession:
             f"{_child_pids()}")
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _session_leak_gate():
-    """Session-end gate: after the last test (and every per-test sweep),
-    nothing the suite started may still be alive. A last-resort sweep
-    reaps stragglers (e.g. instances created at collection time, before
-    any test), then the recorded leak list must be empty — a leaking
-    test fails the session here with the full list instead of the
-    baseline's silent 5-minute post-exit hang."""
-    yield
-    for rt in list(RUNTIME_TASKS):
-        if not rt.shut_down:
-            rt.shutdown(timeout=5.0)
-        for handle in live_task_handles(rt):
-            TEST_LEAKS.append(
-                ("<session-end>",
-                 f"RuntimeTasks task {handle.task_name!r} still live"))
-    for proc in list(SPAWNED_PROCS):
-        if proc.poll() is None:
-            TEST_LEAKS.append(
-                ("<session-end>", f"subprocess pid={proc.pid} still alive"))
-            proc.kill()
-            try:
-                proc.wait(timeout=5)
-            except Exception:  # noqa: BLE001 - the assert below is the gate
-                pass
-    assert not TEST_LEAKS, (
-        "tests leaked processes that outlived them (reaped by the "
-        "conftest sweep; fix the test teardown):\n  "
-        + "\n  ".join(f"{node}: {what}" for node, what in TEST_LEAKS))
-    assert _child_pids() == [], (
-        f"orphaned child processes of the pytest process: {_child_pids()}")
+@pytest.fixture()
+def _order_probe_child():
+    """Q2: spawn a child that lives through the test body, and whose
+    teardown asserts the conftest reap sweep has NOT yet run."""
+    proc = subprocess.Popen(
+        [sys.executable, "-c",
+         "import sys, time; time.sleep(60); sys.exit(0)"])
+    yield proc
+    try:
+        assert proc.poll() is None, (
+            "conftest reap sweep ran BEFORE this fixture's teardown — "
+            "fixture finalization order is wrong; the sweep must be last")
+    finally:
+        proc.kill()
+        proc.wait()
+
+
+def test_reap_sweep_finalizes_after_other_function_fixtures(
+        _order_probe_child):
+    """The conftest sweep (`_reap_test_processes`, autouse) must tear down
+    AFTER every other function-scoped fixture. This test's fixture holds a
+    live child through the body; if the sweep finalized first, the child
+    would be reaped (and recorded as a leak) before this fixture's own
+    teardown — verified there, not just promised by a comment."""
+    assert _order_probe_child.poll() is None
 
 
 class TestNoneBackendGuard:

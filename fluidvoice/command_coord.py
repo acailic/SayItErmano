@@ -208,10 +208,20 @@ class CommandCoordinator:
         self._restart_confirm_watchdog()
 
     def _restart_confirm_watchdog(self) -> None:
-        timer = self._tasks.prepare_timer(
-            "command-confirm", self.on_confirm_timeout,
-            float(self.cfg["command"].get("confirm_timeout_s", 120.0)))
-        self.timer = timer
+        # Atomic vs cancel_pending: a proposal cancelled while we were
+        # presenting must NOT re-arm the confirm watchdog after the
+        # teardown already cancelled the old one — the stray 120 s timer
+        # (firing on_confirm_timeout into a dead proposal) was a real
+        # leak class; the Q2 conftest leak gate caught it racing begin()
+        # against Escape. Every caller runs WITHOUT self._lock held (plain
+        # Lock, not reentrant).
+        with self._lock:
+            if not self.pending:
+                return
+            timer = self._tasks.prepare_timer(
+                "command-confirm", self.on_confirm_timeout,
+                float(self.cfg["command"].get("confirm_timeout_s", 120.0)))
+            self.timer = timer
         if timer is not None:
             timer.start()
 

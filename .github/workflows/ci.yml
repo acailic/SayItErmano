@@ -8,6 +8,7 @@ jobs:
   unit:
     name: unit tests (py${{ matrix.python }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -25,26 +26,70 @@ jobs:
           sudo apt-get install -y pulseaudio-utils || true
           sudo apt-get install -y pipewire-audio-utils \
               || sudo apt-get install -y pipewire-utils || true
-      - name: Install package
+      - name: Install package + dev extra
         run: |
           python -m pip install --upgrade pip
-          pip install -e . pytest
-      - name: Unit tests (offline)
-        # testpaths is pinned to tests/ in [tool.pytest.ini_options], so bare
-        # pytest no longer collects adws/*_test.py (agent-factory scripts).
-        run: pytest tests -m "not slow and not integration" -q
-      - name: Upload test log on failure
-        if: failure()
+          pip install -e ".[dev]"
+      - name: Unit/contract gate (canonical scope, same as `just gate`)
+        # Q1: identical selection + strictness to the local gate — no
+        # display, no model, no outbound network (the conftest network
+        # guard enforces the last one in-process). Warnings, unknown
+        # markers, hangs (--timeout) and the JUnit artifact all apply.
+        run: >-
+          python -m pytest -q -W error -ra --strict-markers --strict-config
+          --timeout=300 --junitxml=build/test-results/unit.xml
+          tests --ignore=tests/integration
+          -m "not integration and not desktop and not needs_display and not needs_model and not needs_network"
+      - name: Upload test results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pytest-log-py${{ matrix.python }}
-          path: |
-            .pytest_cache/
+          name: junit-unit-py${{ matrix.python }}
+          path: build/test-results/*.xml
+          if-nothing-found: ignore
+
+  gtk-x11:
+    name: GTK / virtual X11 lane (prerequisite skips fail)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Provision GTK4/libadwaita + Xvfb (Q1/Q7)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb \
+              gir1.2-gtk-4.0 gir1.2-adw-1 \
+              python3-gi python3-venv \
+              xdotool xclip libnotify-bin
+      - name: Install package against the system PyGObject
+        # the deb does the same trick: a --system-site-packages venv that
+        # sees apt's python3-gi (built for Ubuntu 24.04's python3.12)
+        run: |
+          python3 -m venv --system-site-packages cienv
+          cienv/bin/pip install --upgrade pip
+          cienv/bin/pip install -e ".[dev]"
+      - name: Display tier under Xvfb (skips are failures here)
+        # SAYIT_TEST_REQUIRE_MARKERS (conftest hook): a needs_display test
+        # that skips — no display, missing GTK — fails the lane instead of
+        # silently narrowing what CI proved (E6).
+        run: >-
+          xvfb-run -a env SAYIT_TEST_REQUIRE_MARKERS=needs_display
+          cienv/bin/python -m pytest -q -W error -ra --strict-markers
+          --strict-config --timeout=300
+          --junitxml=build/test-results/gtk.xml
+          tests -m "needs_display"
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-gtk-x11
+          path: build/test-results/*.xml
           if-nothing-found: ignore
 
   lint-compile:
     name: compile + metadata checks
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -55,6 +100,8 @@ jobs:
         run: |
           pip install ruff
           ruff check .
+      - name: Request briefs carry a valid STATUS (same as `just gate`)
+        run: python scripts/validate_requests.py
       - name: Byte-compile everything
         run: |
           pip install -e . pytest

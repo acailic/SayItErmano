@@ -107,11 +107,19 @@ jobs:
       - name: Lint (ruff)
         run: python -m ruff check .
 
-      - name: Offline suite, warnings as errors
-        # Same scope as the local gate (just gate). -W error + the
-        # unhandled-thread-exception filter from [tool.pytest] fail the
-        # release on ANY warning.
-        run: python -m pytest -q -W error tests --ignore=tests/integration
+      - name: Request briefs carry a valid STATUS
+        run: python scripts/validate_requests.py
+
+      - name: Offline suite, warnings as errors (canonical unit gate)
+        # Same scope + strictness as `just gate` (Q1): needs_* tiers
+        # deselected by DECLARED requirement, unknown markers rejected,
+        # bounded per-test timeout. -W error + the unhandled-thread-
+        # exception filter from [tool.pytest] fail the release on ANY
+        # warning.
+        run: >-
+          python -m pytest -q -W error -ra --strict-markers --strict-config
+          --timeout=300 tests --ignore=tests/integration
+          -m "not integration and not desktop and not needs_display and not needs_model and not needs_network"
 
       - name: Dependency-lock freshness (stale-constraints check)
         run: |

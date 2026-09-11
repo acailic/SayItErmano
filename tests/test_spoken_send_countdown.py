@@ -83,7 +83,10 @@ def test_countdown_stops_the_take(cfg, tmp_path):
     assert d.handle_request({"action": "toggle"})["recording"] is True
     d._capture.on_send_countdown()
     assert d._capture.send_countdown_timer is not None
-    deadline = time.monotonic() + 2.0
+    # generous bound: the countdown is 0.4 s, but under `-n auto` load the
+    # worker can be descheduled long enough that 2 s flaked (Q12: flaky
+    # tests get fixed, not rerun); 10 s still proves it stops on its own.
+    deadline = time.monotonic() + 10.0
     while d.recording and time.monotonic() < deadline:
         time.sleep(0.05)
     assert d.recording is False

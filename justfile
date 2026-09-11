@@ -27,25 +27,45 @@ python := env_var_or_default("SAYIT_PY", `[ -x .venv/bin/python ] && echo .venv/
 default:
     @just --list
 
-# ── application: developer gates (plan P0.5) ────────────────────────────────
-# The complete local gate is `just gate`; releases run the same checks in
-# .github/workflows/release-prepare.yml. Suite scope is always
-# `tests --ignore=tests/integration` (integration needs the real model).
+# ── application: developer gates (plan P0.5 + quality plan Q1) ─────────────
+# Tier model (docs/research/2026-09-11-project-quality-and-testing-plan.md):
+#   unit/contract  — offline, headless, no model, no outbound network.
+#                    This is `just gate`, the ONE mandatory gate.
+#   display/GTK    — real display server + GTK4/Adw (Xvfb counts).
+#                    `just test-ui`; CI runs it in the provisioned gtk-x11
+#                    lane where a prerequisite skip FAILS instead of passing.
+#   integration    — real model/mic/daemon/GPU. `just test-integration`
+#                    (needs the shared venv; run from your worktree root).
+# The `-m` filter deselects by DECLARED requirement (needs_* markers), so
+# local and CI collection lists match regardless of the dev machine.
+tier_unit := "not integration and not desktop and not needs_display and not needs_model and not needs_network"
 
 # ruff lint (config: [tool.ruff.lint] in pyproject.toml)
 lint:
     {{python}} -m ruff check .
 
-# offline unit suite, serial (plain pytest stays single-process: --pdb, -x)
+# unit/contract tier, serial (plain pytest stays single-process: --pdb, -x)
 test *ARGS:
-    {{python}} -m pytest -q tests --ignore=tests/integration {{ARGS}}
+    {{python}} -m pytest -q tests --ignore=tests/integration -m "{{tier_unit}}" {{ARGS}}
 
-# offline unit suite on pytest-xdist auto workers (~4-5x faster)
+# unit/contract tier on pytest-xdist auto workers (~4-5x faster)
 test-parallel *ARGS:
-    {{python}} -m pytest -q -n auto tests --ignore=tests/integration {{ARGS}}
+    {{python}} -m pytest -q -n auto tests --ignore=tests/integration -m "{{tier_unit}}" {{ARGS}}
 
-# the complete local gate: clean tree, lint, suite with warnings as errors
-# (unhandled thread exceptions are already errors via [tool.pytest])
+# display/GTK tier (real display or Xvfb; skips headless — use
+# SAYIT_TEST_REQUIRE_MARKERS=needs_display to make skips fail, like CI does)
+test-ui *ARGS:
+    {{python}} -m pytest -q tests -m "needs_display" {{ARGS}}
+
+# real-model/real-mic/daemon-process tier (needs the shared venv + hardware;
+# excluded from every offline gate by --ignore AND by the marker)
+test-integration *ARGS:
+    {{python}} -m pytest -q tests/integration {{ARGS}}
+
+# THE canonical unit/contract gate (Q1): python -m pytest, warnings as
+# errors, unknown markers rejected, every skip listed, JUnit artifact,
+# bounded per-test timeout, request validation. CI's unit job and
+# release-prepare run exactly this scope.
 gate:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -54,8 +74,25 @@ gate:
         exit 1
     fi
     {{python}} -m ruff check .
-    {{python}} -m pytest -q -W error tests --ignore=tests/integration
-    echo "gate: clean tree, lint clean, suite green, zero warnings"
+    {{python}} scripts/validate_requests.py
+    mkdir -p build/test-results
+    {{python}} -m pytest -q -W error -ra --strict-markers --strict-config \
+        --timeout=300 --junitxml=build/test-results/unit.xml \
+        tests --ignore=tests/integration -m "{{tier_unit}}"
+    echo "gate: clean tree, lint clean, briefs valid, suite green, zero warnings"
+
+# release cleanliness on top of the gate: also refuses UNTRACKED files
+# (release-prepare's clean-tree check uses git status --porcelain, which
+# counts them; a dev gate only checks tracked changes)
+gate-release: gate
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [ -z "$(git status --porcelain)" ] || {
+        git status --porcelain
+        echo "gate-release: untracked files present — release-prepare would refuse" >&2
+        exit 1
+    }
+    echo "gate-release: tree fully clean"
 
 # every requests/*.md brief carries exactly one valid STATUS: OPEN|SHIPPED|SUPERSEDED
 validate-requests:

@@ -4,12 +4,26 @@ the installer download. Run with:  pytest -m integration
 """
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 
 import pytest
 
+from tests.conftest import REAL_SESSION_ENV
+
 REPO = Path(__file__).resolve().parents[2]
+
+# Q2: the root conftest pins XDG_SESSION_TYPE=x11 / clears WAYLAND_DISPLAY
+# for the UNIT tier. Real-subsystem tests must see the session they
+# actually run in (the Wayland port gates on exactly these vars), so the
+# snapshot taken before that pin is restored HERE. Per-test monkeypatch
+# overrides keep winning (they run later).
+for _var, _val in REAL_SESSION_ENV.items():
+    if _val is None:
+        os.environ.pop(_var, None)
+    else:
+        os.environ[_var] = _val
 
 TEST_CONFIG = """\
 [general]
@@ -68,18 +82,24 @@ def isolated_env(tmp_path, monkeypatch):
 def _spawn_and_wait(tmp_path: Path, extra_args: list,
                     log_to: Path | None = None) -> subprocess.Popen:
     from fluidvoice import paths
-    args = [str(REPO / ".venv/bin/fluidvoice"), "daemon", *extra_args]
+    # Q2/E7: run THIS checkout's source with the interpreter running the
+    # tests (sys.executable), not a venv-pathed script that only exists in
+    # the main tree. Isolated worktrees share the venv by policy; `python
+    # -m fluidvoice` with cwd=REPO puts this checkout's fluidvoice/ first
+    # on sys.path, so the daemon under test is the one beside these tests.
+    args = [sys.executable, "-m", "fluidvoice", "daemon", *extra_args]
     if log_to is not None:
         # file mode: daemon log() flushes every line, so the file is already
         # complete without draining a pipe; _stop_daemon skips its rewrite
         with open(log_to, "w") as out:
             proc = subprocess.Popen(args, stdout=out, stderr=subprocess.STDOUT,
-                                    text=True, env={**os.environ})
+                                    text=True, cwd=str(REPO),
+                                    env={**os.environ})
         proc._fv_log_to_file = True
     else:
         proc = subprocess.Popen(args, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, text=True,
-                                env={**os.environ})
+                                cwd=str(REPO), env={**os.environ})
     socket = paths.socket_path()
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:

@@ -12,6 +12,8 @@ import os
 
 import pytest
 
+pytestmark = pytest.mark.needs_display  # display/GTK lane (Q1)
+
 gi = pytest.importorskip("gi", reason="PyGObject not installed")
 try:
     gi.require_version("Gtk", "4.0")

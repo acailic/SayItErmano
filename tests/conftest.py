@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import atexit
 import hashlib
+import ipaddress
 import os
 import shutil
+import socket
 import subprocess
 import tempfile
 import threading
@@ -88,6 +90,15 @@ atexit.register(shutil.rmtree, TEST_XDG_ROOT, ignore_errors=True)
 # (headless runner: "unknown" also behaves as X11, but pinning makes it
 # explicit and immune to a runner with a stray WAYLAND_DISPLAY). Per-test
 # monkeypatch.setenv("XDG_SESSION_TYPE", "wayland") keeps winning.
+#
+# Q2 scoping: this normalization belongs to the UNIT tier only. The real
+# compositor identity is snapshotted FIRST so tests/integration/conftest.py
+# can restore it for real-subsystem/desktop tests, which must observe the
+# actual session they run in (documented sandbox overrides aside).
+REAL_SESSION_ENV = {
+    "XDG_SESSION_TYPE": os.environ.get("XDG_SESSION_TYPE"),
+    "WAYLAND_DISPLAY": os.environ.get("WAYLAND_DISPLAY"),
+}
 os.environ["XDG_SESSION_TYPE"] = "x11"
 os.environ.pop("WAYLAND_DISPLAY", None)
 
@@ -116,14 +127,23 @@ def _real_data_untouched():
     byte-identical (a missing file must stay missing — non-creation).
     Failing here raises during session teardown, so pytest reports it as a
     session ERROR even when every test passed — intended: a green run that
-    mutated production is exactly the failure this exists to catch."""
+    mutated production is exactly the failure this exists to catch.
+
+    Q2 note on false positives: the live daemon WRITES the real history
+    file whenever the machine's owner dictates. If this fires while a
+    `systemctl --user status sayit-ermano` shows an ACTIVE daemon, stop it
+    first (`systemctl --user stop sayit-ermano`) and re-run before
+    investigating tests: an external live-daemon write is not a test leak."""
     before = {name: _fingerprint(p) for name, p in _GUARDED_REAL_FILES.items()}
     yield
     after = {name: _fingerprint(p) for name, p in _GUARDED_REAL_FILES.items()}
     for name, was in before.items():
         assert after[name] == was, (
             f"suite wrote to the real {name} file "
-            f"({_GUARDED_REAL_FILES[name]}): {was} -> {after[name]}")
+            f"({_GUARDED_REAL_FILES[name]}): {was} -> {after[name]}. "
+            "If the live sayit-ermano daemon was running during the suite, "
+            "stop it (systemctl --user stop sayit-ermano) and re-run — an "
+            "external daemon write is not a test leak.")
 
 
 # ---------------------------------------------------------------------------
@@ -226,3 +246,181 @@ def _reap_test_processes(request):
         RUNTIME_TASKS[:] = [rt for rt in RUNTIME_TASKS
                             if not rt.shut_down or live_task_handles(rt)]
         SPAWNED_PROCS[:] = [p for p in SPAWNED_PROCS if p.poll() is None]
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _session_leak_gate():
+    """Session-end gate, LIVES IN CONFTEST (Q2/E2): it must load for every
+    invocation — a focused single-file run, a `-n 2 --dist loadfile` worker
+    that never imports tests/test_runner_hygiene.py, a `--lf` rerun. When
+    the verdict lived in the hygiene test module, any run that didn't
+    collect that module reported success despite a resource leak.
+
+    After the last test (and every per-test sweep), nothing the suite
+    started may still be alive. A last-resort sweep reaps stragglers
+    (e.g. instances created at collection time, before any test), then
+    the recorded leak list must be empty — a leaking test fails the
+    session HERE, attributed to the leaking test's node id, instead of
+    the baseline's silent 5-minute post-exit hang. tests/test_leak_gate_
+    meta.py drives real pytest subprocesses to pin exactly that."""
+    yield
+    for rt in list(RUNTIME_TASKS):
+        if not rt.shut_down:
+            rt.shutdown(timeout=5.0)
+        for handle in live_task_handles(rt):
+            TEST_LEAKS.append(
+                ("<session-end>",
+                 f"RuntimeTasks task {handle.task_name!r} still live"))
+    for proc in list(SPAWNED_PROCS):
+        if proc.poll() is None:
+            TEST_LEAKS.append(("<session-end>",
+                               f"subprocess pid={proc.pid} still alive"))
+            proc.kill()
+            try:
+                proc.wait(timeout=5)
+            except Exception:  # noqa: BLE001 - the assert below is the gate
+                pass
+    assert not TEST_LEAKS, (
+        "tests leaked processes that outlived them (reaped by the "
+        "conftest sweep; fix the test teardown):\n  "
+        + "\n  ".join(f"{node}: {what}" for node, what in TEST_LEAKS))
+    _children = _leak_gate_child_pids()
+    assert _children == [], (
+        f"orphaned child processes of the pytest process: {_children}")
+
+
+def _leak_gate_child_pids() -> list:
+    """Direct children of this interpreter, straight from /proc (no ps)."""
+    me = os.getpid()
+    children = []
+    for entry in os.listdir("/proc"):
+        if not entry.isdigit():
+            continue
+        try:
+            with open(f"/proc/{entry}/stat", encoding="utf-8") as fh:
+                fields = fh.read().rsplit(") ", 1)[1].split()
+        except OSError:
+            continue  # process died between listdir and read
+        if int(fields[1]) == me:
+            children.append(int(entry))
+    return children
+
+
+# ---------------------------------------------------------------------------
+# Unit-tier network guard (Q1): a unit test must not open real network
+# ---------------------------------------------------------------------------
+# The unit/contract tier promises "no display, no model, no outbound
+# network". Rather than trusting every test to remember that, outbound
+# connects to non-loopback addresses raise a loud, self-explanatory error.
+# Loopback (127.0.0.0/8, ::1) stays open — the fake HTTP/STT/MCP servers
+# the suite deliberately runs are all local. AF_UNIX sockets (the daemon
+# control socket) are untouched. Tests that genuinely need the outside
+# world declare it: the integration / desktop / needs_network markers
+# exempt a test from this guard.
+_NET_GUARD_EXEMPT_MARKERS = frozenset(
+    {"integration", "desktop", "needs_network", "needs_model"})
+
+_NET_GUARD_MSG = (
+    "unit-tier test opened a network connection to non-loopback {addr!r}: "
+    "unit tests must stay offline. Bind a 127.0.0.1 fake server instead, "
+    "or mark the test integration/needs_network if it genuinely needs the "
+    "network (and move it to tests/integration).")
+
+_ORIG_CONNECT = socket.socket.connect
+_ORIG_CONNECT_EX = socket.socket.connect_ex
+
+
+def _guarded_address_ok(address) -> bool:
+    try:
+        family = address[0]
+    except (TypeError, IndexError):
+        return True  # not an inet tuple (AF_UNIX path etc.) — allow
+    if family in (socket.AF_INET, socket.AF_INET6):
+        host = address[1]
+        if isinstance(host, str):
+            return (host == "localhost"
+                    or host.startswith("127.")
+                    or host == "::1")
+        try:
+            return (ipaddress.ip_address(host).is_loopback)
+        except ValueError:
+            return True  # not an IP literal; DNS already resolved by caller
+    return True
+
+
+def _guarded_connect(self, address):
+    if not _guarded_address_ok(address):
+        raise OSError(_NET_GUARD_MSG.format(addr=address))
+    return _ORIG_CONNECT(self, address)
+
+
+def _guarded_connect_ex(self, address):
+    if not _guarded_address_ok(address):
+        raise OSError(_NET_GUARD_MSG.format(addr=address))
+    return _ORIG_CONNECT_EX(self, address)
+
+
+@pytest.fixture(autouse=True)
+def _unit_network_guard(request, monkeypatch):
+    """Active for every test that has NOT declared network needs."""
+    markers = {m.name for m in request.node.iter_markers()}
+    if markers & _NET_GUARD_EXEMPT_MARKERS:
+        return
+    monkeypatch.setattr(socket.socket, "connect", _guarded_connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", _guarded_connect_ex)
+
+
+# ---------------------------------------------------------------------------
+# Required-tier skips are failures, not passes (Q1)
+# ---------------------------------------------------------------------------
+# A provisioned tier (e.g. the CI GTK lane) must not report green because
+# its modules all skipped for missing prerequisites. Setting
+# SAYIT_TEST_REQUIRE_MARKERS="needs_display" turns ANY skip of a test
+# carrying one of those markers into a failure naming the skip reason.
+# Documented capability skips (a backend adapter lacking confidence
+# signals) belong to the unit tier and are unaffected.
+
+
+def _required_tier_markers() -> set:
+    required = os.environ.get("SAYIT_TEST_REQUIRE_MARKERS", "")
+    return {m.strip() for m in required.split(",") if m.strip()}
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    wanted = _required_tier_markers()
+    if not wanted or report.outcome != "skipped":
+        return
+    hit = {m.name for m in item.iter_markers()} & wanted
+    if not hit:
+        return
+    reason = getattr(report, "longrepr", None)
+    report.outcome = "failed"
+    report.longrepr = (
+        f"REQUIRED-TIER SKIP: {item.nodeid} is marked {sorted(hit)} but "
+        f"skipped in a lane that requires that tier — prerequisites are "
+        f"unmet, this is not a pass. Skip reason: {reason}")
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_collectreport(report):
+    """Same rule for MODULE-LEVEL skips (``pytest.skip(allow_module_level=
+    True)``): they surface as a skipped CollectReport, never as test
+    items, so the makereport hook above cannot see them. In a required
+    tier, a module that refuses to import its prerequisites has failed
+    the lane — the whole point is that headless/missing-GTK cannot
+    silently shrink what CI proved. tryfirst: the Session's own
+    collectreport hookimpl counts `report.failed` for the exit code, so
+    the mutation must happen before it runs (conftest hooks register
+    later and therefore win within the tryfirst group)."""
+    if not _required_tier_markers() or report.outcome != "skipped":
+        return
+    if not str(getattr(report, "nodeid", "")).endswith(".py"):
+        return  # directory-level skip summaries, not modules
+    report.outcome = "failed"
+    report.longrepr = (
+        f"REQUIRED-TIER SKIP: {report.nodeid} skipped at MODULE level "
+        f"(collection) in a lane that requires its tier — prerequisites "
+        f"are unmet, this is not a pass. Skip reason: {report.longrepr}")

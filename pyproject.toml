@@ -41,6 +41,7 @@ wayland = ["evdev>=1.6"]
 dev = [
     "pytest>=8",
     "pytest-xdist>=3.5",  # parallel suite: just test-parallel (auto workers)
+    "pytest-timeout>=2.3",  # bounded per-test timeout in the gate (Q1)
     "ruff>=0.4",           # lint gate: just lint / ruff check .
 ]
 
@@ -68,7 +69,20 @@ include = ["fluidvoice*"]
 # pytest run (plan P0.5). Integration tests still need --ignore (they use
 # the real model/mic/GPU).
 testpaths = ["tests"]
-markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')", "integration: real-subsystem tests (mic, GPU, daemon process, network)", "desktop: live-interactive-session tests (X grabs, screen pixels) - excluded from default runs"]
+# Tier marker model (Q1): `slow`/`integration`/`desktop` describe WHERE a
+# test lives; the needs_* markers declare ENVIRONMENTAL REQUIREMENTS so
+# selection never depends on what the dev machine happens to have. The
+# unit/contract gate deselects all needs_* markers; each needs_* tier has
+# its own canonical command (justfile) and, where provisioned, a CI lane.
+# --strict-markers (gate + CI) makes an unregistered marker a hard error.
+markers = [
+    "slow: duration-only hint (never a stand-in for environmental requirements)",
+    "integration: real-subsystem tests (mic, GPU, daemon process, network)",
+    "desktop: live-interactive-session tests (X grabs, screen pixels) - excluded from default runs",
+    "needs_model: loads/downloads a real speech model (tiny..large-v3, Parakeet)",
+    "needs_network: outbound network beyond loopback fake servers",
+    "needs_display: real display server + GTK4/libadwaita (Xvfb counts)",
+]
 # P0.4 reliability gate: an unhandled exception in ANY thread the suite
 # spawned (timers, monitors, drain threads) fails the run instead of
 # surfacing as a pass-with-warning. The first-PCM timer leak this caught:

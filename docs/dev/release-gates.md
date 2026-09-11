@@ -14,12 +14,20 @@ manually dispatched CI run for the **exact** commit being released.
 Application recipes are unprefixed; the agent-factory (SSSF) recipes all
 live under the `factory-` prefix and are unchanged.
 
+Tier model (quality plan Q1): the `-m` filter deselects by DECLARED
+requirement (`needs_display` / `needs_model` / `needs_network` markers,
+plus `integration`/`desktop`), so local and CI collection lists match no
+matter what the dev machine happens to have installed.
+
 | Recipe | What it runs |
 |---|---|
 | `just lint` | `ruff check .` (config: `[tool.ruff.lint]` in pyproject.toml) |
-| `just test` | offline suite, serial: `pytest -q tests --ignore=tests/integration` |
+| `just test` | unit/contract tier, serial: pytest `-m "<unit filter>"` |
 | `just test-parallel` | same scope on pytest-xdist `-n auto` (~4–5× faster) |
-| `just gate` | clean-tree check + lint + suite with `-W error` |
+| `just test-ui` | display/GTK tier: `-m needs_display` (real display or Xvfb) |
+| `just test-integration` | real model/mic/daemon: `tests/integration` |
+| `just gate` | clean tree (tracked) + lint + request validation + unit tier with `-W error -ra --strict-markers --strict-config --timeout=300 --junitxml` |
+| `just gate-release` | `just gate` + untracked files also refused (what release-prepare checks) |
 | `just validate-requests` | every `requests/*.md` brief carries one valid `STATUS: OPEN\|SHIPPED\|SUPERSEDED` header |
 
 Notes:
@@ -30,13 +38,23 @@ Notes:
 - `just gate` fails on **any** warning: `-W error` plus the
   unhandled-thread-exception error filter in `[tool.pytest.ini_options]`
   (added by the lifecycle work, P0.4).
+- The unit tier is enforced offline IN-PROCESS: a conftest autouse guard
+  raises on any non-loopback `connect()` (loopback fake servers stay
+  allowed; `integration`/`desktop`/`needs_network`-marked tests are
+  exempt). Real-model/network tests live under `tests/integration`.
+- The leak gate (nothing a test starts outlives it) lives in
+  `tests/conftest.py` and applies to EVERY invocation — focused runs,
+  `--lf`, and pytest-xdist workers included (Q2);
+  `tests/test_leak_gate_meta.py` drives real pytest subprocesses to pin
+  that.
+- A provisioned lane (CI's gtk-x11 job) sets
+  `SAYIT_TEST_REQUIRE_MARKERS=needs_display`: a tier test or module that
+  skips there FAILS the lane instead of silently shrinking coverage.
 - Bare `pytest` collects only `tests/` (`testpaths` in
   `[tool.pytest.ini_options]`) — the `adws/*_test.py` agent-factory
-  scripts are no longer swept into test runs. Integration tests
-  (`tests/integration/`) still need the real model and stay excluded
-  from every offline gate via `--ignore`.
+  scripts are not swept into test runs.
 - Dev dependencies (`pip install -e ".[dev]"`): `pytest`, `pytest-xdist`,
-  `ruff`.
+  `pytest-timeout`, `ruff`.
 - The deb's Ubuntu 24.04 / x86_64 / Python 3.12 target and the pinned
   container build are a decision, not a setting —
   [ADR-0004](../adr/ADR-0004-ubuntu-deb-contract.md).

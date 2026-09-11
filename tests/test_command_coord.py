@@ -342,3 +342,21 @@ class TestTeardown:
         assert wait_until(lambda: coord.pending)
         assert coord.display is None  # headless: no panel, no crash
         coord.cancel_pending()  # hygiene: never leave the confirm watchdog
+
+    def test_cancel_during_present_never_rearms_watchdog(self):
+        """Q2 leak-gate catch: Escape landing between the pending handoff
+        and the watchdog arm used to leave the 120 s `command-confirm`
+        timer pending after cancel_pending's teardown — a late
+        _restart_confirm_watchdog (the background present thread) must
+        now find `pending` False and arm nothing."""
+        coord, session, _, _ = make()
+        session.pending = FakeProposal("echo hi")
+        with coord._lock:  # the exact state begin()'s worker hands over
+            coord.session = session
+            coord.pending = True
+        coord.cancel_pending()  # Escape wins the race
+        coord._restart_confirm_watchdog()  # late arm attempt
+        assert coord.timer is None
+        assert coord._tasks.handle("command-confirm") is None
+        report = coord._tasks.shutdown(timeout=5)
+        assert "command-confirm" not in report["cancelled"]
