@@ -467,8 +467,9 @@ class TestPreviewTranscriberFactory:
         fn, bname = made
         assert bname == "faster-whisper"
         from fluidvoice.audio_utils import raw_to_wav_bytes
-        text = fn(raw_to_wav_bytes(pcm(0.2)), "context words")
+        text, conf = fn(raw_to_wav_bytes(pcm(0.2)), "context words")
         assert text == "hi there"
+        assert conf is None  # the Seg fake carries no avg_logprob
         assert kwargs["initial_prompt"] == "context words"
         assert kwargs["condition_on_previous_text"] is False
 
@@ -808,3 +809,135 @@ class TestProvisionalTail:
         eng._emit("fixed aaa", "bbb")     # same tail: no count
         eng._emit("fixed aaa bbb", "")    # commit: no tail, no count
         assert eng.stats.get("tail_rewrites") == 1
+
+
+class TestConfidenceGate:
+    """Low-confidence window text is suppressed from the pill (2026-09-11
+    learning session: BT-mic garbage windows render as wrong words; the
+    bars stay as the activity signal). Transcribers may return
+    (text, mean_avg_logprob); the engine gates below the final-decode
+    LOW threshold."""
+
+    def make_engine(self, tmp_path, transcriber, **kw):
+        shown = []
+        raw = tmp_path / "cg.raw"
+        raw.write_bytes(pcm(0.2))
+        kw.setdefault("interval", 1.0)
+        kw.setdefault("min_audio", 0.5)
+        kw.setdefault("segment_s", 2.0)
+        eng = SegmentedPreviewEngine(raw, transcriber,
+                                     lambda t, s=0: shown.append(t), **kw)
+        return eng, shown
+
+    def drive(self, eng, raw, total_s, step_s):
+        data = b""
+        t = step_s
+        while t <= total_s + 1e-9:
+            data += pcm(step_s)
+            raw.write_bytes(data)
+            eng._tick(data, len(data) / BPS)
+            t += step_s
+
+    def test_low_conf_window_suppressed(self, tmp_path):
+        eng, shown = self.make_engine(
+            tmp_path, lambda w, c: ("garbled words", -1.2))
+        self.drive(eng, tmp_path / "cg.raw", total_s=6.0, step_s=1.0)
+        assert not any(eng.committed)
+        assert eng.stats["lowconf"] >= 3   # 3 commits + gated tails
+        assert not [t for t in shown if "garbled" in t]
+
+    def test_confident_window_committed(self, tmp_path):
+        eng, shown = self.make_engine(
+            tmp_path, lambda w, c: ("clear words", -0.2))
+        self.drive(eng, tmp_path / "cg.raw", total_s=6.0, step_s=1.0)
+        assert "clear words" in " ".join(eng.committed)
+        assert eng.stats["lowconf"] == 0
+
+    def test_unknown_confidence_never_gated(self, tmp_path):
+        eng, shown = self.make_engine(
+            tmp_path, lambda w, c: ("maybe words", None))
+        self.drive(eng, tmp_path / "cg.raw", total_s=6.0, step_s=1.0)
+        assert "maybe words" in " ".join(eng.committed)
+        assert eng.stats["lowconf"] == 0
+
+    def test_plain_str_contract_still_works(self, tmp_path):
+        eng, shown = self.make_engine(tmp_path, lambda w, c: "legacy")
+        self.drive(eng, tmp_path / "cg.raw", total_s=6.0, step_s=1.0)
+        assert "legacy" in " ".join(eng.committed)
+
+    def test_gate_disabled_commits_anyway(self, tmp_path):
+        eng, shown = self.make_engine(
+            tmp_path, lambda w, c: ("garbled words", -1.2), conf_gate=False)
+        self.drive(eng, tmp_path / "cg.raw", total_s=6.0, step_s=1.0)
+        assert "garbled words" in " ".join(eng.committed)
+
+    def test_low_conf_tail_suppressed(self, tmp_path):
+        # first commit confident, every tail decode shaky: the pill shows
+        # the committed words and never the shaky provisional tail
+        replies = iter([("solid words", -0.2), ("junk tail", -1.3),
+                        ("junk tail", -1.3), ("junk tail", -1.3),
+                        ("junk tail", -1.3)])
+        eng, shown = self.make_engine(
+            tmp_path, lambda w, c: next(replies, ("junk tail", -1.3)))
+        self.drive(eng, tmp_path / "cg.raw", total_s=5.0, step_s=1.0)
+        assert "solid words" in " ".join(shown)
+        assert not [t for t in shown if "junk" in t]
+
+
+class TestSustainedSilence:
+    """Per-take self-silencing: when the first committed windows average
+    below -0.55 (sustained - one shaky window never silences), the pill
+    stops showing words for the rest of the take (bars + ellipsis carry
+    it) - measured on the 2026-09-11 BT takes: garble averages ~ -0.78,
+    clean speech ~ -0.35."""
+
+    def make_engine(self, tmp_path, transcriber, **kw):
+        shown = []
+        raw = tmp_path / "ss.raw"
+        raw.write_bytes(pcm(0.2))
+        kw.setdefault("interval", 1.0)
+        kw.setdefault("min_audio", 0.5)
+        kw.setdefault("segment_s", 2.0)
+        eng = SegmentedPreviewEngine(raw, transcriber,
+                                     lambda t, s=0: shown.append(t), **kw)
+        return eng, shown
+
+    def drive(self, eng, raw, total_s, step_s):
+        data = b""
+        t = step_s
+        while t <= total_s + 1e-9:
+            data += pcm(step_s)
+            raw.write_bytes(data)
+            eng._tick(data, len(data) / BPS)
+            t += step_s
+
+    def test_sustained_low_conf_silences_take(self, tmp_path):
+        eng, shown = self.make_engine(
+            tmp_path, lambda w, c: ("words", -0.8))
+        self.drive(eng, tmp_path / "ss.raw", total_s=8.0, step_s=1.0)
+        assert eng.stats["silenced"] == 1
+        # the display ends on the ellipsis; later windows add no words
+        assert shown and shown[-1] == "…"
+
+    def test_clean_windows_never_silence(self, tmp_path):
+        eng, shown = self.make_engine(
+            tmp_path, lambda w, c: ("clear words", -0.3))
+        self.drive(eng, tmp_path / "ss.raw", total_s=6.0, step_s=1.0)
+        assert "silenced" not in eng.stats or eng.stats["silenced"] == 0
+        assert "clear words" in " ".join(shown)
+
+    def test_one_shaky_window_does_not_silence(self, tmp_path):
+        replies = iter([("x", -0.9), ("clear", -0.2), ("clear", -0.2),
+                        ("clear", -0.2), ("clear", -0.2)])
+        eng, shown = self.make_engine(
+            tmp_path, lambda w, c: next(replies, ("clear", -0.2)))
+        self.drive(eng, tmp_path / "ss.raw", total_s=6.0, step_s=1.0)
+        assert not eng.stats.get("silenced")
+        assert "clear" in " ".join(shown)
+
+    def test_gate_off_disables_silencing(self, tmp_path):
+        eng, shown = self.make_engine(
+            tmp_path, lambda w, c: ("words", -0.9), conf_gate=False)
+        self.drive(eng, tmp_path / "ss.raw", total_s=6.0, step_s=1.0)
+        assert not eng.stats.get("silenced")
+        assert "words" in " ".join(shown)

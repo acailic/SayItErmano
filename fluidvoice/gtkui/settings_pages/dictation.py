@@ -253,6 +253,14 @@ class DictationPageMixin:
         preview.add(
             self._switch(
                 "recording",
+                "preview_conf_gate",
+                "Confidence gate",
+                "hide preview words the model scored shaky (wrong-word suppression on hard audio)",
+            )
+        )
+        preview.add(
+            self._switch(
+                "recording",
                 "overlay_chips",
                 "Hover action chips",
                 "hover the pill while recording for copy/paste/cancel buttons (X11)",

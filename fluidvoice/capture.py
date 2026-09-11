@@ -379,6 +379,7 @@ class CaptureCoordinator:
                         interval=float(rcfg.get("preview_interval", 1.2)),
                         min_audio=float(rcfg.get("preview_min_audio", 1.0)),
                         segment_s=float(rcfg.get("preview_segment_s", 2.0)),
+                        conf_gate=bool(rcfg.get("preview_conf_gate", True)),
                         vad_silence_s=float(
                             rcfg.get("preview_vad_silence_s", 2.0)),
                         on_silence=self.vad_auto_stop,
@@ -429,7 +430,10 @@ class CaptureCoordinator:
                       f"lag_s={lag:.1f} tail_rewrites="
                       f"{stats.get('tail_rewrites', 0)}"
                       + (f" suppressed={stats['suppressed']}"
-                         if stats.get("suppressed") else ""))
+                         if stats.get("suppressed") else "")
+                      + (f" lowconf={stats['lowconf']}"
+                         if stats.get("lowconf") else "")
+                      + (" silenced" if stats.get("silenced") else ""))
         if finishing:
             # Keep the pill up in its processing state (flat bars + shimmer,
             # like the Mac) until the final text is inserted.

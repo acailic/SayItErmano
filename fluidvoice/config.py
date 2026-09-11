@@ -723,7 +723,14 @@ _spec("recording", "preview_segmented", True, _bool(),
       description="Segmented streaming preview: fixed windows (50% hop), one\n"
                   "decode per tick instead of re-decoding the whole take")
 _spec("recording", "preview_segment_s", 2.0, _num("float", 1.0, 6.0),
-      description="Segment window length in seconds")
+      description="Segment window length in seconds (larger windows track the\n"
+                  "final text more closely - measured F1 vs the final decode\n"
+                  "0.26/0.49/0.57 at 2/3/4 s on hard audio - at higher\n"
+                  "per-window decode cost)")
+_spec("recording", "preview_conf_gate", True, _bool(),
+      description="Hide preview text the model scored below its low-confidence\n"
+                  "band (wrong-word suppression on hard audio; the pill's level\n"
+                  "bars still show activity)")
 _spec("recording", "preview_vad_silence_s", 2.0, _num("float", 0.0, 10.0),
       description="Trailing-silence VAD auto-stops the take after this many\n"
                   "seconds of quiet; 0 disables the auto-stop (the hotkey\n"

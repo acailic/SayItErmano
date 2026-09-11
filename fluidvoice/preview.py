@@ -15,7 +15,16 @@ from typing import Callable
 
 from .audio_utils import raw_to_wav_bytes
 from .backends.base import SpeechBackend
-from .pipeline import is_repeat_hallucination
+from .pipeline import CONF_LOGPROB_LOW, is_repeat_hallucination
+
+# Sustained-silence self-silencing (2026-09-11 learning session, measured
+# on real takes): one shaky window means nothing, but when the first
+# committed windows AVERAGE below this the preview cannot track the audio
+# (BT-mic garble averaged ~ -0.78 while clean speech averaged ~ -0.35) -
+# stop showing words for the rest of the take (bars + ellipsis) instead
+# of feeding the user wrong ones.
+SUSTAINED_LOW_CONF = -0.55
+SUSTAINED_MIN_SAMPLES = 3
 
 
 class PreviewEngine:
@@ -177,7 +186,8 @@ class SegmentedPreviewEngine:
                  send_phrase: str = "",
                  send_countdown_s: float = 0.0,
                  on_send_countdown: Callable[[], None] | None = None,
-                 on_send_resume: Callable[[], None] | None = None):
+                 on_send_resume: Callable[[], None] | None = None,
+                 conf_gate: bool = True):
         self.raw_path = raw_path
         self.transcriber = transcriber
         self.on_text = on_text
@@ -195,7 +205,14 @@ class SegmentedPreviewEngine:
         self.send_countdown_s = float(send_countdown_s or 0.0)
         self.on_send_countdown = on_send_countdown
         self.on_send_resume = on_send_resume
+        # confidence gate switch (see _gate_low_conf); transcribers without
+        # confidence never trip it either way
+        self.conf_gate = conf_gate
         self._send_armed = False
+        # sustained-silence state: commit-window confidence samples and
+        # the take-level silencing latch (see SUSTAINED_LOW_CONF)
+        self._conf_samples: list[float] = []
+        self._silenced = False
         # audio position where the rolling text last ENDED with the phrase;
         # the tail decode degrades once speech stops (its window slides
         # into silence and drops the final words), so the arm must accept
@@ -212,7 +229,7 @@ class SegmentedPreviewEngine:
         self._silence_fired = False
         self.stats = {"decodes": 0, "commits": 0, "decode_ms_sum": 0.0,
                       "ticks": 0, "audio_s": 0.0, "covered_s": 0.0,
-                      "suppressed": 0}
+                      "suppressed": 0, "lowconf": 0, "silenced": 0}
 
     def start(self) -> None:
         if self._thread:
@@ -251,10 +268,31 @@ class SegmentedPreviewEngine:
             return ""
         wav = raw_to_wav_bytes(raw[a:b], self.sample_rate)
         t0 = _time.monotonic()
-        text = self.transcriber(wav, ctx or None).strip()
+        out = self.transcriber(wav, ctx or None)
+        conf = None
+        if isinstance(out, (tuple, list)) and len(out) == 2:
+            out, conf = out[0], out[1]
+        # the last decode's mean avg_logprob (when the transcriber supplies
+        # it) powers the confidence gate below
+        self._last_conf = conf if isinstance(conf, (int, float)) else None
+        text = str(out).strip()
         self.stats["decodes"] += 1
         self.stats["decode_ms_sum"] += (_time.monotonic() - t0) * 1000.0
         return text
+
+    def _gate_low_conf(self, text: str) -> bool:
+        """Confidence gate (2026-09-11 learning session): a window the
+        model itself scored below the final-decode LOW band renders as
+        wrong words on hard audio (BT mic) - suppress it from the pill and
+        let the level bars carry the activity signal instead. Never fires
+        when the transcriber reports no confidence."""
+        if not (self.conf_gate and text):
+            return False
+        conf = getattr(self, "_last_conf", None)
+        if conf is None or conf >= CONF_LOGPROB_LOW:
+            return False
+        self.stats["lowconf"] += 1
+        return True
 
     def _emit(self, committed: str, tail: str) -> None:
         text = committed
@@ -371,12 +409,39 @@ class SegmentedPreviewEngine:
         k = self._next_commit
         commit_end = k * self.hop_s + self.segment_s
         if audio_s >= commit_end:
+            if self._silenced:
+                # the take silenced itself: keep the tiling/timing alive
+                # but spend no decode on words we would not show
+                self.committed.append("")
+                self._next_commit = k + 2
+                self.stats["commits"] += 1
+                self.stats["covered_s"] = commit_end
+                return
             ctx = self.committed[-1] if self.committed else None
             text = self._decode(k * self.hop_s, commit_end, ctx)
+            conf = getattr(self, "_last_conf", None)
+            if self.conf_gate and conf is not None:
+                self._conf_samples.append(conf)
+                if (len(self._conf_samples) >= SUSTAINED_MIN_SAMPLES
+                        and sum(self._conf_samples)
+                        / len(self._conf_samples) < SUSTAINED_LOW_CONF):
+                    self._silenced = True
+                    self.stats["silenced"] = 1
+                    self.committed.append("")
+                    self._next_commit = k + 2
+                    self.stats["commits"] += 1
+                    self.stats["covered_s"] = commit_end
+                    # swap whatever wrong words were shown for the honest
+                    # ellipsis; the bars carry the activity signal
+                    self.last_text = ""
+                    self._emit("…", "")
+                    return
             if is_repeat_hallucination(text):
                 # whisper loop artifact ("you you you") - commit the
                 # window's timing but never its text
                 self.stats["suppressed"] += 1
+                text = ""
+            elif self._gate_low_conf(text):
                 text = ""
             self.committed.append(text)
             self._next_commit = k + 2
@@ -386,6 +451,8 @@ class SegmentedPreviewEngine:
             return
         if self._silence_fired:
             return
+        if self._silenced:
+            return  # no tail decodes on a self-silenced take either
         # -- live tail: newest segment_s slice (partial prefix allowed).
         start = max(0.0, audio_s - self.segment_s)
         if audio_s - start < max(0.5, min(self.min_bytes / bps, 1.0)):
@@ -394,6 +461,8 @@ class SegmentedPreviewEngine:
         tail = self._decode(start, audio_s, ctx)
         if is_repeat_hallucination(tail):
             self.stats["suppressed"] += 1
+            tail = ""
+        elif self._gate_low_conf(tail):
             tail = ""
         self.stats["covered_s"] = max(self.stats["covered_s"], audio_s)
         self._emit(" ".join(t for t in self.committed if t), tail)
@@ -427,22 +496,34 @@ def preview_transcriber(cfg: dict, backend: SpeechBackend | None,
         return hotwords or ctx or None
 
     if name == "faster-whisper" and model is not None:
-        def fw(wav: bytes, ctx: str | None) -> str:
+        def fw(wav: bytes, ctx: str | None):
             segments, _ = model.transcribe(
                 io.BytesIO(wav), language=lang, initial_prompt=_prompt(ctx),
                 beam_size=1, condition_on_previous_text=False,
                 without_timestamps=True)
-            return " ".join(s.text.strip() for s in segments if s.text.strip())
+            segments = list(segments)
+            text = " ".join(s.text.strip() for s in segments
+                            if s.text.strip())
+            # mean avg_logprob rides along for the engine's confidence
+            # gate (None when the window decoded to nothing)
+            lp = [s.avg_logprob for s in segments
+                  if getattr(s, "avg_logprob", None) is not None]
+            conf = sum(lp) / len(lp) if lp else None
+            return text, conf
         return fw, name
 
     if name == "whisper-torch" and model is not None:
-        def tw(wav: bytes, ctx: str | None) -> str:
+        def tw(wav: bytes, ctx: str | None):
             result = model.transcribe(io.BytesIO(wav), language=lang,
                                       initial_prompt=_prompt(ctx),
                                       beam_size=1,
                                       condition_on_previous_text=False)
-            return " ".join(s.text.strip() for s in result.get("segments", [])
-                            if s.text.strip())
+            segs = result.get("segments", [])
+            text = " ".join(s.text.strip() for s in segs if s.text.strip())
+            lp = [s.avg_logprob for s in segs
+                  if getattr(s, "avg_logprob", None) is not None]
+            conf = sum(lp) / len(lp) if lp else None
+            return text, conf
         return tw, name
 
     if name == "parakeet" and getattr(backend, "_decoder", None) is not None:
