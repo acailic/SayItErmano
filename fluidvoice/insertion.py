@@ -9,24 +9,349 @@ Mirrors FluidVoice's TypingService strategies:
   fixed settle delay on Wayland (cross-client selection reads are
   impossible there - see WAYLAND_PASTE_SETTLE_S).
 
+Honest failure contract (first-use funnel F-05/F-18): insertion never
+reports success falsely. Every insert_text failure raises InsertionFailure
+carrying a machine-readable InsertResult (FailureKind enum, missing tools,
+exact install command, clipboard outcome) - also broadcast to
+add_result_listener subscribers (the daemon/pill seam). Before raising, an
+automatic copy-to-clipboard attempt preserves the text; when even that is
+impossible the message names History as the recovery path (the pipeline
+records the take regardless). copy_to_clipboard/clipboard_fallback return
+an honest ClipboardResult instead of silently no-oping.
+
 Wayland is additive: every branch is taken ONLY via the session probe
 (fluidvoice/session.py), never on "xdotool missing" - the X11 paths below
-stay byte-identical for x11/unknown sessions.
+stay byte-identical for x11/unknown sessions (the capability pre-flight
+enriches failures; it never gates the attempt).
 """
 from __future__ import annotations
 
+import enum
 import os
 import re
 import shutil
 import subprocess
 import time
-from typing import Callable
+from dataclasses import dataclass
+from typing import Callable, NoReturn
 
 from . import session as session_mod
 
 
 class InsertError(RuntimeError):
     pass
+
+
+class ToolMissing(InsertError):
+    """A required external tool is not on PATH (raised by _run)."""
+
+    def __init__(self, tool: str):
+        super().__init__(f"required tool not found: {tool}")
+        self.tool = tool
+
+
+# ---------------------------------------------------------------------------
+# Machine-readable insertion outcomes (F-05/F-18): enums + result objects
+# other components (pipeline, daemon, pill/overlay, tests) consume instead
+# of parsing notification strings.
+# ---------------------------------------------------------------------------
+
+class FailureKind(enum.Enum):
+    """Why an insertion failed."""
+
+    TOOL_MISSING = "tool_missing"        # backend tool not on PATH
+    TOOL_FAILED = "tool_failed"          # tool ran but exited nonzero
+    FOCUS_LOST = "focus_lost"            # no/wrong focused window
+    PASTE_UNVERIFIED = "paste_unverified"  # keystroke ok, target never read
+    NO_BACKEND = "no_backend"            # session has no usable insert path
+
+
+class ClipboardOutcome(enum.Enum):
+    """Honest result of a copy-to-clipboard attempt (F-18: no silent
+    no-ops - a fallback that could not write says so)."""
+
+    WRITTEN = "written"
+    TOOL_MISSING = "tool_missing"
+    WRITE_FAILED = "write_failed"
+
+
+@dataclass(frozen=True)
+class ClipboardResult:
+    outcome: ClipboardOutcome
+    tool: str | None = None
+    detail: str = ""
+
+    @property
+    def written(self) -> bool:
+        return self.outcome is ClipboardOutcome.WRITTEN
+
+
+@dataclass(frozen=True)
+class InsertResult:
+    """Outcome of one insert_text call. ok=True strategies: typed, paste,
+    clipboard-fallback (text on the clipboard, user pastes manually).
+    ok=False: strategy "failed", failure kind set, message actionable,
+    clipboard carries the automatic-preservation outcome (None = not
+    attempted), missing_tools/install_hint from the capability pre-flight."""
+
+    ok: bool
+    strategy: str
+    failure: FailureKind | None = None
+    message: str = ""
+    install_hint: str = ""
+    clipboard: ClipboardResult | None = None
+    missing_tools: tuple[str, ...] = ()
+
+
+class InsertionFailure(InsertError):
+    """Structured insertion failure: the FailureKind and the full
+    InsertResult ride on the exception, so callers consume machine-readable
+    truth instead of string-matching messages."""
+
+    def __init__(self, message: str, *, kind: FailureKind | None = None,
+                 result: InsertResult | None = None,
+                 missing_tools: tuple[str, ...] = (),
+                 install_hint: str = ""):
+        super().__init__(message)
+        self.kind = kind
+        self.result = result
+        self.missing_tools = tuple(missing_tools)
+        self.install_hint = install_hint
+
+
+_result_listeners: list[Callable[[InsertResult], None]] = []
+
+
+def add_result_listener(fn: Callable[[InsertResult], None]) -> None:
+    """Subscribe to every insert_text outcome (ok and failed) - the hook
+    the daemon/pill/overlay use to surface insertion state without
+    touching this module's callers (F-05 hook seam)."""
+    if fn not in _result_listeners:
+        _result_listeners.append(fn)
+
+
+def remove_result_listener(fn: Callable[[InsertResult], None]) -> None:
+    if fn in _result_listeners:
+        _result_listeners.remove(fn)
+
+
+def _emit_result(result: InsertResult,
+                 on_result: Callable[[InsertResult], None] | None) -> None:
+    for fn in list(_result_listeners):
+        try:
+            fn(result)
+        except Exception:
+            pass  # a broken listener must never break insertion
+    if on_result is not None:
+        try:
+            on_result(result)
+        except Exception:
+            pass
+
+
+# stderr signatures of a tool that ran but had no (usable) focused window
+_FOCUS_LOST_RE = re.compile(
+    r"no active window|failed to (?:find|get|focus)|\bx error\b|badwindow",
+    re.IGNORECASE)
+
+
+def _tool_failure_kind(stderr: str) -> FailureKind:
+    return (FailureKind.FOCUS_LOST if _FOCUS_LOST_RE.search(stderr or "")
+            else FailureKind.TOOL_FAILED)
+
+
+# ---------------------------------------------------------------------------
+# Insertion capability pre-flight (F-05): the session's insertion strategy
+# table vs what is actually installed, cached, with the exact install
+# command for the detected distro. Surfaced once at daemon start
+# (startup_capability_check) and consulted at insertion time to enrich
+# failures (capability_status). Never gates the attempt itself - the X11
+# paths stay byte-identical per the module contract.
+# ---------------------------------------------------------------------------
+
+_INSTALL_PATTERNS = {
+    "apt": "sudo apt install {pkgs}",
+    "dnf": "sudo dnf install {pkgs}",
+    "pacman": "sudo pacman -S --needed {pkgs}",
+    "zypper": "sudo zypper install {pkgs}",
+    "apk": "sudo apk add {pkgs}",
+}
+_DISTRO_TO_PM = {
+    "debian": "apt", "ubuntu": "apt", "linuxmint": "apt", "pop": "apt",
+    "elementary": "apt", "zorin": "apt",
+    "fedora": "dnf", "rhel": "dnf", "rocky": "dnf", "almalinux": "dnf",
+    "arch": "pacman", "manjaro": "pacman", "endeavouros": "pacman",
+    "garuda": "pacman",
+    "opensuse-leap": "zypper", "opensuse-tumbleweed": "zypper",
+    "opensuse": "zypper", "suse": "zypper",
+    "alpine": "apk",
+}
+_ID_LIKE_TO_PM = {"debian": "apt", "fedora": "dnf", "rhel": "dnf",
+                  "arch": "pacman", "suse": "zypper", "alpine": "apk"}
+# executable -> distribution package that provides it (identity otherwise)
+_PACKAGE_FOR_TOOL = {"wl-copy": "wl-clipboard", "wl-paste": "wl-clipboard"}
+
+
+def _read_os_release(path: str = "/etc/os-release") -> dict[str, str]:
+    try:
+        out: dict[str, str] = {}
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                if "=" in line:
+                    key, _, val = line.partition("=")
+                    out[key.strip()] = val.strip().strip('"').strip("'")
+        return out
+    except OSError:
+        return {}
+
+
+def _detect_distro() -> str:
+    """os-release ID, else the first ID_LIKE token, else "" (unknown)."""
+    rel = _read_os_release()
+    distro = (rel.get("ID") or "").lower()
+    if not distro:
+        distro = next((t for t in rel.get("ID_LIKE", "").lower().split()
+                       if t), "")
+    return distro
+
+
+def install_hint(missing_tools, distro_id: str | None = None) -> str:
+    """The exact install command for the missing tools on the detected
+    distro (os-release ID, then ID_LIKE, else a generic instruction).
+    Empty string when nothing is missing."""
+    tools = [t for t in missing_tools if t]
+    if not tools:
+        return ""
+    distro = (distro_id or _detect_distro()).lower()
+    pm = _DISTRO_TO_PM.get(distro)
+    if pm is None and distro_id is None:
+        likes = _read_os_release().get("ID_LIKE", "").lower().split()
+        pm = next((_ID_LIKE_TO_PM[t] for t in likes if t in _ID_LIKE_TO_PM),
+                  None)
+    pkgs: list[str] = []
+    for tool in tools:
+        pkg = _PACKAGE_FOR_TOOL.get(tool, tool)
+        if pkg not in pkgs:
+            pkgs.append(pkg)
+    if pm is not None:
+        return _INSTALL_PATTERNS[pm].format(pkgs=" ".join(pkgs))
+    return ("install " + " ".join(pkgs)
+            + " with your distribution's package manager")
+
+
+@dataclass(frozen=True)
+class CapabilityReport:
+    """What the session's insertion strategy table needs vs reality.
+
+    ok: the primary path (typed/paste via the typing tool) is available.
+    fallback_ok: an emergency clipboard write is available - when False a
+    failed insert strands the text in History only."""
+
+    ok: bool
+    fallback_ok: bool
+    session_type: str
+    typing_tool: str | None
+    missing_tools: tuple[str, ...]
+    install_hint: str
+    detail: str
+
+
+def _capability_detail(ok: bool, fallback_ok: bool,
+                       typing_tool: str | None,
+                       missing: tuple[str, ...], hint: str) -> str:
+    if ok and fallback_ok:
+        return f"insertion ready ({typing_tool} + clipboard)"
+    fix = f"; fix: {hint}" if hint else ""
+    if ok:
+        return ("typing works but the clipboard fallback tool is missing "
+                f"({', '.join(missing)}) - a failed insert would leave the "
+                "text in History only" + fix)
+    if fallback_ok:
+        return ("no typing backend (missing " + ", ".join(missing)
+                + ") - dictations degrade to a clipboard copy you paste "
+                "manually" + fix)
+    return ("insertion impossible: missing " + ", ".join(missing)
+            + " - until installed, transcripts are only in History" + fix)
+
+
+def check_insertion_capability(cfg: dict | None = None, *,
+                               which: Callable[[str], str | None] | None = None,
+                               info=None) -> CapabilityReport:
+    """Pure capability check against the actual insertion strategy table:
+
+    x11/unknown: typing needs xdotool; paste and the emergency clipboard
+    need xclip. wayland: typing needs wtype/ydotool (auto-resolved, GNOME
+    excludes wtype); paste and the fallback need wl-clipboard. No caching
+    here - capability_status() adds it.
+    """
+    if which is None:
+        which = shutil.which
+    if info is None:
+        info = session_mod.current()
+    pref = str(((cfg or {}).get("insertion") or {}).get("wayland_tool",
+                                                        "auto"))
+    if info.is_wayland:
+        typing_tool, _reason = session_mod.resolve_wayland_tool(
+            pref, info.desktop_all, which)
+        wanted = list(session_mod.WAYLAND_TYPE_TOOLS) + ["wl-copy", "wl-paste"]
+        fallback_tool = "wl-copy"
+    else:
+        typing_tool = "xdotool" if which("xdotool") else None
+        wanted = ["xdotool", "xclip"]
+        fallback_tool = "xclip"
+    missing = tuple(t for t in wanted if not which(t))
+    ok = typing_tool is not None
+    fallback_ok = bool(which(fallback_tool))
+    hint = install_hint(missing) if missing else ""
+    return CapabilityReport(ok=ok, fallback_ok=fallback_ok,
+                            session_type=info.type,
+                            typing_tool=typing_tool, missing_tools=missing,
+                            install_hint=hint,
+                            detail=_capability_detail(ok, fallback_ok,
+                                                      typing_tool, missing,
+                                                      hint))
+
+
+_capability_cache: dict[tuple, CapabilityReport] = {}
+
+
+def capability_status(cfg: dict | None = None, *,
+                      refresh: bool = False) -> CapabilityReport:
+    """Insertion-time pre-flight, cached per (session type, desktop, tool
+    preference): the first insert_text call warms it, failures are
+    enriched from it (missing tools + install command). refresh=True
+    recomputes (startup, doctor, after an install)."""
+    info = session_mod.current()
+    pref = str(((cfg or {}).get("insertion") or {}).get("wayland_tool",
+                                                        "auto"))
+    key = (info.type, info.desktop_all, pref)
+    if refresh:
+        _capability_cache.pop(key, None)
+    report = _capability_cache.get(key)
+    if report is None:
+        report = check_insertion_capability(cfg, info=info)
+        _capability_cache[key] = report
+    return report
+
+
+def reset_capability_cache() -> None:
+    """Forget cached reports (tests; a daemon re-check after an install)."""
+    _capability_cache.clear()
+
+
+def startup_capability_check(cfg: dict | None = None, *,
+                             on_issue: Callable[[CapabilityReport], None] | None = None
+                             ) -> CapabilityReport:
+    """Run ONCE at daemon start (F-05 fix (a)): refresh the cache and hand
+    the report to on_issue when primary insertion is unavailable, so the
+    problem is announced at startup - not at the first stranded insert."""
+    report = capability_status(cfg, refresh=True)
+    if not report.ok and on_issue is not None:
+        try:
+            on_issue(report)
+        except Exception:
+            pass
+    return report
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +405,7 @@ def _run(args: list[str], timeout: float = 15.0, stdin: bytes | None = None) -> 
     try:
         return subprocess.run(args, input=stdin, capture_output=True, timeout=timeout)
     except FileNotFoundError:
-        raise InsertError(f"required tool not found: {args[0]}") from None
+        raise ToolMissing(args[0]) from None
 
 
 def active_window_class() -> str | None:
@@ -126,7 +451,9 @@ def insert_typed(text: str, delay_ms: int, *, tool: str | None = None) -> None:
         raise InsertError(f"unknown insertion tool: {tool!r}")
     proc = _run(cmd)
     if proc.returncode != 0:
-        raise InsertError(f"{name} type failed: {proc.stderr.decode()[:200]}")
+        stderr = proc.stderr.decode(errors="replace")[:200]
+        raise InsertionFailure(f"{name} type failed: {stderr}",
+                               kind=_tool_failure_kind(stderr))
 
 
 def _clipboard_read() -> bytes | None:
@@ -304,11 +631,15 @@ def _insert_paste_wayland(text: str, *, key: str = "ctrl+v",
     clipboard-manager hygiene markers can be advertised while we hold the
     selection, so managers will see the dictation flash."""
     if not (shutil.which("wl-copy") and shutil.which("wl-paste")):
-        raise InsertError("wl-clipboard is required for paste mode on "
-                          "wayland (install wl-clipboard)")
+        raise InsertionFailure("wl-clipboard is required for paste mode on "
+                               "wayland (install wl-clipboard)",
+                               kind=FailureKind.TOOL_MISSING,
+                               missing_tools=("wl-copy", "wl-paste"))
     if tool is None:
-        raise InsertError("no wayland typing tool for the paste keystroke "
-                          "(install wtype or ydotool)")
+        raise InsertionFailure("no wayland typing tool for the paste keystroke "
+                               "(install wtype or ydotool)",
+                               kind=FailureKind.TOOL_MISSING,
+                               missing_tools=("wtype", "ydotool"))
     data = text.encode()
     previous, mime = _wl_clipboard_snapshot()
     try:
@@ -316,11 +647,13 @@ def _insert_paste_wayland(text: str, *, key: str = "ctrl+v",
             _wl_clipboard_write(data)
         except Exception as e:  # spawn failures surface as InsertError so
             # the auto-mode ladder can fall through to typed insertion
-            raise InsertError(f"wl-copy failed: {e}") from e
+            raise InsertionFailure(f"wl-copy failed: {e}",
+                                   kind=FailureKind.TOOL_FAILED) from e
         proc = _run(_key_cmd(tool, key), timeout=10)
         if proc.returncode != 0:
-            raise InsertError(f"paste keystroke failed: "
-                              f"{proc.stderr.decode()[:200]}")
+            stderr = proc.stderr.decode(errors="replace")[:200]
+            raise InsertionFailure(f"paste keystroke failed: {stderr}",
+                                   kind=_tool_failure_kind(stderr))
         time.sleep(WAYLAND_PASTE_SETTLE_S)  # verification impossible: settle
     finally:
         _wl_restore_clipboard(previous, mime, on_notice)
@@ -365,7 +698,10 @@ def insert_paste(text: str, *, key: str = "ctrl+v", verify: bool = True,
     restore; terminal key still honored).
     """
     if not shutil.which("xclip"):
-        raise InsertError("xclip is required for paste mode (sudo apt install xclip)")
+        raise InsertionFailure("xclip is required for paste mode "
+                               "(sudo apt install xclip)",
+                               kind=FailureKind.TOOL_MISSING,
+                               missing_tools=("xclip",))
     data = text.encode()
     previous, prev_is_text = _clipboard_snapshot()
     hold = _make_hold(data) if verify else None
@@ -377,7 +713,9 @@ def insert_paste(text: str, *, key: str = "ctrl+v", verify: bool = True,
             _clipboard_write(data)  # legacy flash (managers snapshot it)
         proc = _run(["xdotool", "key", "--clearmodifiers", key], timeout=10)
         if proc.returncode != 0:
-            raise InsertError(f"paste keystroke failed: {proc.stderr.decode()[:200]}")
+            stderr = proc.stderr.decode(errors="replace")[:200]
+            raise InsertionFailure(f"paste keystroke failed: {stderr}",
+                                   kind=_tool_failure_kind(stderr))
         if hold is not None:
             # ICCCM: while we own the selection, every read is a
             # SelectionRequest naming its requestor window - a window not
@@ -403,7 +741,9 @@ def insert_paste(text: str, *, key: str = "ctrl+v", verify: bool = True,
                            verify_text=hold is not None and prev_is_text,
                            skip=skip_restore, on_notice=on_notice)
     if hold is not None and not verified:
-        err = InsertError("paste not verified: target did not read the clipboard")
+        err = InsertionFailure("paste not verified: target did not read "
+                               "the clipboard",
+                               kind=FailureKind.PASTE_UNVERIFIED)
         err.not_verified = True  # type: ignore[attr-defined]
         raise err
 
@@ -439,8 +779,85 @@ def terminal_trailing_space(text: str) -> str:
     return text + " "
 
 
+def _preserve_via_clipboard(text: str) -> ClipboardResult:
+    """Automatic copy-to-clipboard preservation on failure (F-05): the
+    text must survive somewhere even when insertion is impossible."""
+    try:
+        result = copy_to_clipboard(text)  # never raises (honest result)
+    except Exception as e:  # noqa: BLE001 - belt and braces
+        return ClipboardResult(ClipboardOutcome.WRITE_FAILED, None, str(e))
+    # stubs/tests may monkeypatch copy_to_clipboard with a None-returning
+    # fake; treat a non-ClipboardResult as a successful write
+    return result if isinstance(result, ClipboardResult) \
+        else ClipboardResult(ClipboardOutcome.WRITTEN, "clipboard")
+
+
+def _failure_message(base: str, kind: FailureKind,
+                     report: CapabilityReport,
+                     clip: ClipboardResult | None) -> str:
+    parts = [base]
+    if report.missing_tools and report.install_hint and kind in (
+            FailureKind.TOOL_MISSING, FailureKind.NO_BACKEND):
+        parts.append(f"Fix: {report.install_hint}")
+    if clip is not None:
+        if clip.written:
+            parts.append("Text copied to the clipboard - paste it with Ctrl+V")
+        else:
+            parts.append("Clipboard copy failed too - "
+                         "your text is saved in History")
+    return " - ".join(parts)
+
+
+def _fail_insert(exc: InsertError, *, text: str, report: CapabilityReport,
+                 on_notice: Callable[[str], None] | None = None,
+                 on_result: Callable[[InsertResult], None] | None = None,
+                 clipboard: ClipboardResult | None = None,
+                 preserve: bool = True) -> NoReturn:
+    """Convert any insertion failure into the honest, structured,
+    machine-readable terminal state (F-05/F-18): classify, preserve the
+    text on the clipboard when possible (History otherwise - the pipeline
+    records the take regardless), notify the actionable message, emit the
+    InsertResult, raise InsertionFailure carrying it."""
+    if isinstance(exc, InsertionFailure) and exc.kind is not None:
+        kind = exc.kind
+    elif isinstance(exc, ToolMissing):
+        kind = FailureKind.TOOL_MISSING
+    else:
+        kind = FailureKind.TOOL_FAILED
+    clip = (clipboard if clipboard is not None or not preserve
+            else _preserve_via_clipboard(text))
+    message = _failure_message(str(exc), kind, report, clip)
+    hint = report.install_hint if report.missing_tools else ""
+    result = InsertResult(ok=False, strategy="failed", failure=kind,
+                          message=message, install_hint=hint,
+                          clipboard=clip,
+                          missing_tools=report.missing_tools)
+    if on_notice is not None:
+        try:
+            on_notice(message)
+        except Exception:
+            pass
+    _emit_result(result, on_result)
+    failure = InsertionFailure(message, kind=kind, result=result,
+                               missing_tools=report.missing_tools,
+                               install_hint=hint)
+    if getattr(exc, "not_verified", False):
+        failure.not_verified = True  # type: ignore[attr-defined]
+    raise failure from exc
+
+
+def _ok_result(strategy: str, report: CapabilityReport,
+               on_result: Callable[[InsertResult], None] | None) -> None:
+    """Emit the machine-readable success result for one insert_text."""
+    _emit_result(InsertResult(ok=True, strategy=strategy,
+                              missing_tools=report.missing_tools),
+                 on_result)
+
+
 def insert_text(text: str, cfg: dict, wm_class: str | None = None,
-                on_notice: Callable[[str], None] | None = None) -> str:
+                on_notice: Callable[[str], None] | None = None,
+                on_result: Callable[[InsertResult], None] | None = None
+                ) -> str:
     """Insert `text` at the caret. Returns the strategy used.
 
     wm_class: the insertion target's app identity (None -> live lookup).
@@ -451,14 +868,33 @@ def insert_text(text: str, cfg: dict, wm_class: str | None = None,
     so autocomplete commits; the space is typing-only - clipboard copy and
     history keep the text without it. A canonical profile may override the
     insertion mode for its app (P2). on_notice surfaces paste-fallback /
-    restore warnings.
+    restore warnings and, on terminal failure, the actionable error.
+    on_result receives the machine-readable InsertResult (also broadcast
+    to add_result_listener subscribers). On failure an InsertionFailure
+    carrying the same result is raised AFTER an automatic clipboard
+    preservation attempt - the text is on the clipboard when possible and
+    always remains in History (F-05/F-18).
 
     Wayland sessions route to _insert_text_wayland (wm_class is None there
     UNLESS the P2 context seam supplied an identity at insertion time;
     without one, terminal quirks are inert, documented divergence)."""
     if session_mod.current().is_wayland:
         return _insert_text_wayland(text, cfg, wm_class=wm_class,
-                                    on_notice=on_notice)
+                                    on_notice=on_notice,
+                                    on_result=on_result)
+    return _insert_text_x11(text, cfg, wm_class=wm_class,
+                            on_notice=on_notice, on_result=on_result)
+
+
+def _insert_text_x11(text: str, cfg: dict,
+                     wm_class: str | None = None,
+                     on_notice: Callable[[str], None] | None = None,
+                     on_result: Callable[[InsertResult], None] | None = None
+                     ) -> str:
+    """X11/unknown insert: mode/threshold/leading-dash routing over the
+    xdotool/xclip backends, with the honest-failure terminal state.
+    """
+    report = capability_status(cfg)  # pre-flight (cached): enrich failures
     wm = active_window_class() if wm_class is None else wm_class
     terminal = bool(wm and is_terminal_app(wm, cfg))
     mode = _effective_insertion_mode(cfg, wm)
@@ -472,34 +908,44 @@ def insert_text(text: str, cfg: dict, wm_class: str | None = None,
             insert_paste(text, key=key,
                          verify=cfg["insertion"].get("verify_paste", True),
                          on_notice=on_notice)
+            _ok_result("paste", report, on_result)
             return "paste"
         except InsertError as e:
             if mode == "paste":
-                raise
+                _fail_insert(e, text=text, report=report,
+                             on_notice=on_notice, on_result=on_result)
             if getattr(e, "not_verified", False) and on_notice is not None:
                 on_notice("Paste did not land - typing instead")
     if cfg["insertion"].get("terminal_autocomplete_space", True):
         if terminal:
             text = terminal_trailing_space(text)
-    insert_typed(text, delay)
+    try:
+        insert_typed(text, delay)
+    except InsertError as e:
+        _fail_insert(e, text=text, report=report,
+                     on_notice=on_notice, on_result=on_result)
+    _ok_result("typed", report, on_result)
     return "typed"
 
 
 def _insert_text_wayland(text: str, cfg: dict,
                         wm_class: str | None = None,
-                        on_notice: Callable[[str], None] | None = None) -> str:
+                        on_notice: Callable[[str], None] | None = None,
+                        on_result: Callable[[InsertResult], None] | None = None
+                        ) -> str:
     """Wayland insert: the same mode/threshold/leading-dash routing as the
     X11 body, over the wtype/ydotool + wl-clipboard backends.
 
     Degradation ladder (each step only when the previous is impossible):
       tool+typed -> tool+wl-clipboard paste -> wl-copy + "paste manually"
-      notice ("clipboard-fallback") -> InsertError (the pipeline notifies;
-      history still records the take). Terminal quirks apply ONLY when an
-    app identity was supplied (P2: the context seam passes the AT-SPI
-    identity at insertion time); wm_class None keeps today's behavior -
-    without an identity ctrl+shift+v and the autocomplete space stay off
-    (a wrong plain ctrl+v in a terminal is recoverable, a mistyped
-    terminal-paste is not)."""
+      notice ("clipboard-fallback") -> honest structured InsertionFailure
+      (the pipeline notifies; history still records the take). Terminal
+    quirks apply ONLY when an app identity was supplied (P2: the context
+    seam passes the AT-SPI identity at insertion time); wm_class None
+    keeps today's behavior - without an identity ctrl+shift+v and the
+    autocomplete space stay off (a wrong plain ctrl+v in a terminal is
+    recoverable, a mistyped terminal-paste is not)."""
+    report = capability_status(cfg)  # pre-flight (cached): enrich failures
     wm = wm_class
     terminal = bool(wm and is_terminal_app(wm, cfg))
     mode = _effective_insertion_mode(cfg, wm)
@@ -513,10 +959,12 @@ def _insert_text_wayland(text: str, cfg: dict,
         try:
             _insert_paste_wayland(text, key=key, tool=tool,
                                   on_notice=on_notice)
+            _ok_result("paste", report, on_result)
             return "paste"
-        except InsertError:
+        except InsertError as e:
             if mode == "paste":
-                raise
+                _fail_insert(e, text=text, report=report,
+                             on_notice=on_notice, on_result=on_result)
             if on_notice is not None:
                 on_notice("Paste did not land - trying to type instead")
     if tool is not None:
@@ -525,27 +973,39 @@ def _insert_text_wayland(text: str, cfg: dict,
                     and terminal:
                 text = terminal_trailing_space(text)
             insert_typed(text, delay, tool=tool)
+            _ok_result("typed", report, on_result)
             return "typed"
         except InsertError:
             if on_notice is not None:
                 on_notice("Typing failed - falling back to the clipboard")
+    clip: ClipboardResult | None = None
     if shutil.which("wl-copy"):
         try:
-            copy_to_clipboard(text, wayland=True)
-        except Exception:
-            pass
-        else:
+            clip = copy_to_clipboard(text, wayland=True)
+        except Exception as e:  # noqa: BLE001 - report, don't raise
+            clip = ClipboardResult(ClipboardOutcome.WRITE_FAILED, "wl-copy",
+                                   str(e))
+        if clip.written:
             if on_notice is not None:
                 on_notice("Copied to clipboard - paste manually (install "
                           "wtype or ydotool to type automatically)")
+            _ok_result("clipboard-fallback", report, on_result)
             return "clipboard-fallback"
-    raise InsertError("no wayland insertion tool available - install "
-                      "wtype or ydotool (plus wl-clipboard for paste mode)")
+    else:
+        clip = ClipboardResult(ClipboardOutcome.TOOL_MISSING, "wl-copy")
+    _fail_insert(
+        InsertionFailure("no wayland insertion tool available - install "
+                         "wtype or ydotool (plus wl-clipboard for paste "
+                         "mode)", kind=FailureKind.NO_BACKEND),
+        text=text, report=report, on_notice=on_notice,
+        on_result=on_result, clipboard=clip, preserve=False)
 
 
-def clipboard_fallback(text: str) -> None:
-    """Last resort when neither typing nor pasting worked: leave text on the clipboard."""
-    copy_to_clipboard(text)  # auto-detects the session (xclip / wl-copy)
+def clipboard_fallback(text: str) -> ClipboardResult:
+    """Last resort when neither typing nor pasting worked: leave text on
+    the clipboard and return the honest outcome (F-18) - callers that
+    ignore the return value keep today's behavior."""
+    return copy_to_clipboard(text)  # auto-detects the session
 
 
 def press_key(spec: str, *, tool: str | None = None) -> None:
@@ -567,27 +1027,34 @@ def press_key(spec: str, *, tool: str | None = None) -> None:
         name = tool
     proc = _run(cmd, timeout=5)
     if proc.returncode != 0:
-        raise InsertError(f"{name} key press failed: "
-                          f"{proc.stderr.decode()[:200]}")
+        stderr = proc.stderr.decode(errors="replace")[:200]
+        raise InsertionFailure(f"{name} key press failed: {stderr}",
+                               kind=_tool_failure_kind(stderr))
 
 
-def copy_to_clipboard(text: str, *, wayland: bool | None = None) -> None:
-    """Put text on the clipboard without typing (upstream copyTranscriptionToClipboard).
+def copy_to_clipboard(text: str, *, wayland: bool | None = None) -> ClipboardResult:
+    """Put text on the clipboard without typing (upstream
+    copyTranscriptionToClipboard). Returns the honest outcome (F-18):
+    WRITTEN, TOOL_MISSING or WRITE_FAILED - never raises, so callers that
+    ignore the result keep today's silent behavior, while the failure
+    paths can tell the truth ("saved in History", not "copied").
     wayland=None auto-detects via the session probe (the daemon's
     always-copy call sites stay session-correct); True/False force it."""
     if wayland is None:
         wayland = session_mod.current().is_wayland
     if wayland:
         if not shutil.which("wl-copy"):
-            return
+            return ClipboardResult(ClipboardOutcome.TOOL_MISSING, "wl-copy")
         try:
             _wl_clipboard_write(text.encode())
-        except Exception:
-            pass
-        return
+        except Exception as e:  # noqa: BLE001 - report, don't raise
+            return ClipboardResult(ClipboardOutcome.WRITE_FAILED, "wl-copy",
+                                   str(e))
+        return ClipboardResult(ClipboardOutcome.WRITTEN, "wl-copy")
     if not shutil.which("xclip"):
-        return
+        return ClipboardResult(ClipboardOutcome.TOOL_MISSING, "xclip")
     try:
         _clipboard_write(text.encode())
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001 - report, don't raise
+        return ClipboardResult(ClipboardOutcome.WRITE_FAILED, "xclip", str(e))
+    return ClipboardResult(ClipboardOutcome.WRITTEN, "xclip")
