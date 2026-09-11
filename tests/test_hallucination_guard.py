@@ -383,3 +383,39 @@ class TestPreviewSuppression:
         self._drive(eng, tmp_path / "take.raw", total_s=5.5, step_s=0.5)
         assert "hello" in " ".join(shown)
         assert not [t for t in shown if "you you" in t]
+
+
+class TestDeadCaptureSuppressesHallucinatedText:
+    """2026-09-11 follow-up: exact-zero audio cannot contain speech, so
+    ANY text over it is a hallucination ("Thank you." was typed over a
+    dead virtual-monitor capture while both guards passed)."""
+
+    def test_text_over_digital_silence_never_typed(self, tmp_path):
+        cfg = _cfg(language="en")
+        b = FakeModelBackend(results=[
+            {"text": "Thank you.", "language": "nn", "duration": 6.0},
+            {"text": "Thank you.", "language": "en", "duration": 6.0},
+        ])
+        pipe, logs = _pipeline(cfg, b)
+        notes: list[tuple[str, str]] = []
+        pipe.notify = lambda title, body="": notes.append((title, body))
+        out = pipe.run(silent_wav(tmp_path / "dead.wav", seconds=6.0),
+                       "TestApp")
+        assert out is None
+        assert notes and "mic" in notes[0][1].lower()
+        assert any("suppressed hallucinated" in l for l in logs)
+
+    def test_repeat_loop_over_digital_silence_uses_dead_mic_path(
+            self, tmp_path):
+        cfg = _cfg(language="en")
+        b = FakeModelBackend(results=[
+            {"text": "you you you you", "language": "en", "duration": 6.0},
+            {"text": "you you you you", "language": "en", "duration": 6.0},
+        ])
+        pipe, logs = _pipeline(cfg, b)
+        pipe.notify = lambda t, b2="": None
+        out = pipe.run(silent_wav(tmp_path / "dead.wav", seconds=6.0),
+                       "TestApp")
+        assert out is None
+        # the dead-capture branch fires before the repetition branch
+        assert any("digital silence" in l for l in logs)

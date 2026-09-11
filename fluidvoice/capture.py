@@ -434,6 +434,15 @@ class CaptureCoordinator:
                       + (f" lowconf={stats['lowconf']}"
                          if stats.get("lowconf") else "")
                       + (" silenced" if stats.get("silenced") else ""))
+            if stats.get("silenced"):
+                # close the loop on the mid-take ellipsis: tell the user
+                # WHY the preview went quiet - and that the final text
+                # (full-take decode) is unaffected
+                self._notify(
+                    "SayItErmano",
+                    "Live preview silenced — audio quality too low for "
+                    "live text; the final transcription still uses the "
+                    "full take")
         if finishing:
             # Keep the pill up in its processing state (flat bars + shimmer,
             # like the Mac) until the final text is inserted.

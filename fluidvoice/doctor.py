@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 import time
 from pathlib import Path
 
@@ -326,6 +327,59 @@ def _remote_endpoint(url: str) -> str:
     base = url.rstrip("/")
     return base if base.endswith("/audio/transcriptions") \
         else base + "/v1/audio/transcriptions"
+
+
+def _classify_probe(data: bytes) -> str:
+    """Probe verdict from raw s16 capture bytes (pure, testable)."""
+    if len(data) < 16000:  # < ~0.5 s captured
+        return "inconclusive"
+    return "silent" if data.count(b"\x00") == len(data) else "live"
+
+
+def _microphone_lines() -> tuple[list[str], bool]:
+    """Default-source health probe: records ~1.5 s via pw-record and
+    flags digital silence (2026-09-10 incident: a wedged PipeWire path
+    streamed exact zeros from a healthy webcam mic - dictations came
+    back empty, or hallucinated over the zeros). Returns (lines, ok)."""
+    if not shutil.which("pw-record") or not shutil.which("pactl"):
+        return ["  probe skipped (pw-record/pactl missing)"], True
+    lines: list[str] = []
+    try:
+        info = subprocess.run(["pactl", "info"], capture_output=True,
+                              text=True, timeout=3).stdout
+        name = next((l.split(":", 1)[1].strip()
+                     for l in info.splitlines()
+                     if l.startswith("Default Source")), "")
+        lines.append(f"  default source: {name or '?'}")
+    except Exception:
+        lines.append("  default source: unknown (pactl info failed)")
+    import tempfile
+    tf = tempfile.NamedTemporaryFile(suffix=".raw", delete=False)
+    tf.close()
+    try:
+        try:
+            subprocess.run(
+                ["pw-record", "--rate", "16000", "--channels", "1",
+                 "--format", "s16", tf.name],
+                timeout=2, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL)
+        except subprocess.TimeoutExpired:
+            pass  # expected: the probe runs for the full 2 s window
+        data = Path(tf.name).read_bytes()
+    except Exception:
+        return lines + ["  probe failed (pw-record error)"], True
+    finally:
+        Path(tf.name).unlink(missing_ok=True)
+    verdict = _classify_probe(data)
+    if verdict == "silent":
+        return lines + [
+            "  signal: DIGITAL SILENCE - the source streams exact zeros.",
+            "    Reconnect the device or run: "
+            "systemctl --user restart wireplumber",
+        ], False
+    if verdict == "inconclusive":
+        return lines + ["  probe inconclusive (<0.5 s captured)"], True
+    return lines + ["  signal: live (nonzero samples present)"], True
 
 
 def _preview_lines(cfg: dict) -> list[str]:
@@ -731,6 +785,12 @@ def run() -> int:
     print("\nlive preview:")
     for line in _preview_lines(cfg):
         print(line)
+
+    print("\nmicrophone:")
+    mic_lines, mic_ok = _microphone_lines()
+    for line in mic_lines:
+        print(line)
+    ok = ok and mic_ok
 
     print("\nchat/terminal formatting:")
     for line in _formatting_lines(cfg):

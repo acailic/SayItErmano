@@ -511,17 +511,21 @@ class DictationPipeline:
                 self.notify("SayItErmano", f"Transcription failed: {e}")
                 return None
             raw = result.text
+            if is_digital_silence(str(wav)):
+                # exact-zero audio cannot contain speech: EMPTY text means
+                # a dead/wedged capture path, and NON-empty text is a
+                # whisper hallucination by construction (2026-09-11:
+                # "Thank you." was typed over a dead monitor while every
+                # guard passed) - either way, say so, it is actionable
+                self.log("dead capture path: mic delivered digital silence"
+                         + (f"; suppressed hallucinated text "
+                            f"{raw.strip()[:40]!r}" if raw.strip() else ""))
+                self.notify("SayItErmano",
+                            "No audio from the mic — check that it is "
+                            "connected and selected")
+                return None
             if not raw.strip():
-                if is_digital_silence(str(wav)):
-                    # the mic streamed zeros: not "user said nothing" but
-                    # a dead/wedged input path - say so, it is actionable
-                    self.log("empty transcription: mic delivered digital "
-                             "silence (dead or wedged input path)")
-                    self.notify("SayItErmano",
-                                "No audio from the mic — check that it is "
-                                "connected and selected")
-                else:
-                    self.log("empty transcription")
+                self.log("empty transcription")
                 return None
             if is_repeat_hallucination(raw):
                 # a pure repetition loop is never the intended speech
