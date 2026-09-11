@@ -90,31 +90,33 @@ Manual dispatch with the version. In order:
    to "fix" a disagreement by bumping over it).
 2. **Clean-tree check** — `git status --porcelain` must be empty.
 3. **Version bump** — both files, then re-verified.
-4. **Lint + offline suite with warnings as errors** — the same scope and
-   `-W error` strictness as `just gate`.
-5. **Dependency-lock freshness** — every runtime dependency in
-   `pyproject.toml` must have an exact `==` pin in
-   `packaging/deb/constraints.txt`, and a `pip install --dry-run -c
-   constraints.txt .` resolution must still succeed (catches bumped
-   minimums the lock no longer satisfies). Regenerate the lock with
-   `packaging/deb/update-constraints.sh`. Hash locking (F9): regenerate
-   **with hashes** (the full, networked run — hashes cannot be fabricated
-   offline) and commit the result on the release branch before the
-   locked build; `build-deb.sh` then verifies every downloaded wheel
-   (`--require-hashes -r`) automatically. The committed lock is pin-only
-   between releases.
+4. **Lint + request validation + offline suite with warnings as
+   errors** — the canonical unit gate scope and `-W error` strictness of
+   `just gate`.
+5. **Dependency lock: hash-locked + fresh (Q3)** —
+   `packaging/deb/locklib.py validate --require-hashes` (the lock must
+   carry wheel hashes; pin-only locks fail the release build), the
+   shared `locklib pins-coverage` check (every runtime dep exactly
+   pinned), and a `pip install --dry-run -c constraints.txt .`
+   resolution check. Regenerate with
+   `packaging/deb/update-constraints.sh` (networked run).
 6. **Locked package build** — the deb is built in the pinned container
    (`packaging/deb/Dockerfile`, Ubuntu 24.04 / x86_64 / Python 3.12)
-   against the hashed constraints; its control `Version` must equal
-   `<version>-1`. The deb is uploaded as workflow artifact
-   `deb-v<version>`.
-7. **Commit + push** — `release: v<version>` pushed to `linux`; a
+   against the hashed lock; its control `Version` must equal
+   `<version>-1`.
+7. **Provenance manifest (Q4)** — `scripts/release_verify.py manifest`
+   binds the built deb to its source: package sha256/size/control
+   version, a digest over every tracked file of the post-bump
+   (pre-commit) worktree, the dependency lock's sha256, and the prepare
+   run's identity. The manifest is uploaded IN THE SAME ARTIFACT as the
+   deb (`deb-v<version>`), and the summary prints the deb sha256.
+8. **Commit + push** — `release: v<version>` pushed to `linux`; a
    non-fast-forward push (branch moved mid-run) fails the release.
 
 ### `release-publish` (`.github/workflows/release-publish.yml`)
 
-Manual dispatch with the version and the release SHA. Every gate fails
-loudly before anything public happens:
+Manual dispatch with the version, the release SHA, and **required
+evidence**. Every gate fails loudly before anything public happens:
 
 | Failure mode | Gate |
 |---|---|
@@ -122,13 +124,17 @@ loudly before anything public happens:
 | Stale release commit | the SHA must be the current tip of `linux` |
 | Version disagreement | input == `pyproject.toml` == `fluidvoice/__init__.py` == deb control `Version` |
 | Dirty files | clean checkout required (`git status --porcelain`) |
-| Stale constraints | same pins-coverage check as prepare |
-| Wrong / missing artifact | the `deb-v<version>` artifact from the successful prepare run, unexpired, control version verified |
+| Wrong prepare run | the successful `release-prepare` run whose `head_sha` is the **parent** of the release SHA is resolved by `scripts/release_verify.py select-prepare-run` (prepare pushes the bump commit after building, so its own head_sha is the parent — never the release SHA) |
+| Stale / foreign artifact | the `deb-v<version>` artifact is resolved **by that run id** (`select-artifact`), unexpired; a same-version artifact from any other run is rejected |
+| Untested source | the manifest re-verifies: deb sha256/size/control match, the tracked-source digest of this checkout equals the digest of the tree the deb was built from, and the dependency lock sha256 matches (`verify-publish`; unit-tested in `tests/test_release_verify.py`) |
+| Stale constraints | the shared `locklib pins-coverage` check (same as prepare) |
+| Missing evidence | the `evidence` input must quote the deb sha256 from the prepare summary (proving the record refers to the exact bytes published) or carry an explicit `EVIDENCE-SKIP: <why>` waiver; empty/unbound evidence fails the release |
 | Double release | tag `v<version>` must not exist yet |
 
 Only then: push the tag and create the GitHub release with the deb.
 Release notes default to the `[Unreleased]` section of `CHANGELOG.md`;
-pass the `notes` input to override.
+pass the `notes` input to override. Locally:
+`just release-publish <version> <sha> "<evidence>"`.
 
 House-style manual follow-ups after publish (unchanged): AUR recipe
 bump (`packaging/aur`), Reddit/HN post, machine refresh

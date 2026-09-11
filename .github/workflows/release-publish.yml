@@ -1,20 +1,33 @@
 name: release-publish
 
-# Release step 2 of 2 (plan P0.5). Manual only — like every workflow in
-# this repo. NEVER tags or uploads on its own: every gate below must pass
-# first, most importantly a successful MANUALLY DISPATCHED CI run for the
-# EXACT release SHA (five releases once shipped without any CI at all —
-# this workflow exists to make that impossible).
+# Release step 2 of 2 (plan P0.5 + quality plan Q4). Manual only, like
+# every workflow in this repo. NEVER tags or uploads on its own: every
+# gate below must pass first.
 #
 # Gates, in order:
 #   1. the release SHA is the current tip of `linux` (no stale releases)
-#   2. clean checkout
-#   3. version agreement: inputs == pyproject == fluidvoice/__init__.py
-#   4. a completed, successful CI run whose head_sha IS the release SHA
-#   5. dependency-lock freshness (same check as release-prepare)
-#   6. the deb artifact release-prepare built for THIS version exists,
-#      is unexpired, and its control Version agrees
-#   7. tag v<version> does not exist yet
+#   2. clean checkout; version agreement: input == pyproject == package
+#   3. a completed, successful CI run whose head_sha IS the release SHA
+#   4. the intended release-prepare run: correct workflow, SUCCESS, and
+#      head_sha == the PARENT of the release SHA (prepare checks out the
+#      pre-bump head and pushes the bump commit afterwards — its head_sha
+#      can never equal the release SHA; the old gate compared exactly
+#      those and proved nothing)
+#   5. the artifact is resolved BY THAT RUN ID (never by name/index):
+#      a same-version artifact from a stale or foreign run is rejected
+#   6. the manifest the prepare run uploaded beside the deb re-verifies
+#      the whole chain: deb sha256/size/control == manifest, the
+#      tracked-source digest of THIS checkout == the digest of the tree
+#      the deb was built from, and the dependency lock sha256 matches
+#      (scripts/release_verify.py — unit-tested in
+#      tests/test_release_verify.py)
+#   7. dependency-lock freshness via the shared locklib pins-coverage
+#   8. REQUIRED EVIDENCE: the `evidence` input must record what was
+#      verified against this artifact (install smoke / desktop matrix /
+#      eval report) and quote the deb sha256 from the prepare summary,
+#      or carry an explicit `EVIDENCE-SKIP: <why>` waiver — empty or
+#      unbound evidence fails the release; nothing is silently skipped
+#   9. tag v<version> does not exist yet
 # Only then: push the tag and create the GitHub release with the deb.
 #
 # Full flow: docs/dev/release-gates.md
@@ -27,6 +40,10 @@ on:
         type: string
       sha:
         description: "Release SHA (the version-bump commit release-prepare pushed; short or full)"
+        required: true
+        type: string
+      evidence:
+        description: "What was verified against this artifact (install smoke, desktop matrix, eval) — must quote the deb sha256 from the prepare summary, or 'EVIDENCE-SKIP: <why>'"
         required: true
         type: string
       notes:
@@ -50,6 +67,7 @@ jobs:
     env:
       VERSION: ${{ inputs.version }}
       SHA_IN: ${{ inputs.sha }}
+      EVIDENCE_IN: ${{ inputs.evidence }}
       NOTES_IN: ${{ inputs.notes }}
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -99,55 +117,42 @@ jobs:
           fi
           echo "CI is green for ${SHA}"
 
-      - name: Dependency-lock freshness (stale-constraints check)
+      - name: Resolve the intended release-prepare run (Q4)
+        # prepare's head_sha is the PARENT of the release SHA; the run
+        # must be the right workflow AND successful.
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import re, sys, tomllib
+          PARENT_SHA="$(git rev-parse "${SHA}^")"
+          echo "release SHA $SHA prepared from parent $PARENT_SHA"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" > /tmp/runs.json
+          PREPARE_RUN_ID="$(python scripts/release_verify.py select-prepare-run \
+              --runs-f /tmp/runs.json --parent-sha "$PARENT_SHA")"
+          echo "PREPARE_RUN_ID=$PREPARE_RUN_ID" >> "$GITHUB_ENV"
+          echo "release-prepare run: $PREPARE_RUN_ID (successful, head == release parent)"
 
-          with open("pyproject.toml", "rb") as fh:
-              deps = tomllib.load(fh)["project"]["dependencies"]
-          pins = set()
-          for line in open("packaging/deb/constraints.txt"):
-              line = line.strip()
-              if not line or line.startswith("#"):
-                  continue
-              m = re.match(r"^([A-Za-z0-9_.-]+)==\S+", line)
-              if not m:
-                  sys.exit(f"ERROR: constraints line is not an exact pin: {line!r}")
-              pins.add(m.group(1).lower().replace("_", "-"))
-          missing = []
-          for d in deps:
-              name = re.split(r"[<>=!~\[; ]", d.strip(), 1)[0]
-              name = name.lower().replace("_", "-")
-              if name not in pins:
-                  missing.append(name)
-          if missing:
-              sys.exit("ERROR: stale constraints — runtime deps without an exact "
-                       f"pin in packaging/deb/constraints.txt: {', '.join(missing)}\n"
-                       "       regenerate with: packaging/deb/update-constraints.sh")
-          print(f"constraints OK: all {len(deps)} runtime deps exactly pinned "
-                f"({len(pins)} pins total)")
-          PY
+      - name: Dependency-lock freshness (shared locklib check)
+        run: python packaging/deb/locklib.py pins-coverage --pyproject pyproject.toml --lock packaging/deb/constraints.txt
 
-      - name: Fetch and verify the deb release-prepare built
+      - name: Fetch the deb + manifest BY PREPARE RUN ID and verify provenance
         run: |
           set -euo pipefail
-          ART="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=deb-v${VERSION}" \
-              --jq '.artifacts[0] // empty')"
-          [ -n "$ART" ] || {
-              echo "ERROR: no deb-v${VERSION} artifact — run release-prepare first" >&2; exit 1; }
-          EXPIRED="$(printf '%s' "$ART" | python3 -c 'import json,sys; print(json.load(sys.stdin)["expired"])')"
-          RUN_ID="$(printf '%s' "$ART" | python3 -c 'import json,sys; print(json.load(sys.stdin)["workflow_run"]["id"])')"
-          [ "$EXPIRED" = "False" ] || {
-              echo "ERROR: deb-v${VERSION} artifact expired — re-run release-prepare" >&2; exit 1; }
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=deb-v${VERSION}" > /tmp/arts.json
+          python scripts/release_verify.py select-artifact \
+              --artifacts-f /tmp/arts.json --name "deb-v${VERSION}" \
+              --run-id "$PREPARE_RUN_ID"
           mkdir -p dist
-          ( cd dist && gh run download "$RUN_ID" -n "deb-v${VERSION}" )
+          ( cd dist && gh run download "$PREPARE_RUN_ID" -n "deb-v${VERSION}" )
           DEB="dist/sayit-ermano_${VERSION}-1_amd64.deb"
+          MANIFEST="dist/manifest-v${VERSION}.json"
           [ -f "$DEB" ] || { echo "ERROR: expected $DEB in the artifact" >&2; ls -la dist; exit 1; }
-          [ "$(dpkg-deb -f "$DEB" Version)" = "${VERSION}-1" ] || {
-              echo "ERROR: deb control Version disagrees with ${VERSION}" >&2; exit 1; }
-          echo "deb verified: $DEB ($(du -h "$DEB" | cut -f1))"
+          [ -f "$MANIFEST" ] || {
+              echo "ERROR: artifact carries no manifest-v${VERSION}.json — it predates the Q4 provenance chain;" >&2
+              echo "       re-run release-prepare (current workflows)." >&2; exit 1; }
+          printf '%s' "$EVIDENCE_IN" > /tmp/evidence.txt
+          python scripts/release_verify.py verify-publish \
+              --repo . --manifest "$MANIFEST" --deb "$DEB" \
+              --version "$VERSION" --evidence-file /tmp/evidence.txt
+          echo "deb verified against its prepare manifest: $DEB ($(du -h "$DEB" | cut -f1))"
 
       - name: Tag does not exist yet
         run: |
@@ -186,7 +191,10 @@ jobs:
               echo "### release-publish v${VERSION} — released"
               echo
               echo "- tag: \`v${VERSION}\` @ \`${SHA}\` (CI-verified)"
-              echo "- artifact: the deb release-prepare built in the pinned container"
+              echo "- artifact: the deb release-prepare built, verified against its"
+              echo "  manifest (source digest + lock + package sha256) from prepare"
+              echo "  run ${PREPARE_RUN_ID}"
+              echo "- evidence on record: ${EVIDENCE_IN}"
               echo "- manual follow-ups (house style): AUR recipe bump"
               echo "  (packaging/aur), Reddit/HN post, machine refresh"
           } >> "$GITHUB_STEP_SUMMARY"

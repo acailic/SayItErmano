@@ -111,11 +111,13 @@ release-prepare VERSION:
     gh workflow run release-prepare.yml -f version="{{VERSION}}"
     echo "dispatched release-prepare for v{{VERSION}} — watch: gh run watch"
 
-# dispatch release-publish for VERSION at SHA (needs green CI on that SHA)
-release-publish VERSION SHA:
+# dispatch release-publish for VERSION at SHA (needs green CI + evidence;
+# EVIDENCE must quote the deb sha256 from the prepare summary, or be an
+# explicit 'EVIDENCE-SKIP: <why>' waiver — Q4 provenance gate)
+release-publish VERSION SHA EVIDENCE:
     #!/usr/bin/env bash
     set -euo pipefail
-    gh workflow run release-publish.yml -f version="{{VERSION}}" -f sha="{{SHA}}"
+    gh workflow run release-publish.yml -f version="{{VERSION}}" -f sha="{{SHA}}" -f evidence="{{EVIDENCE}}"
     echo "dispatched release-publish for v{{VERSION}} @ {{SHA}} — watch: gh run watch"
 
 # ── factory (SSSF agent factory) ────────────────────────────────────────────

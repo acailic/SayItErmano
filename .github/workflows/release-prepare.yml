@@ -121,36 +121,11 @@ jobs:
           --timeout=300 tests --ignore=tests/integration
           -m "not integration and not desktop and not needs_display and not needs_model and not needs_network"
 
-      - name: Dependency-lock freshness (stale-constraints check)
+      - name: "Dependency lock: hash-locked + fresh (Q3)"
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import re, sys, tomllib
-
-          with open("pyproject.toml", "rb") as fh:
-              deps = tomllib.load(fh)["project"]["dependencies"]
-          pins = set()
-          for line in open("packaging/deb/constraints.txt"):
-              line = line.strip()
-              if not line or line.startswith("#"):
-                  continue
-              m = re.match(r"^([A-Za-z0-9_.-]+)==\S+", line)
-              if not m:
-                  sys.exit(f"ERROR: constraints line is not an exact pin: {line!r}")
-              pins.add(m.group(1).lower().replace("_", "-"))
-          missing = []
-          for d in deps:
-              name = re.split(r"[<>=!~\[; ]", d.strip(), 1)[0]
-              name = name.lower().replace("_", "-")
-              if name not in pins:
-                  missing.append(name)
-          if missing:
-              sys.exit("ERROR: stale constraints — runtime deps without an exact "
-                       f"pin in packaging/deb/constraints.txt: {', '.join(missing)}\n"
-                       "       regenerate with: packaging/deb/update-constraints.sh")
-          print(f"constraints OK: all {len(deps)} runtime deps exactly pinned "
-                f"({len(pins)} pins total)")
-          PY
+          python packaging/deb/locklib.py validate packaging/deb/constraints.txt --require-hashes
+          python packaging/deb/locklib.py pins-coverage --pyproject pyproject.toml --lock packaging/deb/constraints.txt
           # The lock must still SATISFY the current pyproject: resolve the
           # full dependency tree against it (dry-run installs nothing).
           pip install --dry-run --quiet --ignore-installed \
@@ -168,11 +143,30 @@ jobs:
           [ "$(dpkg-deb -f "$DEB" Version)" = "${VERSION}-1" ] || {
               echo "ERROR: deb version disagrees with ${VERSION}" >&2; exit 1; }
 
-      - name: Upload deb artifact for release-publish
+      - name: Provenance manifest for the built artifact (Q4)
+        # Binds the deb to the prepared SOURCE CONTENT: package sha256/size/
+        # control version, a digest over every tracked file of this
+        # (post-bump, pre-commit) worktree, the dependency lock's sha256,
+        # and this prepare run's identity. release-publish re-verifies the
+        # whole chain against the release commit before tagging.
+        env:
+          PREPARE_RUN_ID: ${{ github.run_id }}
+          PREPARE_HEAD: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python scripts/release_verify.py manifest \
+              --repo . --deb "dist/sayit-ermano_${VERSION}-1_amd64.deb" \
+              --version "$VERSION" --run-id "$PREPARE_RUN_ID" \
+              --head-sha "$PREPARE_HEAD" \
+              --out "dist/manifest-v${VERSION}.json"
+          SHA256="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["package"]["sha256"])' "dist/manifest-v${VERSION}.json")"
+          echo "DEB_SHA256=$SHA256" >> "$GITHUB_ENV"
+
+      - name: Upload deb + manifest for release-publish
         uses: actions/upload-artifact@v4
         with:
           name: deb-v${{ env.VERSION }}
-          path: dist/*.deb
+          path: dist/
           if-no-files-found: error
 
       - name: Commit and push the version bump
@@ -189,10 +183,13 @@ jobs:
               echo "### release-prepare v${VERSION} — done"
               echo
               echo "- release commit: \`${SHA}\` (pushed to \`linux\`)"
-              echo "- deb artifact uploaded: \`deb-v${VERSION}\`"
+              echo "- deb artifact uploaded: \`deb-v${VERSION}\` (deb + manifest)"
+              echo "- deb sha256: \`${DEB_SHA256}\`"
               echo "- next: dispatch **CI** on that exact commit (Actions → CI →"
               echo "  Run workflow → branch \`linux\`), wait for green,"
               echo "  then \`just release-publish ${VERSION} ${SHA}\`"
+              echo "  (the \`evidence\` input must quote the deb sha256 above"
+              echo "  or carry an explicit EVIDENCE-SKIP waiver)"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Release SHA
