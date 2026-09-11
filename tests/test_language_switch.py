@@ -805,6 +805,7 @@ def loop():
     return GLib.MainLoop()
 
 
+@pytest.mark.needs_display  # GUI lane (Q1)
 @pytest.mark.skipif(not GTK_READY, reason="no GTK/display for settings UI")
 class TestSettingsUI:
     @staticmethod

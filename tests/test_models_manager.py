@@ -545,6 +545,7 @@ def _pump(loop, ms=120):
     loop.run()
 
 
+@pytest.mark.needs_display  # GUI lane (Q1): provisioned tier, never the unit gate
 @pytest.mark.skipif(not _gtk_ok(), reason="GTK4/Adw or display unavailable")
 class TestModelLanguageRows:
     class _Client(Client):
@@ -692,6 +693,7 @@ class TestModelLanguageRows:
         w.close()
 
 
+@pytest.mark.needs_display  # GUI lane (Q1): provisioned tier, never the unit gate
 @pytest.mark.skipif(not _gtk_ok(), reason="GTK4/Adw or display unavailable")
 class TestDiskUsageRows:
     ENTRIES = [

@@ -643,12 +643,27 @@ the upstream macOS repo for reference only and is **never** updated with port
 work; to see what moved upstream, run `scripts/upstream-diff.sh`.
 
 ```bash
-.venv/bin/python -m pytest tests -m "not slow and not integration"  # unit: offline, fast
-.venv/bin/python -m pytest tests -m "integration and not desktop"   # real subsystems, deterministic
-.venv/bin/python -m pytest tests -m desktop                          # live session (grabs, pixels)
-.venv/bin/python -m pytest tests -m "not desktop"                    # deterministic everything
-.venv/bin/python -m pytest -n auto tests --ignore=tests/integration  # parallel via pytest-xdist (~4-5x; skip -n for --pdb debugging)
+just test               # unit/contract tier (offline: the conftest network
+                        # guard fails any non-loopback connect in-process;
+                        # no model/display, tests deselected by DECLARED
+                        # requirement — needs_model/needs_display/etc.)
+just test-parallel      # same scope on pytest-xdist (~4-5x faster)
+just test-ui            # display/GTK tier: real display or Xvfb; a skip
+                        # FAILS in CI's provisioned gtk-x11 lane
+just test-process       # model-free process lane: real daemon/socket/CLI
+                        # subprocesses, works headless or under xvfb-run
+just test-integration   # real model + mic + GPU (needs hardware + the
+                        # shared venv; grabs hotkeys — coordinate first)
+just gate               # clean tree + lint + brief validation + unit tier
+                        # with -W error, strict markers, timeout, JUnit
+just coverage           # branch coverage (baseline: docs/research/
+                        # 2026-09-12-coverage-baseline.md)
 ```
+
+All tier commands live in **one place** — `scripts/run_test_tier.sh` —
+shared verbatim by the justfile, CI and release-prepare, so local and CI
+run the same selection (capability markers: `model`, `network`, `desktop`,
+`packaging`, `gtk`, plus `slow` for duration only).
 
 The test suite — **1782 automated tests** at v0.8.1 (`-n auto` runs it in
 ~19 s):

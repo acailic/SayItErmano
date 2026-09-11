@@ -390,7 +390,13 @@ def real_time_factor(audio_duration_s: float | None,
         return None
     if not ok:
         return None
-    return audio_duration_s / processing_time_s
+    ratio = audio_duration_s / processing_time_s
+    if not math.isfinite(ratio) or ratio <= 0.0:
+        # finite positive inputs can still produce a meaningless ratio
+        # (denormal underflow to 0, overflow to inf) — a measurement
+        # artifact, not a score (property-test find)
+        return None
+    return ratio
 
 
 def mean(values: Iterable[float]) -> float | None:
