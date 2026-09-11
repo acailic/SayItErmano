@@ -101,11 +101,13 @@ def _cmd_run(args: argparse.Namespace) -> int:
             print(f"error: {e}", file=sys.stderr)
             return 1
     report = run_eval(cases, transcriber, out_dir=args.out, manifests=paths,
-                      soak=soak, allow_synth=not args.no_synth)
+                      soak=soak, allow_synth=not args.no_synth,
+                      split=args.split)
     s = report["summary"]
     print(f"{s['cases']} cases ({s['errors']} errored) -> "
           f"{args.out / 'report.json'} + {args.out / 'report.md'}")
-    print(f"  WER mean {_fmt(s['wer_mean'])} · CER mean "
+    print(f"  WER mean {_fmt(s['wer_mean'])} · omissions "
+          f"{_fmt(s['omission_mean'])} · CER mean "
           f"{_fmt(s['cer_mean'])} · hotword recall "
           f"{_fmt(s['hotword_recall_mean'])} · RTF "
           f"{_fmt(s['real_time_factor_mean'])}")
@@ -185,6 +187,12 @@ def main(argv: list[str] | None = None) -> int:
     run_p.add_argument("--soak-csv", type=Path, metavar="PATH",
                        help="embed a scripts/soak.py CSV summary in the "
                             "report")
+    run_p.add_argument("--split", choices=("train", "heldout"),
+                       default=None, metavar="SPLIT",
+                       help="label the run's split identity (train/"
+                            "heldout; default: full/unlabeled). Guard "
+                            "threshold sweeps are computed on train "
+                            "runs only — corpus-spec §6")
     run_p.add_argument("--no-synth", action="store_true",
                        help="never generate synthetic fixtures (missing "
                             "audio becomes a case error)")

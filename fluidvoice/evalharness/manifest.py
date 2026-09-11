@@ -26,6 +26,12 @@ field              type                           notes
 ``silence``), ``seconds`` (> 0), ``rate`` (default 16000). See
 fluidvoice/evalharness/synth.py.
 
+Optional provenance keys (corpus-spec §1; used by subgroup aggregation
+and the guard sweep): ``speaker`` / ``mic_class`` / ``taxonomy`` /
+``split`` (non-empty strings when present) and ``snr_db`` (number when
+present). ``split`` labels the case ``train`` / ``heldout`` for the
+corpus-spec §6 rule — threshold sweeps only ever use ``train`` cases.
+
 Validation fails loudly (ManifestError) with the manifest path, case
 index and id in every message. Unknown extra keys are tolerated —
 private corpora evolve ahead of this schema — but every required key
@@ -58,7 +64,12 @@ class SynthSpec:
 
 @dataclass(frozen=True)
 class Case:
-    """One evaluation case (a manifest row, audio path resolved)."""
+    """One evaluation case (a manifest row, audio path resolved).
+
+    Provenance fields (speaker, mic_class, taxonomy, snr_db, split) are
+    None when the manifest doesn't carry them — subgroups group those
+    cases under ``(unset)`` instead of dropping them.
+    """
 
     id: str
     audio: Path                    # absolute, resolved against the manifest
@@ -69,6 +80,11 @@ class Case:
     license: str
     source: str
     synth: SynthSpec | None = None
+    speaker: str | None = None     # corpus-spec §1 provenance (S07-style id)
+    mic_class: str | None = None   # e.g. "headset-usb" (§5)
+    taxonomy: str | None = None    # stratum id, e.g. "t3-jargon" (§4)
+    snr_db: float | None = None    # post-hoc estimate (§5)
+    split: str | None = None       # "train" / "heldout" (§6)
 
 
 def resolve_manifest_path(path: Path) -> Path:
@@ -173,6 +189,29 @@ def load_manifest(path: Path) -> list[Case]:
         if "synth" in entry and entry["synth"] is not None:
             synth = _synth_from(entry["synth"], where)
 
+        speaker = mic_class = taxonomy = split = None
+        for key in ("speaker", "mic_class", "taxonomy", "split"):
+            v = entry.get(key)
+            if v is None:
+                continue
+            if not isinstance(v, str) or not v.strip():
+                raise ManifestError(f"{where}'{key}' must be a non-empty "
+                                    f"string when present, got {v!r}")
+            if key == "speaker":
+                speaker = v
+            elif key == "mic_class":
+                mic_class = v
+            elif key == "taxonomy":
+                taxonomy = v
+            else:
+                split = v
+        snr_db = entry.get("snr_db")
+        if snr_db is not None:
+            if not isinstance(snr_db, (int, float)) or isinstance(snr_db, bool):
+                raise ManifestError(f"{where}'snr_db' must be a number when "
+                                    f"present, got {snr_db!r}")
+            snr_db = float(snr_db)
+
         cases.append(Case(
             id=cid,
             audio=(manifest_dir / entry["audio"]).resolve(),
@@ -183,6 +222,11 @@ def load_manifest(path: Path) -> list[Case]:
             license=entry["license"],
             source=entry["source"],
             synth=synth,
+            speaker=speaker,
+            mic_class=mic_class,
+            taxonomy=taxonomy,
+            snr_db=snr_db,
+            split=split,
         ))
     return cases
 

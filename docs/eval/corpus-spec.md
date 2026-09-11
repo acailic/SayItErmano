@@ -225,7 +225,7 @@ final selection recorded in the manifest (one file per utterance).
 4. Reports always state which split they cover; never merge splits in
    a headline number.
 
-## 7. Evalharness gap analysis — adapters needed (NOT implemented here)
+## 7. Evalharness gap analysis — adapters G1–G7 (implemented by commit "feat(eval): measurement adapters G1-G7" on agent/f2-metrics; gap table kept for history)
 
 What exists today (fluidvoice/evalharness/): WER + CER with pinned
 normalization (metrics.py `wer`/`cer`), hotword recall over case tags,
