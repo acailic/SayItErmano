@@ -45,15 +45,20 @@
 
 ## What's new
 
-**Unreleased** — **hallucination guard**: when a pinned language (or a
-broken mic feed) makes Whisper return confident fluent garbage — phonetic
-English over Slovenian speech, "you you you" loops, "Thank you for
-watching" over silence — the take is re-decoded once with auto language
-detection (kept only when it comes back confidently better), pure
-repetition loops are never typed (you get a "check mic and language"
-notice instead), and the live preview suppresses loop text too. A mic
-streaming **digital silence** (dead or wedged input path) now gets a
-"no audio from the mic" notice instead of a bare empty transcription.
+**Unreleased** — **hallucination guard + preview confidence gating**:
+when a pinned language (or a broken mic feed) makes Whisper return
+confident fluent garbage — phonetic English over Slovenian speech, "you
+you you" loops, "Thank you for watching" over silence — the take is
+re-decoded once with auto language detection (kept only when it comes
+back confidently better), pure repetition loops are never typed, and
+the live preview suppresses loop text too. The **preview** now carries
+a confidence signal: windows the model scored shaky never render, and a
+take whose windows *sustainedly* score low self-silences to an honest
+ellipsis (level bars keep the activity signal) — measured on real
+takes, 2/3/4 s windows track the final text at F1 0.26/0.49/0.57, so
+bump **Segment window** on large models. A mic streaming **digital
+silence** gets a "no audio from the mic" notice instead of a bare empty
+transcription.
 **Packaging** got honest: the deb is now declared (and dependency-pinned)
 Ubuntu 24.04 / x86_64 / Python 3.12 only, built in a pinned container from
 a committed, hash-lockable dependency set; the AUR recipe became a native
