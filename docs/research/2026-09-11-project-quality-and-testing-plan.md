@@ -1,9 +1,36 @@
 # Project quality and testing improvement plan
 
 - Date: 2026-09-11
-- Status: PLANNED — investigation complete; implementation is future work
+- Status: IMPLEMENTED 2026-09-12 (Q1–Q7-code, Q11, Q12 shipped; Q8/Q9
+  live-evidence halves and Q7's desktop matrices remain gated on external
+  dependencies — see the implementation log below and
+  [evidence index](../quality/evidence-index.md))
 - Audited source: `ed89dfb` on `linux`, application version `0.8.1`
 - Scope: application, tests, CI/release workflows, packaging, desktop behavior, speech evaluation, documentation, and maintenance.
+
+## Implementation log (2026-09-12, agent/qplan-20260911)
+
+| Item | Status | Commit(s) | Notes |
+|---|---|---|---|
+| Q1 test scopes/tiers | SHIPPED | d745255 | needs_model/needs_network/needs_display markers; e2e moved to integration; canonical gate (`-W error --strict-markers --strict-config --timeout --junitxml` + validate-requests) identical in just/CI/prepare; provisioned CI gtk-x11 lane where tier skips FAIL (module-level collection skips included); conftest network guard: non-loopback connect in a unit test fails loudly |
+| Q2 leak enforcement | SHIPPED | d745255 | leak gate in conftest = every invocation incl. xdist workers (meta-tests drive real pytest subprocesses for exit-status proof); compositor env snapshotted/restored for integration; worktree-safe spawning; fixture-order verified by test. First catch: command-confirm watchdog re-arm race (production fix + regression test) |
+| Q3 hash locking | SHIPPED | 7dfd1c9 | locklib.py replaces the broken `pip hash` scraping (E3); wheel matching per spec; atomic self-validating writes; build refuses pin-only unless DEB_ALLOW_PIN_ONLY=1 (E4); offline wheelhouse round-trip with real `pip install --require-hashes` consumer; constraints.txt regenerated WITH hashes (same 25 pins) and a full deb built from it (66M, acceptance met) |
+| Q4 publication binding | SHIPPED | b2247dc | prepare writes a provenance manifest beside the deb (package sha/size/control, tracked-source digest, lock sha, run id); publish resolves the prepare run by parent-SHA + success, resolves the artifact BY RUN ID, re-verifies bytes→source→lock, and requires an `evidence` input quoting the deb sha (or explicit recorded waiver); fixture rehearsal tests cover every rejection |
+| Q5 coverage + properties | SHIPPED | e441f53, 030578a | branch coverage per tier (unit 79.9%/78.9% — [baseline](2026-09-12-coverage-baseline.md), ratchet floor), CI uploads XML; hypothesis properties found and fixed 3 real defects (WER empty-normalized rule, TOML DEL escaping made configs unparseable, RTF NaN) |
+| Q6 lifecycle sequences | SHIPPED | 16c6c08 | event-barrier daemon-seam sequences (busy isolation, cancel contracts, duplicate stop, shutdown joins, lock/mic transitions) + history durability (SIGKILL child, ENOSPC, fsync failure). Found+fixed: `_on_locked` never set the pause gate (hotkeys stayed live on a locked screen) |
+| Q7 process/GTK lanes | CODE HALF SHIPPED | b458a9c (+d745255) | model-free `just test-process` lane (green headless AND under Xvfb), worktree-safe CLI spawning; GTK lane + skip-escalation shipped with Q1. OPEN: live GNOME X11/Wayland/sway matrices, lock/resume, USB replug — need live sessions (briefs stay OPEN) |
+| Q8 real-speech baseline | BLOCKED (external) | — | needs the 150–300-utterance recording from 10–15 speakers (speech-corpus brief OPEN); harness/metrics/adapters ready |
+| Q9 install/soak | NOT STARTED (external) | — | needs disposable target VMs and multi-hour soak windows; deb build path itself now hash-locked end-to-end (Q3) |
+| Q10 recovery UX | NOT STARTED (evidence-gated) | — | processing-cancel contract deliberately pinned as today's no-op in Q6's tests; awaits Q6–Q8 evidence per plan |
+| Q11 privacy/safety contracts | SHIPPED | 3bef99d | local-stays-local, secrets masked in status/config/doctor (real subprocess), default-retention-is-nothing; command-confirm + update-kill-switch + clipboard contracts were already pinned (referenced, not duplicated) |
+| Q12 maintenance practice | SHIPPED | 5c76431 | ruff +F541/F632/F841 (backlog fixed), focused mypy on the seam modules (`just typecheck` + CI), evidence index created, stale 3.11/soak statements corrected |
+
+Bugs fixed as a direct consequence: command-confirm watchdog re-arm
+race, `_on_locked` pause-gate never engaging, WER empty-normalized
+scoring, TOML DEL escaping, RTF NaN scoring, plus two load-flaky tests
+hardened. Suite grew 3531 → 3474 unit-tier (+ integration 40 incl. the
+re-homed e2e); every gate green.
+
 
 ## Recommendation
 
