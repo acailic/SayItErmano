@@ -1,39 +1,41 @@
 # Locked dependency set for the SayItErmano deb — Ubuntu 24.04 / x86_64 /
-# Python 3.12 ONLY (P0.6 deb contract). Generated 2026-09-10
-# from the locked venv by packaging/deb/update-constraints.sh; consumed
-# by packaging/build-deb.sh via `pip install -c <this file> .`.
+# Python 3.12 ONLY (P0.6 deb contract). Generated 2026-09-11
+# from the locked venv by packaging/deb/update-constraints.sh. Hashing/
+# validation live in packaging/deb/locklib.py (Q3); the file is consumed
+# by packaging/build-deb.sh via `pip install --require-hashes -r <this
+# file>` — every downloaded wheel is verified against these sha256.
 #
 # Review rules:
 #   - every pin is exact (==); version bumps must arrive as a visible
 #     diff of this file, never as silent resolution at build time;
-#   - --hash lines (when present) are sha256 of the exact wheels the
-#     Ubuntu 24.04 / py3.12 / x86_64 build downloads from PyPI; pip
-#     >= 23.1 verifies them during the deb build;
+#   - --hash lines are sha256 of the exact wheels the Ubuntu 24.04 /
+#     py3.12 / x86_64 build downloads from PyPI; pin-only locks are
+#     rejected by release builds (DEB_ALLOW_PIN_ONLY=1 is dev-only);
 #   - regenerate with: packaging/deb/update-constraints.sh
 #     (add --pins-only for a network-free pin refresh).
 
-anyio==4.14.2
-av==18.1.0
-certifi==2026.7.22
-click==8.4.2
-ctranslate2==4.8.2
-faster-whisper==1.2.1
-filelock==3.30.2
-flatbuffers==25.12.19
-fsspec==2026.6.0
-h11==0.16.0
-hf-xet==1.6.0
-httpcore==1.0.9
-httpx==0.28.1
-huggingface-hub==1.30.0
-idna==3.6
-numpy==1.26.4
-onnxruntime==1.29.0
-packaging==24.0
-pillow==10.2.0
-protobuf==7.36.1
-python-xlib==0.33
-pyyaml==6.0.1
-tokenizers==0.23.2
-tqdm==4.68.4
-typing-extensions==4.16.0
+anyio==4.14.2 --hash=sha256:9f505dda5ac9f0c8309b5e8bd445a8c2bf7246f3ce950121e45ea15bc41d1494
+av==18.1.0 --hash=sha256:8a032e8d8ebc73dec079364b9b4a6837638a2d106e8472314e685ffbf163e700
+certifi==2026.7.22 --hash=sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775
+click==8.4.2 --hash=sha256:e6f9f66136c816745b9d65817da91d61d957fb16e02e4dcd0552553c5a197b76
+ctranslate2==4.8.2 --hash=sha256:554a0b2abf098a11c66ef7930c0a05b3de683a455e8ea3f2e6ab6966aaabc136
+faster-whisper==1.2.1 --hash=sha256:79a66ad50688c0b794dd501dc340a736992a6342f7f95e5811be60b5224a26a7
+filelock==3.30.2 --hash=sha256:a64b58f75048ec39589983e97f5117163f822261dcb6ba843e098f05aac9663f
+flatbuffers==25.12.19 --hash=sha256:7634f50c427838bb021c2d66a3d1168e9d199b0607e6329399f04846d42e20b4
+fsspec==2026.6.0 --hash=sha256:02e0b71817df9b2169dc30a16832045764def1191b43dcff5bb85bdee212d2a1
+h11==0.16.0 --hash=sha256:63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86
+hf-xet==1.6.0 --hash=sha256:d62671bb130879cef0ee4c9ebe47a14af6c66ec53e6d84dc15936e5ffdfac82f
+httpcore==1.0.9 --hash=sha256:2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55
+httpx==0.28.1 --hash=sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad
+huggingface-hub==1.30.0 --hash=sha256:96ae0a8e99a234374a6fe43e989ebd21c04640b91ab2927e7e5773ba1131ca59
+idna==3.6 --hash=sha256:c05567e9c24a6b9faaa835c4821bad0590fbb9d5779e7caa6e1cc4978e7eb24f
+numpy==1.26.4 --hash=sha256:675d61ffbfa78604709862923189bad94014bef562cc35cf61d3a07bba02a7ed
+onnxruntime==1.29.0 --hash=sha256:2b80d8c7ec2cc7438e4da3760b88c24568cba72c9ace96d668800a6c79419acb
+packaging==24.0 --hash=sha256:2ddfb553fdf02fb784c234c7ba6ccc288296ceabec964ad2eae3777778130bc5
+pillow==10.2.0 --hash=sha256:127cee571038f252a552760076407f9cff79761c3d436a12af6000cd182a9d04
+protobuf==7.36.1 --hash=sha256:97198b77e369a0abd8e262b8f6c7266c55ddb796a3a12c76d7b8881188ed83aa
+python-xlib==0.33 --hash=sha256:c3534038d42e0df2f1392a1b30a15a4ff5fdc2b86cfa94f072bf11b10a164398
+pyyaml==6.0.1 --hash=sha256:6c22bec3fbe2524cde73d7ada88f6566758a8f7227bfbf93a408a9d86bcc12a0
+tokenizers==0.23.2 --hash=sha256:41c2f84d172449b4dadb9cdc508e3e364076613c35b16e76ecfe47a60d1e3305
+tqdm==4.68.4 --hash=sha256:5168118b2368f48c561afda8020fd79195b1bdb0bdf8086b88442c267a315dc2
+typing-extensions==4.16.0 --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8

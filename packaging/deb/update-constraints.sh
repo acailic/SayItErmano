@@ -97,15 +97,17 @@ header() {
     cat <<EOF
 # Locked dependency set for the SayItErmano deb — Ubuntu 24.04 / x86_64 /
 # Python 3.12 ONLY (P0.6 deb contract). Generated $(date -u +%Y-%m-%d)
-# from the locked venv by packaging/deb/update-constraints.sh; consumed
-# by packaging/build-deb.sh via \`pip install -c <this file> .\`.
+# from the locked venv by packaging/deb/update-constraints.sh. Hashing/
+# validation live in packaging/deb/locklib.py (Q3); the file is consumed
+# by packaging/build-deb.sh via \`pip install --require-hashes -r <this
+# file>\` — every downloaded wheel is verified against these sha256.
 #
 # Review rules:
 #   - every pin is exact (==); version bumps must arrive as a visible
 #     diff of this file, never as silent resolution at build time;
-#   - --hash lines (when present) are sha256 of the exact wheels the
-#     Ubuntu 24.04 / py3.12 / x86_64 build downloads from PyPI; pip
-#     >= 23.1 verifies them during the deb build;
+#   - --hash lines are sha256 of the exact wheels the Ubuntu 24.04 /
+#     py3.12 / x86_64 build downloads from PyPI; pin-only locks are
+#     rejected by release builds (DEB_ALLOW_PIN_ONLY=1 is dev-only);
 #   - regenerate with: packaging/deb/update-constraints.sh
 #     (add --pins-only for a network-free pin refresh).
 EOF
@@ -118,22 +120,26 @@ if [ "$PINS_ONLY" = "1" ]; then
 fi
 
 # 2. Download the exact wheels the deb build would fetch and hash them.
+#
+# Hashing/matching/writing is packaging/deb/locklib.py (Q3): the old
+# inline `pip hash | awk '/^sha256=/'` scraped a line format pip never
+# printed (`--hash=sha256:`), matched nothing, and emitted malformed
+# `name==version --` lines. locklib hashes the wheel bytes directly,
+# validates the wheel set against the pins (missing/duplicate/mismatched
+# wheels are errors), self-validates the generated text, and replaces
+# the lock ATOMICALLY — any failure preserves the previous file.
 work="$(mktemp -d "${TMPDIR:-/tmp}/deb-constraints.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 # shellcheck disable=SC2086  # pins is one name==ver per line, no spaces
 "$VENV_PY" -m pip download -q --no-cache-dir --only-binary=:all: \
     -d "$work/wheels" $pins
 
-echo ">> hashing $(find "$work/wheels" -name '*.whl' | wc -l) wheels"
-{ header; echo
-  while IFS= read -r pin; do
-      name="${pin%%==*}"
-      # match the downloaded wheel for this pin (name-version-*.whl)
-      wheel="$(find "$work/wheels" -name "${name//-/_}-*" -name '*.whl' | head -1)"
-      [ -n "$wheel" ] || { echo "ERROR: no wheel downloaded for $name" >&2; exit 1; }
-      h="$("$VENV_PY" -m pip hash "$wheel" | awk '/^sha256=/{print $1}')"
-      printf '%s --%s\n' "$pin" "$h"
-  done <<<"$pins"
-} > "$out"
+printf '%s\n' "$pins" > "$work/pins.txt"
+header > "$work/header.txt"
+"$VENV_PY" "$here/locklib.py" write \
+    --wheels-dir "$work/wheels" \
+    --pins "$work/pins.txt" \
+    --header "$work/header.txt" \
+    --out "$out"
 
 echo ">> wrote $out (pinned + hashed)"

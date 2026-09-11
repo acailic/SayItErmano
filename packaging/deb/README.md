@@ -42,32 +42,49 @@ complete runtime closure (generated from the tested repo venv):
 - the release gate fails on a stale lock (a constraint that no longer
   satisfies the resolved tree) — resolution errors out instead of drifting.
 
-### Hash locking (F9)
+### Hash locking (F9, repaired Q3)
 
 Exact pins lock *versions*, not *artifacts* — a compromised or
 yanked-and-replaced PyPI wheel under the same version string would install
-silently. A release therefore regenerates the lock **with wheel hashes**:
+silently. The lock is **hash-locked in the tree**: every pin carries the
+sha256 of the exact wheel the Ubuntu 24.04 / py3.12 / x86_64 build fetches.
 
 ```bash
 packaging/deb/update-constraints.sh               # pins + wheel hashes (network)
 packaging/deb/update-constraints.sh --pins-only   # pins only (offline refresh)
 ```
 
-The full run downloads the exact wheels the Ubuntu 24.04 / py3.12 / x86_64
-build would fetch and records each `--hash=sha256:…` beside its pin (needs
-pip ≥ 23.1 — `build-deb.sh` upgrades the build venv's pip first). **The
-committed lock is pin-only today: hashes require that network run and are
-regenerated + committed at release time**, before the locked deb build.
+Hashing, wheel-to-pin matching, validation, and the atomic replace all
+live in [`locklib.py`](locklib.py) (stdlib-only, unit-tested offline in
+`tests/test_deb_lock.py` against a local wheelhouse with a real
+`pip install --require-hashes` consumer). The history: the original
+shell generator scraped `python -m pip hash` output with an `awk
+'/^sha256=/'` pattern, but pip prints `--hash=sha256:…` — the pattern
+matched nothing and the writer emitted malformed `name==version --`
+lines. `locklib.py write` now hashes the downloaded wheel bytes directly,
+rejects missing/duplicate/version-mismatched wheels, self-validates the
+generated text, and only then replaces `constraints.txt` (any failure
+preserves the previous lock).
 
-When the lock carries hashes, `build-deb.sh` switches to fully artifact-
-locked installation automatically:
+Release builds are **hash-locked by refusal, not by note** (Q3/E4):
+`build-deb.sh` validates the lock (`locklib.py validate
+--require-hashes`) and fails outright when it carries no hashes. Pin-only
+builds remain available for development as an explicit opt-in that
+publishing cannot accept:
+
+```bash
+DEB_ALLOW_PIN_ONLY=1 packaging/build-deb.sh   # dev only — never ship this
+```
+
+When the lock carries hashes, `build-deb.sh` installs fully artifact-locked:
 
 - the lock is installed with `pip install --require-hashes -r constraints.txt`
   (via `-r`, not `-c` — pip only *enforces* hashes carried by requirements;
   hashes in a bare constraints file are parsed but never checked), so every
-downloaded wheel is verified against the committed sha256;
+  downloaded wheel is verified against the committed sha256;
 - the application itself is installed `--no-deps` from the committed source
-tree — nothing about it is fetched from an index.
+  tree — nothing about it is fetched from an index.
 
-Without hashes the build is pin-locked only and prints a loud note to that
-effect.
+After changing `pyproject.toml` runtime dependencies, refresh with a full
+(networked) `update-constraints.sh` run and commit the diff — the diff is
+the review.

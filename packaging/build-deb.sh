@@ -53,6 +53,23 @@ fi
     exit 1
 }
 
+# --- Q3/E4: release builds are HASH-locked, never pin-only -----------------
+# A pin-only build silently weakens the documented release guarantee
+# (exact versions, but unverified wheel artifacts). Publishing path (the
+# pinned container, release-prepare) never sets DEB_ALLOW_PIN_ONLY, so a
+# lock without hashes FAILS here. Development pin-only builds are an
+# explicit opt-in so the weaker mode is always a conscious choice.
+HASHED=0
+if grep -q -- '--hash=sha256:' "$CONSTRAINTS"; then HASHED=1; fi
+python3 "$REPO/packaging/deb/locklib.py" validate "$CONSTRAINTS" \
+    $([ "$HASHED" = 1 ] && echo --require-hashes) || exit 1
+if [ "$HASHED" != 1 ] && [ "${DEB_ALLOW_PIN_ONLY:-0}" != "1" ]; then
+    echo "ERROR: $CONSTRAINTS carries no --hash lines — release builds are hash-locked." >&2
+    echo "       Regenerate WITH hashes (network run): packaging/deb/update-constraints.sh" >&2
+    echo "       Development pin-only build: DEB_ALLOW_PIN_ONLY=1 $0" >&2
+    exit 1
+fi
+
 STAGE="$(mktemp -d)/pkg"
 trap 'rm -rf "$(dirname "$STAGE")"' EXIT
 
@@ -68,17 +85,16 @@ PIP="$STAGE/opt/$NAME/venv/bin/pip"
 # wheel it downloads against the committed sha256 set. The lock is fed
 # via -r, not -c: pip only ENFORCES hashes carried by requirements, not
 # by constraints. The app itself installs --no-deps from the committed
-# source in this tree — nothing about it is fetched. Without --hash
-# lines the build stays pin-locked (exact == versions, no silent
-# resolution) with a loud note; see packaging/deb/README.md.
-if grep -q -- '--hash=sha256:' "$CONSTRAINTS"; then
+# source in this tree — nothing about it is fetched. The pin-only mode
+# is reachable ONLY through the explicit DEB_ALLOW_PIN_ONLY=1 dev flag
+# above (Q3): publishing cannot accept it.
+if [ "$HASHED" = 1 ]; then
     echo ">> hash-locked install: every downloaded wheel verified against $CONSTRAINTS"
     "$PIP" install -q --no-cache-dir --require-hashes -r "$CONSTRAINTS"
     "$PIP" install -q --no-cache-dir --no-deps .
 else
-    echo ">> NOTE: $CONSTRAINTS carries no --hash lines - building pin-locked only" >&2
-    echo ">>       (versions exact, wheel artifacts unverified). Regenerate WITH hashes" >&2
-    echo ">>       at release time: packaging/deb/update-constraints.sh   (network run)" >&2
+    echo ">> DEV MODE (DEB_ALLOW_PIN_ONLY=1): pin-locked only - versions exact," >&2
+    echo ">> wheel artifacts NOT verified. Never ship a deb built this way." >&2
     "$PIP" install -q --no-cache-dir -c "$CONSTRAINTS" .
 fi
 rm -rf "$STAGE/opt/$NAME/venv/share"  # docs/man from wheels
