@@ -52,6 +52,20 @@ Notes:
   from every offline gate via `--ignore`.
 - Dev dependencies (`pip install -e ".[dev]"`): `pytest`, `pytest-xdist`,
   `pytest-timeout`, `ruff`.
+- **Runner hygiene is a plugin** (Q2): the leak gate loads for every run
+  shape — focused single-file, full, and each pytest-xdist worker — via
+  `pytest_plugins` in the repository-root `conftest.py`
+  (`tests/_runner_hygiene.py`). A leaked child or pending timer fails
+  the run naming the test.
+- **Session identity scoping** (Q2/E7): unit/gtk/dev runs pin
+  `XDG_SESSION_TYPE=x11` for determinism; the integration tier
+  (`scripts/run_test_tier.sh integration`) keeps the AMBIENT compositor
+  identity so desktop matrices exercise the real session.
+- **Tripwire external writes** (Q2): if the real history file changes
+  while an external (non-suite) daemon is live, the failure message
+  says so; export `FLUIDVOICE_TOLERATE_EXTERNAL_HISTORY_WRITES=1` on a
+  daily-driver machine to downgrade exactly that classified case to a
+  warning. Suite-owned writes never get that mercy.
 - The deb's Ubuntu 24.04 / x86_64 / Python 3.12 target and the pinned
   container build are a decision, not a setting —
   [ADR-0004](../adr/ADR-0004-ubuntu-deb-contract.md).

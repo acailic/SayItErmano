@@ -1,6 +1,10 @@
-"""Real CLI invocations through the actual console script."""
+"""Real CLI invocations through the source tree (python -m fluidvoice
+with an explicit checkout cwd — quality plan Q2, finding E7: no assumed
+per-checkout .venv; artifact/installed-binary tests live in
+test_installation.py)."""
 import os
 import subprocess
+import sys
 
 import pytest
 
@@ -8,12 +12,12 @@ from tests.integration.conftest import REPO
 
 pytestmark = pytest.mark.integration
 
-FV = str(REPO / ".venv/bin/fluidvoice")
-
 
 def run_cli(args, env=None, timeout=300):
-    return subprocess.run([FV, *args], capture_output=True, text=True,
-                          timeout=timeout, env={**os.environ, **(env or {})})
+    return subprocess.run(
+        [sys.executable, "-m", "fluidvoice", *args], cwd=str(REPO),
+        capture_output=True, text=True, timeout=timeout,
+        env={**os.environ, **(env or {})})
 
 
 class TestCli:

@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import atexit
 import hashlib
+import json
 import os
 import shutil
-import subprocess
+import sys
 import tempfile
-import threading
 from pathlib import Path
 
 import pytest
@@ -66,7 +66,6 @@ _warm_pillow_freetype()
 # (they run later). tests/integration/conftest.py isolates its own env per
 # test on top of this; it is untouched.
 from fluidvoice import paths as _paths
-from fluidvoice import runtime_tasks as _rt_mod
 
 # Snapshot the REAL resolved paths BEFORE the override: these are the
 # production locations the guard below watches (and what
@@ -81,15 +80,23 @@ os.environ["XDG_CONFIG_HOME"] = str(TEST_XDG_ROOT / "config")
 os.environ["XDG_CACHE_HOME"] = str(TEST_XDG_ROOT / "cache")
 atexit.register(shutil.rmtree, TEST_XDG_ROOT, ignore_errors=True)
 
-# Pin the session type to X11 for the whole suite: the Wayland port gates
-# ONLY on this probe (fluidvoice/session.py), and the pre-existing tests
-# exercise the xdotool/xclip paths — pinning means they take the X11
-# branch no matter what display server the dev machine/CI runner sits on
-# (headless runner: "unknown" also behaves as X11, but pinning makes it
-# explicit and immune to a runner with a stray WAYLAND_DISPLAY). Per-test
+# Pin the session type to X11 — but ONLY for the deterministic tiers
+# (unit/gtk/dev runs): the Wayland port gates ONLY on this probe
+# (fluidvoice/session.py), and the pre-existing tests exercise the
+# xdotool/xclip paths — pinning means they take the X11 branch no matter
+# what display server the dev machine/CI runner sits on (headless
+# runner: "unknown" also behaves as X11, but pinning makes it explicit
+# and immune to a runner with a stray WAYLAND_DISPLAY). Per-test
 # monkeypatch.setenv("XDG_SESSION_TYPE", "wayland") keeps winning.
-os.environ["XDG_SESSION_TYPE"] = "x11"
-os.environ.pop("WAYLAND_DISPLAY", None)
+#
+# The INTEGRATION tier is exempt (quality plan Q2, finding E7): real
+# subsystem tests must see the ambient compositor identity — X11 or
+# Wayland — unchanged, so the desktop matrices actually exercise the
+# session they claim to. scripts/run_test_tier.sh exports
+# FLUIDVOICE_TEST_TIER=integration for exactly this switch.
+if os.environ.get("FLUIDVOICE_TEST_TIER") != "integration":
+    os.environ["XDG_SESSION_TYPE"] = "x11"
+    os.environ.pop("WAYLAND_DISPLAY", None)
 
 # Unit-tier network guard (quality plan Q1): under the canonical tier
 # runner (FLUIDVOICE_TEST_TIER=unit), any outbound non-loopback socket
@@ -118,6 +125,88 @@ _GUARDED_REAL_FILES = {
     "config": REAL_CONFIG_FILE,
 }
 
+# Quality plan Q2: an external live daemon dictating during the ~85 s
+# suite window changes the real history file from OUTSIDE — the tripwire
+# cannot tell that apart from a suite leak by content (same writer
+# library, same schema), but it CAN by lineage: every process the suite
+# (or its children) owns descends from this interpreter; the production
+# daemon does not. Set FLUIDVOICE_TOLERATE_EXTERNAL_HISTORY_WRITES=1 on
+# a daily-driver machine to downgrade a *classified-external* change to
+# a warning; anything without that classification still fails.
+TOLERATE_EXTERNAL_WRITES = "FLUIDVOICE_TOLERATE_EXTERNAL_HISTORY_WRITES"
+
+
+def _is_descendant(pid: int, ancestor: int, max_hops: int = 32) -> bool:
+    """True when `pid`'s parent chain (from /proc) reaches `ancestor`."""
+    for _ in range(max_hops):
+        if pid == ancestor:
+            return True
+        try:
+            with open(f"/proc/{pid}/stat", encoding="utf-8") as fh:
+                pid = int(fh.read().rsplit(") ", 1)[1].split()[1])
+        except (OSError, ValueError, IndexError):
+            return False
+        if pid <= 1:
+            return False
+    return False
+
+
+def _external_daemon_processes() -> list[str]:
+    """Live fluidvoice/sayit-ermano daemons NOT owned by this run."""
+    me = os.getpid()
+    found: list[str] = []
+    for entry in os.listdir("/proc"):
+        if not entry.isdigit() or int(entry) == me:
+            continue
+        try:
+            with open(f"/proc/{entry}/cmdline", "rb") as fh:
+                cmdline = fh.read().decode("utf-8", "replace").split("\0")
+        except OSError:
+            continue
+        joined = " ".join(p for p in cmdline if p)
+        if ("fluidvoice" in joined or "sayit-ermano" in joined) \
+                and "daemon" in cmdline:
+            if not _is_descendant(int(entry), me):
+                found.append(f"pid {entry} ({joined[:70]})")
+    return found
+
+
+def _appended_row_times(path: Path, before_rows: int) -> list[str]:
+    """Timestamps of the rows appended after `before_rows` (best effort:
+    unreadable/malformed rows count as '?' — this is diagnostics, not a
+    parser)."""
+    times: list[str] = []
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return ["<unreadable>"]
+    for line in lines[before_rows:]:
+        try:
+            ts = json.loads(line).get("ts")
+            times.append(str(ts) if ts is not None else "?")
+        except ValueError:
+            times.append("?")
+    return times or ["<size/mtime change without new rows — rewrite?>"]
+
+
+def _classify(name: str, path: Path, before_rows: int) -> str | None:
+    """Human-readable external-write classification, or None when the
+    change looks suite-owned. Only the append-only history file gets the
+    row forensics; every guarded file gets the daemon lineage scan."""
+    daemons = _external_daemon_processes()
+    if not daemons:
+        return None
+    detail = ""
+    if name == "history":
+        rows = _appended_row_times(path, before_rows)
+        detail = (f"; new rows at ts={rows[:5]}"
+                  + (" …" if len(rows) > 5 else ""))
+    return ("an external (non-suite) daemon is live: "
+            + "; ".join(daemons) + detail
+            + " — if those rows are your own dictations, rerun the gate "
+              "in a quiet window (or export " + TOLERATE_EXTERNAL_WRITES
+            + "=1 on this daily-driver machine)")
+
 
 @pytest.fixture(scope="session", autouse=True)
 def _real_data_untouched():
@@ -125,113 +214,41 @@ def _real_data_untouched():
     byte-identical (a missing file must stay missing — non-creation).
     Failing here raises during session teardown, so pytest reports it as a
     session ERROR even when every test passed — intended: a green run that
-    mutated production is exactly the failure this exists to catch."""
+    mutated production is exactly the failure this exists to catch.
+
+    Q2 addition: when the changed file is explainable by an external
+    live daemon (see _classify), the failure message says so, and the
+    TOLERATE_EXTERNAL_WRITES env downgrades exactly that classified
+    case to a stderr warning. A suite-owned write NEVER gets that
+    mercy."""
     before = {name: _fingerprint(p) for name, p in _GUARDED_REAL_FILES.items()}
+    before_rows = {name: (len(p.read_text(encoding="utf-8",
+                                            errors="replace").splitlines())
+                           if p.exists() else 0)
+                   for name, p in _GUARDED_REAL_FILES.items()}
     yield
     after = {name: _fingerprint(p) for name, p in _GUARDED_REAL_FILES.items()}
     for name, was in before.items():
-        assert after[name] == was, (
-            f"suite wrote to the real {name} file "
-            f"({_GUARDED_REAL_FILES[name]}): {was} -> {after[name]}")
+        if after[name] == was:
+            continue
+        path = _GUARDED_REAL_FILES[name]
+        verdict = _classify(name, path, before_rows[name])
+        if verdict and os.environ.get(TOLERATE_EXTERNAL_WRITES) == "1":
+            print(f"tripwire: real {name} file changed, classified as "
+                  f"EXTERNAL ({verdict}); tolerated by {TOLERATE_EXTERNAL_WRITES}",
+                  file=sys.stderr)
+            continue
+        message = (f"suite wrote to the real {name} file ({path}): "
+                   f"{was} -> {after[name]}")
+        if verdict:
+            message += f"\n  NOTE: possibly external — {verdict}"
+        assert after[name] == was, message
 
 
 # ---------------------------------------------------------------------------
 # Runner hygiene — nothing a test starts may outlive the test.
 # ---------------------------------------------------------------------------
-# Phase-0 baseline (docs/research/2026-09-11-phase0-baseline-run.md): the
-# suite printed "3310 passed" and then stayed alive for ~5 minutes before
-# exiting 0. Tests that started a take through a real RuntimeTasks and
-# never shut it down left the capture watchdog pending — a NON-daemon
-# threading.Timer (default recording.max_seconds = 300 s) — so Python's
-# threading._shutdown blocked interpreter exit until every leaked
-# watchdog fired, each printing "max duration reached, stopping" / "no
-# audio captured" AFTER the summary line, and the last one walked a
-# stop→transcribe path against a None backend:
-#     transcription failed: 'NoneType' object has no attribute 'name'
-#
-# Both leak classes are constructed inside production code under test
-# (Daemon.__init__ builds its RuntimeTasks; recorder pipes and test
-# servers are subprocess.Popen objects), so a per-test fixture written in
-# any single test module cannot see them from the outside. The
-# import-time seam below (same pattern as the XDG isolation above:
-# conftest loads before any test module) tracks every RuntimeTasks
-# instance and every real Popen the session creates; the autouse sweep
-# after each test then guarantees teardown:
-#   * RuntimeTasks → shutdown(timeout=5): cancels pending timers, joins
-#     supervised threads (already-shut-down runtimes are no-ops);
-#   * Popen → kill()+wait() when still running at teardown.
-# A test that leaked live tasks is reaped AND recorded; the session-end
-# gate in tests/test_runner_hygiene.py turns the list into a failing
-# run, so a future leak reads as a red test instead of a 5-minute
-# post-exit hang with mystery output.
-_HYGIENE_LOCK = threading.Lock()
-RUNTIME_TASKS: list = []   # every RuntimeTasks constructed this session
-SPAWNED_PROCS: list = []   # every real subprocess.Popen this session
-TEST_LEAKS: list = []      # (test node id, what was still alive)
-
-_RT_ORIG_INIT = _rt_mod.RuntimeTasks.__init__
-_POPEN_ORIG_INIT = subprocess.Popen.__init__
-
-
-def _tracked_rt_init(self, *args, **kwargs) -> None:
-    _RT_ORIG_INIT(self, *args, **kwargs)
-    with _HYGIENE_LOCK:
-        RUNTIME_TASKS.append(self)
-
-
-def _tracked_popen_init(self, *args, **kwargs) -> None:
-    _POPEN_ORIG_INIT(self, *args, **kwargs)
-    with _HYGIENE_LOCK:
-        SPAWNED_PROCS.append(self)
-
-
-_rt_mod.RuntimeTasks.__init__ = _tracked_rt_init
-subprocess.Popen.__init__ = _tracked_popen_init
-
-
-def live_task_handles(runtime) -> list:
-    """The still-live (joinable) task handles of one RuntimeTasks."""
-    return [h for h in getattr(runtime, "_live", []) if h.is_alive()]
-
-
-@pytest.fixture(autouse=True)
-def _reap_test_processes(request):
-    """Guaranteed per-test teardown of every RuntimeTasks instance and
-    real subprocess the test created. Autouse with no dependencies, so
-    it sets up first and tears down LAST — after the test body and every
-    other function-scoped fixture finalizer; code under test never
-    observes it. Leaks are reaped, not forgiven: each is recorded for
-    the session-end gate (tests/test_runner_hygiene.py)."""
-    tasks_from = len(RUNTIME_TASKS)
-    procs_from = len(SPAWNED_PROCS)
-    yield
-    node = request.node.nodeid
-    for rt in RUNTIME_TASKS[tasks_from:]:
-        # A leak is a task that would have outlived the test on its own:
-        # a timer still PENDING at teardown (shutdown() had to cancel it
-        # — left alone it would fire after the test, the baseline's 300 s
-        # watchdog class) or a handle that missed the join deadline. A
-        # thread that is merely winding down (stall monitor between
-        # checks, a background reload) and joins cleanly is NOT a leak.
-        report = rt.shutdown(timeout=5.0) if not rt.shut_down else {}
-        offenders = sorted(set(report.get("cancelled", ()))
-                           | set(report.get("timed_out", ())))
-        for handle in live_task_handles(rt):
-            if handle.task_name not in offenders:
-                offenders.append(handle.task_name)
-        if offenders:
-            TEST_LEAKS.append(
-                (node, f"RuntimeTasks tasks outlived the test: {offenders}"))
-    for proc in SPAWNED_PROCS[procs_from:]:
-        if proc.poll() is None:
-            TEST_LEAKS.append((node, f"subprocess pid={proc.pid} alive"))
-            proc.kill()
-            try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                pass
-    # prune reaped entries so the registries stay small over 3300+ tests
-    with _HYGIENE_LOCK:
-        RUNTIME_TASKS[:] = [rt for rt in RUNTIME_TASKS
-                            if not rt.shut_down or live_task_handles(rt)]
-        SPAWNED_PROCS[:] = [p for p in SPAWNED_PROCS if p.poll() is None]
+# Moved (quality plan Q2, finding E2) into the globally-loaded plugin
+# tests/_runner_hygiene.py, registered from the repository-root conftest
+# so focused runs and every pytest-xdist worker get the gate too. The
+# historical narrative lives with the plugin.

@@ -48,6 +48,9 @@ case "$tier" in
     "$python" scripts/_tier_skip_check.py .junit/gtk.xml gtk
     ;;
   integration)
+    # tier identity for conftest scoping (Q2: the integration tier keeps
+    # the ambient compositor identity — no X11 pinning)
+    export FLUIDVOICE_TEST_TIER=integration
     "$python" -m pytest -q -ra tests/integration \
       --strict-markers --timeout=1800 \
       --junitxml=.junit/integration.xml "$@"

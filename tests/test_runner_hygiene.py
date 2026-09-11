@@ -13,15 +13,20 @@ backend:
     [sayit-ermano] transcription failed: 'NoneType' object has no
     attribute 'name'
 
-tests/conftest.py now tracks every RuntimeTasks instance and every real
+tests/conftest.py tracks every RuntimeTasks instance and every real
 subprocess.Popen the session creates (import-time seam — both are built
-inside production code under test) and reaps them after each test. This
-module pins that machinery:
+inside production code under test) and reaps them after each test.
+Quality plan Q2 moved the tracking and the session-end verdict into the
+globally-loaded plugin tests/_runner_hygiene.py (registered from the
+repository-root conftest, so focused runs and xdist workers cannot
+dodge it — finding E2); tests/test_leak_gate_meta.py proves that with
+real subprocess runs. This module pins the in-session machinery:
 
 * mid-session, the registries never hold a live task or a live process
   (the per-test sweeps keep them clean, so these pass wherever they run
   in a single session — they do not rely on running last);
-* the session-end gate fails the run listing every leaking test;
+* the plugin's reap sweep really does tear down AFTER module-level
+  fixtures (verified dynamically, not via the comment);
 * the process table holds no child of this interpreter;
 * ensure_backend() is None-safe for None-returning factories — the
   exact code path behind the baseline's error line (load_backend never
@@ -32,13 +37,19 @@ from __future__ import annotations
 import copy
 import os
 import threading
+import time
 
 import pytest
 
 from fluidvoice import engine_manager
 from fluidvoice.config import DEFAULTS
 from fluidvoice.runtime_tasks import RuntimeTasks
-from tests.conftest import RUNTIME_TASKS, SPAWNED_PROCS, TEST_LEAKS, live_task_handles
+from tests._runner_hygiene import (
+    REAP_TIMES,
+    RUNTIME_TASKS,
+    SPAWNED_PROCS,
+    live_task_handles,
+)
 
 
 def _child_pids() -> list[int]:
@@ -81,37 +92,33 @@ class TestRegistryCleanMidSession:
             f"{_child_pids()}")
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _session_leak_gate():
-    """Session-end gate: after the last test (and every per-test sweep),
-    nothing the suite started may still be alive. A last-resort sweep
-    reaps stragglers (e.g. instances created at collection time, before
-    any test), then the recorded leak list must be empty — a leaking
-    test fails the session here with the full list instead of the
-    baseline's silent 5-minute post-exit hang."""
-    yield
-    for rt in list(RUNTIME_TASKS):
-        if not rt.shut_down:
-            rt.shutdown(timeout=5.0)
-        for handle in live_task_handles(rt):
-            TEST_LEAKS.append(
-                ("<session-end>",
-                 f"RuntimeTasks task {handle.task_name!r} still live"))
-    for proc in list(SPAWNED_PROCS):
-        if proc.poll() is None:
-            TEST_LEAKS.append(
-                ("<session-end>", f"subprocess pid={proc.pid} still alive"))
-            proc.kill()
-            try:
-                proc.wait(timeout=5)
-            except Exception:  # noqa: BLE001 - the assert below is the gate
-                pass
-    assert not TEST_LEAKS, (
-        "tests leaked processes that outlived them (reaped by the "
-        "conftest sweep; fix the test teardown):\n  "
-        + "\n  ".join(f"{node}: {what}" for node, what in TEST_LEAKS))
-    assert _child_pids() == [], (
-        f"orphaned child processes of the pytest process: {_child_pids()}")
+class TestFinalizationOrder:
+    """Q2: verify the finalization order DYNAMICALLY instead of trusting
+    the "autouse, no dependencies ⇒ tears down last" comment. A plain
+    module fixture records when its teardown ran for test A; the plugin's
+    reap sweep for the SAME node must run no earlier — that ordering is
+    what makes the sweep see the post-cleanup state."""
+
+    _teardown_at: dict[str, float] = {}
+
+    @pytest.fixture()
+    def _records_its_teardown(self, request):
+        yield
+        TestFinalizationOrder._teardown_at[request.node.nodeid] = \
+            time.monotonic()
+
+    def test_a_module_fixture_teardown_time_recorded(
+            self, _records_its_teardown):
+        pass  # the fixture does the recording during ITS teardown
+
+    def test_b_reap_sweep_ran_after_that_teardown(self):
+        node_a = ("tests/test_runner_hygiene.py::TestFinalizationOrder::"
+                  "test_a_module_fixture_teardown_time_recorded")
+        assert node_a in self._teardown_at, "test A never ran (ordering?)"
+        assert node_a in REAP_TIMES, "plugin never swept test A"
+        assert REAP_TIMES[node_a] >= self._teardown_at[node_a], (
+            "reap sweep ran BEFORE the module fixture teardown — the "
+            "autouse-last assumption is broken, leaks would be missed")
 
 
 class TestNoneBackendGuard:

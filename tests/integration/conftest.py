@@ -4,6 +4,7 @@ the installer download. Run with:  pytest -m integration
 """
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -68,18 +69,25 @@ def isolated_env(tmp_path, monkeypatch):
 def _spawn_and_wait(tmp_path: Path, extra_args: list,
                     log_to: Path | None = None) -> subprocess.Popen:
     from fluidvoice import paths
-    args = [str(REPO / ".venv/bin/fluidvoice"), "daemon", *extra_args]
+    # Source-tree daemon launch (quality plan Q2, finding E7): the shared
+    # interpreter + explicit checkout cwd — NOT REPO/.venv/bin/fluidvoice,
+    # which assumed every checkout carries its own venv (agent worktrees
+    # share the main tree's venv by policy, CI has none). cwd first on
+    # sys.path means the daemon under test is THIS worktree's source
+    # (AGENTS.md rule 3). Artifact tests (deb extract/import) use the
+    # installed executable instead, in tests/integration/test_installation.py.
+    args = [sys.executable, "-m", "fluidvoice", "daemon", *extra_args]
     if log_to is not None:
         # file mode: daemon log() flushes every line, so the file is already
         # complete without draining a pipe; _stop_daemon skips its rewrite
         with open(log_to, "w") as out:
             proc = subprocess.Popen(args, stdout=out, stderr=subprocess.STDOUT,
-                                    text=True, env={**os.environ})
+                                    text=True, env={**os.environ}, cwd=str(REPO))
         proc._fv_log_to_file = True
     else:
         proc = subprocess.Popen(args, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, text=True,
-                                env={**os.environ})
+                                env={**os.environ}, cwd=str(REPO))
     socket = paths.socket_path()
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
