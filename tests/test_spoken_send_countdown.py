@@ -81,6 +81,14 @@ def wait_done(d, timeout=5.0):
 def test_countdown_stops_the_take(cfg, tmp_path):
     d, rec = make_daemon(cfg, tmp_path)
     assert d.handle_request({"action": "toggle"})["recording"] is True
+    # the recorder starts on a capture thread; on slow 2-core CI runners
+    # the 0.4 s countdown could fire before recorder.start() ever ran ->
+    # stop with no audio -> cancelled take -> no result text (first CI
+    # dispatch 2026-09-12). Wait for the start seam before counting down.
+    deadline = time.monotonic() + 5.0
+    while rec.started == 0 and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert rec.started == 1, "recorder never started"
     d._capture.on_send_countdown()
     assert d._capture.send_countdown_timer is not None
     # generous bound: the countdown is 0.4 s, but under `-n auto` load the

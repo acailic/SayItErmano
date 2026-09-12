@@ -90,7 +90,14 @@ markers = [
 # spawned (timers, monitors, drain threads) fails the run instead of
 # surfacing as a pass-with-warning. The first-PCM timer leak this caught:
 # daemon.py left threading.Timer callbacks firing after their take died.
-filterwarnings = ["error::pytest.PytestUnhandledThreadExceptionWarning"]
+filterwarnings = [
+    "error::pytest.PytestUnhandledThreadExceptionWarning",
+    # Pillow >= 12 deprecates Image.getdata (removal in Pillow 14, 2027-10);
+    # production use lives in fluidvoice/tray.py:142 — migrate to
+    # get_flattened_data in a dedicated pass, don't block CI on the warning
+    # (surfaced by -W error with latest Pillow on the 2026-09-12 dispatch).
+    "ignore:Image.Image.getdata is deprecated:DeprecationWarning",
+]
 
 # Current ruff layout: linter options live under [tool.ruff.lint] (the
 # top-level `select`/`ignore` keys are deprecated). Minimal, deliberately:

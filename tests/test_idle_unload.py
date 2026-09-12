@@ -133,10 +133,18 @@ def quiet_ui(tmp_path, monkeypatch):
 
 
 def make_daemon(cfg, factory, recorder=None):
-    return dm.Daemon(cfg, recorder=recorder or StubRecorder(),
-                     backend_factory=factory,
-                     pipeline_factory=StubPipeline,
-                     use_hotkey=False, use_sounds=False)
+    d = dm.Daemon(cfg, recorder=recorder or StubRecorder(),
+                  backend_factory=factory,
+                  pipeline_factory=StubPipeline,
+                  use_hotkey=False, use_sounds=False)
+    # eager_warmup defaults True: join the stub warm thread so the idle
+    # asserts can't race maybe_idle_unload's `warm.is_alive()` gate —
+    # lost that race only on slow 2-core CI runners (first CI dispatch
+    # 2026-09-12), never locally on 16 cores.
+    warm = getattr(d._engines, "start_warm_thread", None)
+    if warm is not None:
+        warm.join(timeout=5.0)
+    return d
 
 
 def wait_done(d, timeout=5.0) -> bool:

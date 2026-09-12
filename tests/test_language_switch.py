@@ -494,6 +494,7 @@ class TestPrecedence:
 
     def test_backend_none_uses_config_key(self):
         cfg = _cfg(language="fr")
+        cfg["model"]["name"] = "small"  # pin: "auto" resolves cuda-dependent
         cfg["model"]["languages"] = {"small": "sl"}
         assert backends.effective_language(cfg, None) == "sl"
 

@@ -56,13 +56,13 @@ class TestEffectiveLanguage:
             cfg(general={"language": "de"})) == "de"
 
     def test_override_wins_for_config_key(self):
-        c = cfg(general={"language": "en"}, model={"languages": {
-            "small": "de"}})
+        c = cfg(general={"language": "en"}, model={"name": "small",
+                                               "languages": {"small": "de"}})
         assert backends.effective_language(c) == "de"
 
     def test_auto_override_beats_general(self):
-        c = cfg(general={"language": "en"}, model={"languages": {
-            "small": "auto"}})
+        c = cfg(general={"language": "en"}, model={"name": "small",
+                                               "languages": {"small": "auto"}})
         assert backends.effective_language(c) == "auto"
 
     def test_empty_override_inherits(self):
@@ -285,7 +285,8 @@ class TestDoctorLanguageLines:
     def test_lines_report_resolution(self):
         from fluidvoice.doctor import _language_lines
         c = cfg(general={"language": "en"},
-                model={"languages": {"small": "de"}})
+                model={"name": "small",
+                       "languages": {"small": "de"}})
         lines = _language_lines(c)
         assert any("general: en" in ln for ln in lines)
         assert any("small=de" in ln and "model.languages" in ln
