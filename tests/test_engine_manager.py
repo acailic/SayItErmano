@@ -211,6 +211,21 @@ class TestIdleUnload:
         assert b.closed == 1
         assert calls["unload"] == [1]  # tray refresh requested
 
+    def test_unload_at_exact_threshold_fires_despite_fp_rounding(self):
+        """Regression (first CI dispatches 2026-09-12): `now = last_activity
+        + 60` can round a hair UNDER 60 in float (59.99999999994179 with
+        this base) — the unload then silently never fired on exactly
+        threshold. Found only on CI runners: the rounding depends on the
+        runner's monotonic magnitude, never reproduced locally."""
+        cfg = copy.deepcopy(DEFAULTS)
+        cfg["model"]["idle_unload_s"] = 60
+        mgr, _, _ = make(cfg=cfg)
+        mgr.backend = b = FakeBackend()
+        mgr.last_activity = 524274.093178866  # (x+60)-x == 59.99999999994
+        mgr.maybe_idle_unload(now=524274.093178866 + 60)
+        assert mgr.backend is None
+        assert b.closed == 1
+
     def test_never_unloads_while_take_active_or_warming(self):
         cfg = copy.deepcopy(DEFAULTS)
         cfg["model"]["idle_unload_s"] = 60

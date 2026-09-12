@@ -171,7 +171,8 @@ def _gate_state(d) -> str:
     when one refuses, this names the gate)."""
     e = d._engines
     warm = e.start_warm_thread
-    return (f"threshold={e.idle_threshold()} active={d._is_take_active()} "
+    return (f"threshold={e.idle_threshold()} "
+            f"active={d.recording or d.busy} "
             f"(rec={d.recording} busy={d.busy}) warmup={dict(e.warmup)} "
             f"warm_thread={'alive' if warm is not None and warm.is_alive() else warm} "
             f"backend={type(d.backend).__name__}")

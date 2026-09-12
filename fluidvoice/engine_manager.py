@@ -302,7 +302,12 @@ class SpeechEngineManager:
                 if warm is not None and warm.is_alive():
                     return  # eager startup warmup still running
                 idle_s = now - self.last_activity
-                if idle_s < t:
+                # FP guard: `now` in these paths is `last_activity + t`
+                # computed in float — with large monotonic bases that sum
+                # can round a hair UNDER t (observed on CI: 59.99999999999
+                # vs 60), refusing an exactly-threshold unload. An idle of
+                # at-least-t must fire; only a genuinely-shorter one waits.
+                if idle_s < t - 1e-9:
                     return
                 backend = self.backend
                 self.backend = None

@@ -117,7 +117,13 @@ jobs:
         # mypy die on import-not-found (first CI dispatch 2026-09-12).
         run: |
           pip install -e . mypy
-          python -m mypy
+          # CI installs bleeding-edge numpy whose stubs use PEP 695
+          # `type` statements — unparsable at the configured
+          # python_version 3.11 (dispatches 2026-09-12). Check at 3.12
+          # here; local 'just typecheck' keeps the 3.11 floor with the
+          # older pinned numpy. Ruff (py311) + the py3.11 unit matrix
+          # still guard 3.11 syntax everywhere.
+          python -m mypy --python-version 3.12
       - name: Request briefs carry a valid STATUS (same as `just gate`)
         run: python scripts/validate_requests.py
       - name: Byte-compile everything
