@@ -165,6 +165,18 @@ def wait_backend(d, timeout=5.0) -> bool:
     return False
 
 
+def _gate_state(d) -> str:
+    """Full maybe_idle_unload gate snapshot for assert messages (the
+    injected-time unload tests flake ONLY on very slow CI runners;
+    when one refuses, this names the gate)."""
+    e = d._engines
+    warm = e.start_warm_thread
+    return (f"threshold={e.idle_threshold()} active={d._is_take_active()} "
+            f"(rec={d.recording} busy={d.busy}) warmup={dict(e.warmup)} "
+            f"warm_thread={'alive' if warm is not None and warm.is_alive() else warm} "
+            f"backend={type(d.backend).__name__}")
+
+
 def take(d):
     """One full dictation: toggle on, toggle off, wait for processing."""
     d.toggle()
@@ -244,7 +256,7 @@ class TestIdleUnloadCore:
         d._engines.maybe_idle_unload(now=base + 59)
         assert d.backend is not None and d._engines.idle_unloaded_at is None
         d._engines.maybe_idle_unload(now=base + 60)
-        assert d.backend is None
+        assert d.backend is None, _gate_state(d)
         assert d._engines.idle_unloaded_at == base + 60
         assert loads[0].close_calls == 1  # the close() seam fired
 
@@ -309,7 +321,7 @@ class TestReloadOnNextTake:
         take(d)
         assert len(loads) == 1
         d._engines.maybe_idle_unload(now=d._engines.last_activity + 60)
-        assert d.backend is None
+        assert d.backend is None, _gate_state(d)
         d.toggle()  # background reload fails (logged, not raised)
         time.sleep(0.2)  # let the reload thread die
         assert d.backend is None
@@ -359,7 +371,7 @@ class TestIdleClock:
         take(d)
         base = d._engines.last_activity
         d._engines.maybe_idle_unload(now=base + 60)
-        assert d.backend is None
+        assert d.backend is None, _gate_state(d)
         # a new take reloads + touches; even a huge synthetic age cannot
         # fire while idle-tracking resumes from the fresh take
         take(d)

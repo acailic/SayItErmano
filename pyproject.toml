@@ -159,5 +159,5 @@ warn_unused_ignores = true
 # 2026-09-12: numpy/__init__.pyi:737). We type our seams, not numpy;
 # skip it entirely (local venvs just have older numpy).
 [[tool.mypy.overrides]]
-module = "numpy.*"
+module = ["numpy", "numpy.*"]
 follow_imports = "skip"

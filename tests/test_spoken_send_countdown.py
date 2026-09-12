@@ -132,6 +132,13 @@ def test_stale_timer_cannot_stop_a_take(cfg, tmp_path):
 def test_vad_auto_stop_cancels_pending_countdown(cfg, tmp_path):
     d, rec = make_daemon(cfg, tmp_path)
     d.handle_request({"action": "toggle"})
+    # wait for the recorder start seam (capture thread) — on slow CI
+    # runners vad_auto_stop() could otherwise land BEFORE recorder.start()
+    # ran, leaving the take live (same class as the countdown fix)
+    deadline = time.monotonic() + 5.0
+    while rec.started == 0 and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert rec.started == 1, "recorder never started"
     d._capture.on_send_countdown()
     timer = d._capture.send_countdown_timer
     d._capture.vad_auto_stop()
