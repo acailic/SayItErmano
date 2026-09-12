@@ -85,4 +85,13 @@ another GTK search field). Repeat A1–A15 with:
 
 ### Runs
 
-_(none yet — first run pending)_
+- **2026-09-13 (night), Matrix C (X11 control) on GNOME X11/Pop!_OS 46,
+  worktree 09e1b9f.** C1 ✓, C2 ✓ (x11 identity provider,
+  identity-only). C3 ✗ blocked — not by X11 itself but by provider
+  defects that equally hit the Wayland REQ-PARITY path: ReadLimits.apps
+  =16 truncates this desktop's 28-app a11y tree (silent `missing`),
+  `_find_active_window` picks an unfocused Electron window flagged
+  ACTIVE, and the GIR text-interface call silently returns None
+  (python-atspi absent in the venv). Full detail + reproducers:
+  [night-2026-09-13-desktop-matrix-x11.md](../research/night-2026-09-13-desktop-matrix-x11.md)
+  (findings F1–F3). Matrices A (GNOME Wayland) and B (sway): NOT RUN.

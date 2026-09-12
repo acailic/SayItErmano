@@ -147,4 +147,18 @@ failing blocks only advertising that combination as supported.
 
 ### Runs
 
-_(none yet — first run pending)_
+- **2026-09-13 (night), GNOME X11 / Pop!_OS 46, matrix 4 + Matrix C
+  (X11 control).** Full evidence:
+  [night-2026-09-13-desktop-matrix-x11.md](../research/night-2026-09-13-desktop-matrix-x11.md).
+  Typed paths ✓ on gedit, gnome-terminal, Firefox, Chromium, Discord
+  (terminal autocomplete-space both branches byte-verified; focus-change
+  A15 ✓; absent-tools honest failure ✓; compositor Super probe ✓; copyq
+  hygiene ✓; privacy sweep ✓; a11y-bus-kill degrade ✓). Paste paths
+  reproduced four real defects (terminal duplication; Firefox/Discord
+  false-verified silent loss; Chromium paste-after-restore inserting the
+  previous clipboard) — ledger candidates F4–F6 in the report. C3/atspi
+  blocked on this desktop by the provider findings F1–F3 (app-count cap,
+  first-ACTIVE-window misidentification, GIR text-iface call). Not run:
+  VS Code/Slack/Telegram/XFCE (absent), LibreOffice byte-exact (no stable
+  doc window under automation), spoken-send (no synthesizable phrase),
+  all Wayland/sway/KDE matrices.
