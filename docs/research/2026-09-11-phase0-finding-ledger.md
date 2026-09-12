@@ -528,3 +528,65 @@ Deferred-but-noted for WP5: F-09/F-10 (busy-window feedback + cancel —
 daily-trust friction once the funnel works), F-04 (artifact signing —
 prerequisite for any paid release), F-30 (promise honesty — follows
 F-26/F-14 mechanically).
+
+---
+
+## Addendum 2026-09-13 · night X11 desktop-matrix run
+
+New findings from the live GNOME X11 matrix
+([evidence](night-2026-09-13-desktop-matrix-x11.md)); all REPRODUCED
+live on `09e1b9f`, no fixes attempted (brief forbids product changes).
+
+### F-31 · INSERT · high · REPRODUCED
+
+atspi context read silently `missing` on busy desktops:
+`ReadLimits.apps = 16` truncates this machine's 28-app a11y tree before
+the focused app (gedit at index 27). No log line, no crash — P2
+continuation/GAAV/insertion-time identity just never engage. Same
+provider is the Wayland REQ-PARITY path (hits F-26's matrices).
+Acceptance: read finds the focused app with >20 a11y apps registered,
+matrix C3/A2 green.
+
+### F-32 · INSERT · high · REPRODUCED
+
+`_find_active_window` returns the first STATE_ACTIVE window in desktop
+order; unfocused Electron windows keep ACTIVE (reproduced: identity
+attached to an unfocused "Codex|ChatGPT" window while gedit held focus)
+→ wrong-window identity feeds profiles/spoken-send. Acceptance: read
+resolves the actually-focused window with >1 ACTIVE-flagged app present.
+
+### F-33 · INSERT · high · REPRODUCED
+
+atspi text reads return None on GIR-only installs (python-atspi absent,
+e.g. the project venv): `Accessible.get_text()` is the deprecated 1-arg
+interface getter, so the duck-called `get_text(start, end)` raises and
+is swallowed; role/caret work, selection/preceding never do. Working
+form verified live: `Atspi.Text.get_text(node, start, end)`.
+Acceptance: adapter reads preceding/selection under GIR, A3/A4/A6 pass.
+
+### F-34 · INSERT · high · REPRODUCED
+
+Verified-paste in gnome-terminal under a clipboard manager: the paste
+lands but is reported unverified, the typed fallback then duplicates
+the transcript (live twice, incl. a 450-char insert). gedit does not
+duplicate. Acceptance: paste-or-fallback never yields two copies.
+
+### F-35 · INSERT · high · REPRODUCED
+
+Paste-mode verification false-positives lose or corrupt text in
+browser-class apps: Firefox/Discord report `paste` verified while the
+field receives nothing (silent loss, transcript only in history);
+Chromium's read resolves after the restore and inserts the PREVIOUS
+clipboard (live: my marker text pasted instead of the dictation).
+Verification counts any post-keystroke selection read (TARGETS probe /
+manager proxy), then releases ownership before the content read.
+Acceptance: paste verified ⟺ field content read; the four matrix
+paste cells green.
+
+### F-36 · TEST · low · REPRODUCED
+
+`test_hygiene_markers_suppress_copyq_history` skips as "copyq not
+running" though copyq runs: its `copyq read 0` probe fails in the
+pytest env (isolated XDG) while succeeding in the session env — the
+tier under-reports a live capability. Acceptance: probe inherits the
+session env or the skip reason names the real cause.
