@@ -1,7 +1,16 @@
 """Tray icon tests (headless - no D-Bus session needed)."""
 from __future__ import annotations
 
-from fluidvoice.tray import (
+import pytest
+
+# Pillow >= 12 deprecates Image.getdata (removal in Pillow 14, 2027);
+# production use lives in fluidvoice/tray.py:142 — migrate in a
+# dedicated pass. Mark-level filter (NOT ini): with -W error on the
+# CLI, ini filterwarnings entries lose and the gate stays red.
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:Image.Image.getdata is deprecated:DeprecationWarning")
+
+from fluidvoice.tray import (  # noqa: E402
     KIND_CHECK,
     KIND_SEPARATOR,
     TRAY_SIZE,

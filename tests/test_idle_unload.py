@@ -170,6 +170,14 @@ def take(d):
     d.toggle()
     d.toggle()
     assert wait_done(d)
+    # wait_done watches busy/_process_thread only; `recording` clears on
+    # the capture stop path. On very slow CI runners it could still be
+    # True here — and maybe_idle_unload's take-active gate would then
+    # (correctly!) refuse to unload. Wait for the full stop seam.
+    deadline = time.monotonic() + 5.0
+    while d.recording and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert not d.recording
 
 
 # ---------------------------------------------------------------------------

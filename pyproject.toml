@@ -153,3 +153,11 @@ files = [
 ]
 follow_imports = "silent"
 warn_unused_ignores = true
+
+# numpy's latest stubs use PEP 695 `type` statements — a SYNTAX error
+# when mypy parses them with python_version 3.11 (first CI dispatch
+# 2026-09-12: numpy/__init__.pyi:737). We type our seams, not numpy;
+# skip it entirely (local venvs just have older numpy).
+[[tool.mypy.overrides]]
+module = "numpy.*"
+follow_imports = "skip"

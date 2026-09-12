@@ -200,7 +200,13 @@ class TestIdleUnload:
         mgr.maybe_idle_unload(now=base + 59)
         assert mgr.backend is b  # below: untouched
         mgr.maybe_idle_unload(now=base + 60)
-        assert mgr.backend is None
+        assert mgr.backend is None, (
+            "idle unload refused — gate state: "
+            f"threshold={mgr.idle_threshold()} "
+            f"active={mgr._is_take_active()} "
+            f"warmup={dict(mgr.warmup)} "
+            f"warm_thread={mgr.start_warm_thread} "
+            f"idle_s={(base + 60) - mgr.last_activity}")
         assert mgr.idle_unloaded_at == base + 60
         assert b.closed == 1
         assert calls["unload"] == [1]  # tray refresh requested
