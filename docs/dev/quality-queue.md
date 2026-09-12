@@ -21,7 +21,7 @@ An item is DONE only with implementation + evidence — never a design doc.
 
 | Item | Status | Depends on | Commit | Test command | Evidence / acceptance |
 |---|---|---|---|---|---|
-| Q1 test scopes + gate alignment | **DONE 2026-09-12** | — | see `git log --grep "quality plan Q1"` | `just test-unit`, `just test-gtk`, `just gate` | E1: e2e real-download test moved to `tests/integration/` (network+model marks); meta-test `TestE2eStaysIntegration` guards it. E6: one tier source `scripts/run_test_tier.sh` consumed by justfile + ci.yml + release-prepare.yml; unit gate = `-W error --strict-markers --timeout --junitxml` + brief validation; JUnit uploaded on failure. Unit tier run 2026-09-12: 3382 passed, 4 documented capability skips, 154 deselected, network guard active, zero model downloads (fresh-cache offline proof = the guard denies any outbound socket pre-connect). GTK tier run 2026-09-12 on `:1`: 154 passed, 0 skipped (skip⇒fail via `scripts/_tier_skip_check.py`). CI gtk lane provisioned (first dispatch pending — workflows are manual-only by project rule). |
+| Q1 test scopes + gate alignment | **DONE 2026-09-12** | — | see `git log --grep "quality plan Q1"` | `just test-unit`, `just test-gtk`, `just gate` | E1: e2e real-download test moved to `tests/integration/` (network+model marks); meta-test `TestE2eStaysIntegration` guards it. E6: one tier source `scripts/run_test_tier.sh` consumed by justfile + ci.yml + release-prepare.yml; unit gate = `-W error --strict-markers --timeout --junitxml` + brief validation; JUnit uploaded on failure. Unit tier run 2026-09-12: 3382 passed, 4 documented capability skips, 154 deselected, network guard active, zero model downloads (fresh-cache offline proof = the guard denies any outbound socket pre-connect). GTK tier run 2026-09-12 on `:1`: 154 passed, 0 skipped (skip⇒fail via `scripts/_tier_skip_check.py`). CI gtk lane GREEN on first dispatch day 2026-09-12 (run 34694707879: all four jobs green — first fully green CI run in project history). |
 | Q2 teardown enforcement (E2, E7) | **DONE 2026-09-12** | — | see `git log --grep "quality plan Q2"` | `just test-unit` (+ `tests/test_leak_gate_meta.py`) | E2: leak verdict moved from tests/test_runner_hygiene.py into the globally-loaded plugin tests/_runner_hygiene.py, registered via `pytest_plugins` in the NEW repository-root conftest.py — every run shape loads it. Audit repro re-run 2026-09-12: temp leaking test alone → `1 passed, 1 error, exit 1` with node attribution (was exit 0). Meta-tests (disposable dirs, real subprocess pytest): child/timer leaks fail single-file runs with attribution; `-n 2 --dist loadfile` with no hygiene module still red (the E2 gap); clean runs green; failing+leaking reports both; setup-failure keeps cleanup; `--timeout` hang fails promptly (<60 s); focused repo run loads the plugin (`--trace-config`). E7: integration daemon/CLI launches use `sys.executable -m fluidvoice` + explicit checkout cwd (no assumed per-checkout .venv; artifact tests keep the installed binary); X11/WAYLAND pinning now scoped OUT of the integration tier (`FLUIDVOICE_TEST_TIER=integration` keeps ambient compositor identity); finalization order of the autouse sweep verified dynamically (TestFinalizationOrder), not by comment. Tripwire: external live-daemon writes now classified by /proc lineage in the failure message, with `FLUIDVOICE_TOLERATE_EXTERNAL_HISTORY_WRITES=1` to downgrade classified-external changes on daily-driver machines. |
 | Q3 dependency hash locking (E3, E4) | TODO | — | | | |
 | Q4 publication↔source binding (E5) | TODO | Q3, Q1 | | | |
@@ -36,8 +36,11 @@ An item is DONE only with implementation + evidence — never a design doc.
 
 Known follow-ups surfaced while doing Q1 (small, fold into their items):
 
-- ci.yml's gtk job is written but undispatched (manual-only CI rule);
-  its first dispatch must be treated as part of the lane's acceptance.
+- RESOLVED 2026-09-12: first CI dispatches (5 runs) went fully green —
+  unit py3.11/3.12, gtk lane, compile+mypy. The dispatch campaign found
+  and fixed a real production bug (idle-unload one-ULP threshold rounding)
+  plus six CI-environment determinism gaps; weekly Sunday dispatch is now
+  automated via morning-demon.
 - The tripwire's external-write classification is lineage-based: a
   double-forked daemon escaping the pytest process tree would read as
   external. Residual risk accepted in Q2; revisit if a leak ever
