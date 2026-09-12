@@ -538,6 +538,13 @@ if _gtk_ok():
     from fluidvoice.gtkui.client import Client
 
     Adw.init()
+else:
+    # Headless (CI, first dispatch 2026-09-12): the GTK test classes below
+    # reference Client INSIDE their class bodies, which evaluate during
+    # COLLECTION — without this fallback a bare checkout crashes with
+    # NameError before the skipif ever runs. object() never executes: the
+    # tests skip via _gtk_ok() in every headless environment.
+    Client = object
 
 
 def _pump(loop, ms=120):

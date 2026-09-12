@@ -110,9 +110,12 @@ jobs:
           ruff check .
       - name: Focused type check (mypy, Q12)
         # same gate as `just typecheck`; the typed seam modules listed in
-        # pyproject [tool.mypy] — grow deliberately, no repo-wide sweep
+        # pyproject [tool.mypy] — grow deliberately, no repo-wide sweep.
+        # Install the package first: checked modules import real deps
+        # (chunking.py → av via faster-whisper); a bare checkout made
+        # mypy die on import-not-found (first CI dispatch 2026-09-12).
         run: |
-          pip install mypy
+          pip install -e . mypy
           python -m mypy
       - name: Request briefs carry a valid STATUS (same as `just gate`)
         run: python scripts/validate_requests.py
