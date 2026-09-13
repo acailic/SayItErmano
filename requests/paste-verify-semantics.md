@@ -1,6 +1,19 @@
 Paste verification semantics are wrong in both directions - four live-reproduced data-corruption defects from the 2026-09-13 night X11 desktop-matrix run (ledger F-34/F-35, evidence docs/research/night-2026-09-13-desktop-matrix-x11.md): duplicated transcripts in terminals, silently lost dictations in Firefox/Discord, and stale-clipboard inserts in Chromium. The read-observation signal (a selection read after the keystroke) is counted too generously and released too early.
 
-STATUS: OPEN
+STATUS: SHIPPED
+
+<!-- shipped in 33431b2 + 023c44d (content-only verification, field
+     probe with poll loop pinned to the keystroke time, 1.5 s proxy-
+     aware deadline; gate green, 14 new unit tests). Live evidence
+     2026-09-14 on the repro desktop: gedit + gnome-terminal paste
+     cells PASS (the F-34 duplication case verifies via the field
+     probe, no typed fallback, clipboard restored); Firefox paste
+     lands once with the signal on Firefox's own content read in
+     bisect runs replicating the exact production preamble; a late
+     manager content-read can no longer false-verify. Full browser
+     matrix cells deferred to the night-matrix rerun - the desktop
+     was in live use and windows were closed under the harness; F-36
+     copyq test-env skip stays a separate follow-up.) -->
 
 Today: insert_paste (fluidvoice/insertion.py) verifies via SelectionHold.wait_read - ANY selection read by a window not seen during the quiesce counts, including TARGETS probes and clipboard-manager proxy reads - and on any signal releases ownership and restores the previous clipboard immediately. Reproduced live:
 

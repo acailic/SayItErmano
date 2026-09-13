@@ -584,14 +584,25 @@ garbage. Live (this desktop, GIR-only venv): read returns
 preceding='mid sentence live probe' from a focused gedit — the exact
 path that returned None before. A3/A4/A6 cells await the matrix rerun.
 
-### F-34 · INSERT · high · REPRODUCED
+### F-34 · INSERT · high · FIXED 2026-09-14 (33431b2 + 023c44d)
 
 Verified-paste in gnome-terminal under a clipboard manager: the paste
 lands but is reported unverified, the typed fallback then duplicates
 the transcript (live twice, incl. a 450-char insert). gedit does not
 duplicate. Acceptance: paste-or-fallback never yields two copies.
 
-### F-35 · INSERT · high · REPRODUCED
+FIX: two signals must agree - a content-only selection read
+(wait_content_read: TARGETS/hygiene reads no longer count) and the
+focused field's payload check (AT-SPI probe, enabled by F-31..F-33);
+the whole thing is a poll loop holding ownership until either verifies
+(proxied VTE pastes never show a new-window read - the mutter proxy
+revealed during quiesce does the read - so only the field proves
+them; live-measured insert latency ~0.5-1 s, deadline 1.5 s). LIVE:
+gnome-terminal paste cell PASS (payload once, clipboard restored, no
+typed fallback); gedit PASS. A late clipboard-manager content read
+cannot false-verify (field negative holds the verdict).
+
+### F-35 · INSERT · high · FIXED 2026-09-14 (33431b2 + 023c44d)
 
 Paste-mode verification false-positives lose or corrupt text in
 browser-class apps: Firefox/Discord report `paste` verified while the
@@ -602,6 +613,19 @@ Verification counts any post-keystroke selection read (TARGETS probe /
 manager proxy), then releases ownership before the content read.
 Acceptance: paste verified ⟺ field content read; the four matrix
 paste cells green.
+
+FIX: the paste-verify signal is a TEXT-CONTENT read by a NEW window
+and ownership is held until it happens (or the deadline), so the
+restore cannot race the app's read; a readable field provably lacking
+the payload outranks a fired signal at the final verdict. LIVE
+(2026-09-14, this desktop): Firefox paste lands once with the signal
+firing on Firefox's own content read (bisect runs B/C/D - marker +
+snapshot + probe preamble, exactly the production sequence); the
+full matrix cells for Firefox/Chromium/Discord await the night-matrix
+rerun (the desktop was in live use during the day attempt - windows
+closed under the harness, focus stolen; harness notes: click the
+textarea at window-relative y~220 for the file:// probe page, use a
+full DEFAULTS cfg so terminal detection works).
 
 ### F-36 · TEST · low · REPRODUCED
 
