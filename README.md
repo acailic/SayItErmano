@@ -69,23 +69,8 @@ Mac, prompt profiles render as **radio rows with per-row Rename/Delete
 menus**, the active model carries a radio indicator, and the History menu
 gains **Export as Text** plus a **Pause saving / Resume saving** toggle.
 
-**[v0.7.0](https://github.com/acailic/SayItErmano/releases/tag/v0.7.0)** — the
-languages + endpoints + guardrails release: a **runtime language-cycle hotkey**
-with a wrong-language whitelist guard, an optional **OpenAI-compatible remote
-STT backend** (`model.remote_url` — point dictation at a LAN vLLM/whisper.cpp
-box; off by default, nothing leaves your machine otherwise), an **AI refusal
-guardrail** (a refusing polish model never types into your document), a
-**spoken-send quiet countdown**, and a **scriptable unix-socket API**.
-
-**[v0.6.0](https://github.com/acailic/SayItErmano/releases/tag/v0.6.0)** —
-Wayland session support, segmented streaming preview on every backend with
-VAD auto-stop, and command mode v2.
-
-**[v0.4.0](https://github.com/acailic/SayItErmano/releases/tag/v0.4.0)** — the
-SayItErmano identity: repo, .deb package, command, launcher and tray entry all
-carry the new name, plus an **original app icon** (gold tile, speech bubble +
-waveform — no FluidVoice artwork anywhere). One-shot installer now defaults to
-a user-space install with no sudo.
+Older releases (v0.8.0 and back) live in the
+[CHANGELOG](CHANGELOG.md).
 
 ## How it works
 
