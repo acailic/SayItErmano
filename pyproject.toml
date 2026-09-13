@@ -68,8 +68,8 @@ include = ["fluidvoice*"]
 # (--pdb, breakpoints, -x); the GTK tests need no special scoping under
 # workers (each worker is its own process + XDG-isolated conftest).
 [tool.pytest.ini_options]
-# Bare `pytest` collects only the application suite — adws/*_test.py are
-# agent-factory scripts with their own deps (pydantic) and no place in a
+# Bare `pytest` collects only the application suite —
+# tools/factory/adws/*_test.py are agent-factory scripts with their own deps (pydantic) and no place in a
 # pytest run (plan P0.5). Integration tests still need --ignore (they use
 # the real model/mic/GPU).
 testpaths = ["tests"]
@@ -118,14 +118,13 @@ target-version = "py311"  # matches requires-python ">=3.11" (F10): the
 # ratchet: F811 (redefined-while-unused) has 134 sites of deliberate
 # test-double redefinitions in tests/ and vendored .claude templates —
 # and zero in production code — so enabling it now would flood without
-# buying correctness. adws/** and .claude/** are vendored SSSF factory
+# buying correctness. the tools/factory/** tree is vendored SSSF factory
 # assets, exempt from the new codes so template updates don't churn.
 [tool.ruff.lint]
 select = ["I001", "F401", "F541", "F632", "F841"]
 
 [tool.ruff.lint.per-file-ignores]
-"adws/**" = ["F541", "F632", "F841"]
-".claude/**" = ["F541", "F632", "F841"]
+"tools/factory/**" = ["F541", "F632", "F841"]
 
 # Branch coverage for the Q5 baseline/ratchet: `just coverage` (unit
 # tier) and CI's unit job write XML here; tiers are measured separately

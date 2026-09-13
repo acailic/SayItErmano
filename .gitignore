@@ -13,9 +13,9 @@ build/
 # private evaluation corpora (docs/eval/README.md §Private corpora)
 eval-private/
 
-# sssf runtime
-adws/adw_data/sessions/
-adws/adw_data/sssf.db*
+# sssf runtime (org plan 2.4: factory moved to tools/factory/)
+tools/factory/adws/adw_data/sessions/
+tools/factory/adws/adw_data/sssf.db*
 .env
 
 # uv run artifact from the factory drivers

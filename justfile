@@ -1,22 +1,15 @@
-# SSSF starter recipes. Stamped by install.py, then yours to edit.
-#
-# Two halves (plan P0.5):
-#   1. SayItErmano APPLICATION recipes, unprefixed: lint / test /
-#      test-parallel / gate (+ release-prepare / release-publish driving
-#      the manual GitHub workflows).
-#   2. The agent FACTORY (SSSF starter) recipes, all under the `factory-`
-#      prefix, functionally unchanged. Add your own as your chains grow;
-#      see the example branch for the fuller set (orchestrator agents,
-#      kill, rosters, ipi).
+# SayItErmano application recipes (lint / test / test-parallel / gate,
+# release-prepare / release-publish driving the manual GitHub
+# workflows). The agent FACTORY (SSSF) recipes live in
+# tools/factory/justfile, imported below — all under the `factory-`
+# prefix, unchanged behavior (org plan 2.4).
 
 # `.env` reaches every ADW through this, so keys work without exporting them.
 set dotenv-load
 set positional-arguments
 
-# Every factory recipe passes this through, so `SSSF_CONFIG=other.yaml just
-# factory-prompt "..."` swaps the whole roster for one run.
-config := env_var_or_default("SSSF_CONFIG", "adws/adw_sssf_config/sssf.config.yaml")
-db     := "adws/adw_data/sssf.db"
+# agent factory recipes (tools/factory/, org plan 2.4)
+import 'tools/factory/justfile'
 
 # Python for the application recipes: repo venv if present, else $SAYIT_PY,
 # else python3. (Worktrees share the main tree's venv via SAYIT_PY; see
@@ -178,76 +171,3 @@ release-publish VERSION SHA EVIDENCE:
     set -euo pipefail
     gh workflow run release-publish.yml -f version="{{VERSION}}" -f sha="{{SHA}}" -f evidence="{{EVIDENCE}}"
     echo "dispatched release-publish for v{{VERSION}} @ {{SHA}} — watch: gh run watch"
-
-# ── factory (SSSF agent factory) ────────────────────────────────────────────
-
-# ── first run ───────────────────────────────────────────────────────────────
-
-# Proves the whole path works: config validated, session minted, agent ran,
-# envelope parsed, gates checked, trace written. Costs a few cents and changes
-# nothing in your repo, because both workflows are read-only.
-#
-# (`just --list` shows only the LAST comment line, so that one is the summary.)
-
-# factory: two cheap read-only runs, end to end
-factory-demo:
-    @echo "1/2  adw_prompt: one agent, one prompt"
-    uv run adws/adw_prompt.py --config {{config}} --agent scout "reply with a one-line summary of this repo"
-    @echo "\n2/2  adw_scout: read-only recon"
-    uv run adws/adw_scout.py --config {{config}} "list the top-level directories in this repo and what each is for. change nothing."
-    @echo "\nboth done. now run:  just factory-sessions    (or: just factory-obs)"
-
-# ── run a workflow ──────────────────────────────────────────────────────────
-# Args pass straight through: "<prompt or path/to/prompt.md>" [--adw-id X]
-
-# factory: one agent, one prompt
-factory-prompt *ARGS:
-    uv run adws/adw_prompt.py --config {{config}} "$@"
-
-# factory: read-only recon
-factory-scout *ARGS:
-    uv run adws/adw_scout.py --config {{config}} "$@"
-
-# factory: plan only
-factory-plan *ARGS:
-    uv run adws/adw_plan.py --config {{config}} "$@"
-
-# factory: planner, builder, commit
-factory-plan-build *ARGS:
-    uv run adws/adw_plan_build.py --config {{config}} "$@"
-
-# factory: plan, build, test, commit
-factory-sdlc *ARGS:
-    uv run adws/adw_plan_build_test.py --config {{config}} "$@"
-
-# factory: the full chain, plus review and docs
-factory-simple-sdlc *ARGS:
-    uv run adws/adw_simple_sdlc.py --config {{config}} "$@"
-
-# ── watch it ────────────────────────────────────────────────────────────────
-# Reads never block a running workflow, the db is WAL. Poll as hard as you like.
-
-# factory: the last 10 runs
-factory-sessions:
-    @sqlite3 {{db}} "select adw_id, status, substr(request,1,50), total_tokens, round(total_cost,4) from sessions order by started_at desc limit 10;"
-
-# factory: phase status in sequence
-factory-phases ADW_ID:
-    @sqlite3 {{db}} "select seq, name, kind, owner, status, attempt from phases where adw_id='{{ADW_ID}}' order by seq;"
-
-# factory: the live event tail
-factory-tail ADW_ID:
-    @sqlite3 {{db}} "select rowid, type, name, started_at from events where adw_id='{{ADW_ID}}' order by rowid desc limit 25;"
-
-# factory: what a run has alive right now, with pids
-factory-procs ADW_ID:
-    @sqlite3 {{db}} "select kind, name, pid, command, started_at from processes where adw_id='{{ADW_ID}}' and ended_at is null order by id;"
-
-# ── observability UI ────────────────────────────────────────────────────────
-
-# Needs bun. The db path is passed explicitly because the server runs from the
-# app dir and would otherwise look for a trace db sitting next to itself.
-
-# factory: boot the trace UI, http://localhost:4601 (api on :4600)
-factory-obs:
-    cd .claude/skills/sssf/apps/visualizer && bun install && (SSSF_DB={{justfile_directory()}}/{{db}} bun run server/index.ts &) && bunx vite
