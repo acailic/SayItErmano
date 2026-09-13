@@ -25,3 +25,4 @@ uv.lock
 # tier JUnit artifacts (scripts/run_test_tier.sh)
 .junit/
 .coverage
+.zcode/
