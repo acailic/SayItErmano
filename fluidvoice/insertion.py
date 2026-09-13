@@ -360,12 +360,19 @@ def startup_capability_check(cfg: dict | None = None, *,
 # + the clipboard-indicator GNOME extension - see docs/STATUS.md).
 # ---------------------------------------------------------------------------
 PASTE_QUIESCE_S = 0.25          # eager readers land here (observed +0.00..0.01)
-PASTE_VERIFY_TIMEOUT_S = 0.60   # post-keystroke read cap
+PASTE_VERIFY_TIMEOUT_S = 0.60   # post-keystroke content-read cap
 PASTE_POLL_INTERVAL_S = 0.025   # granularity of selection-event waits
 RESTORE_SETTLE_S = 0.12         # xclip fork serve latency after a restore write
 LEGACY_SETTLE_S = 0.25          # today's fixed sleep (insertion.verify_paste = false)
 VERIFY_LADDER_S = (0.10, 0.20, 0.30)  # fallback ladder when ownership is unavailable
 RESTORE_VERIFY_RETRIES = 1
+# Field-content verification (ledger F-34/F-35): the focused field's
+# text is probed (AT-SPI, bounded, transient) before the keystroke and
+# re-read when the selection signal is missing or suspicious. The grace
+# window covers pastes whose read is proxied/late; the probe read is
+# bounded to this many characters around the caret.
+FIELD_RESCUE_GRACE_S = 0.18  # distinct from _clipboard_write's 0.15 settle
+FIELD_PROBE_CHARS = 2000
 # Clipboard-manager hygiene markers advertised alongside the dictation text
 # while we own the selection: x-kde-passwordManagerHint is the Klipper/
 # GPaste/KeePassXC convention; the two application/x-copyq-* markers are
@@ -491,6 +498,33 @@ def _make_hold(data: bytes, hygiene=HYGIENE_TARGETS):
         return None
     except Exception:  # noqa: BLE001 - never let verification break pasting
         return None
+
+
+def _probe_field_text(max_chars: int = FIELD_PROBE_CHARS) -> str | None:
+    """The focused field's current text tail via the AT-SPI provider
+    (ledger F-34/F-35 field verification), or None when the focus is
+    not resolvable to a readable text field. Never raises; the value is
+    TRANSIENT (compared, never stored/logged) per the context seam's
+    privacy contract."""
+    try:
+        from .context.atspi_provider import read_field_text
+        return read_field_text(max_chars=max_chars)
+    except Exception:  # noqa: BLE001 - a blind probe is no probe
+        return None
+
+
+def _payload_landed(before: str | None, after: str | None,
+                    payload: str) -> bool | None:
+    """Did `payload` land in the field, judged from two probe
+    snapshots? True/False when the field is readable, None when the
+    probe is blind (unreadable field / provider unavailable - callers
+    fall back to the selection signal)."""
+    if after is None:
+        return None
+    if before is not None and after == before:
+        return False  # provably unchanged
+    window = payload[-FIELD_PROBE_CHARS:]
+    return window in after
 
 
 def _clipboard_write(data: bytes) -> None:
@@ -690,12 +724,19 @@ def insert_paste(text: str, *, key: str = "ctrl+v", verify: bool = True,
     verify=True (insertion.verify_paste) owns the CLIPBOARD selection for
     the duration (python-xlib) instead of a blind xclip flash: hygiene
     marker targets are advertised so clipboard managers suppress the
-    dictation, the paste keystroke is verified by observing the target
-    read the selection, and only then is the previous clipboard restored
-    (read-back checked, one retry). An unverified paste raises InsertError
-    AFTER the restore so insert_text can fall back to typed insertion.
-    verify=False keeps today's behavior exactly (fixed sleep + blind
-    restore; terminal key still honored).
+    dictation, and the paste is verified TWO ways (ledger F-34/F-35) -
+    (1) the target app reads the selection's TEXT CONTENT after the
+    keystroke (a TARGETS/proxy read does not count), and (2) the focused
+    field's content, probed before the keystroke and re-read when the
+    selection signal is missing (a landed paste the signal could not
+    see) or suspicious (a fired signal over a provably-unchanged field
+    - the proxy signature). Ownership is held until verification
+    concludes so the restore cannot race the app's read. An unverified
+    paste raises InsertError AFTER the restore so insert_text can fall
+    back to typed insertion - with the field check as the duplication
+    guard: the fallback only types when the field provably lacks the
+    payload. verify=False keeps today's behavior exactly (fixed sleep +
+    blind restore; terminal key still honored).
     """
     if not shutil.which("xclip"):
         raise InsertionFailure("xclip is required for paste mode "
@@ -704,6 +745,7 @@ def insert_paste(text: str, *, key: str = "ctrl+v", verify: bool = True,
                                missing_tools=("xclip",))
     data = text.encode()
     previous, prev_is_text = _clipboard_snapshot()
+    field_before = _probe_field_text() if verify else None
     hold = _make_hold(data) if verify else None
     verified = False
     try:
@@ -718,17 +760,34 @@ def insert_paste(text: str, *, key: str = "ctrl+v", verify: bool = True,
                                    kind=_tool_failure_kind(stderr))
         if hold is not None:
             # ICCCM: while we own the selection, every read is a
-            # SelectionRequest naming its requestor window - a window not
-            # seen during the quiesce reading AFTER the keystroke means the
-            # target app took the clipboard = the paste landed.
-            verified = hold.wait_read(PASTE_VERIFY_TIMEOUT_S,
-                                      exclude_windows=known,
-                                      interval=PASTE_POLL_INTERVAL_S) is not None
+            # SelectionRequest naming its requestor window - a NEW
+            # window reading the TEXT CONTENT after the keystroke means
+            # the target app took the payload = the paste landed (a
+            # TARGETS probe or hygiene read does not count).
+            verified = hold.wait_content_read(
+                PASTE_VERIFY_TIMEOUT_S, exclude_windows=known,
+                interval=PASTE_POLL_INTERVAL_S) is not None
         elif verify:
             for settle in VERIFY_LADDER_S:
                 time.sleep(settle)
         else:
             time.sleep(LEGACY_SETTLE_S)
+        if verify:
+            landed = _payload_landed(field_before,
+                                     _probe_field_text(), text)
+            if landed is not None and landed != verified:
+                # probe and signal disagree: one of them raced the app's
+                # read->insert step - re-check once after a grace period
+                # before trusting the probe over the ICCCM signal (or the
+                # missing signal over a late landing paste)
+                time.sleep(FIELD_RESCUE_GRACE_S)
+                landed = _payload_landed(field_before,
+                                         _probe_field_text(), text)
+            if landed is True:
+                verified = True  # rescue: landed but unobservable (F-34)
+            elif landed is False:
+                verified = False  # proxy signature: signal fired over an
+                # unchanged field (F-35a) - the field outranks the signal
     finally:
         skip_restore = False
         if hold is not None:

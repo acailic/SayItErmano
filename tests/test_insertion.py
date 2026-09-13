@@ -38,6 +38,9 @@ def runner(monkeypatch):
     monkeypatch.setattr(insertion.time, "sleep",
                         lambda s: calls["sleeps"].append(s))
     monkeypatch.setattr(insertion, "_make_hold", lambda *a, **k: None)
+    # field probe blind: unit tests never touch a real a11y bus
+    monkeypatch.setattr(insertion, "_probe_field_text",
+                        lambda *a, **k: None)
     return calls
 
 
@@ -60,6 +63,21 @@ def scripted_reads(monkeypatch, calls, plain_reads, targets=b"UTF8_STRING\ntext/
     monkeypatch.setattr(insertion, "_run", fake_run)
 
 
+def scripted_probe(monkeypatch, snapshots):
+    """Replace _probe_field_text: returns snapshots[0], [1], ... (the
+    last repeats). Call order in insert_paste: field_before, post-
+    keystroke, then one grace recheck when probe and signal disagree."""
+    state = {"i": 0}
+
+    def fake(*a, **k):
+        out = snapshots[min(state["i"], len(snapshots) - 1)]
+        state["i"] += 1
+        return out
+
+    monkeypatch.setattr(insertion, "_probe_field_text", fake)
+    return state
+
+
 class FakeHold:
     """Scriptable SelectionHold stand-in for insert_paste's state machine."""
 
@@ -80,6 +98,10 @@ class FakeHold:
         return self.lost
 
     def wait_read(self, timeout, exclude_windows=(), interval=None):
+        self.read_calls.append((timeout, tuple(exclude_windows)))
+        return self.reader
+
+    def wait_content_read(self, timeout, exclude_windows=(), interval=None):
         self.read_calls.append((timeout, tuple(exclude_windows)))
         return self.reader
 
@@ -277,6 +299,29 @@ class TestClipboardFallback:
         insertion.clipboard_fallback("emergency")  # must not raise
 
 
+class TestPayloadLanded:
+    """The pure field-snapshot judgement behind paste verification."""
+
+    def test_blind_probe_is_unknown(self):
+        assert insertion._payload_landed("x", None, "payload") is None
+        assert insertion._payload_landed(None, None, "payload") is None
+
+    def test_unchanged_field_is_false(self):
+        assert insertion._payload_landed("stable", "stable", "p") is False
+
+    def test_payload_present_is_true(self):
+        assert insertion._payload_landed("a", "apayload", "payload") is True
+        assert insertion._payload_landed(None, "apayload", "payload") is True
+
+    def test_long_payload_judged_by_bounded_tail(self):
+        payload = "A" * 3000
+        after = "z" + "A" * 2500  # only the payload TAIL is visible
+        assert insertion._payload_landed("z", after, payload) is True
+
+    def test_absent_payload_is_false(self):
+        assert insertion._payload_landed("a", "ab", "payload") is False
+
+
 class TestPasteVerification:
     """insert_paste's verify-then-restore state machine (faked holds)."""
 
@@ -402,6 +447,65 @@ class TestPasteVerification:
         with pytest.raises(insertion.InsertError) as ei:
             insertion.insert_paste("text")
         assert getattr(ei.value, "not_verified", False)
+
+    def test_field_rescue_prevents_double_type(self, runner, monkeypatch):
+        # F-34: the paste landed but the selection signal missed it
+        # (proxied by an already-known window) - the field probe rescues
+        # the verification and the typed fallback never runs
+        hold = FakeHold(reader=None)
+        self._hold_run(monkeypatch, runner, hold)
+        scripted_probe(monkeypatch, ["prompt$ ", "prompt$ " + "x" * 2000])
+        payload = "x" * 2000
+        assert insertion.insert_text(payload, full_cfg()) == "paste"
+        assert hold.released
+        typed = [c for c in runner["run"] if c[:2] == ["xdotool", "type"]]
+        assert typed == []  # NOTHING typed: no duplicated transcript
+
+    def test_field_rescue_paste_mode_no_raise(self, runner, monkeypatch):
+        hold = FakeHold(reader=None)
+        self._hold_run(monkeypatch, runner, hold)
+        scripted_probe(monkeypatch, ["", "rescued payload"])
+        assert insertion.insert_paste("rescued payload") is None
+
+    def test_unchanged_field_downgrades_false_signal(self, runner, monkeypatch):
+        # F-35a: a probe/proxy read fired the signal but the field never
+        # received the text - the field outranks the signal, the paste is
+        # declared unverified and the typed fallback delivers the text
+        hold = FakeHold(reader=0x123)
+        self._hold_run(monkeypatch, runner, hold)
+        scripted_probe(monkeypatch, ["stable field", "stable field"])
+        notices = []
+        assert insertion.insert_text("x" * 2000, full_cfg(),
+                                     on_notice=notices.append) == "typed"
+        assert any("Paste did not land" in n for n in notices)
+        assert any(c[:2] == ["xdotool", "type"]
+                   for c in runner["run"])  # the text WAS delivered
+
+    def test_disagreement_recheck_rescues_insert_race(self, runner, monkeypatch):
+        # the signal fired but the first post-keystroke probe raced the
+        # app's read->insert step: the grace recheck must rescue it, not
+        # let a momentary disagreement downgrade a real paste
+        hold = FakeHold(reader=0x123)
+        self._hold_run(monkeypatch, runner, hold)
+        scripted_probe(monkeypatch, ["old ", "old ", "old payload"])
+        assert insertion.insert_paste("payload") is None
+        assert insertion.FIELD_RESCUE_GRACE_S in runner["sleeps"]
+
+    def test_agree_signal_and_field_no_grace_latency(self, runner, monkeypatch):
+        # signal fired, field confirms immediately: no grace sleep
+        hold = FakeHold(reader=0x123)
+        self._hold_run(monkeypatch, runner, hold)
+        scripted_probe(monkeypatch, ["old ", "old payload"])
+        assert insertion.insert_paste("payload") is None
+        assert insertion.FIELD_RESCUE_GRACE_S not in runner["sleeps"]
+
+    def test_probe_blind_signal_decides(self, runner, monkeypatch):
+        # probe None everywhere (unreadable field / no atspi): the
+        # ICCCM content-read signal decides, exactly as before
+        hold = FakeHold(reader=0x123)
+        self._hold_run(monkeypatch, runner, hold)
+        scripted_probe(monkeypatch, [None])
+        assert insertion.insert_paste("text") is None  # signal verified
 
 
 class TestTerminalPasteKey:

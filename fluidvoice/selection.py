@@ -8,8 +8,9 @@ requestor's window. insert_paste uses that to
   reveal themselves during a short quiesce window after ownership is taken,
   and then
 - verify the target app actually read the dictation after the paste
-  keystroke - a read from a window NOT seen during the quiesce is the
-  "the paste landed" signal - before the previous clipboard is restored.
+  keystroke - a TEXT-CONTENT read (not a TARGETS probe) from a window
+  NOT seen during the quiesce is the "the paste landed" signal - before
+  the previous clipboard is restored.
 
 Owning the selection ourselves (instead of the legacy `xclip` flash) also
 lets us advertise clipboard-manager hygiene marker targets alongside the
@@ -71,14 +72,19 @@ def _is_text_target(target: object) -> bool:
 
 
 def _new_reader(events: Sequence[tuple[float, int, object]], since: float,
-                exclude: Sequence[int] | None = None) -> int | None:
+                exclude: Sequence[int] | None = None,
+                content_targets: frozenset | None = None) -> int | None:
     """First requestor window id not in `exclude` whose read was recorded
     at or after `since` - the paste-verify signal. Excluded (already
-    known) windows were seen during the quiesce."""
+    known) windows were seen during the quiesce. `content_targets`, when
+    given, restricts the signal to reads of those selection targets
+    (text content) - TARGETS probes and hygiene-marker reads from new
+    windows do not count (ledger F-35: a probe is not a paste)."""
     excluded = set(exclude or ())
-    for at, requestor, _target in events:
+    for at, requestor, target in events:
         if at >= since and requestor not in excluded and requestor != 0:
-            return requestor
+            if content_targets is None or target in content_targets:
+                return requestor
     return None
 
 
@@ -264,15 +270,37 @@ class SelectionHold:
     def wait_read(self, timeout: float, exclude_windows: Sequence[int] = (),
                   interval: float = POLL_INTERVAL_S) -> int | None:
         """Wait until a window NOT in exclude_windows reads the selection
-        (the "the paste landed" signal). Returns that window id, or None
-        on timeout / lost ownership / closed hold."""
+        (ANY target). Returns that window id, or None on timeout / lost
+        ownership / closed hold. Diagnostics/tests; paste verification
+        uses wait_content_read."""
+        return self._wait_new_reader(timeout, exclude_windows, interval,
+                                     content_targets=None)
+
+    def wait_content_read(self, timeout: float,
+                          exclude_windows: Sequence[int] = (),
+                          interval: float = POLL_INTERVAL_S) -> int | None:
+        """Wait until a window NOT in exclude_windows reads the selection's
+        TEXT CONTENT (one of the served text targets). The paste-verify
+        signal: a TARGETS probe or a hygiene-marker read is NOT a paste
+        (ledger F-35), and only a content read means the target app took
+        the payload - ownership must be held until it happens so the
+        restore cannot race the app's read (ledger F-6 class)."""
+        return self._wait_new_reader(
+            timeout, exclude_windows, interval,
+            content_targets=frozenset(self._text_atoms.values()))
+
+    def _wait_new_reader(self, timeout: float,
+                         exclude_windows: Sequence[int],
+                         interval: float,
+                         content_targets: frozenset | None) -> int | None:
         if self._closed:
             return None
         since = time.monotonic()
         deadline = since + timeout
         while True:
             self._drain()
-            reader = _new_reader(self.events, since, exclude_windows)
+            reader = _new_reader(self.events, since, exclude_windows,
+                                 content_targets)
             if reader is not None:
                 return reader
             if self._lost or self._closed or time.monotonic() >= deadline:

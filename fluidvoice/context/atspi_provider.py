@@ -309,6 +309,32 @@ def _find_focused(node: _AtspiNode, limits: ReadLimits,
     return None
 
 
+def _locate_focus(atspi, limits: ReadLimits) -> tuple[_AtspiNode, _AtspiNode] | None:
+    """(window, focused_object) for the currently focused field, or
+    None. Shared walk behind both read_focus and read_field_text:
+    ACTIVE candidates probed for a FOCUSED descendant with per-candidate
+    budget slices; no focus anywhere -> None (callers decide what that
+    means - a stale window-level read or an unreadable field)."""
+    desktop = _desktop(atspi)
+    if desktop is None:
+        return None
+    candidates = _active_windows(desktop, limits)
+    if not candidates:
+        return None
+    # A huge unfocused tree (Electron) must not starve the true
+    # window's probe: each candidate gets its own slice of the budget.
+    per = max(_MIN_PROBE_NODES,
+              limits.nodes // max(1, len(candidates)))
+    for cand in candidates:
+        sub = ReadLimits(apps=limits.apps, windows=limits.windows,
+                         children=limits.children, depth=limits.depth,
+                         nodes=per)
+        hit = _find_focused(cand, sub)
+        if hit is not None:
+            return cand, hit
+    return None
+
+
 def read_focus(atspi, max_preceding: int,
                limits: ReadLimits | None = None) -> FocusContext:
     """One bounded accessibility read. Pure with respect to `atspi`
@@ -321,33 +347,17 @@ def read_focus(atspi, max_preceding: int,
     as identity-only ``stale`` context, exactly the historical
     behavior."""
     limits = limits or ReadLimits()
-    desktop = _desktop(atspi)
-    if desktop is None:
-        return missing_context("atspi")
-    candidates = _active_windows(desktop, limits)
-    if not candidates:
-        return missing_context("atspi")
-    window = None
-    focused = None
-    # A huge unfocused tree (Electron) must not starve the true
-    # window's probe: each candidate gets its own slice of the budget.
-    per = max(_MIN_PROBE_NODES,
-              limits.nodes // max(1, len(candidates)))
-    for cand in candidates:
-        sub = ReadLimits(apps=limits.apps, windows=limits.windows,
-                         children=limits.children, depth=limits.depth,
-                         nodes=per)
-        hit = _find_focused(cand, sub)
-        if hit is not None:
-            window, focused = cand, hit
-            break
-    if focused is not None:
-        node, stale = focused, False
+    located = _locate_focus(atspi, limits)
+    if located is None:
+        desktop = _desktop(atspi)
+        candidates = _active_windows(desktop, limits) if desktop else []
+        if not candidates:
+            return missing_context("atspi")
+        window = node = candidates[0]
+        stale = True
     else:
-        # No FOCUSED state found in any candidate (some toolkits skip
-        # it): identity-only from the FIRST active window - the
-        # historical pick and still the best identity guess.
-        window, node, stale = candidates[0], candidates[0], True
+        window, node = located
+        stale = False
     app_id = node.app_name or window.name
     return FocusContext(
         app_id=app_id,
@@ -359,6 +369,36 @@ def read_focus(atspi, max_preceding: int,
         provider_name="atspi",
         stale=stale,
     )
+
+
+def read_field_text(atspi=None, max_chars: int = 2000) -> str | None:
+    """The focused field's text ending at the caret (bounded), or None
+    when the focus cannot be resolved to a readable text field.
+
+    Paste-verification probe (ledger F-34/F-35): TRANSIENT by contract -
+    callers may compare two snapshots but must never store, log or
+    transmit the value (the context seam's privacy rules govern this
+    read too). The window ENDS at the caret because a paste inserts
+    there: after a landed paste the snapshot ends with the payload."""
+    if atspi is None:
+        module, _error = _try_import()
+        if module is None:
+            return None
+        atspi = module
+    try:
+        located = _locate_focus(atspi, ReadLimits())
+        if located is None:
+            return None
+        _window, node = located
+        caret = node.caret_offset()
+        count = node.character_count()
+        if caret is None or count is None or caret < 0:
+            return None
+        end = min(caret, count)
+        start = max(0, end - max(0, max_chars))
+        return node.text_range(start, end)
+    except Exception:  # noqa: BLE001 - a failed probe is "no data"
+        return None
 
 
 def _selection_text(node: _AtspiNode) -> str | None:

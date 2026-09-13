@@ -284,7 +284,9 @@ class TestSelectionHoldLive:
             proc = subprocess.Popen(["xclip", "-o", "-selection", "clipboard"],
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.DEVNULL)
-            reader = hold.wait_read(1.0, exclude_windows=known)
+            # content-only signal: a plain `xclip -o` reads UTF8_STRING,
+            # so this is exactly the read a paste target performs
+            reader = hold.wait_content_read(1.0, exclude_windows=known)
             out, _ = proc.communicate(timeout=5)
             assert reader is not None, "the xclip -o read was not observed"
             assert reader not in known  # a window quiesce did not see

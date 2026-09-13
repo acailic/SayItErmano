@@ -58,6 +58,9 @@ def x11(monkeypatch):
     monkeypatch.setenv("DISPLAY", ":99")
     calls: dict = {"run": [], "popen": [], "writes": [], "notices": []}
     installed = {"xdotool", "xclip"}
+    # field probe blind: unit tests never touch a real a11y bus
+    monkeypatch.setattr(insertion, "_probe_field_text",
+                        lambda *a, **k: None)
 
     def fake_run(args, timeout=15.0, stdin=None):
         calls["run"].append(list(args))
@@ -387,6 +390,10 @@ class TestPasteUnverifiedFailure:
                 return False
 
             def wait_read(self, timeout, exclude_windows=(), interval=None):
+                return None
+
+            def wait_content_read(self, timeout, exclude_windows=(),
+                                  interval=None):
                 return None
 
             def release(self):

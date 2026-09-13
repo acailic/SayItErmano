@@ -48,6 +48,22 @@ class TestPureHelpers:
         events = [(1.0, 0, "x")]
         assert _new_reader(events, since=0.0, exclude=()) is None
 
+    def test_new_reader_content_only_filters_probes(self):
+        # F-35: a TARGETS probe or a hygiene-marker read from a NEW
+        # window is not a paste - only text-content reads carry the
+        # signal when content_targets is given
+        events = [(1.0, 0xAAA, "TARGETS"),
+                  (1.1, 0xBBB, "UTF8_STRING"),
+                  (1.2, 0xCCC, "x-kde-passwordManagerHint")]
+        text = frozenset({"UTF8_STRING", "text/plain;charset=utf-8",
+                          "text/plain", "STRING"})
+        assert _new_reader(events, since=0.5, exclude=[],
+                           content_targets=text) == 0xBBB
+        assert _new_reader(events, since=0.5, exclude=[0xBBB],
+                           content_targets=text) is None
+        assert _new_reader(events, since=0.5, exclude=[],
+                           content_targets=frozenset({"STRING"})) is None
+
 
 # ---------------------------------------------------------------------------
 # Fake X plumbing (hermetic: no X connection, no subprocess)
@@ -292,6 +308,30 @@ class TestEventRecording:
         hold, disp = make_hold(monkeypatch)
         hold.release()
         assert hold.wait_read(1, exclude_windows=()) is None
+
+    def test_wait_content_read_ignores_probes(self, monkeypatch):
+        # F-35a signature: a TARGETS probe + a hygiene-marker read from
+        # NEW windows after the keystroke must NOT verify a paste
+        hold, disp = make_hold(monkeypatch)
+        known = hold.quiesce(0)
+        disp.events.append(make_event(disp, selection.X.SelectionRequest,
+                                      requestor_wid=0xCCC,
+                                      target="TARGETS"))
+        disp.events.append(make_event(disp, selection.X.SelectionRequest,
+                                      requestor_wid=0xDDD,
+                                      target="x-kde-passwordManagerHint"))
+        assert hold.wait_content_read(0.01, exclude_windows=known) is None
+
+    def test_wait_content_read_fires_on_text_read(self, monkeypatch):
+        hold, disp = make_hold(monkeypatch)
+        known = hold.quiesce(0)
+        disp.events.append(make_event(disp, selection.X.SelectionRequest,
+                                      requestor_wid=0xCCC,
+                                      target="TARGETS"))
+        disp.events.append(make_event(disp, selection.X.SelectionRequest,
+                                      requestor_wid=0xEEE,
+                                      target="text/plain;charset=utf-8"))
+        assert hold.wait_content_read(0.01, exclude_windows=known) == 0xEEE
 
     def test_events_recorded_with_monotonic_times(self, monkeypatch):
         hold, disp = make_hold(monkeypatch)
