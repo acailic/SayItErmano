@@ -278,28 +278,36 @@ class SelectionHold:
 
     def wait_content_read(self, timeout: float,
                           exclude_windows: Sequence[int] = (),
-                          interval: float = POLL_INTERVAL_S) -> int | None:
+                          interval: float = POLL_INTERVAL_S,
+                          since: float | None = None) -> int | None:
         """Wait until a window NOT in exclude_windows reads the selection's
         TEXT CONTENT (one of the served text targets). The paste-verify
         signal: a TARGETS probe or a hygiene-marker read is NOT a paste
         (ledger F-35), and only a content read means the target app took
         the payload - ownership must be held until it happens so the
-        restore cannot race the app's read (ledger F-6 class)."""
+        restore cannot race the app's read (ledger F-6 class).
+
+        `since` (monotonic) pins the observation start: polling callers
+        pass the keystroke time so a read that arrives BETWEEN polls is
+        never missed (a fresh `since` per call would blind the loop to
+        events landing during its field probes)."""
         return self._wait_new_reader(
             timeout, exclude_windows, interval,
-            content_targets=frozenset(self._text_atoms.values()))
+            content_targets=frozenset(self._text_atoms.values()),
+            since=since)
 
     def _wait_new_reader(self, timeout: float,
                          exclude_windows: Sequence[int],
                          interval: float,
-                         content_targets: frozenset | None) -> int | None:
+                         content_targets: frozenset | None,
+                         since: float | None = None) -> int | None:
         if self._closed:
             return None
-        since = time.monotonic()
-        deadline = since + timeout
+        started = time.monotonic() if since is None else since
+        deadline = time.monotonic() + timeout
         while True:
             self._drain()
-            reader = _new_reader(self.events, since, exclude_windows,
+            reader = _new_reader(self.events, started, exclude_windows,
                                  content_targets)
             if reader is not None:
                 return reader

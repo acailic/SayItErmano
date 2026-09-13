@@ -6,6 +6,9 @@ import pytest
 
 from fluidvoice import insertion
 
+# captured at import (test fixtures shrink the live-loop deadline)
+REAL_VERIFY_TIMEOUT_S = insertion.PASTE_VERIFY_TIMEOUT_S
+
 
 def ok(args=None, stdout=b""):
     return subprocess.CompletedProcess(args or [], 0, stdout, b"")
@@ -41,6 +44,9 @@ def runner(monkeypatch):
     # field probe blind: unit tests never touch a real a11y bus
     monkeypatch.setattr(insertion, "_probe_field_text",
                         lambda *a, **k: None)
+    # the verify loop's real-world deadline (1.5 s) would busy-spin a
+    # test (sleep is faked) - shrink it to a tick
+    monkeypatch.setattr(insertion, "PASTE_VERIFY_TIMEOUT_S", 0.05)
     return calls
 
 
@@ -101,7 +107,8 @@ class FakeHold:
         self.read_calls.append((timeout, tuple(exclude_windows)))
         return self.reader
 
-    def wait_content_read(self, timeout, exclude_windows=(), interval=None):
+    def wait_content_read(self, timeout, exclude_windows=(), interval=None,
+                          since=None):
         self.read_calls.append((timeout, tuple(exclude_windows)))
         return self.reader
 
@@ -337,7 +344,9 @@ class TestPasteVerification:
         self._hold_run(monkeypatch, runner, hold)
         assert insertion.insert_text("x" * 2000, full_cfg()) == "paste"
         assert hold.quiesced == [insertion.PASTE_QUIESCE_S]
-        assert hold.read_calls[0][0] == insertion.PASTE_VERIFY_TIMEOUT_S
+        # the verify loop POLLS the hold non-blockingly; the first poll
+        # sees the content read and the blind field probe defers to it
+        assert hold.read_calls, "the loop must poll the hold"
         assert set(hold.read_calls[0][1]) == hold.known  # quiesce windows excluded
         assert hold.released
         # the dictation NEVER hits the clipboard via xclip while the hold
@@ -345,14 +354,14 @@ class TestPasteVerification:
         writes = [c for c in runner["popen"] if c[0] == "xclip"]
         assert len(writes) == 1  # read-back matched: no retry write
 
-    def test_slow_app_within_cap_uses_full_timeout(self, runner, monkeypatch):
-        hold = FakeHold(reader=0x123)
+    def test_verify_window_covers_proxied_pastes(self, runner, monkeypatch):
+        hold = FakeHold(reader=None)  # proxy path: no observable read
         self._hold_run(monkeypatch, runner, hold,
                        plain=[b"previous clipboard"])  # read-back matches
-        assert insertion.insert_paste("text", verify=True) is None
-        # the 0.60 s cap gives slow-to-focus apps the full window
-        assert hold.read_calls[0][0] == 0.60
-        assert insertion.PASTE_VERIFY_TIMEOUT_S == 0.60
+        # live-measured 2026-09-14: the mutter clipboard proxy serves
+        # VTE pastes ~0.5-1 s after the keystroke - the poll deadline
+        # must cover it (0.6 s cut them off: F-34)
+        assert REAL_VERIFY_TIMEOUT_S >= 1.0
 
     def test_never_reads_falls_back_to_typed_and_notifies(self, runner, monkeypatch):
         hold = FakeHold(reader=None)  # target never read the selection
@@ -481,23 +490,32 @@ class TestPasteVerification:
         assert any(c[:2] == ["xdotool", "type"]
                    for c in runner["run"])  # the text WAS delivered
 
-    def test_disagreement_recheck_rescues_insert_race(self, runner, monkeypatch):
+    def test_proxy_path_polls_field_until_landed(self, runner, monkeypatch):
+        # the proxy paste inserts LATE: several False polls, then the
+        # payload appears - the loop must keep polling, not give up
+        hold = FakeHold(reader=None)
+        self._hold_run(monkeypatch, runner, hold)
+        state = scripted_probe(
+            monkeypatch, ["old ", "old ", "old ", "old payload"])
+        assert insertion.insert_paste("payload") is None
+        assert state["i"] >= 4  # at least: before + 3 field polls
+
+    def test_signal_then_insert_race_still_verified(self, runner, monkeypatch):
         # the signal fired but the first post-keystroke probe raced the
-        # app's read->insert step: the grace recheck must rescue it, not
-        # let a momentary disagreement downgrade a real paste
+        # app's read->insert step: the loop must keep polling until the
+        # payload lands instead of downgrading on a momentary negative
         hold = FakeHold(reader=0x123)
         self._hold_run(monkeypatch, runner, hold)
         scripted_probe(monkeypatch, ["old ", "old ", "old payload"])
         assert insertion.insert_paste("payload") is None
-        assert insertion.FIELD_RESCUE_GRACE_S in runner["sleeps"]
 
-    def test_agree_signal_and_field_no_grace_latency(self, runner, monkeypatch):
-        # signal fired, field confirms immediately: no grace sleep
+    def test_agree_on_first_poll_is_immediate(self, runner, monkeypatch):
+        # signal fired, field confirms on the first poll: no spin
         hold = FakeHold(reader=0x123)
         self._hold_run(monkeypatch, runner, hold)
-        scripted_probe(monkeypatch, ["old ", "old payload"])
+        state = scripted_probe(monkeypatch, ["old ", "old payload"])
         assert insertion.insert_paste("payload") is None
-        assert insertion.FIELD_RESCUE_GRACE_S not in runner["sleeps"]
+        assert state["i"] == 2  # before + exactly one field poll
 
     def test_probe_blind_signal_decides(self, runner, monkeypatch):
         # probe None everywhere (unreadable field / no atspi): the

@@ -393,7 +393,7 @@ class TestPasteUnverifiedFailure:
                 return None
 
             def wait_content_read(self, timeout, exclude_windows=(),
-                                  interval=None):
+                                  interval=None, since=None):
                 return None
 
             def release(self):

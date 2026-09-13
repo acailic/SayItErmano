@@ -333,6 +333,24 @@ class TestEventRecording:
                                       target="text/plain;charset=utf-8"))
         assert hold.wait_content_read(0.01, exclude_windows=known) == 0xEEE
 
+    def test_wait_content_read_pinned_since_catches_between_polls(self, monkeypatch):
+        # live Firefox lesson (2026-09-14): a content read that lands
+        # BETWEEN a polling caller's field probes must still be seen -
+        # `since` pins the observation start instead of resetting it
+        hold, disp = make_hold(monkeypatch)
+        known = hold.quiesce(0)
+        t_key = selection.time.monotonic()
+        selection.time.sleep(0)  # (faked) the caller goes off probing
+        disp.events.append(make_event(disp, selection.X.SelectionRequest,
+                                      requestor_wid=0xEEE,
+                                      target="UTF8_STRING"))
+        # a LATER poll with timeout=0 still sees the event via since
+        assert hold.wait_content_read(
+            0, exclude_windows=known, since=t_key) == 0xEEE
+        # without `since` (fresh start), the same event is invisible
+        assert hold.wait_content_read(
+            0, exclude_windows=known) is None
+
     def test_events_recorded_with_monotonic_times(self, monkeypatch):
         hold, disp = make_hold(monkeypatch)
         before = selection.time.monotonic()

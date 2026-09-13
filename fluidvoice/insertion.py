@@ -360,18 +360,21 @@ def startup_capability_check(cfg: dict | None = None, *,
 # + the clipboard-indicator GNOME extension - see docs/STATUS.md).
 # ---------------------------------------------------------------------------
 PASTE_QUIESCE_S = 0.25          # eager readers land here (observed +0.00..0.01)
-PASTE_VERIFY_TIMEOUT_S = 0.60   # post-keystroke content-read cap
+PASTE_VERIFY_TIMEOUT_S = 1.50   # poll cap: proxied clipboards (mutter
+                                 # proxy for VTE) insert ~0.5-1 s after
+                                 # the keystroke - 0.6 s cut them off
 PASTE_POLL_INTERVAL_S = 0.025   # granularity of selection-event waits
+FIELD_POLL_INTERVAL_S = 0.05    # field-probe cadence inside the verify loop
 RESTORE_SETTLE_S = 0.12         # xclip fork serve latency after a restore write
 LEGACY_SETTLE_S = 0.25          # today's fixed sleep (insertion.verify_paste = false)
 VERIFY_LADDER_S = (0.10, 0.20, 0.30)  # fallback ladder when ownership is unavailable
 RESTORE_VERIFY_RETRIES = 1
 # Field-content verification (ledger F-34/F-35): the focused field's
-# text is probed (AT-SPI, bounded, transient) before the keystroke and
-# re-read when the selection signal is missing or suspicious. The grace
-# window covers pastes whose read is proxied/late; the probe read is
-# bounded to this many characters around the caret.
-FIELD_RESCUE_GRACE_S = 0.18  # distinct from _clipboard_write's 0.15 settle
+# text is probed (AT-SPI, bounded, transient) in a poll loop alongside
+# the selection signal - proxied pastes NEVER show a new-window read
+# (the proxy already revealed itself during quiesce), so the field is
+# the only signal that can verify them. The probe read is bounded to
+# this many characters around the caret.
 FIELD_PROBE_CHARS = 2000
 # Clipboard-manager hygiene markers advertised alongside the dictation text
 # while we own the selection: x-kde-passwordManagerHint is the Klipper/
@@ -758,36 +761,54 @@ def insert_paste(text: str, *, key: str = "ctrl+v", verify: bool = True,
             stderr = proc.stderr.decode(errors="replace")[:200]
             raise InsertionFailure(f"paste keystroke failed: {stderr}",
                                    kind=_tool_failure_kind(stderr))
+        t_keystroke = time.monotonic()
         if hold is not None:
-            # ICCCM: while we own the selection, every read is a
-            # SelectionRequest naming its requestor window - a NEW
-            # window reading the TEXT CONTENT after the keystroke means
-            # the target app took the payload = the paste landed (a
-            # TARGETS probe or hygiene read does not count).
-            verified = hold.wait_content_read(
-                PASTE_VERIFY_TIMEOUT_S, exclude_windows=known,
-                interval=PASTE_POLL_INTERVAL_S) is not None
+            # Verification poll loop (ledger F-34/F-35). Two signals,
+            # either may come first or alone:
+            #   (a) ICCCM: a NEW window reads the selection's TEXT
+            #       CONTENT after the keystroke (a TARGETS probe or a
+            #       read from an already-known window does not count -
+            #       the mutter clipboard proxy revealed during quiesce
+            #       performs proxied pastes and NEVER shows a new
+            #       window, F-34);
+            #   (b) the focused field now contains the payload (AT-SPI
+            #       probe, blind on unreadable fields).
+            # verified = (a) or (b); a readable field that provably
+            # lacks the payload outranks a fired signal (F-35a proxy
+            # signature) - but only as the loop's FINAL verdict, since
+            # the app's read->insert step can trail the signal.
+            # Ownership is held throughout so the restore cannot race
+            # the app's read.
+            signal = False
+            landed = None
+            deadline = time.monotonic() + PASTE_VERIFY_TIMEOUT_S
+            while True:
+                # `since=t_keystroke`: a content read landing between
+                # polls (while the field probe runs) must not vanish -
+                # a fresh `since` per call blinded the loop to exactly
+                # those events (live Firefox: read at +1.10 s, missed)
+                if hold.wait_content_read(
+                        0, exclude_windows=known,
+                        interval=PASTE_POLL_INTERVAL_S,
+                        since=t_keystroke) is not None:
+                    signal = True
+                landed = _payload_landed(field_before,
+                                         _probe_field_text(), text)
+                if landed is True:
+                    verified = True
+                    break
+                if signal and landed is not False:
+                    verified = True
+                    break
+                if time.monotonic() >= deadline:
+                    verified = signal and landed is not False
+                    break
+                time.sleep(FIELD_POLL_INTERVAL_S)
         elif verify:
             for settle in VERIFY_LADDER_S:
                 time.sleep(settle)
         else:
             time.sleep(LEGACY_SETTLE_S)
-        if verify:
-            landed = _payload_landed(field_before,
-                                     _probe_field_text(), text)
-            if landed is not None and landed != verified:
-                # probe and signal disagree: one of them raced the app's
-                # read->insert step - re-check once after a grace period
-                # before trusting the probe over the ICCCM signal (or the
-                # missing signal over a late landing paste)
-                time.sleep(FIELD_RESCUE_GRACE_S)
-                landed = _payload_landed(field_before,
-                                         _probe_field_text(), text)
-            if landed is True:
-                verified = True  # rescue: landed but unobservable (F-34)
-            elif landed is False:
-                verified = False  # proxy signature: signal fired over an
-                # unchanged field (F-35a) - the field outranks the signal
     finally:
         skip_restore = False
         if hold is not None:
