@@ -128,8 +128,16 @@ jobs:
           python packaging/deb/locklib.py pins-coverage --pyproject pyproject.toml --lock packaging/deb/constraints.txt
           # The lock must still SATISFY the current pyproject: resolve the
           # full dependency tree against it (dry-run installs nothing).
+          # Hash mode is stripped for THIS check only: pip propagates
+          # constraint hashes into hash-checking mode, which can never
+          # verify a file:// directory requirement (the local package) -
+          # the lock's hash INTEGRITY is the validate step above; the
+          # dry-run proves RESOLUTION freshness (first live dispatch
+          # 2026-09-13 exposed the latent bug).
+          sed 's/[[:space:]]*--hash=[^[:space:]]*//g' \
+              packaging/deb/constraints.txt > /tmp/constraints-nohash.txt
           pip install --dry-run --quiet --ignore-installed \
-              -c packaging/deb/constraints.txt .
+              -c /tmp/constraints-nohash.txt .
 
       - name: Locked package build (pinned Ubuntu 24.04 container)
         run: |
