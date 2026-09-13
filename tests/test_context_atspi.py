@@ -237,6 +237,131 @@ class TestReadFocus:
         assert ctx.stale and ctx.app_id == "app"
 
 
+class TestBusyDesktop:
+    """Ledger F-31/F-32 (night run 2026-09-13): busy desktops register
+    26-28 a11y apps with the focused one at the END, and more than one
+    window can carry ACTIVE while unfocused."""
+
+    @staticmethod
+    def _busy_tree(filler_apps=25):
+        """`filler_apps` helper apps first, then gedit with the focus."""
+        filler = [FakeNode(name=f"helper-{i}", role="application",
+                           states=(), children=[])
+                  for i in range(filler_apps)]
+        field = FakeNode(name="text", role="text", states=(FOCUSED,),
+                         text=FakeText("mid sentence", caret=12),
+                         app_name="org.gnome.gedit")
+        gedit_win = FakeNode(name="*Untitled — gedit", role="frame",
+                             states=(ACTIVE,), children=[field],
+                             app_name="org.gnome.gedit")
+        gedit = FakeNode(name="org.gnome.gedit", role="application",
+                         states=(), children=[gedit_win])
+        return FakeNode(children=filler + [gedit]), gedit_win
+
+    def test_default_limits_reach_late_registered_apps(self):
+        # F-31: gedit sits at index 25 of 26; defaults must find it.
+        desktop, _win = self._busy_tree()
+        ctx = read_focus(fake_module(desktop), 120)
+        assert not ctx.missing and not ctx.stale
+        assert ctx.app_id == "org.gnome.gedit"
+        assert ctx.accessible_role == "text"
+        assert ctx.preceding_text == "mid sentence"
+
+    def test_explicit_small_apps_limit_still_truncates(self):
+        # caller-injected limits stay authoritative (bounded work)
+        desktop, _win = self._busy_tree()
+        ctx = read_focus(fake_module(desktop), 120,
+                         ReadLimits(apps=5))
+        assert ctx.missing
+
+    def test_unfocused_active_window_does_not_steal_identity(self):
+        # F-32: an Electron window FIRST in desktop order keeps ACTIVE
+        # while gedit holds the focus - the read must attach to gedit.
+        electron_win = FakeNode(
+            name="Codex|ChatGPT", role="frame", states=(ACTIVE,),
+            children=[FakeNode(name="pane", role="panel", states=())],
+            app_name="electron")
+        electron = FakeNode(name="electron", role="application",
+                            states=(), children=[electron_win])
+        desktop, _win = self._busy_tree(filler_apps=1)
+        desktop.children.insert(0, electron)
+        ctx = read_focus(fake_module(desktop), 120)
+        assert not ctx.stale and not ctx.missing
+        assert ctx.app_id == "org.gnome.gedit"
+        assert ctx.preceding_text == "mid sentence"
+
+    def test_big_unfocused_tree_does_not_starve_later_candidates(self):
+        # the probe budget is split per candidate: a deep unfocused tree
+        # (Electron) must not eat the whole node budget before the true
+        # window is probed
+        class Chain:
+            def __init__(self, depth=0):
+                self._depth = depth
+
+            name = "electron"
+
+            def getState(self):
+                return FakeState(ACTIVE)
+
+            def getApplication(self):
+                return SimpleNamespace(name="electron")
+
+            def getRoleName(self):
+                return "frame"
+
+            @property
+            def childCount(self):
+                return 1
+
+            def getChildAtIndex(self, i):
+                return Chain(self._depth + 1)
+
+        electron = SimpleNamespace(
+            name="electron", role="application", childCount=1,
+            getChildAtIndex=lambda i: Chain(),
+            getState=lambda: FakeState(),
+            getApplication=lambda: None,
+            getRoleName=lambda: "application")
+        field = FakeNode(name="text", role="text", states=(FOCUSED,),
+                         text=FakeText("typed here", caret=10),
+                         app_name="gedit")
+        gedit_win = FakeNode(name="gedit", role="frame",
+                             states=(ACTIVE,), children=[field],
+                             app_name="gedit")
+        gedit = FakeNode(name="gedit", role="application", states=(),
+                         children=[gedit_win])
+        desktop = SimpleNamespace(
+            name="desktop", childCount=2,
+            getChildAtIndex=lambda i: [electron, gedit][i],
+            getState=lambda: FakeState(),
+            getApplication=lambda: None,
+            getRoleName=lambda: "application")
+        ctx = read_focus(fake_module(desktop), 120,
+                         ReadLimits(nodes=100, depth=200))
+        assert not ctx.stale and not ctx.missing
+        assert ctx.app_id == "gedit"
+        assert ctx.preceding_text == "typed here"
+
+    def test_all_active_unfocused_keeps_first_as_stale_identity(self):
+        # compat floor: nothing carries FOCUSED -> first ACTIVE window
+        # is the stale identity-only fallback, as before
+        win_a = FakeNode(name="A", role="frame", states=(ACTIVE,),
+                         children=[FakeNode(name="p", role="panel",
+                                            states=())], app_name="app-a")
+        win_b = FakeNode(name="B", role="frame", states=(ACTIVE,),
+                         children=[FakeNode(name="p", role="panel",
+                                            states=())], app_name="app-b")
+        desktop = FakeNode(children=[
+            FakeNode(name="app-a", role="application", states=(),
+                     children=[win_a]),
+            FakeNode(name="app-b", role="application", states=(),
+                     children=[win_b])])
+        ctx = read_focus(fake_module(desktop), 120)
+        assert ctx.stale and ctx.usable
+        assert ctx.app_id == "app-a"
+        assert ctx.preceding_text is None
+
+
 class TestProviderShell:
     def test_injected_module_used(self):
         desktop, _w, _f = terminal_tree()
@@ -325,3 +450,108 @@ class TestGirStyle:
         assert ctx.accessible_role == "search"
         assert ctx.preceding_text == "find files"
         assert ctx.search_like
+
+
+class TestGirUnboundInterfaces:
+    """Ledger F-33 (night run 2026-09-13): on GIR installs without
+    python-atspi (the project venv), the bound ``get_text(start, end)``
+    hits the deprecated zero-arg interface getter and raises - the
+    working form is the unbound ``Atspi.Text.get_text(obj, s, e)``."""
+
+    @staticmethod
+    def _gir_module(content, caret, selection):
+        class Text:
+            """Unbound interface calls - the verified GIR form."""
+
+            @staticmethod
+            def get_text(obj, start, end):
+                return obj.content[start:end]
+
+            @staticmethod
+            def get_character_count(obj):
+                return len(obj.content)
+
+            @staticmethod
+            def get_caret_offset(obj):
+                return obj.caret
+
+            @staticmethod
+            def get_selection(obj, index):
+                return obj.selection
+
+        class Node:
+            def __init__(self, name=None, role=None, states=(),
+                         children=(), app_name=None):
+                self.content = content
+                self.caret = caret
+                self.selection = selection
+                self._name, self._role = name, role
+                self._states = GirState(*states)
+                self._children = list(children)
+                self._app_name = app_name
+
+            def get_name(self):
+                return self._name
+
+            def get_role_name(self):
+                return self._role
+
+            def get_state_set(self):
+                return self._states
+
+            def get_application(self):
+                return Node(name=self._app_name) if self._app_name else None
+
+            def get_child_count(self):
+                return len(self._children)
+
+            def get_child_at_index(self, i):
+                return self._children[i]
+
+            # deprecated zero-arg interface getters: raise when called
+            # with arguments, mirroring the real GIR Accessible surface
+            def get_text(self):
+                raise TypeError("deprecated getter takes no arguments")
+
+            def get_character_count(self):
+                raise TypeError("deprecated getter takes no arguments")
+
+            def get_caret_offset(self):
+                raise TypeError("deprecated getter takes no arguments")
+
+            def get_selection(self):
+                raise TypeError("deprecated getter takes no arguments")
+
+        field = Node(name="text", role="text", states=(FOCUSED,),
+                     app_name="org.gnome.gedit")
+        window = Node(name="Untitled", role="frame", states=(ACTIVE,),
+                      children=[field], app_name="org.gnome.gedit")
+        desktop = Node(children=[Node(name="org.gnome.gedit",
+                                      role="application", states=(),
+                                      children=[window])])
+        return SimpleNamespace(
+            Text=Text,
+            get_desktop=lambda i: desktop,
+            StateType=SimpleNamespace(ACTIVE=ACTIVE, FOCUSED=FOCUSED))
+
+    def test_unbound_fallback_reads_preceding_and_selection(self):
+        module = self._gir_module("well I don't wish to see it", 27,
+                                  (5, 9))
+        ctx = read_focus(module, 120)
+        assert ctx.app_id == "org.gnome.gedit"
+        assert ctx.accessible_role == "text"
+        assert ctx.preceding_text == "well I don't wish to see it"
+        assert ctx.selection_text == "I do"
+
+    def test_no_text_interface_class_still_degrades(self):
+        # a GIR module without the Text class (old introspection data):
+        # everything degrades to None, identity/role survive
+        module = self._gir_module("abc", 3, (0, 0))
+        module = SimpleNamespace(
+            get_desktop=module.get_desktop,
+            StateType=module.StateType)
+        ctx = read_focus(module, 120)
+        assert ctx.app_id == "org.gnome.gedit"
+        assert ctx.accessible_role == "text"
+        assert ctx.preceding_text is None
+        assert ctx.selection_text is None

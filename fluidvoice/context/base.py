@@ -172,9 +172,16 @@ def apply_continuation(text: str, preceding: str | None, *,
 
 @dataclass
 class ReadLimits:
-    """Bounded-work guarantees for provider tree walks (AT-SPI)."""
+    """Bounded-work guarantees for provider tree walks (AT-SPI).
 
-    apps: int = 16
+    ``apps`` covers full desktops: GNOME/X11 sessions register 26-28
+    a11y apps (shell helpers included) with the interesting ones at the
+    END of the child list (GTK apps register when they start), so the
+    default must sit above that; 16 silently truncated busy desktops
+    (ledger F-31, night run 2026-09-13). Callers may inject tighter
+    limits - they stay authoritative."""
+
+    apps: int = 64
     windows: int = 32
     children: int = 64
     depth: int = 24

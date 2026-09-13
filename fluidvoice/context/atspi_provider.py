@@ -8,13 +8,16 @@ forever after (the import failure is cached) — never an exception, and
 never a crash in the take path.
 
 Locating the focused object: at-spi2 has no direct "give me the focus"
-query, so the read walks desktop -> application -> ACTIVE window, then
-descends for the FOCUSED object. The walk is strictly bounded
-(`ReadLimits`: app/window/child counts, depth, total nodes). If no
-FOCUSED descendant is found, the ACTIVE window itself is returned as
-identity-only context marked ``stale`` — its app identity is still the
-focused app, but role/selection/preceding are withheld (they would not
-be provably about the focused field).
+query, so the read collects the desktop's ACTIVE-flagged windows
+(bounded; more than one app can hold ACTIVE while unfocused), probes
+each for a FOCUSED descendant with a fair slice of the node budget,
+and takes the first candidate that actually contains the focus. The
+walk is strictly bounded (`ReadLimits`: app/window/child counts,
+depth, total nodes). If no candidate has a FOCUSED descendant, the
+FIRST active window is returned as identity-only context marked
+``stale`` — its app identity is still the focused app, but
+role/selection/preceding are withheld (they would not be provably
+about the focused field).
 
 Both python-atspi (CamelCase: ``getRoleName``, ``queryText``) and GIR
 (``get_role_name``) naming are ducked through small adapters; any
@@ -172,6 +175,25 @@ class _AtspiNode:
     def _text_iface(self):
         return _call(self.obj, "queryText")
 
+    def _unbound_text_call(self, method: str, args: tuple):
+        """GIR unbound interface fallback: ``Atspi.Text.<method>(obj,
+        *args)``.
+
+        On GIR-only installs (python-atspi absent, e.g. the project
+        venv) the bound ``get_text(start, end)`` hits the deprecated
+        zero-arg interface getter and raises, so the duck adapter
+        returns None (ledger F-33). The unbound interface call is the
+        verified working form there; pyatspi (queryText) never reaches
+        this fallback."""
+        iface = getattr(self.atspi, "Text", None)
+        fn = getattr(iface, method, None) if iface is not None else None
+        if callable(fn):
+            try:
+                return fn(self.obj, *args)
+            except Exception:  # noqa: BLE001
+                return None
+        return None
+
     def character_count(self) -> int | None:
         iface = self._text_iface()
         if iface is not None:
@@ -179,6 +201,8 @@ class _AtspiNode:
         else:
             value = _call(self.obj, "getCharacterCount",
                           "get_character_count")
+        if value is None:
+            value = self._unbound_text_call("get_character_count", ())
         try:
             return int(value) if value is not None else None
         except Exception:  # noqa: BLE001
@@ -190,6 +214,8 @@ class _AtspiNode:
             value = _call(iface, "getCaretOffset", "get_caret_offset")
         else:
             value = _call(self.obj, "getCaretOffset", "get_caret_offset")
+        if value is None:
+            value = self._unbound_text_call("get_caret_offset", ())
         try:
             return int(value) if value is not None else None
         except Exception:  # noqa: BLE001
@@ -201,10 +227,12 @@ class _AtspiNode:
         iface = self._text_iface()
         holder = iface if iface is not None else self.obj
         value = _call(holder, "getText", "get_text", args=(start, end))
-        try:
-            return str(value) if value is not None else None
-        except Exception:  # noqa: BLE001
-            return None
+        if value is None:
+            value = self._unbound_text_call("get_text", (start, end))
+        # isinstance guard: a deprecated interface getter that does NOT
+        # raise would hand back the interface OBJECT, not text - never
+        # let that stringify into garbage preceding/selection.
+        return value if isinstance(value, str) else None
 
     def selection_range(self) -> tuple[int, int] | None:
         iface = self._text_iface()
@@ -213,6 +241,8 @@ class _AtspiNode:
         else:
             value = _call(self.obj, "getSelection", "get_selection",
                           args=(0,))
+        if value is None:
+            value = self._unbound_text_call("get_selection", (0,))
         try:
             if isinstance(value, (tuple, list)) and len(value) == 2:
                 start, end = int(value[0]), int(value[1])
@@ -231,8 +261,23 @@ def _desktop(atspi) -> _AtspiNode | None:
     return _AtspiNode(obj, atspi) if obj is not None else None
 
 
-def _find_active_window(desktop: _AtspiNode,
-                        limits: ReadLimits) -> _AtspiNode | None:
+#: How many ACTIVE-flagged windows may compete for the focus probe.
+#: More than one app can hold an ACTIVE-flagged window while unfocused
+#: (Electron keeps ACTIVE; ledger F-32, night run 2026-09-13) - the
+#: first ones in desktop order that fit here are the candidates.
+_ACTIVE_CANDIDATES = 4
+
+#: Floor for one candidate's share of the node budget, so a caller's
+#: tiny explicit budget still allows a real (if shallow) probe.
+_MIN_PROBE_NODES = 16
+
+
+def _active_windows(desktop: _AtspiNode,
+                    limits: ReadLimits) -> list[_AtspiNode]:
+    """ACTIVE-flagged windows in desktop order, bounded to
+    ``_ACTIVE_CANDIDATES``. Order is kept: the FIRST is today's
+    historical pick and stays the stale-fallback identity."""
+    out: list[_AtspiNode] = []
     for ai in range(min(desktop.child_count(), limits.apps)):
         app = desktop.child(ai)
         if app is None:
@@ -240,8 +285,10 @@ def _find_active_window(desktop: _AtspiNode,
         for wi in range(min(app.child_count(), limits.windows)):
             win = app.child(wi)
             if win is not None and win.active:
-                return win
-    return None
+                out.append(win)
+                if len(out) >= _ACTIVE_CANDIDATES:
+                    return out
+    return out
 
 
 def _find_focused(node: _AtspiNode, limits: ReadLimits,
@@ -265,20 +312,42 @@ def _find_focused(node: _AtspiNode, limits: ReadLimits,
 def read_focus(atspi, max_preceding: int,
                limits: ReadLimits | None = None) -> FocusContext:
     """One bounded accessibility read. Pure with respect to `atspi`
-    being any duck-typed module — unit tests inject fakes."""
+    being any duck-typed module — unit tests inject fakes.
+
+    Window choice: every ACTIVE-flagged window (bounded) is probed for
+    a FOCUSED descendant with a fair slice of the node budget - the
+    first candidate that actually contains the focus wins. When none
+    does (some toolkits skip FOCUSED), the FIRST candidate is returned
+    as identity-only ``stale`` context, exactly the historical
+    behavior."""
     limits = limits or ReadLimits()
     desktop = _desktop(atspi)
     if desktop is None:
         return missing_context("atspi")
-    window = _find_active_window(desktop, limits)
-    if window is None:
+    candidates = _active_windows(desktop, limits)
+    if not candidates:
         return missing_context("atspi")
-    focused = _find_focused(window, limits)
+    window = None
+    focused = None
+    # A huge unfocused tree (Electron) must not starve the true
+    # window's probe: each candidate gets its own slice of the budget.
+    per = max(_MIN_PROBE_NODES,
+              limits.nodes // max(1, len(candidates)))
+    for cand in candidates:
+        sub = ReadLimits(apps=limits.apps, windows=limits.windows,
+                         children=limits.children, depth=limits.depth,
+                         nodes=per)
+        hit = _find_focused(cand, sub)
+        if hit is not None:
+            window, focused = cand, hit
+            break
     if focused is not None:
         node, stale = focused, False
     else:
-        # No FOCUSED state found (some toolkits skip it): identity-only.
-        node, stale = window, True
+        # No FOCUSED state found in any candidate (some toolkits skip
+        # it): identity-only from the FIRST active window - the
+        # historical pick and still the best identity guess.
+        window, node, stale = candidates[0], candidates[0], True
     app_id = node.app_name or window.name
     return FocusContext(
         app_id=app_id,
