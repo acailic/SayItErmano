@@ -639,3 +639,17 @@ FIX: the probe (and the post-hold re-read) run with the session's real
 XDG dirs, and the skip names the actual cause ("CLI unreachable from
 the test env"). Verified live 2026-09-14: the test now RUNS and passes
 against the resident CopyQ.
+
+### F-37 · OBSERVABILITY · low · FIXED 2026-09-14 (day session)
+
+Night-report F7 (2026-09-13, not filed then): paste-fallback and
+clipboard-restore notices route to ui.notify only - with notifications
+disabled they vanish, and the daemon log shows a bare `typed (...)`
+line with no trace of the failed paste attempt (made F-34 harder to
+see during the night analysis). Acceptance: insertion notices reach
+the daemon log regardless of the notification setting.
+
+FIX: the pipeline's insertion-notice wrapper logs every notice
+("insertion notice: Paste did not land - typing instead") through the
+pipeline logger before the desktop notification; notifications-off
+keeps a full audit trail next to the strategy line.

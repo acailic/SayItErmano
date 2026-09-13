@@ -142,12 +142,21 @@ class DictationPipeline:
             # xdotool lookup.
             notify = self.notify
 
+            def _notice(title: str, body: str = "") -> None:
+                # F-7 (ledger): insertion notices must reach the daemon
+                # log as well - with notifications disabled they used to
+                # vanish, and a paste->typed fallback left no trace next
+                # to the bare `typed (...)` line.
+                self.log(f"insertion notice: {title}"
+                         + (f" - {body}" if body else ""))
+                notify(title, body)
+
             def _inserter(text: str, c: dict) -> str:
                 if self._focus_identity:
                     return insertion.insert_text(
                         text, c, wm_class=self._focus_identity,
-                        on_notice=notify)
-                return insertion.insert_text(text, c, on_notice=notify)
+                        on_notice=_notice)
+                return insertion.insert_text(text, c, on_notice=_notice)
 
             self.inserter = _inserter
         else:
