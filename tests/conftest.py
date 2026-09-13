@@ -172,7 +172,7 @@ def _real_data_untouched():
 #     supervised threads (already-shut-down runtimes are no-ops);
 #   * Popen → kill()+wait() when still running at teardown.
 # A test that leaked live tasks is reaped AND recorded; the session-end
-# gate in tests/test_runner_hygiene.py turns the list into a failing
+# gate in this conftest (_session_leak_gate) turns the list into a failing
 # run, so a future leak reads as a red test instead of a 5-minute
 # post-exit hang with mystery output.
 _HYGIENE_LOCK = threading.Lock()
@@ -212,7 +212,7 @@ def _reap_test_processes(request):
     it sets up first and tears down LAST — after the test body and every
     other function-scoped fixture finalizer; code under test never
     observes it. Leaks are reaped, not forgiven: each is recorded for
-    the session-end gate (tests/test_runner_hygiene.py)."""
+    the session-end gate (_session_leak_gate, this conftest)."""
     tasks_from = len(RUNTIME_TASKS)
     procs_from = len(SPAWNED_PROCS)
     yield

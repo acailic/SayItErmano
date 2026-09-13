@@ -12,7 +12,6 @@
 <p align="center">
   <a href="https://github.com/acailic/SayItErmano/releases"><img src="https://img.shields.io/github/v/release/acailic/SayItErmano?color=blue&label=release" alt="latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/acailic/SayItErmano?color=blue" alt="license GPL-3.0"></a>
-  <img src="https://img.shields.io/badge/tests-1782%20passing-brightgreen" alt="1782 automated tests">
   <img src="https://img.shields.io/badge/platform-Linux%20%C2%B7%20X11%20%C2%B7%20Wayland%20%C2%B7%20GTK%204-blue" alt="Linux · X11 · Wayland · GTK 4">
   <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
 </p>
@@ -462,7 +461,7 @@ converts via ffmpeg since `whisper-cli` reliably reads WAV only.
 | Live streaming preview overlay | ✅ | ✅ Mac-style pill (live waveform, mode accent colors, state labels, send indicator) |
 | Write/Rewrite selected text | ✅ (⌥R) | ✅ dedicated rewrite hotkey |
 | Command mode (voice → terminal agent) | ✅ (notch chat panel) | ✅ dedicated hotkey, live conversation panel, upstream tool schema in the JSON protocol, destructive strong-confirm, per-app context, History Commands view |
-| Per-app prompt sets | ✅ | 🚧 roadmap (app hint is already captured) |
+| Per-app prompt sets | ✅ | ✅ Settings → AI → Per-app prompts (per-app instructions captured with the app hint) |
 | Settings UI with model picker | ✅ | ✅ native GTK app (`sayit-ermano app`): Settings + History windows |
 | Onboarding (setup + tryout) | ✅ | ✅ opens once on first launch (`sayit-ermano app --onboard`) |
 | Overlay sizes (pill/small/medium/large) | ✅ | ✅ `recording.preview_overlay_size` |
@@ -518,8 +517,10 @@ echo '{"action": "transcribe", "path": "/tmp/note.wav"}' \
 ```
 
 `transcribe` refuses while a dictation is running (the GPU stays
-dedicated to your take) and rejects files over 200 MB (v1 does not
-chunk); `process: true` runs the standard filler/punctuation chain.
+dedicated to your take); long inputs are chunked automatically
+(ten-minute overlapping chunks, reconciled into one transcript — see
+`fluidvoice/chunking.py`), with a hard ceiling of 6 h of audio;
+`process: true` runs the standard filler/punctuation chain.
 
 **MCP agents** get the same powers over stdio — run `sayit-ermano mcp`
 (register it with any MCP client, e.g. Claude Desktop:
@@ -662,19 +663,23 @@ just coverage           # branch coverage (baseline: docs/research/
                         # 2026-09-12-coverage-baseline.md)
 ```
 
-All tier commands live in **one place** — `scripts/run_test_tier.sh` —
-shared verbatim by the justfile, CI and release-prepare, so local and CI
-run the same selection (capability markers: `model`, `network`, `desktop`,
-`packaging`, `gtk`, plus `slow` for duration only).
+Tier selection lives in the [justfile](justfile) (`just test`,
+`just test-parallel`, `just test-ui`, `just test-process`,
+`just test-integration`) and is mirrored in the CI workflow — run the
+same recipes locally that CI runs (capability markers: `model`,
+`network`, `desktop`, `packaging`, `gtk`, plus `slow` for duration
+only).
 
-The test suite — **1782 automated tests** at v0.8.1 (`-n auto` runs it in
-~19 s):
+The test suite — run `just test-parallel` for the current count
+(3480 offline unit/contract tests at 2026-09-14, ~20 s on this
+machine; 154 display-tier and 40 integration tests behind their own
+recipes):
 
 | Layer | What it exercises |
 |---|---|
 | Unit + integration-style | processing engines, AI client (mocked transport), daemon + pipeline state machines (stubs), socket API, MCP server, remote-STT + refusal/countdown guards, insertion command construction, config validation + registration meta-tests, overlay/pill painting, GTK app offscreen smoke tests |
 | E2E (slow) | real whisper model transcribing the JFK sample |
-| Integration | real `pw-record` capture + raw→WAV, GPU transcription, streaming preview with the loaded model, a real daemon **subprocess** (socket control incl. get/set-config + select-model, toggle/cancel, clean shutdown), live X11 hotkey grab + overlay pixel proof, real CLI invocations (doctor/transcribe/history/config), live AI polish + rewrite against local Ollama (skipped when absent), .deb extract + relocated-venv import, one-shot installer DRY_RUN download | 29 |
+| Integration | real `pw-record` capture + raw→WAV, GPU transcription, streaming preview with the loaded model, a real daemon **subprocess** (socket control incl. get/set-config + select-model, toggle/cancel, clean shutdown), live X11 hotkey grab + overlay pixel proof, real CLI invocations (doctor/transcribe/history/config), live AI polish + rewrite against local Ollama (skipped when absent), .deb extract + relocated-venv import, one-shot installer DRY_RUN download |
 
 Integration tests run against your real PipeWire/X11/CUDA environment and are
 isolated through `SAYITERMANO_CONFIG` / `SAYITERMANO_SOCKET` / `XDG_DATA_HOME`
@@ -682,8 +687,12 @@ env overrides (the same overrides work for running multiple daemons).
 
 Layout: `fluidvoice/backends/` (speech engines) · `processing/` (fillers,
 dictionary, spoken punctuation) · `ai/` (prompts + OpenAI-compatible client) ·
-`insertion.py` · `hotkey.py` (XGrabKey) · `control.py` (unix socket) ·
-`daemon.py` (orchestration).
+`context/` (focused-field context seam) · coordinators (`daemon.py`,
+`capture`/`command_coord`/`engine_manager`/`runtime_tasks`) · `insertion.py` +
+`selection.py` (typed/paste insertion + clipboard ownership) · `hotkey.py`
+(XGrabKey) · `control.py`/`control_server.py`/`mcp_server.py` (IPC) · `gtkui/`
+(settings/history/onboarding windows) · `evalharness/` (corpus + eval
+adapters) · `overlay.py` (pill).
 
 ## License & credits
 

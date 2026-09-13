@@ -1,12 +1,11 @@
 # SayItErmano — Status Ledger
 
-Last updated: 2026-09-11 · v0.8.1 released, **P0 reliability program +
-P1 wave 1 (backend seam, config registry, eval harness, knowledge
-docs) in tree (unreleased)** · post-P0-sweep defect fixes F1-F11/N1-N8
-landed · **phase 0 report + first-use funnel (wave 1), corpus tooling +
-eval adapters G1–G7 (wave 2) merged; dead-capture guard + doctor mic
-probe (2026-09-11 incidents)** · **3531 automated offline tests + 38
-integration** · verified
+Last updated: 2026-09-14 · v0.8.1 released, **P0–P2 + quality plan
+(Q1–Q7 code half, Q11, Q12) in tree (unreleased)** · night X11
+desktop matrix + full integration tier evidenced 2026-09-13 ·
+provider/paste-verify defect fixes F-31..F-37 landed 2026-09-14 ·
+**3480 automated offline tests + 154 display + 40 integration**
+(`just test-parallel` for the current count) · verified
 against upstream `altic-dev/FluidVoice` by a 5-agent audit
 (prompts/AI, punctuation rules, daemon pipeline, models, security).
 
