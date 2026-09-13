@@ -44,24 +44,22 @@
 
 ## What's new
 
-**Unreleased** — **hallucination guard + preview confidence gating**:
-when a pinned language (or a broken mic feed) makes Whisper return
-confident fluent garbage — phonetic English over Slovenian speech, "you
-you you" loops, "Thank you for watching" over silence — the take is
-re-decoded once with auto language detection (kept only when it comes
-back confidently better), pure repetition loops are never typed, and
-the live preview suppresses loop text too. The **preview** now carries
-a confidence signal: windows the model scored shaky never render, and a
-take whose windows *sustainedly* score low self-silences to an honest
-ellipsis (level bars keep the activity signal) — measured on real
-takes, 2/3/4 s windows track the final text at F1 0.26/0.49/0.57, so
-bump **Segment window** on large models. A mic streaming **digital
-silence** gets a "no audio from the mic" notice instead of a bare empty
-transcription.
-**Packaging** got honest: the deb is now declared (and dependency-pinned)
-Ubuntu 24.04 / x86_64 / Python 3.12 only, built in a pinned container from
-a committed, hash-lockable dependency set; the AUR recipe became a native
-source build against Arch's current Python.
+**[v0.8.2](https://github.com/acailic/SayItErmano/releases/tag/v0.8.2)** — the
+reliability + correctness release: every dictation path got audited and
+hardened. **Verified pasting** — paste mode now proves the target read the
+clipboard and the field received the text (duplicated transcripts in
+terminals, silently lost dictations in browsers: fixed, live-matrix
+evidenced); **focused-field context** (off by default) reads the target
+field so continuations, search boxes and per-app profiles work — and the
+AT-SPI provider now survives busy 26+-app desktops. **Hallucination
+guard + preview confidence**: fluent garbage over wrong-language or dead
+audio is re-decoded once and repetition loops never type; shaky preview
+windows never render. **Chunked file transcription** (10-min overlapping
+chunks, 6 h ceiling). **IPC hardening** across the control socket and MCP
+bridge, **first-use funnel** (visible model download, guided first
+insertion, honest insertion errors), and the deb's **pinned reproducible
+builds** (Ubuntu 24.04 / x86_64 / Python 3.12, hash-locked dependencies)
+plus a native **AUR** source recipe.
 
 **[v0.8.1](https://github.com/acailic/SayItErmano/releases/tag/v0.8.1)** — the
 macOS-parity release: the settings sidebar groups into **Settings / More**
@@ -70,17 +68,6 @@ History), Languages and Commands live on the Dictation page like on the
 Mac, prompt profiles render as **radio rows with per-row Rename/Delete
 menus**, the active model carries a radio indicator, and the History menu
 gains **Export as Text** plus a **Pause saving / Resume saving** toggle.
-
-**[v0.8.0](https://github.com/acailic/SayItErmano/releases/tag/v0.8.0)** — the
-integration + polish release: an **MCP server** (`sayit-ermano mcp` — drive
-dictation from Claude/other MCP clients), **vocabulary boosting**
-(`model.hotwords` — bias the decoder toward your names/jargon), a
-**prompt-leak guard** and **mid-take stall watchdog**, two upstream
-command-mode bug classes fixed with a **security policy** (destructive-gate
-bypasses), an AI **over-correction guard**, a **flicker-stable provisional
-preview tail**, and a redesigned **native app**: settings now navigate by
-sidebar, the history/onboarding/settings windows got a full presentation
-pass, and the deb shrank 77 → 65 MB.
 
 **[v0.7.0](https://github.com/acailic/SayItErmano/releases/tag/v0.7.0)** — the
 languages + endpoints + guardrails release: a **runtime language-cycle hotkey**

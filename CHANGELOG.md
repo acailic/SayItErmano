@@ -13,6 +13,70 @@ not reproduced here.
 
 ## [Unreleased]
 
+**Reliability sweep + focused-field context + verified pasting** — the
+P0–P2 program, the quality plan's code halves, and six live-reproduced
+defect fixes from the first night desktop matrix.
+
+- **IPC hardening (P0 audit sweep)** — the control socket gets a bounded
+  accept queue and per-request read deadlines (transient `accept()` errors
+  no longer kill the accept thread); the MCP bridge survives daemon
+  timeouts/restarts, answers JSON-RPC 2.0 batch arrays per member, refuses
+  NaN/Infinity ids at the parser, and bounds inbound stdio lines at 1 MiB;
+  history appends survive invalid UTF-8 blobs and U+2028/U+2029/U+0085
+  row rewrites; shutdown mutations are serialized and the control socket
+  is never blindly unlinked.
+- **Daemon decomposition (P1.2)** — `CaptureCoordinator`,
+  `CommandCoordinator`, `SpeechEngineManager` and `RuntimeTasks` extract
+  the take lifecycle, command conversations, engine lifecycle and named
+  timers from the 1.4k-line Daemon; behavior-preserving, pinned by the
+  failure-sequence tests (Q6).
+- **Focused-field context (P2) + per-app profiles** — an insertion-time
+  AT-SPI/X11 context seam reads the focused field (role, selection,
+  bounded preceding text) so continuation capitalization/spacing, search-box
+  handling and per-app prompt/behavior profiles work without a second
+  focus lookup; context is off by default pending the Wayland matrix.
+  **Busy-desktop fixes (F-31..F-33)**: the AT-SPI walk no longer truncates
+  26+-app desktops, no longer attaches to a stale ACTIVE-flagged Electron
+  window, and text reads work on GIR-only installs (verified live on
+  GNOME X11).
+- **Verified pasting (F-34/F-35)** — paste mode now verifies against the
+  target actually reading the selection's TEXT CONTENT and against the
+  focused field's payload (AT-SPI probe): duplicated transcripts in
+  terminals, silently lost dictations in Firefox/Discord and
+  stale-clipboard inserts in Chromium — all reproduced live on the night
+  matrix — are fixed; ownership is held until verification concludes so
+  the clipboard restore cannot race the app's read. Insertion notices
+  reach the daemon log even with notifications off (F-37).
+- **Chunked file transcription (P3)** — `transcribe` converts once and
+  splits long inputs into ten-minute overlapping chunks reconciled into
+  one transcript (ceiling 6 h); no more size-refusal.
+- **Hallucination guard + preview confidence gating** — when a pinned
+  language (or a broken mic feed) makes Whisper return confident fluent
+  garbage, the take is re-decoded once with auto language detection
+  (kept only when confidently better), pure repetition loops are never
+  typed, and the live preview suppresses loop text and self-silences
+  sustainedly-low-confidence takes to an honest ellipsis; a mic streaming
+  digital silence gets a "no audio from the mic" notice. Dead-capture
+  hallucinated text is suppressed and the doctor gained a mic probe.
+- **First-use funnel** — visible model download with a guided first
+  insertion; insertion failures are honest and actionable (machine-
+  readable kinds, install hints, automatic clipboard preservation,
+  "saved in History" as the floor).
+- **Eval tooling (Q8 groundwork)** — recording manifest/consent/
+  deterministic-split corpus tooling, measurement adapters (subgroups,
+  omissions, hallucination, punctuation, language, guard scores) and a
+  TTS decode baseline (real-model WER/latency/hallucination via piper).
+- **Quality program (code halves)** — canonical test tiers with three
+  green CI lanes (unit, process, gtk-x11 on Xvfb), a globally enforced
+  leak gate, branch-coverage baseline (79.9% line / 78.9% branch),
+  privacy/command-safety contracts, ruff correctness rules + focused
+  mypy, and release provenance binding publication to the tested
+  package and its exact source tree.
+- **Repository organization** — the vendored SSSF agent factory is
+  self-contained under `tools/factory/`, historical ADW plans archived
+  under `docs/plans/archive/`, and the documentation truth pass fixed
+  the drifted claims (test counts, paths, feature states).
+
 Packaging and documentation correctness (plan P0.6).
 
 - **Deb contract** — the .deb is now honestly Ubuntu 24.04 / x86_64 /
