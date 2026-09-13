@@ -6,7 +6,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from fluidvoice.context import AtspiProvider
-from fluidvoice.context.atspi_provider import read_focus, read_field_text
+from fluidvoice.context.atspi_provider import read_field_text, read_focus
 from fluidvoice.context.base import ReadLimits
 
 ACTIVE, FOCUSED = 1, 2
