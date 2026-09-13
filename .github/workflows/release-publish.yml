@@ -88,8 +88,12 @@ jobs:
                   exit 1 ;;
           esac
           echo "SHA=$TIP" >> "$GITHUB_ENV"
-          [ -n "$(git status --porcelain)" ] && {
-              echo "ERROR: dirty checkout" >&2; exit 1; }
+          # `if`, not `[ ... ] && { ... }`: a CLEAN checkout makes the
+          # test fail and the bare && list's status would kill the step
+          # under set -e (first live dispatch, 2026-09-13)
+          if [ -n "$(git status --porcelain)" ]; then
+              echo "ERROR: dirty checkout" >&2; exit 1
+          fi
 
       - name: Version agreement (input == pyproject == package)
         run: |
