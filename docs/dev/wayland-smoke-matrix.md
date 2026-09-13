@@ -95,3 +95,9 @@ another GTK search field). Repeat A1–A15 with:
   (python-atspi absent in the venv). Full detail + reproducers:
   [night-2026-09-13-desktop-matrix-x11.md](../research/night-2026-09-13-desktop-matrix-x11.md)
   (findings F1–F3). Matrices A (GNOME Wayland) and B (sway): NOT RUN.
+- **2026-09-14, C3 blocker trio FIXED (1f26739)** — apps cap 64,
+  ACTIVE-candidate probing with per-candidate budget slices, GIR
+  unbound `Atspi.Text.*` fallbacks (ledger F-31..F-33). Mechanism
+  live-verified on the same desktop (focused gedit at app index 26,
+  GIR-only venv: usable field-level read, preceding text returned).
+  The C3 CELL still needs a matrix rerun to close.

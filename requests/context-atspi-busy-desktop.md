@@ -1,6 +1,15 @@
 Context provider (AT-SPI) is silently blind on busy desktops - three reproduced defects from the 2026-09-13 night X11 desktop-matrix run (ledger F-31/F-32/F-33, evidence docs/research/night-2026-09-13-desktop-matrix-x11.md). All three block matrix C3 (and the Wayland REQ-PARITY path uses the same provider); none produce a log line - the read just degrades to missing/stale.
 
-STATUS: OPEN
+STATUS: SHIPPED
+
+<!-- shipped in 1f26739 (apps cap 64, ACTIVE-candidate probing with
+     per-candidate budget slices, GIR unbound Atspi.Text.* fallbacks;
+     gate 3460 passed / 4 skipped; live re-verified on the repro
+desktop: focused gedit at app index 26 of 27, GIR-only venv, read
+     returns usable field-level context with role=text and
+     preceding='mid sentence live probe' where the pre-fix read
+     returned missing. Ledger F-31/F-32/F-33 marked FIXED; matrix C3
+     cell itself awaits the next night-matrix rerun.) -->
 
 Today: read_focus (fluidvoice/context/atspi_provider.py) walks desktop -> first ACTIVE-flagged window -> FOCUSED descendant, under ReadLimits (fluidvoice/context/base.py) whose apps cap defaults to 16. Reproduced live on this desktop (26-28 a11y-registered apps, the interesting ones at indices 16+):
 

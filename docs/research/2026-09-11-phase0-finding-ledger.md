@@ -537,7 +537,7 @@ New findings from the live GNOME X11 matrix
 ([evidence](night-2026-09-13-desktop-matrix-x11.md)); all REPRODUCED
 live on `09e1b9f`, no fixes attempted (brief forbids product changes).
 
-### F-31 · INSERT · high · REPRODUCED
+### F-31 · INSERT · high · FIXED 2026-09-14 (1f26739)
 
 atspi context read silently `missing` on busy desktops:
 `ReadLimits.apps = 16` truncates this machine's 28-app a11y tree before
@@ -547,7 +547,12 @@ provider is the Wayland REQ-PARITY path (hits F-26's matrices).
 Acceptance: read finds the focused app with >20 a11y apps registered,
 matrix C3/A2 green.
 
-### F-32 · INSERT · high · REPRODUCED
+FIX: apps default 16 -> 64 (callers' explicit limits stay
+authoritative). Live: 27 apps registered, focused gedit at the end of
+the list, default-limit read returns usable field-level context
+(role=text). Matrix C3/A2 cells await the night-matrix rerun.
+
+### F-32 · INSERT · high · FIXED 2026-09-14 (1f26739)
 
 `_find_active_window` returns the first STATE_ACTIVE window in desktop
 order; unfocused Electron windows keep ACTIVE (reproduced: identity
@@ -555,7 +560,15 @@ attached to an unfocused "Codex|ChatGPT" window while gedit held focus)
 → wrong-window identity feeds profiles/spoken-send. Acceptance: read
 resolves the actually-focused window with >1 ACTIVE-flagged app present.
 
-### F-33 · INSERT · high · REPRODUCED
+FIX: all ACTIVE windows (bounded to 4, desktop order) are probed for a
+FOCUSED descendant with a per-candidate slice of the node budget — a
+huge unfocused tree cannot starve the true window's probe; no candidate
+has focus -> first ACTIVE stays the stale identity-only fallback
+(historical behavior). Pinned by unit tests
+(test_big_unfocused_tree_does_not_starve_later_candidates,
+test_unfocused_active_window_does_not_steal_identity).
+
+### F-33 · INSERT · high · FIXED 2026-09-14 (1f26739)
 
 atspi text reads return None on GIR-only installs (python-atspi absent,
 e.g. the project venv): `Accessible.get_text()` is the deprecated 1-arg
@@ -563,6 +576,13 @@ interface getter, so the duck-called `get_text(start, end)` raises and
 is swallowed; role/caret work, selection/preceding never do. Working
 form verified live: `Atspi.Text.get_text(node, start, end)`.
 Acceptance: adapter reads preceding/selection under GIR, A3/A4/A6 pass.
+
+FIX: the text adapters fall back to the unbound `Atspi.Text.*` calls
+when the bound path is missing/raises; text_range refuses to stringify
+a non-str result so a non-raising deprecated getter cannot smuggle
+garbage. Live (this desktop, GIR-only venv): read returns
+preceding='mid sentence live probe' from a focused gedit — the exact
+path that returned None before. A3/A4/A6 cells await the matrix rerun.
 
 ### F-34 · INSERT · high · REPRODUCED
 
