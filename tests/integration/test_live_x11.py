@@ -298,10 +298,19 @@ class TestSelectionHoldLive:
         import shutil
         if not shutil.which("copyq"):
             pytest.skip("copyq not installed")
+        # F-36 (ledger, night run 2026-09-13): probe the LIVE instance
+        # with the session's real XDG dirs - the isolated test env can
+        # hide the running CopyQ from its CLI and the old skip reason
+        # ("copyq not running") under-reported a live capability.
+        env = dict(os.environ)
+        env["XDG_CONFIG_HOME"] = os.path.expanduser("~/.config")
+        env["XDG_DATA_HOME"] = os.path.expanduser("~/.local/share")
         before = subprocess.run(["copyq", "read", "0"], capture_output=True,
-                                timeout=5)
+                                timeout=5, env=env)
         if before.returncode != 0:
-            pytest.skip("copyq not running")
+            pytest.skip("copyq CLI unreachable from the test env (the "
+                        "running instance does not answer via the "
+                        "session XDG dirs)")
         from fluidvoice.insertion import HYGIENE_TARGETS
         from fluidvoice.selection import SelectionHold
         hold = SelectionHold(b"FV-ITEST-SECRET-MARKER-8a1f", HYGIENE_TARGETS)
@@ -313,7 +322,7 @@ class TestSelectionHoldLive:
             hold.release()
         time.sleep(0.2)
         after = subprocess.run(["copyq", "read", "0"], capture_output=True,
-                               timeout=5)
+                               timeout=5, env=env)
         assert b"FV-ITEST-SECRET-MARKER-8a1f" not in after.stdout
         assert after.stdout == before.stdout  # top of history unchanged
 

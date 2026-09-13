@@ -627,10 +627,15 @@ closed under the harness, focus stolen; harness notes: click the
 textarea at window-relative y~220 for the file:// probe page, use a
 full DEFAULTS cfg so terminal detection works).
 
-### F-36 · TEST · low · REPRODUCED
+### F-36 · TEST · low · FIXED 2026-09-14 (7d3331d follow-up)
 
 `test_hygiene_markers_suppress_copyq_history` skips as "copyq not
 running" though copyq runs: its `copyq read 0` probe fails in the
 pytest env (isolated XDG) while succeeding in the session env — the
 tier under-reports a live capability. Acceptance: probe inherits the
 session env or the skip reason names the real cause.
+
+FIX: the probe (and the post-hold re-read) run with the session's real
+XDG dirs, and the skip names the actual cause ("CLI unreachable from
+the test env"). Verified live 2026-09-14: the test now RUNS and passes
+against the resident CopyQ.
