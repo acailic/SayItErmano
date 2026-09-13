@@ -6,7 +6,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from fluidvoice.context import AtspiProvider
-from fluidvoice.context.atspi_provider import read_focus
+from fluidvoice.context.atspi_provider import read_focus, read_field_text
 from fluidvoice.context.base import ReadLimits
 
 ACTIVE, FOCUSED = 1, 2
@@ -555,3 +555,58 @@ class TestGirUnboundInterfaces:
         assert ctx.accessible_role == "text"
         assert ctx.preceding_text is None
         assert ctx.selection_text is None
+
+
+class TestReadFieldText:
+    """The insertion-side probe (F-34/F-35 verification): the focused
+    field's text tail ending at the caret, None when unreadable."""
+
+    def test_returns_text_ending_at_caret(self):
+        field = FakeNode(name="f", role="text", states=(FOCUSED,),
+                         text=FakeText("0123456789", caret=7),
+                         app_name="app")
+        window = FakeNode(name="W", role="frame", states=(ACTIVE,),
+                          children=[field], app_name="app")
+        desktop = FakeNode(children=[FakeNode(name="a", role="application",
+                                              states=(),
+                                              children=[window])])
+        assert read_field_text(fake_module(desktop)) == "0123456"
+
+    def test_bounded_to_max_chars(self):
+        field = FakeNode(name="f", role="text", states=(FOCUSED,),
+                         text=FakeText("a" * 5000, caret=5000),
+                         app_name="app")
+        window = FakeNode(name="W", role="frame", states=(ACTIVE,),
+                          children=[field], app_name="app")
+        desktop = FakeNode(children=[FakeNode(name="a", role="application",
+                                              states=(),
+                                              children=[window])])
+        out = read_field_text(fake_module(desktop), max_chars=100)
+        assert out == "a" * 100
+
+    def test_no_focus_is_none(self):
+        window = FakeNode(name="W", role="frame", states=(ACTIVE,),
+                          children=[FakeNode(name="p", role="panel",
+                                             states=())], app_name="app")
+        desktop = FakeNode(children=[FakeNode(name="a", role="application",
+                                              states=(),
+                                              children=[window])])
+        # stale fallback has no focused node -> the probe must say None
+        assert read_field_text(fake_module(desktop)) is None
+
+    def test_broken_text_ops_are_none_not_crash(self):
+        class Broken:
+            def getCharacterCount(self):
+                raise RuntimeError("defunct")
+
+            def getCaretOffset(self):
+                raise RuntimeError("defunct")
+
+        field = FakeNode(name="f", role="text", states=(FOCUSED,),
+                         text=Broken(), app_name="app")
+        window = FakeNode(name="W", role="frame", states=(ACTIVE,),
+                          children=[field], app_name="app")
+        desktop = FakeNode(children=[FakeNode(name="a", role="application",
+                                              states=(),
+                                              children=[window])])
+        assert read_field_text(fake_module(desktop)) is None
