@@ -1,0 +1,238 @@
+# TTS decode-baseline reference set (wave 3, agent J).
+#
+# Fixed, versioned reference texts for the first real-model decode
+# benchmark: piper renders each [[utterances]] text to speech, the
+# production speech backend transcribes it, and the wave-2 measurement
+# adapters score the round trip (docs/eval/decode-baseline-2026-09-11.md).
+#
+# Stratification mirrors docs/eval/corpus-spec.md §4 (T1–T6) at 1/10th
+# scale — this is a TTS single-voice BASELINE, explicitly NOT the human
+# corpus (that brief stays OPEN). Rules for changes: this file is
+# versioned evidence; edit only by APPENDING a new utterance or bumping
+# a text wholesale with a note in the report — never silently rewrite
+# texts a published number depends on.
+#
+# tags double as the hotword vocabulary (hotword recall scores the tags
+# the reference contains); T4 carries its names/numbers there per the
+# corpus-spec §4 T4 convention.
+
+[[utterances]]
+id = "t1-01"
+taxonomy = "t1-command"
+text = "Open the downloads folder."
+tags = []
+
+[[utterances]]
+id = "t1-02"
+taxonomy = "t1-command"
+text = "Commit and push."
+tags = []
+
+[[utterances]]
+id = "t1-03"
+taxonomy = "t1-command"
+text = "Select all and copy."
+tags = []
+
+[[utterances]]
+id = "t1-04"
+taxonomy = "t1-command"
+text = "Switch to the next workspace."
+tags = []
+
+[[utterances]]
+id = "t1-05"
+taxonomy = "t1-command"
+text = "Close the current tab."
+tags = []
+
+[[utterances]]
+id = "t1-06"
+taxonomy = "t1-command"
+text = "Save the file and quit."
+tags = []
+
+[[utterances]]
+id = "t1-07"
+taxonomy = "t1-command"
+text = "Mute my microphone."
+tags = []
+
+[[utterances]]
+id = "t1-08"
+taxonomy = "t1-command"
+text = "Restart the timer."
+tags = []
+
+[[utterances]]
+id = "t2-01"
+taxonomy = "t2-message"
+text = "Hey, I'm running a few minutes late. Start without me."
+tags = []
+
+[[utterances]]
+id = "t2-02"
+taxonomy = "t2-message"
+text = "Can you review the pull request when you get a chance?"
+tags = []
+
+[[utterances]]
+id = "t2-03"
+taxonomy = "t2-message"
+text = "Sounds good to me. Let's ship it on Friday."
+tags = []
+
+[[utterances]]
+id = "t2-04"
+taxonomy = "t2-message"
+text = "I pushed the fix to the staging branch this morning."
+tags = []
+
+[[utterances]]
+id = "t2-05"
+taxonomy = "t2-message"
+text = "Thanks for the quick turnaround on that bug report."
+tags = []
+
+[[utterances]]
+id = "t2-06"
+taxonomy = "t2-message"
+text = "Let's grab coffee after the standup tomorrow."
+tags = []
+
+[[utterances]]
+id = "t3-01"
+taxonomy = "t3-jargon"
+text = "Git rebase onto the main branch."
+tags = ["rebase"]
+
+[[utterances]]
+id = "t3-02"
+taxonomy = "t3-jargon"
+text = "The kubernetes node is running out of memory."
+tags = ["kubernetes"]
+
+[[utterances]]
+id = "t3-03"
+taxonomy = "t3-jargon"
+text = "Run docker compose up in detached mode."
+tags = ["docker"]
+
+[[utterances]]
+id = "t3-04"
+taxonomy = "t3-jargon"
+text = "Add a systemd unit for the background worker."
+tags = ["systemd"]
+
+[[utterances]]
+id = "t3-05"
+taxonomy = "t3-jargon"
+text = "Export the API key as an environment variable."
+tags = ["API"]
+
+[[utterances]]
+id = "t3-06"
+taxonomy = "t3-jargon"
+text = "Pin the dependency to version 2.1."
+tags = []
+
+[[utterances]]
+id = "t3-07"
+taxonomy = "t3-jargon"
+text = "Check the stack trace in the journal log."
+tags = []
+
+[[utterances]]
+id = "t4-01"
+taxonomy = "t4-names-numbers"
+text = "Email Ananya Mueller about the invoice."
+tags = ["Ananya", "Mueller"]
+
+[[utterances]]
+id = "t4-02"
+taxonomy = "t4-names-numbers"
+text = "The server address is 192.168.0.1."
+tags = ["192.168.0.1"]
+
+[[utterances]]
+id = "t4-03"
+taxonomy = "t4-names-numbers"
+text = "My flight lands at 4:35 PM."
+tags = ["4:35"]
+
+[[utterances]]
+id = "t4-04"
+taxonomy = "t4-names-numbers"
+text = "Deploy version 3.14.2 to production."
+tags = ["3.14.2"]
+
+[[utterances]]
+id = "t4-05"
+taxonomy = "t4-names-numbers"
+text = "Book a table for six at Ljubljana Castle."
+tags = ["Ljubljana"]
+
+[[utterances]]
+id = "t4-06"
+taxonomy = "t4-names-numbers"
+text = "The invoice total is 1,250 euros."
+tags = ["1,250"]
+
+[[utterances]]
+id = "t5-01"
+taxonomy = "t5-longform"
+text = "This release focused on reliability. The recording pipeline now survives a microphone disappearing mid-take, and the daemon recovers from a locked session without losing audio. Latency on the preview path dropped by roughly a third after the segmentation rework. We also fixed the long-standing bug where the tray icon stopped updating after a theme change. Upgrading is recommended for everyone."
+tags = []
+
+[[utterances]]
+id = "t6-01"
+taxonomy = "t6-dev-prompt"
+text = "Write a Python function that walks a directory tree and deletes any file older than thirty days. Log each deletion and skip symlinks."
+tags = []
+
+[[utterances]]
+id = "t6-02"
+taxonomy = "t6-dev-prompt"
+text = "Refactor the config loader so it validates every key before the daemon starts. Add unit tests for the failure cases."
+tags = []
+
+[[utterances]]
+id = "t6-03"
+taxonomy = "t6-dev-prompt"
+text = "Explain why this curl request fails with a certificate error, then suggest two fixes."
+tags = []
+
+[[utterances]]
+id = "t6-04"
+taxonomy = "t6-dev-prompt"
+text = "Add a progress bar to the sync command and make it respect the quiet flag."
+tags = []
+
+# ── negatives (corpus-spec §4 negative table, subset) ──────────────────────
+# Digital silence at three lengths + deterministic low-level noise at two.
+# Empty reference: every produced word is a hallucination (G3).
+
+[[negatives]]
+id = "neg-silence-2s"
+kind = "silence"
+seconds = 2.0
+
+[[negatives]]
+id = "neg-silence-5s"
+kind = "silence"
+seconds = 5.0
+
+[[negatives]]
+id = "neg-silence-10s"
+kind = "silence"
+seconds = 10.0
+
+[[negatives]]
+id = "neg-noise-5s"
+kind = "noise"
+seconds = 5.0
+
+[[negatives]]
+id = "neg-noise-10s"
+kind = "noise"
+seconds = 10.0
