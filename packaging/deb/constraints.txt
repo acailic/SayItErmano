@@ -1,5 +1,5 @@
 # Locked dependency set for the SayItErmano deb — Ubuntu 24.04 / x86_64 /
-# Python 3.12 ONLY (P0.6 deb contract). Generated 2026-09-11
+# Python 3.12 ONLY (P0.6 deb contract). Generated 2026-09-13
 # from the locked venv by packaging/deb/update-constraints.sh. Hashing/
 # validation live in packaging/deb/locklib.py (Q3); the file is consumed
 # by packaging/build-deb.sh via `pip install --require-hashes -r <this
@@ -13,6 +13,7 @@
 #     rejected by release builds (DEB_ALLOW_PIN_ONLY=1 is dev-only);
 #   - regenerate with: packaging/deb/update-constraints.sh
 #     (add --pins-only for a network-free pin refresh).
+
 
 anyio==4.14.2 --hash=sha256:9f505dda5ac9f0c8309b5e8bd445a8c2bf7246f3ce950121e45ea15bc41d1494
 av==18.1.0 --hash=sha256:8a032e8d8ebc73dec079364b9b4a6837638a2d106e8472314e685ffbf163e700
@@ -39,3 +40,10 @@ pyyaml==6.0.1 --hash=sha256:6c22bec3fbe2524cde73d7ada88f6566758a8f7227bfbf93a408
 tokenizers==0.23.2 --hash=sha256:41c2f84d172449b4dadb9cdc508e3e364076613c35b16e76ecfe47a60d1e3305
 tqdm==4.68.4 --hash=sha256:5168118b2368f48c561afda8020fd79195b1bdb0bdf8086b88442c267a315dc2
 typing-extensions==4.16.0 --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
+# closure gap (2026-09-13, first live release-prepare dispatch): six is
+# invisible to update-constraints.sh's venv walk — the system deb's
+# egg-info for python-xlib declares no Requires — but pip resolves it
+# from PyPI metadata in the pinned container, where --require-hashes
+# demands every member pinned. Wheel re-hashed from PyPI (Ubuntu
+# 24.04 / py3.12 / x86_64); full-tree closure re-verified: no other gaps.
+six==1.17.0 --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274
