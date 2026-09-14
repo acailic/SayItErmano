@@ -352,7 +352,7 @@ class CommandCoordinator:
         if display is not None:
             try:
                 display.close()
-            except Exception:
+            except Exception:  # noqa: S110 — teardown/cleanup must not raise
                 pass
 
     def _close_panel(self) -> None:
@@ -362,7 +362,7 @@ class CommandCoordinator:
         if panel is not None:
             try:
                 panel.close()
-            except Exception:
+            except Exception:  # noqa: S110 — teardown/cleanup must not raise
                 pass
 
     def _end_session(self, close_panel: bool = True) -> None:

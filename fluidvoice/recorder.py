@@ -103,7 +103,7 @@ class Recorder:
         def _drain(p: subprocess.Popen) -> None:
             try:
                 p.stderr.read()
-            except Exception:
+            except Exception:  # noqa: S110 — poll/tick must survive transient failures
                 pass
 
         threading.Thread(target=_drain, args=(proc,), daemon=True).start()

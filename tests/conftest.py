@@ -41,7 +41,7 @@ def _warm_pillow_freetype() -> None:
         font = _load_font(13, bold=True)
         if font is not None:
             font.getlength("warm")
-    except Exception:
+    except Exception:  # noqa: S110 — best-effort grab; self-heal loop retries
         pass  # measurement guards must never break collection
 
 
@@ -278,7 +278,7 @@ def _session_leak_gate():
             proc.kill()
             try:
                 proc.wait(timeout=5)
-            except Exception:  # noqa: BLE001 - the assert below is the gate
+            except Exception:  # noqa: BLE001,S110 — the assert below is the gate
                 pass
     assert not TEST_LEAKS, (
         "tests leaked processes that outlived them (reaped by the "

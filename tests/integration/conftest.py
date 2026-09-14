@@ -208,7 +208,7 @@ def daemon_blocked_hotkey(isolated_env, tmp_path):
                 self.released = True
                 try:
                     self._display.close()  # X auto-releases passive grabs
-                except Exception:
+                except Exception:  # noqa: S110 — best-effort path; caller must proceed
                     pass
 
     handle = _Handle(holder, proc)

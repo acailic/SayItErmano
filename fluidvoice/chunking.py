@@ -91,7 +91,7 @@ def _probe_duration(path: Path) -> float | None:
             d = float(dur_us) / 1e6  # microseconds
             if d > 0:
                 return d
-    except Exception:
+    except Exception:  # noqa: S110 — optional capability probe
         pass
     ffprobe = shutil.which("ffprobe")
     if ffprobe:
@@ -103,7 +103,7 @@ def _probe_duration(path: Path) -> float | None:
                 capture_output=True, text=True, timeout=10)
             if out.returncode == 0:
                 return float(out.stdout.strip())
-        except Exception:
+        except Exception:  # noqa: S110 — optional capability probe
             pass
     return None
 

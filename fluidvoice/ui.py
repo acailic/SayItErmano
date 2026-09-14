@@ -31,5 +31,5 @@ def play_sound(which: str, volume: float = 1.0, enabled: bool = True) -> None:
                 args = [player, f"--volume={int(vol * 65536)}", str(path)]
             subprocess.run(args, stdout=subprocess.DEVNULL,
                            stderr=subprocess.DEVNULL, check=False)
-    except Exception:
+    except Exception:  # noqa: S110 — best-effort path; caller must proceed
         pass

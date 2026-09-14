@@ -405,7 +405,7 @@ class DictationPipeline:
         if display is not None:
             try:
                 display.set_badge(text)
-            except Exception:
+            except Exception:  # noqa: S110 — best-effort path; caller must proceed
                 pass
 
     def _insert(self, text: str) -> str:

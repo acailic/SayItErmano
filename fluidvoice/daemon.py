@@ -187,7 +187,7 @@ class Daemon:
         if self._command_hotkey:
             try:
                 self._command_hotkey.set_recording(active)
-            except Exception:
+            except Exception:  # noqa: S110 — best-effort grab; self-heal loop retries
                 pass
 
     # -- lifecycle -----------------------------------------------------------
@@ -517,12 +517,12 @@ class Daemon:
         if self._hotkey is not None:
             try:
                 self._hotkey.set_recording(recording)  # Escape grab while up
-            except Exception:
+            except Exception:  # noqa: S110 — best-effort path; caller must proceed
                 pass
         if self._mouse_ptt is not None:
             try:
                 self._mouse_ptt.set_recording(recording)
-            except Exception:
+            except Exception:  # noqa: S110 — best-effort path; caller must proceed
                 pass
 
     def _tray_tooltip(self) -> str:
@@ -550,7 +550,7 @@ class Daemon:
             lang, source = self._engines.language_detail()
             if source == "cycle" or lang != "auto":
                 tip += f" — lang: {lang}"
-        except Exception:  # noqa: BLE001 - tooltip must never break the tray
+        except Exception:  # noqa: BLE001,S110 — tooltip must never break the tray
             pass
         return tip
 
@@ -782,7 +782,7 @@ class Daemon:
         if tray is not None:
             try:
                 tray.refresh()
-            except Exception:
+            except Exception:  # noqa: S110 — cosmetic surface; degrade silently
                 pass
 
     def _restart_hotkey(self) -> None:

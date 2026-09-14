@@ -214,7 +214,7 @@ def _load_font(size: int, bold: bool):
     if path:
         try:
             return ImageFont.truetype(path, size)
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort path; caller must proceed
             pass
     try:
         return ImageFont.load_default(size=size)  # Pillow >= 10.1
@@ -1230,7 +1230,7 @@ class FluidOverlay:
                 ev = self._d.next_event()
                 if getattr(ev, "type", None) == self._X.ButtonPress:
                     clicked = True
-        except Exception:
+        except Exception:  # noqa: S110 — poll/tick must survive transient failures
             pass
         return clicked
 
@@ -1242,7 +1242,7 @@ class FluidOverlay:
         def _run():
             try:
                 cb()
-            except Exception:
+            except Exception:  # noqa: S110 — poll/tick must survive transient failures
                 pass  # daemon-side actions log their own failures
 
         threading.Thread(target=_run, name="fluidvoice-overlay-chip",
@@ -1366,7 +1366,7 @@ class FluidOverlay:
                 self._win.unmap()
                 self._win.destroy()
                 self._d.sync()
-            except Exception:
+            except Exception:  # noqa: S110 — best-effort path; caller must proceed
                 pass
             self._win = None
         x = (screen.width_in_pixels - w) // 2
@@ -1404,7 +1404,7 @@ class FluidOverlay:
                          bytes(packed))
             self._win.mask(xshape.SO.Set, xshape.SK.Bounding, 0, 0, pm)
             pm.free()
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort path; caller must proceed
             pass  # plain rectangle is the last resort; content is still right
 
     def _teardown_display(self) -> None:
@@ -1414,12 +1414,12 @@ class FluidOverlay:
             try:
                 win.unmap()
                 d.sync()
-            except Exception:
+            except Exception:  # noqa: S110 — teardown/cleanup must not raise
                 pass
         if d is not None:
             try:
                 d.close()
-            except Exception:
+            except Exception:  # noqa: S110 — teardown/cleanup must not raise
                 pass
 
 

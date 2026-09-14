@@ -136,14 +136,14 @@ class SelectionHold:
             if disp is not None:
                 try:
                     disp.close()
-                except Exception:
+                except Exception:  # noqa: S110 — best-effort grab; self-heal loop retries
                     pass
             raise
         except Exception as e:  # X connection errors, Xlib errors
             if disp is not None:
                 try:
                     disp.close()
-                except Exception:
+                except Exception:  # noqa: S110 — best-effort grab; self-heal loop retries
                     pass
             raise SelectionUnavailable(f"X error: {e}") from None
         now_ms = int(time.time() * 1000) & 0xFFFFFFFF
@@ -179,11 +179,11 @@ class SelectionHold:
                                        window=0,
                                        selection=self._clipboard, time=0)
             self._disp.flush()
-        except Exception:
+        except Exception:  # noqa: S110 — teardown/cleanup must not raise
             pass
         try:
             self._disp.close()
-        except Exception:
+        except Exception:  # noqa: S110 — teardown/cleanup must not raise
             pass
 
     # -- event loop ---------------------------------------------------------
@@ -248,7 +248,7 @@ class SelectionHold:
                 property=(prop if served else X.NONE))
             self._disp.send_event(ev.requestor, reply)
             self._disp.flush()
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort path; caller must proceed
             pass  # a broken requestor must never kill the hold
 
     # -- public waits ---------------------------------------------------------

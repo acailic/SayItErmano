@@ -104,7 +104,7 @@ def register_icons() -> None:
             theme = Gtk.IconTheme.get_for_display(display)
             if theme is not None:
                 theme.add_resource_path("/io/github/acailic/sayitermano/icons")
-    except Exception:
+    except Exception:  # noqa: S110 — best-effort path; caller must proceed
         pass  # icon-name lookups degrade to theme fallbacks
 
 

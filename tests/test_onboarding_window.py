@@ -33,7 +33,7 @@ from fluidvoice.gtkui.onboarding_funnel import FunnelCounters  # noqa: E402
 try:
     from gi.repository import Adw
     Adw.init()
-except Exception:  # pragma: no cover
+except Exception:  # pragma: no cover  # noqa: S110 — test cleanup must not mask the real failure
     pass
 
 

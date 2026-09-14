@@ -314,7 +314,7 @@ class SpeechEngineManager:
                 self.idle_unloaded_at = now
             try:
                 backend.close()
-            except Exception:  # noqa: BLE001 - teardown is best-effort
+            except Exception:  # noqa: BLE001,S110 — teardown is best-effort
                 pass
             del backend  # release before gc so cycles die here too
             gc.collect()

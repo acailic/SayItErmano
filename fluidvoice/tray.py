@@ -72,7 +72,7 @@ def list_microphones(refresh: bool = False) -> list[dict]:
             default = subprocess.run(["pactl", "get-default-source"],
                                      capture_output=True, text=True,
                                      timeout=3).stdout.strip()
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort path; caller must proceed
             pass
         for m in mics:
             m["default"] = m["name"] == default
@@ -461,7 +461,7 @@ class TrayIcon:
         if loop is not None:
             try:
                 loop.quit()
-            except Exception:
+            except Exception:  # noqa: S110 — teardown/cleanup must not raise
                 pass
 
     def refresh(self) -> None:
@@ -471,7 +471,7 @@ class TrayIcon:
         if self.active and self._loop is not None:
             try:
                 self._glib.idle_add(self._apply_state)
-            except Exception:
+            except Exception:  # noqa: S110 — cosmetic surface; degrade silently
                 pass
 
     # -- state (thread-safe; applied on the loop thread) ----------------------
@@ -483,7 +483,7 @@ class TrayIcon:
         if changed and self.active and self._loop is not None:
             try:
                 self._glib.idle_add(self._apply_state)
-            except Exception:
+            except Exception:  # noqa: S110 — best-effort path; caller must proceed
                 pass
 
     def _apply_state(self) -> bool:  # on the GLib loop; False = run once

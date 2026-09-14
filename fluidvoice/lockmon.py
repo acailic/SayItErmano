@@ -357,7 +357,7 @@ class LockMonitor:
                 bus.remove_signal_receiver(handler,
                                            signal_name=signal_name,
                                            dbus_interface=iface, path=path)
-            except Exception:  # noqa: BLE001 - hygiene only
+            except Exception:  # noqa: BLE001,S110 — hygiene only
                 pass
 
     def _on_session_removed(self, sid, path) -> None:
@@ -463,7 +463,7 @@ class LockMonitor:
                         self._on_screensaver_active,
                         signal_name="ActiveChanged",
                         dbus_interface=name)
-            except Exception:
+            except Exception:  # noqa: S110 — poll/tick must survive transient failures
                 pass  # optional source
             loop = GLib.MainLoop()
             self._loop = loop
@@ -524,7 +524,7 @@ class LockMonitor:
         if loop is not None:
             try:
                 loop.quit()
-            except Exception:
+            except Exception:  # noqa: S110 — teardown/cleanup must not raise
                 pass
         thread, self._thread = self._thread, None
         if thread is not None:

@@ -192,7 +192,7 @@ class AIClient:
                 detail = ""
                 try:
                     detail = e.read().decode(errors="replace")[:300]
-                except Exception:
+                except Exception:  # noqa: S110 — best-effort path; caller must proceed
                     pass
                 last_err = AIError(f"HTTP {e.code}: {detail}")
                 if e.code in (400, 401, 403, 404, 422):

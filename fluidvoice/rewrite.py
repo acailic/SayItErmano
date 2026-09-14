@@ -101,7 +101,7 @@ def _capture_selection_wayland() -> str:
     if previous is not None and previous != selected:
         try:
             _wl_clipboard_write(previous, mime)
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort path; caller must proceed
             pass
     return text.strip()
 

@@ -359,7 +359,7 @@ class HotkeyListener:
             if healthy_after != healthy_before:
                 try:
                     self._on_grab_change(healthy_after)
-                except Exception:
+                except Exception:  # noqa: S110 — best-effort grab; self-heal loop retries
                     pass
             if (healthy_after and not healthy_before
                     and self._was_healthy is not None):
@@ -371,7 +371,7 @@ class HotkeyListener:
                     self._combo_attempts.pop((self._keycode, self._mods | extra), None)
                 self._refuse_warned = False
             self._was_healthy = healthy_after
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort grab; self-heal loop retries
             pass  # a display closing under stop() must not kill the loop
 
     def _resolve_cancel(self) -> str:
@@ -426,7 +426,7 @@ class HotkeyListener:
         if self._display:
             try:
                 self._display.close()
-            except Exception:
+            except Exception:  # noqa: S110 — teardown/cleanup must not raise
                 pass
 
     @property
@@ -469,7 +469,7 @@ class HotkeyListener:
         finally:
             try:
                 d.close()
-            except Exception:
+            except Exception:  # noqa: S110 — poll/tick must survive transient failures
                 pass
 
     def set_recording(self, active: bool) -> None:
@@ -552,7 +552,7 @@ class HotkeyListener:
             d.ungrab_keyboard(X.CurrentTime)
             d.screen().root.ungrab_key(keycode, X.AnyModifier)
             d.sync()
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort path; caller must proceed
             pass  # best-effort: worst case keys stay swallowed
 
     def _hold_until_release(self, d: Display, keycode: int) -> bool:
@@ -571,7 +571,7 @@ class HotkeyListener:
                     root.grab_key(self._escape_keycode, X.AnyModifier, False,
                                   X.GrabModeAsync, X.GrabModeAsync,
                                   onerror=lambda _e, _r: 1)  # swallow refusals
-                except Exception:
+                except Exception:  # noqa: S110 — teardown/cleanup must not raise
                     pass  # best-effort: cancel via CLI still works
             try:
                 while not self._stop_flag.is_set():
@@ -597,17 +597,17 @@ class HotkeyListener:
                 if self._escape_keycode:
                     try:
                         root.ungrab_key(self._escape_keycode, X.AnyModifier)
-                    except Exception:
+                    except Exception:  # noqa: S110 — teardown/cleanup must not raise
                         pass
                 try:
                     self._grab(keycode)  # re-arm the dictation hotkey
                     self._settle_grabs(keycode)
-                except Exception:
+                except Exception:  # noqa: S110 — teardown/cleanup must not raise
                     pass
         finally:
             try:
                 d.ungrab_keyboard(X.CurrentTime)  # release escape activation
-            except Exception:
+            except Exception:  # noqa: S110 — teardown/cleanup must not raise
                 pass
         return aborted
 
@@ -660,7 +660,7 @@ class HotkeyListener:
             try:
                 self._grab(keycode)  # re-arm after the decision window
                 self._settle_grabs(keycode)
-            except Exception:
+            except Exception:  # noqa: S110 — best-effort path; caller must proceed
                 pass
 
     def _safe(self, cb) -> None:
@@ -668,7 +668,7 @@ class HotkeyListener:
             return
         try:
             cb()
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort path; caller must proceed
             pass
 
 
@@ -835,7 +835,7 @@ class MousePTTListener:
             if healthy_after != healthy_before:
                 try:
                     self._on_grab_change(healthy_after)
-                except Exception:
+                except Exception:  # noqa: S110 — best-effort grab; self-heal loop retries
                     pass
             if (healthy_after and not healthy_before
                     and self._was_healthy is not None):
@@ -844,7 +844,7 @@ class MousePTTListener:
                     self._combo_attempts.pop((self.button, self._mods | extra), None)
                 self._refuse_warned = False
             self._was_healthy = healthy_after
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort grab; self-heal loop retries
             pass  # a display closing under stop() must not kill the loop
 
     def _resolve_cancel(self) -> str:
@@ -906,7 +906,7 @@ class MousePTTListener:
         if self._display:
             try:
                 self._display.close()
-            except Exception:
+            except Exception:  # noqa: S110 — teardown/cleanup must not raise
                 pass
 
     @property
@@ -937,7 +937,7 @@ class MousePTTListener:
         finally:
             try:
                 d.close()
-            except Exception:
+            except Exception:  # noqa: S110 — poll/tick must survive transient failures
                 pass
 
     def _classify_idle_event(self, event) -> str:
@@ -1038,7 +1038,7 @@ class MousePTTListener:
             # Free the pointer: the passive grab's activation holds it.
             try:
                 d.ungrab_pointer(X.CurrentTime)
-            except Exception:
+            except Exception:  # noqa: S110 — best-effort path; caller must proceed
                 pass  # best-effort: worst case clicks stay swallowed
             # Escape still cancels: arm a passive grab for the hold only
             if self._escape_keycode:
@@ -1046,7 +1046,7 @@ class MousePTTListener:
                     root.grab_key(self._escape_keycode, X.AnyModifier, False,
                                   X.GrabModeAsync, X.GrabModeAsync,
                                   onerror=lambda _e, _r: 1)  # swallow refusals
-                except Exception:
+                except Exception:  # noqa: S110 — best-effort path; caller must proceed
                     pass  # best-effort: cancel via CLI still works
             try:
                 while not self._stop_flag.is_set():
@@ -1063,7 +1063,7 @@ class MousePTTListener:
                             if verdict == _MOUSE_HOLD_REPRESS:
                                 try:
                                     d.ungrab_pointer(X.CurrentTime)
-                                except Exception:
+                                except Exception:  # noqa: S110 — best-effort path; caller must proceed
                                     pass
                     except Exception:
                         break  # display closed / stop() - end the hold
@@ -1072,18 +1072,18 @@ class MousePTTListener:
                 if self._escape_keycode:
                     try:
                         root.ungrab_key(self._escape_keycode, X.AnyModifier)
-                    except Exception:
+                    except Exception:  # noqa: S110 — best-effort path; caller must proceed
                         pass
         finally:
             self._holding = False
             try:
                 # idempotent; covers the re-press path's re-activation
                 d.ungrab_pointer(X.CurrentTime)
-            except Exception:
+            except Exception:  # noqa: S110 — best-effort path; caller must proceed
                 pass
             try:
                 d.ungrab_keyboard(X.CurrentTime)  # release escape activation
-            except Exception:
+            except Exception:  # noqa: S110 — best-effort path; caller must proceed
                 pass
         if aborted:
             self._safe(self.on_cancel)
@@ -1096,5 +1096,5 @@ class MousePTTListener:
             return
         try:
             cb()
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort path; caller must proceed
             pass

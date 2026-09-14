@@ -137,7 +137,7 @@ class RemoteSttBackend:
                 detail = ""
                 try:
                     detail = e.read().decode(errors="replace")[:300]
-                except Exception:
+                except Exception:  # noqa: S110 — best-effort path; caller must proceed
                     pass
                 last_err = RemoteSttError(f"remote STT {host}: "
                                           f"HTTP {e.code}: {detail}")

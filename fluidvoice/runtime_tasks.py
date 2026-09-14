@@ -422,7 +422,7 @@ class RuntimeTasks:
     def _safe_log(self, msg: str) -> None:
         try:
             self._log(msg)
-        except Exception:  # noqa: BLE001 - logging must never raise here
+        except Exception:  # noqa: BLE001,S110 — logging must never raise here
             pass
 
     def _deadline(self, d: float | None) -> float:

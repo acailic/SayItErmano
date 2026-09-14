@@ -198,20 +198,20 @@ class TestHoldPassthroughLive:
                 subprocess.run(["xdotool", "keyup", "F9"], timeout=5)
                 try:
                     control.request("cancel")
-                except Exception:
+                except Exception:  # noqa: S110 — best-effort path; caller must proceed
                     pass
         finally:
             if win is not None:
                 try:
                     if prev_focus is not None:
                         prev_focus.set_input_focus(X.RevertToParent, X.CurrentTime)
-                except Exception:
+                except Exception:  # noqa: S110 — best-effort path; caller must proceed
                     pass
                 try:
                     win.unmap()
                     win.destroy()
                     d.sync()
-                except Exception:
+                except Exception:  # noqa: S110 — best-effort path; caller must proceed
                     pass
             d.close()
 
@@ -475,7 +475,7 @@ class TestMousePTTLive:
                 self._mouse_up_8()
                 try:
                     control.request("cancel")
-                except Exception:
+                except Exception:  # noqa: S110 — best-effort path; caller must proceed
                     pass
 
             # best-effort: let the take transcribe while focus is the
@@ -492,13 +492,13 @@ class TestMousePTTLive:
                     if prev_focus is not None:
                         prev_focus.set_input_focus(X.RevertToParent,
                                                    X.CurrentTime)
-                except Exception:
+                except Exception:  # noqa: S110 — best-effort path; caller must proceed
                     pass
                 try:
                     win.unmap()
                     win.destroy()
                     d.sync()
-                except Exception:
+                except Exception:  # noqa: S110 — best-effort path; caller must proceed
                     pass
             d.close()
 
@@ -518,13 +518,13 @@ class TestMousePTTLive:
             self._mouse_up_8()
             try:
                 control.request("cancel")
-            except Exception:
+            except Exception:  # noqa: S110 — best-effort path; caller must proceed
                 pass
 
     def _close_quietly(self, display):
         try:
             display.close()
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort path; caller must proceed
             pass
 
     def test_blocked_arm_then_recovery(self, daemon_mouse_ptt, tmp_path):
@@ -571,7 +571,7 @@ class TestMousePTTLive:
             self._mouse_up_8()
             try:
                 control.request("cancel")
-            except Exception:
+            except Exception:  # noqa: S110 — best-effort path; caller must proceed
                 pass
             self._close_quietly(holder)
             _stop_daemon(proc, tmp_path)

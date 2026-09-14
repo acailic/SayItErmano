@@ -141,7 +141,7 @@ class AIPageMixin:
                 )
                 self.provider_img.set_visible(True)
                 return
-            except Exception:
+            except Exception:  # noqa: S110 — best-effort path; caller must proceed
                 pass
         self.provider_img.set_visible(False)
 
@@ -437,6 +437,6 @@ class AIPageMixin:
         """Record the pair as permanently dismissed (never resuggested)."""
         try:
             self.c.dict_suggestion_dismiss(ref["heard"], ref["corrected"])
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort path; caller must proceed
             pass  # a failed dismiss leaves the row in place on rebuild
         self._load_suggestions()

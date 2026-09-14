@@ -64,7 +64,7 @@ class FasterWhisperBackend:
         # second of silence gets that out of the way at daemon start.
         try:
             self._warm_inference()
-        except Exception:
+        except Exception:  # noqa: S110 — optional capability probe
             pass  # the model loaded; a failed probe must not fail startup
 
     def close(self) -> None:

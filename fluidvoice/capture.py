@@ -479,7 +479,7 @@ class CaptureCoordinator:
         if display is not None:
             try:
                 display.show("⏎ sending… (speak to cancel)")
-            except Exception:  # noqa: BLE001 - display is best-effort
+            except Exception:  # noqa: BLE001,S110 — display is best-effort
                 pass
         holder: dict[str, threading.Timer] = {}
 
@@ -505,7 +505,7 @@ class CaptureCoordinator:
                 display.show(last[-getattr(engine, "char_limit", 160):]
                              if len(last) > getattr(engine, "char_limit", 160)
                              else last)
-            except Exception:  # noqa: BLE001 - display is best-effort
+            except Exception:  # noqa: BLE001,S110 — display is best-effort
                 pass
 
     def cancel_send_countdown(self) -> None:

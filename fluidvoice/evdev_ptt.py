@@ -82,7 +82,7 @@ class EvdevPTT:
                 return dev
             try:
                 dev.close()
-            except Exception:
+            except Exception:  # noqa: S110 — best-effort path; caller must proceed
                 pass
         return None
 
@@ -130,7 +130,7 @@ class EvdevPTT:
         if dev is not None:
             try:
                 dev.close()  # breaks a blocking read_one if any
-            except Exception:
+            except Exception:  # noqa: S110 — teardown/cleanup must not raise
                 pass
 
     # -- loop ------------------------------------------------------------------

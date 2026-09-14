@@ -76,7 +76,7 @@ class PreviewEngine:
                 if text and text != self.last_text:
                     self.last_text = text
                     self._emit(text)
-            except Exception:
+            except Exception:  # noqa: S110 — poll/tick must survive transient failures
                 pass  # preview is best-effort; the final pass is authoritative
             finally:
                 self._busy = False
@@ -92,7 +92,7 @@ class PreviewEngine:
         shown = text if len(text) <= self.char_limit else "…" + text[-self.char_limit:]
         try:
             self.on_text(shown)
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort path; caller must proceed
             pass
 
 
@@ -324,9 +324,9 @@ class SegmentedPreviewEngine:
         except TypeError:
             try:  # displays with the legacy single-arg signature
                 self.on_text(shown)
-            except Exception:
+            except Exception:  # noqa: S110 — cosmetic surface; degrade silently
                 pass
-        except Exception:
+        except Exception:  # noqa: S110 — cosmetic surface; degrade silently
             pass
 
     # -- loop --------------------------------------------------------------
@@ -345,7 +345,7 @@ class SegmentedPreviewEngine:
             self._busy = True
             try:
                 self._tick(raw, audio_s)
-            except Exception:
+            except Exception:  # noqa: S110 — poll/tick must survive transient failures
                 pass  # preview is best-effort; the final pass is authoritative
             finally:
                 self._busy = False
@@ -372,7 +372,7 @@ class SegmentedPreviewEngine:
                 self._send_armed = True
                 try:
                     self.on_send_countdown()
-                except Exception:
+                except Exception:  # noqa: S110 — poll/tick must survive transient failures
                     pass
             elif quiet < 0.5:
                 # active speech: cancels a running countdown AND
@@ -382,7 +382,7 @@ class SegmentedPreviewEngine:
                     self._send_armed = False
                     try:
                         self.on_send_resume()
-                    except Exception:
+                    except Exception:  # noqa: S110 — poll/tick must survive transient failures
                         pass
                 self._phrase_seen_s = None
 
@@ -401,7 +401,7 @@ class SegmentedPreviewEngine:
                 self._silence_fired = True
                 try:
                     self.on_silence()
-                except Exception:
+                except Exception:  # noqa: S110 — poll/tick must survive transient failures
                     pass
                 return
 
@@ -609,7 +609,7 @@ class NotifyPreview:
             out = (proc.stdout or "").strip()
             if out.isdigit():
                 self._id = int(out)
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort path; caller must proceed
             pass
 
     def close(self) -> None:
@@ -618,7 +618,7 @@ class NotifyPreview:
             try:
                 subprocess.run(["notify-send", "-a", "SayItErmano", "-r",
                                 str(self._id), "-t", "1", " "], timeout=3)
-            except Exception:
+            except Exception:  # noqa: S110 — teardown/cleanup must not raise
                 pass
             self._id = None
 

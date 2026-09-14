@@ -98,7 +98,7 @@ def cuda_available() -> bool:
         import torch.cuda  # noqa: F401
         if torch.cuda.is_available():
             return True
-    except Exception:
+    except Exception:  # noqa: S110 — optional capability probe
         pass
     return False
 

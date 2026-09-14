@@ -140,12 +140,12 @@ def _emit_result(result: InsertResult,
     for fn in list(_result_listeners):
         try:
             fn(result)
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort path; caller must proceed
             pass  # a broken listener must never break insertion
     if on_result is not None:
         try:
             on_result(result)
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort path; caller must proceed
             pass
 
 
@@ -349,7 +349,7 @@ def startup_capability_check(cfg: dict | None = None, *,
     if not report.ok and on_issue is not None:
         try:
             on_issue(report)
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort path; caller must proceed
             pass
     return report
 
@@ -815,7 +815,7 @@ def insert_paste(text: str, *, key: str = "ctrl+v", verify: bool = True,
             skip_restore = hold.lost_ownership  # user's fresh copy wins
             try:
                 hold.release()
-            except Exception:
+            except Exception:  # noqa: S110 — best-effort path; caller must proceed
                 pass
         _restore_clipboard(previous, prev_is_text,
                            verify_text=hold is not None and prev_is_text,
@@ -915,7 +915,7 @@ def _fail_insert(exc: InsertError, *, text: str, report: CapabilityReport,
     if on_notice is not None:
         try:
             on_notice(message)
-        except Exception:
+        except Exception:  # noqa: S110 — best-effort path; caller must proceed
             pass
     _emit_result(result, on_result)
     failure = InsertionFailure(message, kind=kind, result=result,
