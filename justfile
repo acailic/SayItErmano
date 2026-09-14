@@ -80,12 +80,17 @@ test-process *ARGS:
 # Tiers are measured separately (this is the unit tier only; the display
 # tier runs the same command with -m needs_display). Baseline:
 # docs/research/2026-09-12-coverage-baseline.md — ratchet upward only.
+# FLOOR 71 (org plan 5.2/E2): measured 71.94% post-v0.8.2 (the released
+# code base grew faster than the suite since the 09-12 baseline's
+# 79.9%); ci.yml's unit job carries the same number — pinned together
+# by tests/test_tier_source.py. Raise as coverage grows.
 coverage *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p build/coverage
     {{python}} scripts/test_tier.py unit -q -n auto -W error --strict-markers --timeout=300 \
         --cov=fluidvoice --cov-branch \
+        --cov-fail-under=71 \
         --cov-report=term-missing \
         --cov-report=xml:build/coverage/unit.xml \
         {{ARGS}}

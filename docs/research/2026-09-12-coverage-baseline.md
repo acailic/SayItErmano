@@ -39,9 +39,16 @@ privacy/safety surfaces.
 
 ## Ratchet policy
 
+- **2026-09-14 (org plan 5.2/E2): the floor is now ENFORCED** —
+  `--cov-fail-under=71` in `just coverage` and the CI unit job (the
+  two numbers pinned together by `tests/test_tier_source.py`).
+  Measured total 71.95%: the v0.8.2 code delta (context seam,
+  first-use funnel, evalharness, chunking) grew faster than the unit
+  suite, superseding the 09-12 79.9%/78.9% recording as the floor.
+  Raise the flag as meaningful assertions land.
 - The unit-tier branch percentage must not regress: CI's unit job
-  uploads `build/coverage/unit.xml`; a drop below the recorded baseline
-  (78.9% branches) is a review blocker even when tests pass.
+  uploads `build/coverage/unit.xml`; a drop below the enforced floor
+  is a review blocker even when tests pass (and now FAILS the lane).
 - Raise the recorded numbers here when meaningful assertions land
   (Q6/Q7/Q11 work); do NOT chase 100% — the adapters and live-host paths
   are integration-tier territory by design.

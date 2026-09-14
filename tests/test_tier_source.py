@@ -58,6 +58,19 @@ def test_build_args_per_tier() -> None:
     ]
 
 
+def test_coverage_floor_agrees_between_justfile_and_ci() -> None:
+    """--cov-fail-under must be identical in just coverage and the CI
+    unit job (org plan 5.2/E2) — a drifted floor is a silent ratchet."""
+    import re
+
+    def floor(rel: str) -> str:
+        m = re.search(r"--cov-fail-under=(\d+)", (REPO_ROOT / rel).read_text())
+        assert m, f"{rel} lost its coverage floor"
+        return m.group(1)
+
+    assert floor("justfile") == floor(".github/workflows/ci.yml")
+
+
 def test_unknown_tier_exits_with_message(capsys) -> None:  # type: ignore[no-untyped-def]
     try:
         tier.build_args("nope", [])

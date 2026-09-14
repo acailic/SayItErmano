@@ -449,7 +449,20 @@ with a fresh empty Unreleased above; backfilled the never-mentioned
 lock suppression + dictionary auto-learning (v0.6.0) and mic priority
 fallback (v0.4.0).
 
-Remaining: Phase 5 items (5.1 single tier source, 5.2 coverage floor,
-5.3 control-route table, 5.4 CLI table, 5.5 page builders, 5.6
-silent-swallow lint, 5.7 typing ratchet), Phase 6 as external access
-arrives; 5.8/5.9 opportunistically.
+### 2026-09-14 — Phase 5.1 + 5.2
+
+**5.1** — `scripts/test_tier.py` is the single tier-selection source
+(marker expression + path selection per tier); justfile (7 recipes),
+ci.yml (unit + gtk-x11) and release-prepare.yml all exec it with their
+own strictness/coverage flags. The unit expression went from three
+executable copies to one; `tests/test_tier_source.py` guards against
+re-inlining and pins the per-tier argv.
+**5.2** — coverage floor enforced: `--cov-fail-under=71` in `just
+coverage` and the CI unit job, pinned together by the same test.
+Measured 71.95% post-v0.8.2 (code grew faster than the suite since
+the 09-12 baseline's 79.9% — recorded in the baseline doc); a floor
+of 72 flapped on ±0.01 jitter, 71 is the stable start of the ratchet.
+
+Remaining: Phase 5 items (5.3 control-route table, 5.4 CLI table,
+5.5 page builders, 5.6 silent-swallow lint, 5.7 typing ratchet),
+Phase 6 as external access arrives; 5.8/5.9 opportunistically.

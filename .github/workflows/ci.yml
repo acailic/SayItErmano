@@ -38,10 +38,17 @@ jobs:
         # Q5: branch coverage attached per run; the recorded baseline
         # (docs/research/2026-09-12-coverage-baseline.md) is the ratchet
         # floor — a regression is a review blocker.
+      - name: Offline suite, warnings as errors (canonical unit gate)
+        # Same scope + strictness as `just gate` (Q1): needs_* tiers are
+        deselected by DECLARED requirement, so local and CI collection
+        lists match regardless of the dev machine. Coverage floor 71 —
+        org plan 5.2/E2, must match justfile's coverage recipe
+        (pinned by tests/test_tier_source.py); regressions below the
+        floor — a review blocker — now FAIL the lane.
         run: >-
           python scripts/test_tier.py unit -q -W error -ra --strict-markers --strict-config
           --timeout=300 --junitxml=build/test-results/unit.xml
-          --cov=fluidvoice --cov-branch
+          --cov=fluidvoice --cov-branch --cov-fail-under=71
           --cov-report=term-missing
           --cov-report=xml:build/coverage/unit.xml
       - name: Upload test results
