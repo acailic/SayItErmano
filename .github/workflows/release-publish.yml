@@ -71,7 +71,7 @@ jobs:
       NOTES_IN: ${{ inputs.notes }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: linux
           fetch-depth: 0

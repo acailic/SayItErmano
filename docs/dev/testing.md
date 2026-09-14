@@ -30,12 +30,14 @@ just coverage           # branch coverage (baseline: docs/research/
                         # 2026-09-12-coverage-baseline.md)
 ```
 
-Tier selection lives in the [justfile](../../justfile) (`just test`,
-`just test-parallel`, `just test-ui`, `just test-process`,
-`just test-integration`) and is mirrored in the CI workflow — run the
-same recipes locally that CI runs (capability markers: `model`,
-`network`, `desktop`, `packaging`, `gtk`, plus `slow` for duration
-only).
+Tier selection lives ONCE in
+[scripts/test_tier.py](../../scripts/test_tier.py) (org plan 5.1): the
+justfile recipes (`just test`, `just test-parallel`, `just test-ui`,
+`just test-process`, `just test-integration`) and every CI lane exec
+that script — run the same recipes locally that CI runs (capability
+markers: `model`, `network`, `desktop`, `packaging`, `gtk`, plus
+`slow` for duration only); `tests/test_tier_source.py` fails if the
+expression ever gets re-inlined.
 
 The test suite — run `just test-parallel` for the current count
 (3480 offline unit/contract tests at 2026-09-14, ~20 s on this
