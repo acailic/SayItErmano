@@ -235,7 +235,7 @@ def handle_message(msg: Any,
 
 
 def _handle_batch(batch: list, request: Callable[..., dict]
-                  ) -> list | None:
+                  ) -> list | dict | None:
     """JSON-RPC 2.0 §Batch: process each member independently and reply
     with an array (invalid members get individual error objects;
     notifications are skipped). An empty batch is a single invalid-

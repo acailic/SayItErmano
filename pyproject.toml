@@ -122,10 +122,13 @@ target-version = "py311"  # matches requires-python ">=3.11" (F10): the
 # buying correctness. the tools/factory/** tree is vendored SSSF factory
 # assets, exempt from the new codes so template updates don't churn.
 [tool.ruff.lint]
-select = ["I001", "F401", "F541", "F632", "F841", "S110"]  # S110 (5.6): no NEW silent except-pass — every existing one carries a noqa reason
+select = ["I001", "F401", "F541", "F632", "F841", "S110", "B006", "B023"]  # S110 (5.6): no NEW silent except-pass — every existing one carries a noqa reason. B006/B023 (5.7): mutable defaults, loop-var closures (GTK callbacks, threads)
 
 [tool.ruff.lint.per-file-ignores]
 "tools/factory/**" = ["F541", "F632", "F841"]
+# archived run-artifact analysis scripts (org plan 2.1) — historical
+# evidence, not live code; not held to the live ratchets
+"docs/research/data/**" = ["B023"]
 
 # Branch coverage for the Q5 baseline/ratchet: `just coverage` (unit
 # tier) and CI's unit job write XML here; tiers are measured separately
@@ -145,10 +148,14 @@ skip_empty = true
 # flood. Grow `files` as more modules get honest annotations.
 [tool.mypy]
 python_version = "3.11"
-files = [
+files = [  # 5.7 ratchet: IPC + persistence boundaries join the typed seam
     "fluidvoice/backends/base.py",
     "fluidvoice/runtime_tasks.py",
     "fluidvoice/chunking.py",
+    "fluidvoice/config.py",
+    "fluidvoice/history.py",
+    "fluidvoice/control_server.py",
+    "fluidvoice/mcp_server.py",
     "packaging/deb/locklib.py",
     "scripts/release_verify.py",
 ]

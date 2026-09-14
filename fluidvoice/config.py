@@ -50,7 +50,7 @@ Coercer = Callable[[Any], tuple[bool, Any]]
 #: the key); "settable" = accepted by apply_settings (socket / UI edits).
 PERSIST = frozenset({"save", "settable"})
 PERSIST_SAVE_ONLY = frozenset({"save"})       # file-carried, never socket-set
-PERSIST_NONE = frozenset()                    # in DEFAULTS, managed by nobody
+PERSIST_NONE: frozenset[str] = frozenset()   # in DEFAULTS, managed by nobody
 
 
 def _bool() -> Coercer:
@@ -1112,7 +1112,7 @@ SETTING_RANGES: dict[tuple[str, str], Any] = {
 }
 
 SETTING_ENUMS: dict[tuple[str, str], set] = {
-    (s, k): set(spec.coercer.options)
+    (s, k): set(getattr(spec.coercer, "options", ()))
     for (s, k), spec in REGISTRY.items()
     if getattr(spec.coercer, "kind", None) == "enum"
 }

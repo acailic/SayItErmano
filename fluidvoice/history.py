@@ -421,7 +421,7 @@ class HistoryStore:
         with self._locked(exclusive=False):
             if not q:
                 return self._tail_unlocked(limit)
-            out = []
+            out: list[dict] = []
             for entry in reversed(self._read_all_unlocked()):
                 if len(out) >= limit:
                     break
