@@ -482,6 +482,18 @@ per subcommand + one `_cmd_*` handler each (the five control
 round-trips share `_cmd_remote`); `main()` is 7 lines. Bodies
 verbatim, CLI suites unchanged and green.
 
-Remaining: Phase 5 items (5.5 page builders, 5.6 silent-swallow lint,
-5.7 typing ratchet), Phase 6 as external access arrives; 5.8/5.9
-opportunistically.
+### 2026-09-14 — Phase 5.6 + 5.7
+
+**5.6** — ruff S110 live: every existing silent except-pass (86 in
+fluidvoice, 9 in tests) carries a categorized `# noqa: S110 — reason`
+(teardown / poll-tick / cosmetic / capability probe / best-effort
+grab / best-effort read); a NEW one fails lint. S112 stays out of
+scope per the item.
+**5.7** — mypy files 5 → 9 (config, history, control_server,
+mcp_server — the IPC/persistence seam); four honest fixes, no new
+ignores. ruff B006 + B023 enabled (zero live findings; the archived
+learning-session script under docs/research/data/ is per-file-
+ignored as a historical artifact).
+
+Remaining: 5.5 (settings page builders — display-tier work),
+5.8/5.9 opportunistically, Phase 6 as external access arrives.
