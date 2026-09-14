@@ -340,7 +340,7 @@ checklist (GNOME-Wayland, then sway) is tracked in
   open-panel button + per-DE instructions deliver the same outcome.
 
 ### Reliability-first program P0 (in tree, unreleased — shaping v0.8.2)
-Plan: [research/2026-09-10-reliability-first-improvement-program.md](research/2026-09-10-reliability-first-improvement-program.md).
+Plan: [plans/archive/2026-09-10-reliability-first-improvement-program.md](plans/archive/2026-09-10-reliability-first-improvement-program.md).
 - **Hallucination guard** (b73ecd2): preview/transcript never shows or
   types fluent garbage — repeat-hallucination detection across the
   preview seam and pipeline.
@@ -375,7 +375,7 @@ Plan: [research/2026-09-10-reliability-first-improvement-program.md](research/20
   the `-bin` repack; README install section leads with the contract.
 
 ### Contextual dictation seam (P2, in tree — prototype, OFF by default)
-Plan: [research/2026-09-10-reliability-first-improvement-program.md](research/2026-09-10-reliability-first-improvement-program.md)
+Plan: [plans/archive/2026-09-10-reliability-first-improvement-program.md](plans/archive/2026-09-10-reliability-first-improvement-program.md)
 (P2). Design: [dev/context-seam.md](dev/context-seam.md).
 - **ContextProvider seam** (`fluidvoice/context/`): `FocusContext`
   (app identity, accessible role, selection, bounded preceding text,

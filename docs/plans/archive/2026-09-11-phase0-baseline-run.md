@@ -8,7 +8,7 @@
   (`5efc25d` commercial-model evidence, `f74c924` the phase plan itself) —
   no code changed since the plan was written.
 - Scope: existing offline checks only, per
-  [the plan](2026-09-11-product-excellence-and-monetization-plan.md) item 2
+  [the plan](../2026-09-11-product-excellence-and-monetization-plan.md) item 2
   ("Run existing offline checks and save failures/skips/warnings with
   environment details"). Nothing was fixed; this is a measurement record.
 

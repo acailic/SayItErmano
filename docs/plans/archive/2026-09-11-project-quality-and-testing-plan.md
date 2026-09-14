@@ -4,7 +4,7 @@
 - Status: IMPLEMENTED 2026-09-12 (Q1–Q7-code, Q11, Q12 shipped; Q8/Q9
   live-evidence halves and Q7's desktop matrices remain gated on external
   dependencies — see the implementation log below and
-  [evidence index](../quality/evidence-index.md))
+  [evidence index](../../quality/evidence-index.md))
 - Audited source: `ed89dfb` on `linux`, application version `0.8.1`
 - Scope: application, tests, CI/release workflows, packaging, desktop behavior, speech evaluation, documentation, and maintenance.
 
@@ -16,7 +16,7 @@
 | Q2 leak enforcement | SHIPPED | d745255 | leak gate in conftest = every invocation incl. xdist workers (meta-tests drive real pytest subprocesses for exit-status proof); compositor env snapshotted/restored for integration; worktree-safe spawning; fixture-order verified by test. First catch: command-confirm watchdog re-arm race (production fix + regression test) |
 | Q3 hash locking | SHIPPED | 7dfd1c9 | locklib.py replaces the broken `pip hash` scraping (E3); wheel matching per spec; atomic self-validating writes; build refuses pin-only unless DEB_ALLOW_PIN_ONLY=1 (E4); offline wheelhouse round-trip with real `pip install --require-hashes` consumer; constraints.txt regenerated WITH hashes (same 25 pins) and a full deb built from it (66M, acceptance met) |
 | Q4 publication binding | SHIPPED | b2247dc | prepare writes a provenance manifest beside the deb (package sha/size/control, tracked-source digest, lock sha, run id); publish resolves the prepare run by parent-SHA + success, resolves the artifact BY RUN ID, re-verifies bytes→source→lock, and requires an `evidence` input quoting the deb sha (or explicit recorded waiver); fixture rehearsal tests cover every rejection |
-| Q5 coverage + properties | SHIPPED | e441f53, 030578a | branch coverage per tier (unit 79.9%/78.9% — [baseline](2026-09-12-coverage-baseline.md), ratchet floor), CI uploads XML; hypothesis properties found and fixed 3 real defects (WER empty-normalized rule, TOML DEL escaping made configs unparseable, RTF NaN) |
+| Q5 coverage + properties | SHIPPED | e441f53, 030578a | branch coverage per tier (unit 79.9%/78.9% — [baseline](../../research/2026-09-12-coverage-baseline.md), ratchet floor), CI uploads XML; hypothesis properties found and fixed 3 real defects (WER empty-normalized rule, TOML DEL escaping made configs unparseable, RTF NaN) |
 | Q6 lifecycle sequences | SHIPPED | 16c6c08 | event-barrier daemon-seam sequences (busy isolation, cancel contracts, duplicate stop, shutdown joins, lock/mic transitions) + history durability (SIGKILL child, ENOSPC, fsync failure). Found+fixed: `_on_locked` never set the pause gate (hotkeys stayed live on a locked screen) |
 | Q7 process/GTK lanes | CODE HALF SHIPPED | b458a9c (+d745255) | model-free `just test-process` lane (green headless AND under Xvfb), worktree-safe CLI spawning; GTK lane + skip-escalation shipped with Q1. OPEN: live GNOME X11/Wayland/sway matrices, lock/resume, USB replug — need live sessions (briefs stay OPEN) |
 | Q8 real-speech baseline | BLOCKED (external) | — | needs the 150–300-utterance recording from 10–15 speakers (speech-corpus brief OPEN); harness/metrics/adapters ready |
@@ -260,4 +260,4 @@ Leak diagnostic: a temporary test called `subprocess.Popen([sys.executable, '-c'
 
 Hash diagnostic: `python -m pip hash` on temporary fixed bytes returned a `--hash=sha256:…` line. Applying the generator's `^sha256=` selection matched nothing. This verifies the parsing defect without downloading wheels or editing the committed lock; a full target-environment lock/build remains Q3 work.
 
-Related records: [earlier reliability program](2026-09-10-reliability-first-improvement-program.md), [phase-0 report](2026-09-11-phase0-report.md), [historical finding ledger](2026-09-11-phase0-finding-ledger.md), [release gates](../dev/release-gates.md), [desktop matrix](../dev/desktop-matrix.md), and [speech corpus specification](../eval/corpus-spec.md).
+Related records: [earlier reliability program](2026-09-10-reliability-first-improvement-program.md), [phase-0 report](2026-09-11-phase0-report.md), [historical finding ledger](../../research/2026-09-11-phase0-finding-ledger.md), [release gates](../../dev/release-gates.md), [desktop matrix](../../dev/desktop-matrix.md), and [speech corpus specification](../../eval/corpus-spec.md).

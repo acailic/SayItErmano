@@ -11,7 +11,7 @@ command, clipboard fallback preserving the transcript, machine-readable
 result). Suite 3310→3401 passed. Wayland/X11 live verification of the
 funnel remains with the user tests + matrix brief.
 
-Source: [phase 0 report](../docs/research/2026-09-11-phase0-report.md)
+Source: [phase 0 report](../docs/plans/archive/2026-09-11-phase0-report.md)
 findings F-02, F-05, F-18, F-19 (siblings F-03, F-08, F-17 fold in). One
 brief because they are one funnel: install → model ready → tryout → first
 real insertion.

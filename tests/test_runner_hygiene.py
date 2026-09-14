@@ -1,6 +1,6 @@
 """Runner hygiene: the suite must leave nothing running behind it.
 
-Phase-0 baseline (docs/research/2026-09-11-phase0-baseline-run.md): the
+Phase-0 baseline (docs/plans/archive/2026-09-11-phase0-baseline-run.md): the
 pytest process stayed alive ~5 minutes after the summary line. Tests
 that started a take through a real RuntimeTasks and never shut it down
 left the capture watchdog pending — a NON-daemon threading.Timer

@@ -4,7 +4,7 @@ Everything on this page is **not built yet**. What already shipped lives
 in [STATUS.md](STATUS.md); the reasoning behind locked decisions lives
 in [adr/](adr/) (index: [adr/README.md](adr/README.md)); the evidence
 base is [research/](research/), especially
-[reliability-first improvement program](research/2026-09-10-reliability-first-improvement-program.md)
+[reliability-first improvement program](plans/archive/2026-09-10-reliability-first-improvement-program.md)
 (the "plan" below). **Reconciled 2026-09-11 (phase 0, plan item 1):**
 plan P1 and the P2 code work are complete and in tree (unreleased,
 shaping v0.8.2+); the current prioritized backlog is the **live Wayland

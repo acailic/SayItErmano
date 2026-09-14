@@ -3,9 +3,9 @@
 - Date: 2026-09-11
 - Status: PHASE 0 artifact (plan item 3; the seed for WP5's top-five
   synthesis) of
-  [2026-09-11-product-excellence-and-monetization-plan.md](2026-09-11-product-excellence-and-monetization-plan.md)
+  [2026-09-11-product-excellence-and-monetization-plan.md](../plans/2026-09-11-product-excellence-and-monetization-plan.md)
 - Code baseline: `f74c924` on `linux` (agent worktree `agent/p0-ledger`)
-- Companion artifacts: [journey map](2026-09-11-phase0-journey-map.md)
+- Companion artifacts: [journey map](../plans/archive/2026-09-11-phase0-journey-map.md)
   (the failure points below carry its step IDs), reconciled
   [ROADMAP](../ROADMAP.md).
 

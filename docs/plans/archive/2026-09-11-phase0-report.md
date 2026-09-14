@@ -2,7 +2,7 @@
 
 - Date: 2026-09-11
 - Status: COMPLETE (phase 0 of
-  [the product-excellence and monetization plan](2026-09-11-product-excellence-and-monetization-plan.md))
+  [the product-excellence and monetization plan](../2026-09-11-product-excellence-and-monetization-plan.md))
 - Executed by: 3-agent parallel team on isolated worktrees
   (`agent/p0-baseline`, `agent/p0-ledger`, `agent/p0-evalspec`), merge-gated
   into `linux`; post-merge verification: ruff clean,
@@ -13,11 +13,11 @@
 | Deliverable | File |
 |---|---|
 | Verified offline baseline + env + deltas | [phase0-baseline-run.md](2026-09-11-phase0-baseline-run.md) |
-| Finding ledger (ranked, evidence-tagged) | [phase0-finding-ledger.md](2026-09-11-phase0-finding-ledger.md) |
+| Finding ledger (ranked, evidence-tagged) | [phase0-finding-ledger.md](../../research/2026-09-11-phase0-finding-ledger.md) |
 | Install→first-insertion + take-lifecycle maps | [phase0-journey-map.md](2026-09-11-phase0-journey-map.md) |
-| Real-speech corpus specification | [../eval/corpus-spec.md](../eval/corpus-spec.md) |
-| Desktop/app support matrix (extends wayland-smoke-matrix) | [../dev/desktop-matrix.md](../dev/desktop-matrix.md) |
-| Moderated user-test script | [../dev/user-test-script.md](../dev/user-test-script.md) |
+| Real-speech corpus specification | [../eval/corpus-spec.md](../../eval/corpus-spec.md) |
+| Desktop/app support matrix (extends wayland-smoke-matrix) | [../dev/desktop-matrix.md](../../dev/desktop-matrix.md) |
+| Moderated user-test script | [../dev/user-test-script.md](../../dev/user-test-script.md) |
 
 Roadmap reconciled with shipped work in the same wave
 (`docs/ROADMAP.md`): program-complete engineering items cleared; the
@@ -62,15 +62,15 @@ the closest, F-05, strands-but-keeps the text in History):
 
 Only these three (frequency × severity × reach × confidence ÷ effort):
 
-1. [wayland-matrix-execution](../../requests/wayland-matrix-execution.md) —
+1. [wayland-matrix-execution](../../../requests/wayland-matrix-execution.md) —
    run the existing live matrices; produces the compatibility evidence
    F-26 blocks (no product code).
-2. [first-use-funnel](../../requests/first-use-funnel.md) — F-02 + F-05 +
+2. [first-use-funnel](../../../requests/first-use-funnel.md) — F-02 + F-05 +
    F-19 + F-18 as one funnel fix with instrumentation hooks for the
    phase-1 user tests.
-3. [speech-corpus-recording](../../requests/speech-corpus-recording.md) —
+3. [speech-corpus-recording](../../../requests/speech-corpus-recording.md) —
    recruit + record + validate the corpus per
-   [the spec](../eval/corpus-spec.md); wires the measurement adapters gap
+   [the spec](../../eval/corpus-spec.md); wires the measurement adapters gap
    list into follow-ups.
 
 Runner hygiene anomalies (leaked processes / NoneType line) stay in the

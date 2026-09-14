@@ -2,7 +2,7 @@
 
 STATUS: OPEN
 
-Source: [phase 0 report](../docs/research/2026-09-11-phase0-report.md)
+Source: [phase 0 report](../docs/plans/archive/2026-09-11-phase0-report.md)
 finding F-14/F-13. Specification:
 [corpus-spec.md](../docs/eval/corpus-spec.md). This brief records the
 corpus and enumerates (not implements) the evalharness adapters.

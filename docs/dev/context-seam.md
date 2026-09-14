@@ -1,6 +1,6 @@
 # The ContextProvider seam (P2 — contextual dictation)
 
-Plan source: [research/2026-09-10-reliability-first-improvement-program.md](../research/2026-09-10-reliability-first-improvement-program.md)
+Plan source: [research/2026-09-10-reliability-first-improvement-program.md](../plans/archive/2026-09-10-reliability-first-improvement-program.md)
 (P2). This note records the seam, its privacy invariants, the
 per-app behavior profiles, the legacy migration, and what is
 deliberately left to the manual smoke matrix.

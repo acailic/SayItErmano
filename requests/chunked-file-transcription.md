@@ -11,7 +11,7 @@ and a 6-hour decoded-duration bound replacing both the 25 MB CLI warning
 and the 200 MB socket byte cap. Tests: `tests/test_chunking.py`.
 
 Source: reliability-first improvement program
-(`docs/research/2026-09-10-reliability-first-improvement-program.md`, P3
+(`docs/plans/archive/2026-09-10-reliability-first-improvement-program.md`, P3
 backlog) — flagged there as the next product priority after P0/P1/P2.
 Drafted 2026-09-10 during the P0→P2 implementation session; not started.
 

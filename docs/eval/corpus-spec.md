@@ -2,7 +2,7 @@
 
 - Date: 2026-09-12
 - Status: **SPEC — approved for recording; no audio recorded yet**
-- Origin: [product excellence plan](../research/2026-09-11-product-excellence-and-monetization-plan.md)
+- Origin: [product excellence plan](../plans/2026-09-11-product-excellence-and-monetization-plan.md)
   ("Define so good it is an obvious purchase" → corpus paragraph, and
   phase 0 next-session item 4). This document specifies the corpus; it
   changes no code and records no audio.

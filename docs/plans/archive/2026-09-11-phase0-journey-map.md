@@ -2,12 +2,12 @@
 
 - Date: 2026-09-11
 - Status: PHASE 0 artifact (plan item 3 of
-  [2026-09-11-product-excellence-and-monetization-plan.md](2026-09-11-product-excellence-and-monetization-plan.md))
+  [2026-09-11-product-excellence-and-monetization-plan.md](../2026-09-11-product-excellence-and-monetization-plan.md))
 - Code baseline: `f74c924` on `linux` (agent worktree `agent/p0-ledger`)
 - Method: static code trace with file:line references. Nothing here was run
   against a live session; steps that can only be settled live are marked
   **UNVERIFIED**. Companion artifact: the
-  [finding ledger](2026-09-11-phase0-finding-ledger.md) seeds from every
+  [finding ledger](../../research/2026-09-11-phase0-finding-ledger.md) seeds from every
   failure point below.
 
 Line numbers refer to `f74c924`; they drift with any future change.
@@ -24,12 +24,12 @@ what the user sees, and whether recovery exists.
 
 ### Step 1 — Obtain and install the package
 
-Three supported routes ([README](../../README.md) install section):
+Three supported routes ([README](../../../README.md) install section):
 
 | Route | Entry point | Notes |
 |---|---|---|
 | One-shot curl installer | `scripts/install-one-shot.sh:26-27` | Default **user-space, no sudo**; downloads the latest release deb from the GitHub API (`:66-78`), extracts the bundled venv into `~/.local/share/sayit-ermano/venv` (`:148-155`), writes `~/.local/bin/sayit-ermano` (`:157-163`), a systemd user unit (`:192-210`) and — only when the unit is absent/disabled — an XDG autostart entry (`:165-175`). |
-| System deb | `packaging/build-deb.sh` | Ubuntu 24.04 / amd64 / Python 3.12 contract ([ADR-0004](../adr/ADR-0004-ubuntu-deb-contract.md), [deb README](../../packaging/deb/README.md)). `Depends:` covers `xdotool, xclip, libnotify-bin, python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1, pipewire-audio-utils` (`build-deb.sh:146`), so a deb install brings every external tool. |
+| System deb | `packaging/build-deb.sh` | Ubuntu 24.04 / amd64 / Python 3.12 contract ([ADR-0004](../../adr/ADR-0004-ubuntu-deb-contract.md), [deb README](../../../packaging/deb/README.md)). `Depends:` covers `xdotool, xclip, libnotify-bin, python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1, pipewire-audio-utils` (`build-deb.sh:146`), so a deb install brings every external tool. |
 | pipx (any distro) | `scripts/verify-pipx.sh` | Python 3.11+; system GTK GIRs + tools still required by hand. |
 | AUR | `packaging/aur/` | Instructions only, not published by the project. |
 

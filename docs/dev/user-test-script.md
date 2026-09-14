@@ -2,7 +2,7 @@
 
 - Date: 2026-09-12
 - Status: **SCRIPT — drafted in phase 0; not yet run**
-- Origin: [product excellence plan](../research/2026-09-11-product-excellence-and-monetization-plan.md)
+- Origin: [product excellence plan](../plans/2026-09-11-product-excellence-and-monetization-plan.md)
   phase 1 ("observe 8–12 target users attempting realistic tasks") and
   the usefulness gates ("First useful result", "Less work to produce
   correct text" ≥30 %, "Counterbalance task order").

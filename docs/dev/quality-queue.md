@@ -9,12 +9,12 @@
 > the justfile) because Q3–Q12 build on it; the rows below are kept as
 > the historical record of the superseded approach, whose commits remain
 > in history. The authoritative per-item log is now in the
-> [plan document](../research/2026-09-11-project-quality-and-testing-plan.md)
+> [plan document](../plans/archive/2026-09-11-project-quality-and-testing-plan.md)
 > (§ Implementation log). The extra GUI-dependent sites those commits
 > marked (language_switch TestSettingsUI, models_manager GTK classes)
 > were ADOPTED as `needs_display`.
 
-Companion to `docs/research/2026-09-11-project-quality-and-testing-plan.md`
+Companion to `docs/plans/archive/2026-09-11-project-quality-and-testing-plan.md`
 (implementation queue Q1–Q12). Every row records what the plan demands:
 owner, status, dependency, commit, test command, evidence, acceptance.
 An item is DONE only with implementation + evidence — never a design doc.

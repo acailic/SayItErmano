@@ -2,7 +2,7 @@
 
 STATUS: OPEN
 
-Source: [phase 0 report](../docs/research/2026-09-11-phase0-report.md)
+Source: [phase 0 report](../docs/plans/archive/2026-09-11-phase0-report.md)
 finding F-26. The runbook already exists:
 [wayland-smoke-matrix.md](../docs/dev/wayland-smoke-matrix.md), extended by
 [desktop-matrix.md](../docs/dev/desktop-matrix.md). This brief executes it —

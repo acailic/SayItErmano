@@ -40,7 +40,7 @@ from evidence; do not promise every language, desktop, and workflow at launch.
 | Manual release gates and a narrow Ubuntu deb compatibility contract exist. | Exercise and prove installation, upgrades, and release reproducibility under that contract. | [release gates](../dev/release-gates.md), [deb contract](../../packaging/deb/README.md) |
 | The project declares GPL-3.0-or-later and credits reused upstream prompts and sounds. | Commercial packaging needs a rights inventory and a GPL-compatible offer. | [project metadata](../../pyproject.toml), [license](../../LICENSE), [port provenance](../../README.md) |
 
-The [existing reliability program](2026-09-10-reliability-first-improvement-program.md)
+The [existing reliability program](archive/2026-09-10-reliability-first-improvement-program.md)
 remains technical context. This plan adds customer outcomes, measured quality,
 and commercial validation. Its first deliverable reconciles that program and
 the [roadmap](../ROADMAP.md) with current code; neither old plans nor this
@@ -147,7 +147,7 @@ unrelated architecture rewrite into UX improvements.
 ## Monetization research and one-time purchase design
 
 The initial evidence is kept in the companion
-[commercial-model research note](2026-09-11-commercial-model-evidence.md).
+[commercial-model research note](../research/2026-09-11-commercial-model-evidence.md).
 It is a starting point, not a price recommendation or proof of demand.
 
 Research four questions after the usefulness baseline:
@@ -238,7 +238,7 @@ The next session should execute **phase 0 only**, then begin phase 1 against
 that baseline:
 
 > **Phase 0 executed 2026-09-11** by a 3-agent team — see the
-> [phase 0 report](2026-09-11-phase0-report.md) for the verified baseline,
+> [phase 0 report](archive/2026-09-11-phase0-report.md) for the verified baseline,
 > the five findings, and the three OPEN briefs it produced.
 
 1. Rebase the investigation context on the current `linux` SHA and record

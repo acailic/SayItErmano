@@ -149,7 +149,7 @@ def _real_data_untouched():
 # ---------------------------------------------------------------------------
 # Runner hygiene — nothing a test starts may outlive the test.
 # ---------------------------------------------------------------------------
-# Phase-0 baseline (docs/research/2026-09-11-phase0-baseline-run.md): the
+# Phase-0 baseline (docs/plans/archive/2026-09-11-phase0-baseline-run.md): the
 # suite printed "3310 passed" and then stayed alive for ~5 minutes before
 # exiting 0. Tests that started a take through a real RuntimeTasks and
 # never shut it down left the capture watchdog pending — a NON-daemon

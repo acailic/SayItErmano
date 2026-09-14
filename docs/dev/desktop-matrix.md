@@ -2,7 +2,7 @@
 
 - Date: 2026-09-12
 - Status: **DRAFTED — every cell UNTESTED; phase 0 does not run these**
-- Origin: [product excellence plan](../research/2026-09-11-product-excellence-and-monetization-plan.md)
+- Origin: [product excellence plan](../plans/2026-09-11-product-excellence-and-monetization-plan.md)
   phase 0 item 4. Extends
   [wayland-smoke-matrix.md](wayland-smoke-matrix.md) (the context/AT-SPI
   parity gate, still NOT DONE) into a full application × session matrix
