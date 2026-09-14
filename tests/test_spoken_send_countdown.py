@@ -78,6 +78,20 @@ def wait_done(d, timeout=5.0):
     return False
 
 
+def wait_result(d, timeout=10.0):
+    """Wait for last_result["text"] to land. Second CI hardening for the
+    countdown test: `recording=False` flips BEFORE the take-complete
+    hook spawns the process thread, so wait_done alone can return
+    while last_result is still empty (2-core runner, 2026-09-14
+    dispatch) — poll the seam itself instead of assuming ordering."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if isinstance(d.last_result, dict) and d.last_result.get("text"):
+            return True
+        time.sleep(0.02)
+    return False
+
+
 def test_countdown_stops_the_take(cfg, tmp_path):
     d, rec = make_daemon(cfg, tmp_path)
     assert d.handle_request({"action": "toggle"})["recording"] is True
@@ -98,6 +112,7 @@ def test_countdown_stops_the_take(cfg, tmp_path):
     while d.recording and time.monotonic() < deadline:
         time.sleep(0.05)
     assert d.recording is False
+    assert wait_result(d), "take finished but no result landed"
     assert wait_done(d)
     assert d.last_result.get("text") == "typed text"
     assert d._capture.send_countdown_timer is None

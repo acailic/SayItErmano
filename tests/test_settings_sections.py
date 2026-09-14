@@ -127,15 +127,33 @@ class TestMainWindowSections:
     def test_activity_chart_draws_without_crashing(self, win) -> None:
         import time as _time
 
-        import cairo
+        class FakeCairo:
+            """Records the drawing calls — exercises the path logic
+            without pycairo (the CI gtk env installs PyGObject against
+            the system cairo but not the Python bindings, so a real
+            Context cannot be built there)."""
+
+            def __init__(self) -> None:
+                self.calls: list[str] = []
+
+            def __getattr__(self, name):
+                def _record(*_a, **_kw):
+                    self.calls.append(name)
+
+                return _record
+
         by_day = {_time.strftime("%Y-%m-%d", _time.localtime(_time.time() - i * 86400)):
                  {"dictations": (i % 5) + 1} for i in range(30)}
         win._stats = {"by_day": by_day, "best_streak": 3}
-        surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 320, 160)
-        ctx = cairo.Context(surface)
+        ctx = FakeCairo()
         for span in (7, 30):  # both code paths: recent-only and long tail
             win._stats_span = span
             win._draw_activity(win.chart, ctx, 320, 160)
-        # and with no data at all
+        assert ctx.calls.count("fill") == 7 + 30  # one bar per day
+        assert "stroke" in ctx.calls  # baseline hairline
+        assert "show_text" in ctx.calls  # day labels + peak
+        # and with no data at all: early return, no draws
+        ctx.calls.clear()
         win._stats = None
         win._draw_activity(win.chart, ctx, 320, 160)
+        assert ctx.calls == []
