@@ -62,3 +62,25 @@ re-verifies the chain against the release SHA and records the operator's
 `evidence` input (which must quote the deb sha256 or carry an explicit
 `EVIDENCE-SKIP: <reason>`). Find that record in the release-publish run
 summary and the GitHub release page for each tag.
+
+### v0.8.2 (2026-09-14)
+
+- **Release SHA** `4851af13cf785c9645409542d34f396db099dca3`
+  (release commit; parent `3c43953` = prepare run head).
+- **deb** `sayit-ermano_0.8.2-1_amd64.deb`, sha256
+  `a60cd603b8aaf4ca216ad1b9f6989d83ef35dfd5c0cc3095d996895f1bb90a66`.
+- **release-prepare** run `34791291564` (SUCCESS): gate + locked
+  container build + provenance manifest (deb sha256 `a60cd603…`,
+  source digest `e4bd68b8…`).
+- **CI on the EXACT release SHA** run `34791561655` (SUCCESS): compile +
+  metadata, unit py3.11, unit py3.12, GTK/Xvfb lane — all four green.
+- **release-publish** run `34791741957` (SUCCESS): every provenance gate
+  green, tag `v0.8.2` + GitHub release created; dispatched from the
+  `agent/release-publish-fix` branch carrying the set-e clean-checkout
+  fix (merged into `linux` as `98b935d` right after).
+- First release ever run through the full Q3/Q4 provenance chain; the
+  first live dispatches also fixed three latent CI bugs (hash-mode
+  dry-run vs file:// dir, unpinned `six` closure gap under
+  `--require-hashes`, the set-e clean-checkout gate) and documented the
+  push→dispatch ref-metadata race (mitigated by re-preparing; a
+  `select-prepare-run` digest fallback is the follow-up).
