@@ -412,6 +412,27 @@ updated in the same commit. **Deviation:** the phase-0 finding ledger
 stays in `docs/research/` — it is a living run record (night matrix
 appends through 2026-09-14), not a plan.
 
-Remaining: 4.2 (README split into `docs/guides/`), 4.3 (generated
-config reference), 4.4 (STATUS trim), 4.5 (docs link check in the
-gate), Phase 5 items, Phase 6 as external access arrives.
+### 2026-09-14 — Phase 4.2 + 4.5
+
+**4.2** — `752a43a`: the 36 KB README split into `docs/guides/`
+(install, configuration, wayland, command-mode, remote-stt,
+file-transcription, scripting-and-mcp, dev/testing); README now 12 KB,
+front-door job only; guides indexed from `docs/README.md`.
+**4.5** — `55df225`: `scripts/check_docs_links.py` in `just gate` +
+unit-tier mirror (`tests/test_docs_links.py`), so CI enforces it too.
+
+### 2026-09-14 — Phase 4.3
+
+`scripts/gen_config_reference.py` renders the "All settings" block of
+`docs/guides/configuration.md` (one table per `[section]`: key,
+default, apply/secret notes, effect) straight from
+`fluidvoice.config.REGISTRY` — the same one registry `config init`
+renders its commented template from. `--check` is a gate step and
+`tests/test_config_reference.py` the unit-tier mirror, so a registry
+change without regenerating the doc fails the suite. The hand-curated
+TOML highlights were replaced by a 3-key quick start plus the
+generated 108-key reference; the duplicated intro sentence (a 4.2
+assembly artifact) fixed in passing.
+
+Remaining: 4.4 (STATUS trim), Phase 5 items, Phase 6 as external
+access arrives.

@@ -127,12 +127,13 @@ gate:
     fi
     {{python}} -m ruff check .
     {{python}} scripts/check_docs_links.py
+    {{python}} scripts/gen_config_reference.py --check
     {{python}} scripts/validate_requests.py
     mkdir -p build/test-results
     {{python}} -m pytest -q -W error -ra --strict-markers --strict-config \
         --timeout=300 --junitxml=build/test-results/unit.xml \
         tests --ignore=tests/integration -m "{{tier_unit}}"
-    echo "gate: clean tree, lint clean, briefs valid, suite green, zero warnings"
+    echo "gate: clean tree, lint clean, briefs valid, config docs fresh, suite green, zero warnings"
 
 # release cleanliness on top of the gate: also refuses UNTRACKED files
 # (release-prepare's clean-tree check uses git status --porcelain, which

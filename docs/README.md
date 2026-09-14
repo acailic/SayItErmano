@@ -11,7 +11,7 @@ the app itself.
 - [guides/install.md](guides/install.md) — every install route (one-shot
   installer, Ubuntu .deb, pipx, AUR, source) and updates.
 - [guides/configuration.md](guides/configuration.md) — the complete
-  annotated `config.toml` reference.
+  `config.toml` reference, generated from the settings registry.
 - [guides/wayland.md](guides/wayland.md) — Wayland capability matrix and
   tool setup (`wtype`/`ydotool`, DE shortcuts, evdev PTT).
 - [guides/command-mode.md](guides/command-mode.md) — voice → terminal
