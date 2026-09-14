@@ -31,7 +31,9 @@ default:
 #                    (needs the shared venv; run from your worktree root).
 # The `-m` filter deselects by DECLARED requirement (needs_* markers), so
 # local and CI collection lists match regardless of the dev machine.
-tier_unit := "not integration and not desktop and not needs_display and not needs_model and not needs_network"
+# The tier marker expressions + path selection live ONCE in
+# scripts/test_tier.py (org plan 5.1) — every recipe and CI lane below
+# execs it; the drift guard is tests/test_tier_source.py.
 
 # ruff lint (config: [tool.ruff.lint] in pyproject.toml)
 lint:
@@ -39,11 +41,11 @@ lint:
 
 # unit/contract tier, serial (plain pytest stays single-process: --pdb, -x)
 test *ARGS:
-    {{python}} -m pytest -q tests --ignore=tests/integration -m "{{tier_unit}}" {{ARGS}}
+    {{python}} scripts/test_tier.py unit -q {{ARGS}}
 
 # unit/contract tier on pytest-xdist auto workers (~4-5x faster)
 test-parallel *ARGS:
-    {{python}} -m pytest -q -n auto tests --ignore=tests/integration -m "{{tier_unit}}" {{ARGS}}
+    {{python}} scripts/test_tier.py unit -q -n auto {{ARGS}}
 
 # display/GTK tier — VIRTUAL display by default: xvfb-run + GTK's cairo
 # software renderer, so nothing flashes on the real desktop, on pytest-xdist
@@ -55,25 +57,24 @@ test-ui *ARGS:
     set -euo pipefail
     if [ "${SAYIT_TEST_REAL_DISPLAY:-0}" = "1" ] \
             || ! command -v xvfb-run >/dev/null 2>&1; then
-        {{python}} -m pytest -q tests -m "needs_display" {{ARGS}}
+        {{python}} scripts/test_tier.py display -q {{ARGS}}
     else
         xvfb-run -a env GSK_RENDERER=cairo \
-            {{python}} -m pytest -q -n auto -W error --timeout=300 \
-            tests -m "needs_display" {{ARGS}}
+            {{python}} scripts/test_tier.py display -q -n auto -W error --timeout=300 \
+            {{ARGS}}
     fi
 
 # real-model/real-mic/daemon-process tier (needs the shared venv + hardware;
 # excluded from every offline gate by --ignore AND by the marker)
 test-integration *ARGS:
-    {{python}} -m pytest -q tests/integration {{ARGS}}
+    {{python}} scripts/test_tier.py integration -q {{ARGS}}
 
 # MODEL-FREE process lane (Q7): real daemon/socket/CLI subprocesses, no
 # GPU/model/network — runs in any checkout (spawns `sys.executable -m
 # fluidvoice` from THIS tree), works under Xvfb:
 #   xvfb-run -a just test-process
 test-process *ARGS:
-    {{python}} -m pytest -q tests/integration \
-        -m "integration and not needs_model and not needs_network and not desktop" {{ARGS}}
+    {{python}} scripts/test_tier.py process -q {{ARGS}}
 
 # unit/contract tier branch coverage (Q5): terminal summary + XML for CI.
 # Tiers are measured separately (this is the unit tier only; the display
@@ -83,11 +84,11 @@ coverage *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p build/coverage
-    {{python}} -m pytest -q -n auto -W error --strict-markers --timeout=300 \
+    {{python}} scripts/test_tier.py unit -q -n auto -W error --strict-markers --timeout=300 \
         --cov=fluidvoice --cov-branch \
         --cov-report=term-missing \
         --cov-report=xml:build/coverage/unit.xml \
-        tests --ignore=tests/integration -m "{{tier_unit}}" {{ARGS}}
+        {{ARGS}}
 
 # display/GTK tier coverage (same Xvfb isolation as test-ui, its own XML)
 coverage-ui *ARGS:
@@ -96,17 +97,17 @@ coverage-ui *ARGS:
     mkdir -p build/coverage
     if command -v xvfb-run >/dev/null 2>&1; then
         xvfb-run -a env GSK_RENDERER=cairo \
-            {{python}} -m pytest -q -n auto -W error --strict-markers --timeout=300 \
+            {{python}} scripts/test_tier.py display -q -n auto -W error --strict-markers --timeout=300 \
             --cov=fluidvoice --cov-branch \
             --cov-report=term-missing \
             --cov-report=xml:build/coverage/display.xml \
-            tests -m "needs_display" {{ARGS}}
+            {{ARGS}}
     else
-        {{python}} -m pytest -q -n auto -W error --strict-markers --timeout=300 \
-            --cov=fluidvoice --cov-branch \
-            --cov-report=term-missing \
-            --cov-report=xml:build/coverage/display.xml \
-            tests -m "needs_display" {{ARGS}}
+        {{python}} scripts/test_tier.py display -q -n auto -W error --strict-markers --timeout=300 \
+        --cov=fluidvoice --cov-branch \
+        --cov-report=term-missing \
+        --cov-report=xml:build/coverage/display.xml \
+        {{ARGS}}
     fi
 
 # focused type check (Q12): the typed seam modules (config in pyproject
@@ -114,7 +115,7 @@ coverage-ui *ARGS:
 typecheck:
     {{python}} -m mypy
 
-# THE canonical unit/contract gate (Q1): python -m pytest, warnings as
+# THE canonical unit/contract gate (Q1): the tier script, warnings as
 # errors, unknown markers rejected, every skip listed, JUnit artifact,
 # bounded per-test timeout, request validation. CI's unit job and
 # release-prepare run exactly this scope.
@@ -130,9 +131,8 @@ gate:
     {{python}} scripts/gen_config_reference.py --check
     {{python}} scripts/validate_requests.py
     mkdir -p build/test-results
-    {{python}} -m pytest -q -W error -ra --strict-markers --strict-config \
-        --timeout=300 --junitxml=build/test-results/unit.xml \
-        tests --ignore=tests/integration -m "{{tier_unit}}"
+    {{python}} scripts/test_tier.py unit -q -W error -ra --strict-markers --strict-config \
+        --timeout=300 --junitxml=build/test-results/unit.xml
     echo "gate: clean tree, lint clean, briefs valid, config docs fresh, suite green, zero warnings"
 
 # release cleanliness on top of the gate: also refuses UNTRACKED files

@@ -39,13 +39,11 @@ jobs:
         # (docs/research/2026-09-12-coverage-baseline.md) is the ratchet
         # floor — a regression is a review blocker.
         run: >-
-          python -m pytest -q -W error -ra --strict-markers --strict-config
+          python scripts/test_tier.py unit -q -W error -ra --strict-markers --strict-config
           --timeout=300 --junitxml=build/test-results/unit.xml
           --cov=fluidvoice --cov-branch
           --cov-report=term-missing
           --cov-report=xml:build/coverage/unit.xml
-          tests --ignore=tests/integration
-          -m "not integration and not desktop and not needs_display and not needs_model and not needs_network"
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -83,10 +81,9 @@ jobs:
         # silently narrowing what CI proved (E6).
         run: >-
           xvfb-run -a env GSK_RENDERER=cairo SAYIT_TEST_REQUIRE_MARKERS=needs_display
-          cienv/bin/python -m pytest -q -W error -ra --strict-markers
+          cienv/bin/python scripts/test_tier.py display -q -W error -ra --strict-markers
           --strict-config --timeout=300
           --junitxml=build/test-results/gtk.xml
-          tests -m "needs_display"
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4

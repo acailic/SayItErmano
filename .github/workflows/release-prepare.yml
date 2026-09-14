@@ -117,9 +117,8 @@ jobs:
         # exception filter from [tool.pytest] fail the release on ANY
         # warning.
         run: >-
-          python -m pytest -q -W error -ra --strict-markers --strict-config
-          --timeout=300 tests --ignore=tests/integration
-          -m "not integration and not desktop and not needs_display and not needs_model and not needs_network"
+          python scripts/test_tier.py unit -q -W error -ra --strict-markers --strict-config
+          --timeout=300
 
       - name: "Dependency lock: hash-locked + fresh (Q3)"
         run: |
