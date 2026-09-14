@@ -116,9 +116,13 @@ coverage-ui *ARGS:
     fi
 
 # focused type check (Q12): the typed seam modules (config in pyproject
-# [tool.mypy] — grow the list as modules earn annotations)
+# [tool.mypy] — grow the list as modules earn annotations).
+# PYTHONNOUSERSITE: a bleeding-edge user-site numpy (PEP 695 `type`
+# stubs) otherwise shadows the interpreter floor and mypy dies on
+# syntax, not on our code (CI checks at 3.12 for the same reason —
+# see the mypy job comment in ci.yml).
 typecheck:
-    {{python}} -m mypy
+    PYTHONNOUSERSITE=1 {{python}} -m mypy
 
 # THE canonical unit/contract gate (Q1): the tier script, warnings as
 # errors, unknown markers rejected, every skip listed, JUnit artifact,
