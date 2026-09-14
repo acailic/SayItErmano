@@ -1,9 +1,10 @@
 # Organization and improvement plan
 
 - Date: 2026-09-12
-- Status: ACTIVE — Phases 1–4 shipped 2026-09-13/14 (v0.8.2 published
-  with provenance evidence; docs architecture complete); see the
-  implementation log at the end
+- Status: ACTIVE — Phases 1–5 shipped 2026-09-13/14 (v0.8.2 published
+  with provenance evidence; docs architecture complete; Phase 5 code
+  items done — 5.8 is the adopted tests-mirror-package policy, 5.9
+  stays deferred); see the implementation log at the end
 - Audited source: `59aa282` on `linux`, application version `0.8.1`
   (113 commits unreleased since the `v0.8.1` tag)
 - Scope: repository layout, documentation, code structure, tests/CI,
@@ -495,5 +496,21 @@ ignores. ruff B006 + B023 enabled (zero live findings; the archived
 learning-session script under docs/research/data/ is per-file-
 ignored as a historical artifact).
 
-Remaining: 5.5 (settings page builders — display-tier work),
-5.8/5.9 opportunistically, Phase 6 as external access arrives.
+### 2026-09-14 — Phase 5.5 (Phase 5 complete)
+
+`_build_dictation` 443 → 22 lines + 8 sections, `_build_models`
+161 → 18 + 8, `HistoryWindow.__init__` 198 → 43 + 4 helpers — every
+builder under 120 lines, bodies verbatim. New
+tests/test_settings_sections.py: 9 display-tier tests pinning each
+section's structure (isolation build, registry-key wiring, view/
+stats assertions). **Real bug found:** the Stats activity chart never
+drew on GTK 4.14 (Ubuntu 24.04) — `lookup_color` and
+`rounded_rectangle` don't exist on that stack; guarded + arc-path
+replacement, CHANGELOG entry added. Display tier 154 → 163;
+main_window.py display coverage 70% → 78%.
+**5.8** adopted as standing policy (new tests land in mirrored
+folders; no bulk move). **5.9** stays deferred per its own item.
+
+Remaining: Phase 6 as external access arrives (6.1 Wayland session,
+6.2 corpus consent, 6.4 VMs); 5.9 opportunistically with subsystem
+rework.

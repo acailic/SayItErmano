@@ -13,7 +13,13 @@ not reproduced here.
 
 ## [Unreleased]
 
-Nothing yet.
+- **Fixed: Stats activity chart never drew on Ubuntu 24.04** — the
+  GTK 4.14 stack has no `GtkWidget.lookup_color` and pycairo has no
+  `Context.rounded_rectangle`; the chart's draw callback raised
+  AttributeError before the first bar (silently, page shown). The
+  accent lookup is guarded with the existing fallback color and bars
+  use an arc-based rounded path. Found by the new per-section display
+  tests (org plan 5.5).
 
 ## [v0.8.2] — reliability sweep, verified pasting, deb contract (2026-09-14)
 
