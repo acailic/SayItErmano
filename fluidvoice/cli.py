@@ -1,4 +1,9 @@
-"""SayItErmano command line interface."""
+"""SayItErmano command line interface.
+
+Structure (org plan 5.4): _build_parser() registers every subcommand
+and binds its handler with set_defaults(func=...) — one _cmd_* function
+per command, main() just parses and dispatches.
+"""
 from __future__ import annotations
 
 import argparse
@@ -13,7 +18,7 @@ from . import doctor as doctor_mod
 from .config import load_config, write_template
 
 
-def main(argv: list[str] | None = None) -> int:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="sayit-ermano",
         description="SayItErmano - local voice dictation with AI polish (community Linux port of FluidVoice)")
@@ -25,6 +30,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="skip the X11 global hotkey (use `sayit-ermano toggle` instead)")
     p.add_argument("--no-sounds", action="store_true", help="disable start/stop sounds")
     p.add_argument("--config", type=Path, help="alternative config file")
+    p.set_defaults(func=_cmd_daemon)
 
     for name, help_ in [("toggle", "start/stop a recording"),
                         ("cancel", "cancel the running recording (no transcription)"),
@@ -33,6 +39,7 @@ def main(argv: list[str] | None = None) -> int:
                         ("language", "cycle the dictation language (general.language_cycle)")]:
         p = sub.add_parser(name, help=help_)
         p.add_argument("--json", action="store_true", help="raw JSON output")
+        p.set_defaults(func=_cmd_remote)
 
     p = sub.add_parser("transcribe", help="one-shot transcription of an audio file")
     p.add_argument("file", type=Path,
@@ -47,6 +54,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="write the result to PATH instead of stdout (plain text, "
                         "or JSON with --json)")
     p.add_argument("--config", type=Path, help="alternative config file")
+    p.set_defaults(func=_cmd_transcribe)
 
     p = sub.add_parser("history", help="show recent transcriptions")
     p.add_argument("-n", type=int, default=10)
@@ -58,21 +66,30 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--yes", action="store_true",
                    help="with --scrub-tests: apply the removal "
                         "(a history.jsonl.bak-<ts> backup is written first)")
+    p.set_defaults(func=_cmd_history)
 
     p = sub.add_parser("config", help="show/init the config file")
     p.add_argument("action", nargs="?", default="path", choices=["path", "init", "print"])
+    p.set_defaults(func=_cmd_config)
 
     p = sub.add_parser("settings",
                        help="open the native Settings window (alias of `app --open settings`)")
+    p.set_defaults(func=_cmd_settings)
+
     p = sub.add_parser("app", help="open the native GTK app (History/Settings)")
     p.add_argument("--open", choices=["history", "settings"], default="history",
                    help="window to raise (default: history)")
     p.add_argument("--onboard", action="store_true",
                    help="run the first-run onboarding flow")
-    sub.add_parser("doctor", help="environment check")
-    sub.add_parser("mcp",
-                   help="run the MCP server on stdio (for MCP-capable "
-                        "agents; forwards to the running daemon)")
+    p.set_defaults(func=_cmd_app)
+
+    p = sub.add_parser("doctor", help="environment check")
+    p.set_defaults(func=_cmd_doctor)
+
+    p = sub.add_parser("mcp",
+                       help="run the MCP server on stdio (for MCP-capable "
+                            "agents; forwards to the running daemon)")
+    p.set_defaults(func=_cmd_mcp)
 
     # local evaluation harness (plan P1.4): thin passthrough — everything
     # lives in fluidvoice.evalharness (python -m fluidvoice.evalharness)
@@ -81,6 +98,7 @@ def main(argv: list[str] | None = None) -> int:
                             "see `python -m fluidvoice.evalharness --help`)")
     p.add_argument("harness_args", nargs=argparse.REMAINDER, metavar="ARGS",
                    help="harness subcommand and flags (run/check/fixtures/soak)")
+    p.set_defaults(func=_cmd_eval_run)
 
     p = sub.add_parser(
         "update",
@@ -91,169 +109,182 @@ def main(argv: list[str] | None = None) -> int:
                              "release (records it in the update state)")
     p.add_argument("--json", action="store_true",
                    help="raw JSON output")
+    p.set_defaults(func=_cmd_update)
+    return parser
 
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_parser()
     args = parser.parse_args(argv)
     if not args.cmd:
         parser.print_help()
         return 0
+    return args.func(args)
 
-    if args.cmd == "daemon":
-        from .daemon import Daemon
-        cfg = load_config(args.config)
-        lock = _acquire_daemon_lock()
-        if lock is None:
-            print("sayit-ermano daemon is already running - second instance "
-                  "exiting", file=sys.stderr)
-            return 0
-        try:
-            Daemon(cfg, use_hotkey=not args.no_hotkey,
-                   use_sounds=not args.no_sounds).run()
-        finally:
-            lock.close()
-            _DAEMON_LOCK_FILE.unlink(missing_ok=True)
+
+def _cmd_daemon(args: argparse.Namespace) -> int:
+    from .daemon import Daemon
+    cfg = load_config(args.config)
+    lock = _acquire_daemon_lock()
+    if lock is None:
+        print("sayit-ermano daemon is already running - second instance "
+              "exiting", file=sys.stderr)
         return 0
-
-    if args.cmd in ("toggle", "cancel", "status", "paste-last", "language"):
-        from . import control
-        try:
-            resp = control.request("cycle-language" if args.cmd == "language"
-                                   else args.cmd)
-        except control.ControlError as e:
-            print(f"error: {e}", file=sys.stderr)
-            return 1
-        if args.json:
-            print(json.dumps(resp))
-        elif args.cmd == "language":
-            if resp.get("ok"):
-                print(f"cycled -> {resp.get('language')} ({resp.get('source')})")
-            else:
-                print(f"language cycle: {resp.get('error')}")
-        else:
-            print(_describe(resp))
-        return 0 if resp.get("ok") else 1
-
-    if args.cmd == "transcribe":
-        from . import backends, chunking
-        from .ai.client import AIClient
-        from .audio_utils import SUPPORTED_AUDIO_EXTS, AudioFormatError
-        from .processing import post_process
-        if not args.file.exists():
-            print(f"error: file not found: {args.file}", file=sys.stderr)
-            return 1
-        cfg = load_config(args.config)
-        backend = backends.load_backend(cfg)
-        if args.file.suffix.lower() not in SUPPORTED_AUDIO_EXTS:
-            print(f"note: '{args.file.suffix}' is not a verified format - trying "
-                  "anyway (ffmpeg fallback when needed)", file=sys.stderr)
-        try:
-            # long inputs are chunked (P3): convert once, ten-minute
-            # overlapping chunks, one reconciled transcript
-            result = chunking.transcribe_long(
-                backend, args.file,
-                language=backends.effective_language(cfg, backend),
-                force_whisper_cpp=backend.name == "whisper.cpp")
-        except (AudioFormatError, chunking.AudioTooLargeError) as e:
-            print(f"error: {e}", file=sys.stderr)
-            return 1
-        text = result.to_plain_text()
-        if not args.no_process:
-            text = post_process(text, cfg)
-        if args.ai and cfg["ai"].get("enabled"):
-            text = AIClient(cfg).polish(text)
-        elif args.ai:
-            print("(ai.enabled=false in config; raw transcription only)", file=sys.stderr)
-        if args.json:
-            # CLI-edge serialization: the historical --json payload shape
-            # (duration_s; raw per-segment text, not post-processed)
-            payload = {"text": text,  # final text (post-processed/AI if on)
-                       "language": result.language,
-                       # null for torch/whisper.cpp; [] when backend exposes none
-                       "duration_s": result.duration,
-                       "segments": [s.to_dict() for s in result.segments]}
-            out_text = json.dumps(payload, indent=2, ensure_ascii=False)
-        else:
-            out_text = text
-        if args.out:
-            args.out.parent.mkdir(parents=True, exist_ok=True)
-            args.out.write_text(out_text + "\n", encoding="utf-8")
-            print(f"wrote {args.out}", file=sys.stderr)  # stderr keeps stdout clean
-        else:
-            print(out_text)
-        return 0
-
-    if args.cmd == "history":
-        from . import history
-        if args.export:
-            def _note(m):
-                print(m, file=sys.stderr)
-            try:
-                n = history.export_zip(args.export, on_note=_note)
-            except OSError as e:
-                print(f"error: {e}", file=sys.stderr)
-                return 1
-            print(f"exported {n} entries to {args.export}")
-            return 0
-        if args.scrub_tests:
-            counts = history.test_command_counts()
-            for cmd in sorted(counts):
-                print(f"  {cmd}: {counts[cmd]}")
-            removed = sum(counts.values())
-            if args.yes:
-                removed, total, backup = history.scrub_test_entries(apply=True)
-                if backup is not None:
-                    print(f"removed {removed} entries (kept {total - removed}), "
-                          f"backup: {backup}")
-                else:
-                    print(f"nothing to remove ({total} entries, 0 test rows)")
-            else:
-                total = len(history.read_all())
-                print(f"would remove {removed} of {total} entries "
-                      f"\u2014 run with --yes to apply")
-            return 0
-        for entry in history.tail(args.n):
-            ts = entry.get("ts")
-            when = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts)) if ts else "?"
-            ai = " [AI]" if entry.get("ai") else ""
-            print(f"{when}{ai}: {entry.get('text', '')}")
-        return 0
-
-    if args.cmd == "config":
-        if args.action == "init":
-            path = write_template()
-            print(f"wrote {path}")
-        elif args.action == "print":
-            print(paths.config_file().read_text() if paths.config_file().exists()
-                  else "(no config file - defaults in use; run `sayit-ermano config init`)")
-        else:
-            print(paths.config_file())
-        return 0
-
-    if args.cmd == "settings":
-        # Kept for the .desktop entry (Exec=sayit-ermano settings): opens the
-        # native window now that the web UI is retired.
-        from .gtkui.application import run as run_app
-        return run_app(["--open", "settings"])
-
-    if args.cmd == "app":
-        from .gtkui.application import run as run_app
-        return run_app(["--open", args.open] + (["--onboard"] if args.onboard else []))
-
-    if args.cmd == "mcp":
-        from .mcp_server import serve
-        serve()
-        return 0
-
-    if args.cmd == "eval-run":
-        from .evalharness.cli import main as eval_main
-        return eval_main(list(args.harness_args))
-
-    if args.cmd == "doctor":
-        return doctor_mod.run()
-
-    if args.cmd == "update":
-        return _cmd_update(args)
-
+    try:
+        Daemon(cfg, use_hotkey=not args.no_hotkey,
+               use_sounds=not args.no_sounds).run()
+    finally:
+        lock.close()
+        _DAEMON_LOCK_FILE.unlink(missing_ok=True)
     return 0
+
+
+def _cmd_remote(args: argparse.Namespace) -> int:
+    """toggle / cancel / status / paste-last / language: one control
+    round-trip to the running daemon (language maps to cycle-language)."""
+    from . import control
+    try:
+        resp = control.request("cycle-language" if args.cmd == "language"
+                               else args.cmd)
+    except control.ControlError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(resp))
+    elif args.cmd == "language":
+        if resp.get("ok"):
+            print(f"cycled -> {resp.get('language')} ({resp.get('source')})")
+        else:
+            print(f"language cycle: {resp.get('error')}")
+    else:
+        print(_describe(resp))
+    return 0 if resp.get("ok") else 1
+
+
+def _cmd_transcribe(args: argparse.Namespace) -> int:
+    from . import backends, chunking
+    from .ai.client import AIClient
+    from .audio_utils import SUPPORTED_AUDIO_EXTS, AudioFormatError
+    from .processing import post_process
+    if not args.file.exists():
+        print(f"error: file not found: {args.file}", file=sys.stderr)
+        return 1
+    cfg = load_config(args.config)
+    backend = backends.load_backend(cfg)
+    if args.file.suffix.lower() not in SUPPORTED_AUDIO_EXTS:
+        print(f"note: '{args.file.suffix}' is not a verified format - trying "
+              "anyway (ffmpeg fallback when needed)", file=sys.stderr)
+    try:
+        # long inputs are chunked (P3): convert once, ten-minute
+        # overlapping chunks, one reconciled transcript
+        result = chunking.transcribe_long(
+            backend, args.file,
+            language=backends.effective_language(cfg, backend),
+            force_whisper_cpp=backend.name == "whisper.cpp")
+    except (AudioFormatError, chunking.AudioTooLargeError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    text = result.to_plain_text()
+    if not args.no_process:
+        text = post_process(text, cfg)
+    if args.ai and cfg["ai"].get("enabled"):
+        text = AIClient(cfg).polish(text)
+    elif args.ai:
+        print("(ai.enabled=false in config; raw transcription only)", file=sys.stderr)
+    if args.json:
+        # CLI-edge serialization: the historical --json payload shape
+        # (duration_s; raw per-segment text, not post-processed)
+        payload = {"text": text,  # final text (post-processed/AI if on)
+                   "language": result.language,
+                   # null for torch/whisper.cpp; [] when backend exposes none
+                   "duration_s": result.duration,
+                   "segments": [s.to_dict() for s in result.segments]}
+        out_text = json.dumps(payload, indent=2, ensure_ascii=False)
+    else:
+        out_text = text
+    if args.out:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(out_text + "\n", encoding="utf-8")
+        print(f"wrote {args.out}", file=sys.stderr)  # stderr keeps stdout clean
+    else:
+        print(out_text)
+    return 0
+
+
+def _cmd_history(args: argparse.Namespace) -> int:
+    from . import history
+    if args.export:
+        def _note(m):
+            print(m, file=sys.stderr)
+        try:
+            n = history.export_zip(args.export, on_note=_note)
+        except OSError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        print(f"exported {n} entries to {args.export}")
+        return 0
+    if args.scrub_tests:
+        counts = history.test_command_counts()
+        for cmd in sorted(counts):
+            print(f"  {cmd}: {counts[cmd]}")
+        removed = sum(counts.values())
+        if args.yes:
+            removed, total, backup = history.scrub_test_entries(apply=True)
+            if backup is not None:
+                print(f"removed {removed} entries (kept {total - removed}), "
+                      f"backup: {backup}")
+            else:
+                print(f"nothing to remove ({total} entries, 0 test rows)")
+        else:
+            total = len(history.read_all())
+            print(f"would remove {removed} of {total} entries "
+                  f"\u2014 run with --yes to apply")
+        return 0
+    for entry in history.tail(args.n):
+        ts = entry.get("ts")
+        when = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts)) if ts else "?"
+        ai = " [AI]" if entry.get("ai") else ""
+        print(f"{when}{ai}: {entry.get('text', '')}")
+    return 0
+
+
+def _cmd_config(args: argparse.Namespace) -> int:
+    if args.action == "init":
+        path = write_template()
+        print(f"wrote {path}")
+    elif args.action == "print":
+        print(paths.config_file().read_text() if paths.config_file().exists()
+              else "(no config file - defaults in use; run `sayit-ermano config init`)")
+    else:
+        print(paths.config_file())
+    return 0
+
+
+def _cmd_settings(args: argparse.Namespace) -> int:
+    # Kept for the .desktop entry (Exec=sayit-ermano settings): opens the
+    # native window now that the web UI is retired.
+    from .gtkui.application import run as run_app
+    return run_app(["--open", "settings"])
+
+
+def _cmd_app(args: argparse.Namespace) -> int:
+    from .gtkui.application import run as run_app
+    return run_app(["--open", args.open] + (["--onboard"] if args.onboard else []))
+
+
+def _cmd_mcp(args: argparse.Namespace) -> int:
+    from .mcp_server import serve
+    serve()
+    return 0
+
+
+def _cmd_eval_run(args: argparse.Namespace) -> int:
+    from .evalharness.cli import main as eval_main
+    return eval_main(list(args.harness_args))
+
+
+def _cmd_doctor(args: argparse.Namespace) -> int:
+    return doctor_mod.run()
 
 
 def _cmd_update(args) -> int:
