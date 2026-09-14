@@ -29,7 +29,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable
 
-from . import __version__, backends, control, insertion, paths, ui
+from . import __version__, backends, control, control_routes, insertion, paths, ui
 from . import history as history_mod
 from . import session as session_mod
 from . import update as update_mod
@@ -988,111 +988,10 @@ class Daemon:
     # -- control protocol ----------------------------------------------------
 
     def handle_request(self, req: dict) -> dict:
-        action = req.get("action")
-        if action == "toggle":
-            recording = self.toggle()
-            return {"ok": True, "recording": recording}
-        if action == "cancel":
-            self.cancel()
-            return {"ok": True, "recording": False, "cancelled": True}
-        if action == "paste-last":
-            ok, detail = self.paste_last()
-            return {"ok": ok, "error": detail if not ok else None}
-        if action == "cycle-language":
-            return {"ok": True, **self._engines.cycle_language()}
-        if action == "insert-text":
-            ok, detail = self.insert_text_action(str(req.get("text", "")))
-            return {"ok": ok, "error": detail if not ok else None}
-        if action == "command-rerun":
-            purpose = req.get("purpose")
-            return self._commands.rerun(str(req.get("command", "")),
-                                       str(purpose) if purpose else None)
-        if action == "status":
-            upd = self._update_status()
-            with self._lock:
-                model_state = {
-                    "policy_s": self._engines.idle_threshold(),
-                    "loaded": self.backend is not None,
-                    "idle_s": round(time.monotonic()
-                                     - self._engines.last_activity, 1),
-                }
-            return {"ok": True, "recording": self.recording, "busy": self.busy,
-                    "backend": self.backend.name if self.backend else None,
-                    # what the model ACTUALLY runs on: the loaded backend's
-                    # resolved device (post auto-pick and CPU fallback);
-                    # with no model loaded, what "auto" would pick
-                    "cuda": (getattr(self.backend, "device", "") == "cuda"
-                             if self.backend is not None else
-                             backends.cuda_available()),
-                    "version": __version__,
-                    # None = hotkey disabled/--no-hotkey; False = every
-                    # lock-mask combo not held (blocked, daemon retrying)
-                    "hotkey_grabbed": (self._hotkey.hotkey_grabbed
-                                       if self._hotkey is not None else None),
-                    # None = no button configured (or unavailable); False =
-                    # the button grab is refused and being retried
-                    "mouse_ptt_grabbed": (self._mouse_ptt.button_grabbed
-                                          if self._mouse_ptt is not None
-                                          else None),
-                    "locked": self._locked,
-                    # lock watch surface (lockmon status: mode/via name the
-                    # watched session - the doctor lock line reads this)
-                    "lock_watch": (self._lockmon.status()
-                                   if self._lockmon is not None else
-                                   {"active": False, "mode": "off",
-                                    "session": None, "via": None,
-                                    "locked": self._locked}),
-                    # session type + per-capability backends (wayland port
-                    # v0.3; additive keys - JSON consumers unaffected)
-                    "session": {"type": self._session.type,
-                                "desktop": self._session.desktop},
-                    "capabilities": session_mod.capabilities(
-                        self._session, cfg=self.cfg),
-                    "warmup": dict(self.warmup),
-                    "active_model": self._engines.active_model_name(),
-                    "active_model_key": backends.backend_model_key(self.backend)
-                                       or backends.config_model_key(self.cfg),
-                    "today": history_mod.today_stats(history_mod.read_all()),
-                    # update check-and-assist (fluidvoice/update.py): the
-                    # dict carries everything; the two flat keys are the
-                    # CLI/UI convenience surface
-                    "update": upd,
-                    "update_available": upd.get("update_available"),
-                    "update_url": upd.get("url"),
-                    # idle-unload policy + live state (doctor/tray read
-                    # this; additive key - JSON consumers unaffected)
-                    "model_state": model_state,
-                    # language cycle + guard state (doctor/CLI/GTK read
-                    # this; additive key - JSON consumers unaffected)
-                    "language": self._engines.language_status()}
-        if action == "shutdown":
-            self._quit_gracefully()
-            return {"ok": True}
-        if action == "set-device":
-            device = str(req.get("device", ""))
-            self._set_device(device)
-            return {"ok": True, "device": device}
-        if action == "test-dictation":
-            return self.test_dictation(float(req.get("seconds", 3.0)))
-        if action == "get-config":
-            from .config import mask_secrets
-            return {"ok": True, "config": mask_secrets(self.cfg)}
-        if action == "set-config":
-            return self._set_config(req.get("config") or {})
-        if action == "select-model":
-            return self._engines.select_model(str(req.get("name", "")))
-        if action == "model-delete":
-            return self._engines.delete_model(str(req.get("kind", "")),
-                                     str(req.get("name", "")))
-        if action == "mics":
-            from .tray import list_microphones
-            return {"ok": True, "mics": list_microphones()}
-        if action == "transcribe":
-            return self._api_transcribe(str(req.get("path") or ""),
-                                        bool(req.get("process", False)))
-        if action == "history":
-            return self._api_history(req)
-        return {"ok": False, "error": f"unknown action {action!r}"}
+        # Route table lives in control_routes.py (org plan 5.3): one
+        # handler per action, shared by the socket and MCP bridges
+        # (which forwards action dicts over the socket).
+        return control_routes.dispatch(self, req)
 
     def _set_config(self, body: dict) -> dict:
         """Validated settings merge over the socket (native-app spec):
