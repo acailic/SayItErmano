@@ -1,5 +1,12 @@
 # Quality-plan item tracker
 
+> **SUPERSEDED 2026-09-14** — this queue is historical. The single
+> authoritative Q-item tracker is § Implementation log of the
+> [quality plan](../plans/archive/2026-09-11-project-quality-and-testing-plan.md);
+> current status of the live-evidence halves also lives in the
+> [evidence index](../quality/evidence-index.md) and open briefs.
+> Kept for the per-row history of the two parallel Q1/Q2 implementations.
+
 > **2026-09-12 merge note:** Q1/Q2 were implemented TWICE in parallel —
 > bd6a531/cf6f947 on `linux` (design described in the rows below) and
 > d745255 on `agent/qplan-20260911`, alongside Q3–Q12. The merge that
