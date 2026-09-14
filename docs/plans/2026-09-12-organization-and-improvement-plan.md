@@ -511,6 +511,25 @@ main_window.py display coverage 70% → 78%.
 **5.8** adopted as standing policy (new tests land in mirrored
 folders; no bulk move). **5.9** stays deferred per its own item.
 
+### 2026-09-14 — post-Phase-5 hardening
+
+- **CI repaired + dispatched**: the 5.1 ci.yml rewrite had left an
+  orphaned step header (no `run`/`uses`) plus bare comment lines —
+  PyYAML-legal but rejected by GitHub's parser, so every push since
+  `92f3ce5` failed the 0-second workflow validation and
+  `workflow_dispatch` 422'd. After the fix, run `34829413364` @
+  `586cb8c`: all four lanes green; first dispatch also flushed out two
+  CI-only test flakes (spoken-send countdown race, pycairo dependency)
+  — both hardened. Lesson recorded in the evidence index: local gates
+  cannot catch workflow-file parse errors.
+- **ROADMAP** release-note reconciliation (product plan phase 0):
+  "in tree, unreleased (shaping v0.8.2+)" → shipped in v0.8.2.
+- **Display coverage push** (5.5 follow-up): first mirrored
+  `tests/gtkui/` folder (5.8 policy) — widget proxies, history
+  clear-all, wayland copy/open. Display tier 163 → 172;
+  settings_pages/common.py 62% → 100%, history page 67% → 100%,
+  wayland page 80% → 92%.
+
 Remaining: Phase 6 as external access arrives (6.1 Wayland session,
 6.2 corpus consent, 6.4 VMs); 5.9 opportunistically with subsystem
 rework.

@@ -84,3 +84,20 @@ summary and the GitHub release page for each tag.
   `--require-hashes`, the set-e clean-checkout gate) and documented the
   push→dispatch ref-metadata race (mitigated by re-preparing; a
   `select-prepare-run` digest fallback is the follow-up).
+
+### Post-release CI dispatches
+
+- **2026-09-14, run `34829413364` (SUCCESS)** on `linux` @ `586cb8c` —
+  all four lanes green (compile+metadata, unit py3.11, unit py3.12,
+  GTK/Xvfb) after the org-plan Phase 5 code delta: tier script,
+  coverage floor 71 (measured 71.08% in the py3.12 lane), control-route
+  table, CLI handler table, GTK section-builder split + 172-test
+  display tier. Two more latent defects surfaced by the first
+  post-delta dispatch (`34828351373`) and fixed on the spot: the ci.yml
+  5.1 rewrite had left a step with neither `run` nor `uses` (and bare
+  comment lines) — invalid for GitHub's parser though PyYAML-legal,
+  which is why every push since `92f3ce5` showed a 0-second
+  "workflow file issue" failure; and two CI-only test flakes (see
+  `fix(tests)` 2026-09-14 commit). Local `just gate` cannot catch a
+  workflow-file parse — dispatching CI after workflow edits is the
+  only guard.
