@@ -23,7 +23,7 @@
 <p align="center">
   <a href="https://youtu.be/HWyjH-VCBAw" title="Watch the demo on YouTube">
     <img src="docs/screenshots/demo-video-thumbnail.png" width="560" alt="SayItErmano demo video — watch on YouTube: a real end-to-end dictation with the live pill, language cycling and spoken-send"></a><br>
-  <sub><a href="https://youtu.be/HWyjH-VCBAw">▶ Watch the one-minute demo video</a> — real end-to-end run: hotkey → live pill → typed text → language cycle → spoken-send.</sub>
+  <sub><a href="https://youtu.be/HWyjH-VCBAw">▶ Watch the one-minute demo video</a></sub>
 </p>
 
 > [!NOTE]
@@ -35,39 +35,28 @@
 > [docs/BEHAVIOR-SPEC.md](docs/BEHAVIOR-SPEC.md) for what was ported, with
 > file:line evidence from the upstream sources.
 >
-> **Naming:** the project, repo, package, command and env-var overrides
-> (`SAYITERMANO_CONFIG`, `SAYITERMANO_SOCKET`, `SAYITERMANO_API_KEY`, …) are
-> **SayItErmano** (`sayit-ermano`). Only the Python module keeps the upstream
-> `fluidvoice` naming on purpose — internals credit the port's origin.
-> Installing `sayit-ermano` replaces the pre-rename `fluidvoice-linux` package
-> and takes over its config, history and models.
+> **Naming:** the project, package and commands are **SayItErmano**;
+> only the Python module keeps the upstream `fluidvoice` name on
+> purpose. Installing `sayit-ermano` replaces the pre-rename
+> `fluidvoice-linux` package and takes over its config, history and
+> models — details in the [install guide](docs/guides/install.md).
 
 ## What's new
 
 **[v0.8.2](https://github.com/acailic/SayItErmano/releases/tag/v0.8.2)** — the
-reliability + correctness release: every dictation path got audited and
-hardened. **Verified pasting** — paste mode now proves the target read the
-clipboard and the field received the text (duplicated transcripts in
-terminals, silently lost dictations in browsers: fixed, live-matrix
-evidenced); **focused-field context** (off by default) reads the target
-field so continuations, search boxes and per-app profiles work — and the
-AT-SPI provider now survives busy 26+-app desktops. **Hallucination
-guard + preview confidence**: fluent garbage over wrong-language or dead
-audio is re-decoded once and repetition loops never type; shaky preview
-windows never render. **Chunked file transcription** (10-min overlapping
-chunks, 6 h ceiling). **IPC hardening** across the control socket and MCP
-bridge, **first-use funnel** (visible model download, guided first
-insertion, honest insertion errors), and the deb's **pinned reproducible
-builds** (Ubuntu 24.04 / x86_64 / Python 3.12, hash-locked dependencies)
-plus a native **AUR** source recipe.
+reliability + correctness release: **verified pasting** (paste mode proves
+the target read the clipboard and the field got the text — duplicated
+transcripts in terminals and lost dictations in browsers: fixed,
+live-matrix evidenced), **focused-field context** (off by default), a
+**hallucination guard** (fluent garbage over wrong-language or dead audio
+never types), **chunked file transcription** (10-min overlapping chunks,
+6 h ceiling), IPC hardening, a **first-use funnel**, the deb's **pinned
+reproducible builds** and a native **AUR** recipe.
 
 **[v0.8.1](https://github.com/acailic/SayItErmano/releases/tag/v0.8.1)** — the
-macOS-parity release: the settings sidebar groups into **Settings / More**
-sections with the upstream page order (General, Dictation, Models, AI,
-History), Languages and Commands live on the Dictation page like on the
-Mac, prompt profiles render as **radio rows with per-row Rename/Delete
-menus**, the active model carries a radio indicator, and the History menu
-gains **Export as Text** plus a **Pause saving / Resume saving** toggle.
+macOS-parity release: upstream settings page order, prompt profiles as
+**radio rows**, active-model radio indicator, History **Export as Text**
+and **Pause saving**.
 
 Older releases (v0.8.0 and back) live in the
 [CHANGELOG](CHANGELOG.md).
@@ -78,7 +67,7 @@ Older releases (v0.8.0 and back) live in the
 2. **Local transcription** — faster-whisper on CUDA GPU when available, CPU int8 otherwise (whisper.cpp, torch, and NVIDIA Parakeet TDT via ONNX Runtime backends also supported).
 3. **Post-processing chain** — filler-word removal → custom dictionary → **spoken punctuation commands** (`literal comma`, `literal new line`, `example literal dot com`, …) — the full FluidVoice rule table.
 4. **Optional AI polish** — the *verbatim* FluidVoice dictation prompt sent to any OpenAI-compatible endpoint (OpenAI, Groq, Ollama, LM Studio, llama.cpp server). Turns *"um lets meet on tuesday around 3 no wait 4 p.m."* into *"Let's meet on Tuesday at 4 p.m."*
-5. **Text insertion** — `xdotool type` keystrokes (clipboard-free), or clipboard paste with automatic restore for long texts. Paste is verified by observing the target read the selection before your clipboard is restored, dictation text flashes are hidden from clipboard managers (CopyQ live-verified), and terminal apps get `ctrl+shift+v`. Plus history, start/stop sounds (the original GPLv3 FluidVoice SFX), and desktop notifications.
+5. **Text insertion** — `xdotool type` keystrokes (clipboard-free), or verified clipboard paste with automatic restore for long texts. Plus history, start/stop sounds (the original GPLv3 FluidVoice SFX), and desktop notifications.
 
 ```
 hotkey ─▶ pw-record 16k mono ─▶ faster-whisper (CUDA/int8) ─▶ fillers/dictionary/
@@ -90,177 +79,25 @@ hotkey ─▶ pw-record 16k mono ─▶ faster-whisper (CUDA/int8) ─▶ filler
 
 ## Installation
 
-### Quick start — one-shot installer
-
-One download + one command, then SayItErmano appears in your app launcher,
-autostarts at login, and needs no terminal. The default install is
-**user-space and needs no sudo at all** (`~/.local/…` + a systemd user unit
-that shadows any system unit); it only asks for sudo if a required system
-package (GTK/pygobject, xdotool, …) is missing:
+**Quick start** — one download + one command, then SayItErmano appears in
+your app launcher, autostarts at login, and needs no terminal. The default
+install is user-space and needs no sudo at all; it only asks for sudo if a
+required system package (GTK/pygobject, xdotool, …) is missing:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/install-one-shot.sh | bash
 ```
 
-Prefer the classic system-wide .deb (root-owned, `/opt` runtime)?
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/install-one-shot.sh | bash -s -- --system
-```
-
-### Ubuntu 24.04 — official .deb
-
-The .deb is a **single-target package: Ubuntu 24.04 · x86_64 · Python 3.12**
-(24.04 derivatives like Pop!_OS 24.04 work too). Its bundled runtime venv
-uses the system Python, and the package declares
-`Depends: python3 (>= 3.12), python3 (<< 3.13)` — so it installs cleanly
-on the target and refuses to lie about compatibility. Other distros or
-Python versions: use [pipx](#pipx--pip-any-distro-python-311) below or the
-[AUR package](#arch-linux-aur).
-
-```bash
-curl -LO https://github.com/acailic/SayItErmano/releases/download/v0.8.1/sayit-ermano_0.8.1-1_amd64.deb
-sudo apt install ./sayit-ermano_0.8.1-1_amd64.deb
-```
-
-Grab a specific version from the [releases page](https://github.com/acailic/SayItErmano/releases).
-Building it yourself: release artifacts come out of a **pinned Ubuntu 24.04
-container** with a **committed, hash-lockable dependency set** —
-
-```bash
-docker build -t sayit-ermano-deb -f packaging/deb/Dockerfile .
-mkdir -p dist && docker run --rm -v "$PWD/dist:/out" sayit-ermano-deb
-```
-
-(or `./packaging/build-deb.sh` directly on an Ubuntu 24.04 / Python 3.12
-host — it refuses to run anywhere else). See
-[packaging/deb/README.md](packaging/deb/README.md) for the deb contract,
-the pinned environment, and the reviewed `constraints.txt` lock.
-
-**What you get after install** (log out/in once):
-
-- **App launcher entry "SayItErmano"** (opens the native app) with its own icon
-- **Daemon autostarts at login** (XDG autostart; a systemd user unit is also
-  provided: `systemctl --user enable --now sayit-ermano`)
-- `sayit-ermano` available everywhere in PATH (`doctor`, `toggle`,
-  `settings`, `history`, …)
-- Removes cleanly with `sudo apt remove sayit-ermano` — upgrading from the
-  pre-rename `fluidvoice-linux` package replaces it automatically; your
-  config, history and downloaded models are kept
-
-### pipx / pip (any distro, Python 3.11+)
-
-The cross-distro route (the deb above is Ubuntu 24.04-only): works on any
-Linux with Python 3.11+ — a pipx install lands under `~/.local/pipx` (or
-`~/.local/share/pipx`) and never touches the system Python:
-
-```bash
-pipx install sayit-ermano          # from PyPI (publishing is manual — if the
-                                   # latest release isn't on PyPI yet, use:)
-pipx install git+https://github.com/acailic/SayItErmano.git@linux
-```
-
-Upgrades are one command (`sayit-ermano update` detects the pipx install
-and prints exactly this):
-
-```bash
-pipx upgrade sayit-ermano
-```
-
-You can also install a locally built wheel (e.g. after `git clone` +
-`uv build --wheel`): `pipx install ./dist/sayit_ermano-<ver>-py3-none-any.whl`.
-Verify an install any time with `./scripts/verify-pipx.sh` (entry points,
-data files, and the updater's install-method detection, in a sandbox).
-
-Using the one-shot user install instead? Its bundled venv can be upgraded
-directly (the exact line `sayit-ermano update` prints for that layout):
-
-```bash
-~/.local/share/sayit-ermano/venv/bin/pip install -U sayit-ermano
-```
-
-(re-running the one-shot installer is the fully supported path — it also
-restarts the daemon and cleans up duplicate installs.)
-
-### Arch Linux (AUR)
-
-A native package, [`sayit-ermano`](https://aur.archlinux.org/packages/sayit-ermano),
-source-built against Arch's current Python (PEP 517 `python -m build` —
-speech via the AUR
-[`python-faster-whisper`](https://aur.archlinux.org/packages/python-faster-whisper)
-package). The recipe and the one-command publish script live in
-[`packaging/aur/`](packaging/aur/). If the package page does not exist
-yet, the first push is still pending an AUR SSH key —
-`packaging/aur/publish.sh` finishes it. (An earlier `sayit-ermano-bin`
-recipe that repackaged the Ubuntu deb was never published and is
-superseded.)
-
-### From source (development)
-
-```bash
-git clone https://github.com/acailic/SayItErmano.git -b linux
-cd SayItErmano
-./scripts/install.sh          # apt deps + venv (reuses your CUDA torch if present)
-
-# run it (foreground; systemd unit in systemd/)
-.venv/bin/sayit-ermano daemon
-```
-
 Press **Right Ctrl**, speak, press **Right Ctrl** again. Done.
 
-Useful commands:
-
-```bash
-sayit-ermano app               # native GTK app: History, Settings, onboarding
-sayit-ermano doctor            # environment check
-sayit-ermano toggle            # CLI trigger (bind to a DE shortcut on Wayland)
-sayit-ermano cancel            # abort a recording
-sayit-ermano language          # cycle the dictation language (language_cycle)
-sayit-ermano transcribe x.opus --json   # one-shot file transcription
-sayit-ermano history -n 10
-sayit-ermano config init       # write ~/.config/sayit-ermano/config.toml
-sayit-ermano update            # check for a newer release + print the upgrade command
-```
-
-### Requirements
-
-- **X11**: the full experience (global hotkey grab + xdotool typing + the
-  pill preview). **Wayland is supported** since v0.3 — see the matrix
-  below; you need `wtype` or `ydotool` for text insertion and a
-  desktop-environment custom shortcut for the hotkey (Settings → Wayland
-  assists with both).
-- Python 3.11+ for pipx/source installs (tested 3.12); the .deb bundles
-  and requires Ubuntu 24.04's Python 3.12. Also `pipewire` (`pw-record`),
-  `xdotool`, `xclip`, `libnotify-bin`, `pulseaudio-utils` (sounds).
-- A whisper model is downloaded on first use (~75 MB tiny … ~3.1 GB large-v3;
-  default `small` ≈ 484 MB, or `base` on CPU). For the whisper.cpp backend,
-  the curated GGUF models are one-click downloads in Settings → Models.
-- GPU is optional: faster-whisper uses CUDA automatically when cuBLAS 12 +
-  cuDNN 9 are resolvable; otherwise it falls back to CPU int8.
-
-### Wayland support
-
-| Capability | X11 | Wayland |
-|---|---|---|
-| Global hotkey | `XGrabKey` (toggle + hold) | DE custom shortcut → the generated `sayit-ermano-toggle` script (Settings → Wayland prints the per-GNOME/KDE/COSMIC steps; `sayit-ermano doctor` too). Optional **evdev push-to-talk**: hold a physical key read from `/dev/input` (`hotkey.wayland_evdev`, privileged — `input` group + `pip install 'sayit-ermano[wayland]'`) |
-| Text insertion | `xdotool type` | `wtype` (wlroots/KDE — GNOME has no virtual-keyboard protocol) or `ydotool` (any compositor; needs `ydotoold` running + `/dev/uinput` access). `insertion.wayland_tool` = `auto\|wtype\|ydotool` |
-| Paste mode | verified read-observation + clipboard restore | `wl-clipboard` + fixed settle + restore — **paste verification is impossible on Wayland** (no client can observe another client's selection reads), and no clipboard-manager hygiene markers can be advertised |
-| Live preview | X11 pill | notification bubble (the layer-shell pill on wlroots compositors is future work; no pill on GNOME-Wayland) |
-| Tray | StatusNotifierItem | StatusNotifierItem (same) |
-| App hints / terminal quirks | WM_CLASS via `xdotool` | unavailable (AT-SPI is future work) — `general.terminal_apps` quirks are inert |
-
-Install the tools:
-
-```bash
-sudo apt install wtype wl-clipboard        # sway/wlroots, KDE
-sudo apt install ydotool wl-clipboard       # any compositor incl. GNOME:
-sudo systemctl enable --now ydotool         # ydotoold must run; /dev/uinput
-sudo usermod -aG input $USER                # only for evdev push-to-talk
-```
-
-`sayit-ermano doctor` prints the per-capability matrix with per-tool
-found/missing on your session, and `sayit-ermano status` carries the same
-matrix (additive `session`/`capabilities` keys in the JSON).
+All routes — the one-shot installer (user or `--system`), the official
+Ubuntu 24.04 .deb, pipx/pip on any distro, the AUR package, building
+from source, and how updates work — are documented in
+[docs/guides/install.md](docs/guides/install.md). Requirements in brief:
+Python 3.11+, `pipewire`/`xdotool`/`xclip`/`libnotify-bin`, a whisper
+model on first use (default `small` ≈ 484 MB), GPU optional. On Wayland
+you need `wtype`/`ydotool` and a DE shortcut:
+[docs/guides/wayland.md](docs/guides/wayland.md).
 
 ## The native app
 
@@ -271,12 +108,7 @@ matrix (additive `session`/`capabilities` keys in the JSON).
 <p>
 <img src="docs/screenshots/settings-general.png" width="292" alt="Settings: General">
 <img src="docs/screenshots/settings-models.png" width="292" alt="Settings: Models with one-click switch and GGUF downloads">
-<img src="docs/screenshots/settings-ai.png" width="292" alt="Settings: AI — radio-row prompt profiles">
-</p>
-<p>
 <img src="docs/screenshots/settings-dictation.png" width="292" alt="Settings: Dictation — hotkeys, languages, mic picker">
-<img src="docs/screenshots/settings-history.png" width="292" alt="Settings: History retention">
-<img src="docs/screenshots/settings-about.png" width="292" alt="Settings: About">
 </p>
 
 `sayit-ermano app` opens a native GTK 4 / libadwaita app (single instance;
@@ -285,24 +117,19 @@ settings sidebar even keeps the Mac's **Settings / More** section grouping
 and page order:
 
 - **History** (main window) — live status header, search, copy/delete,
-  inline audio replay for retained recordings, **Export as ZIP or plain
-  text**, and a **Pause saving** toggle.
-- **Settings** — sidebar sections: **General** / **Dictation** (hotkeys
-  with press-to-capture, languages + cycle, mic picker, commands) /
-  **Models** (radio-marked active model, one-click switch + download) /
-  **AI polish** (any OpenAI-compatible endpoint, live Test connection,
-  prompt profiles as radio rows, per-app prompts) / **History** /
-  **Wayland** / **About**. Saving hot-applies what the daemon can take
-  live (hotkey re-grab, recorder/tray/model rebuild) and says what needs
+  inline audio replay, **Export as ZIP or plain text**, **Pause saving**.
+- **Settings** — **General** / **Dictation** (hotkeys, languages, mic,
+  commands) / **Models** (radio-marked active, one-click switch +
+  download) / **AI polish** (any OpenAI-compatible endpoint, prompt
+  profiles, per-app prompts) / **History** / **Wayland** / **About**.
+  Saving hot-applies what the daemon can take live and says what needs
   a restart.
 - **Onboarding** — opens once on first launch with a real 3-second tryout.
 
-With the daemon stopped, History still works and Settings saves to the
-config file directly (applies on next daemon start). Everything it saves goes
-to the same `config.toml` (with a strict whitelist; API keys are never exposed
-through the UI — use the env var). Settings talk to the daemon over the
-user-owned unix control socket — no network listener exists. The config file
-is written with 0600 permissions.
+With the daemon stopped, History still works and Settings writes the
+config directly. Settings talk to the daemon over the user-owned unix
+control socket — no network listener exists; API keys are never exposed
+through the UI (use the env var).
 
 ### Enable AI polish (optional)
 
@@ -317,105 +144,9 @@ With Ollama: `ollama pull qwen3:8b`. No key needed for local endpoints; for clou
 providers set `api_key_env = "SAYITERMANO_API_KEY"` and export the variable
 (keys are never written to disk by the tooling).
 
-**Refusal guardrail** (`ai.refusal_guard`, default on): a polish reply that
-reads as a model refusal — "I'm sorry, I can't assist with that." — is never
-typed into your document; the raw transcript is used instead and a
-notification explains why. Opt out with `refusal_guard = false` if you want
-the model's reply verbatim (English patterns only in v1).
-
-### Command mode (voice → terminal agent)
-
-Set `command_key` under `[hotkey]` to a spare keysym (e.g. `F10`); like the
-rewrite key it needs `[ai]` enabled with a base URL and model. Press it and
-dictate an instruction ("list the biggest files in my downloads folder");
-stop the recording with the main dictation key. The model answers in a
-strict-JSON tool-call protocol (the upstream `execute_terminal_command`
-schema) and proposes shell commands — shown in the pill overlay in an
-awaiting-confirmation state — and you press the command hotkey again to run
-each one; `Escape` cancels. **Every** command requires that explicit
-confirmation before anything executes; output is fed back to the model and
-the loop continues (bounded by `[command] max_turns`).
-
-Commands matching the built-in **destructive list** (ported from upstream:
-`rm`, `mv`, `sudo`, `kill`, `chmod`, `dd`, redirections, `xargs rm`, …) or
-your own patterns get a stronger gate: an amber ⚠ pill and a **two-press**
-confirm — the first press only arms, the second runs.
-
-Follow-up context: within `command.context_window_s` (default 300 s, `0`
-disables) the last five executed results in the *same* focused app are
-replayed to the model so "now the biggest one" works; say **"new session"**
-to clear it. Nothing is persisted — a daemon restart starts cold.
-
-Executed commands land in History, which has a **Commands** page showing
-command, purpose, exit code, duration and collapsible output, with Copy and
-**Re-run** (re-run only re-posts a proposal — it still needs the hotkey
-confirm, never silent):
-
-```toml
-[command]
-context_window_s = 300.0
-# extra strings treated as destructive (case-insensitive substrings):
-destructive_patterns = ["git push", "shutdown"]
-```
-
-### Remote STT server (optional)
-
-Nothing leaves your machine unless you point SayItErmano at a URL you
-choose — the remote backend is **off by default** and LAN-friendly. When
-`remote_url` is set, each dictation POSTs the recorded WAV (the same
-16 kHz mono audio the local backends decode) as multipart to
-`<url>/v1/audio/transcriptions` on **any OpenAI-compatible server** and
-types back the returned text:
-
-```toml
-[model]
-remote_url  = "http://192.168.1.50:8000"  # empty = local models only
-remote_model = "whisper-large-v3"          # model name sent with the request
-# remote_api_key = ""                      # optional bearer token (masked, never logged)
-# remote_timeout_s = 30
-```
-
-Server examples:
-
-- **vLLM**: `vllm serve openai/whisper-large-v3 --port 8000` →
-  `remote_url = "http://<lan-host>:8000"`, `remote_model = "whisper-large-v3"`
-- **whisper.cpp**: `whisper-server -m models/ggml-large-v3.bin --port 8080`
-  (its OpenAI-compatible route)
-- anything else speaking `POST /v1/audio/transcriptions` works: NVIDIA NIM,
-  DGX Spark, Groq/OpenAI cloud (set `remote_api_key` there)
-
-`sayit-ermano doctor` shows the endpoint and probes reachability. To go
-back to local models, clear `remote_url` (Settings → Models → Remote
-sends the empty value — that means "off") or click **Use** on a local
-model, which clears it for you. Notes: remote takes have **no live
-preview and no VAD auto-stop** (one batch decode per take); transient
-failures (connection refused, 429/5xx) are retried once, other HTTP
-errors are not; a saved API key is removed by editing `config.toml`
-(same limitation as `ai.api_key`).
-
-<details>
-<summary><strong>File transcription</strong> (<code>sayit-ermano transcribe</code>)</summary>
-
-Accepts **wav, flac, mp3, opus, oga, ogg, m4a, aac, wma, aiff, webm** (verified
-to decode via PyAV). Unknown extensions are still attempted: anything PyAV
-can't open is converted with **ffmpeg** to 16 kHz mono WAV first
-(`sudo apt install ffmpeg` if it's missing). The whisper.cpp backend always
-converts via ffmpeg since `whisper-cli` reliably reads WAV only.
-
-- `--json` prints `{text, language, duration_s, segments}` where `segments`
-  are raw `{start, end, text}` per-segment entries with timestamps
-  (not post-processed; `[]` on the whisper.cpp backend — segment parsing
-  isn't wired up there in v1).
-- `--out PATH` writes the result to a file instead of stdout (JSON with
-  `--json`); missing parent directories are created.
-- Long inputs are **chunked** (P3): anything over ten minutes is converted
-  once, transcribed in ten-minute overlapping chunks, and reconciled into
-  one transcript (boundary duplicates deduplicated conservatively — exact
-  text match within the 1.5 s overlap window). The old >25 MB warning is
-  gone; the bound is decoded duration — 6 h of audio max (disk/temp safety),
-  enforced with a structured error, never a hang.
-
-</details>
+A **refusal guardrail** (`ai.refusal_guard`, default on) never types model
+refusals into your document — the raw transcript is used instead; see
+[configuration.md](docs/guides/configuration.md).
 
 ## Features vs. upstream FluidVoice
 
@@ -439,232 +170,30 @@ converts via ffmpeg since `whisper-cli` reliably reads WAV only.
 | Overlay sizes (pill/small/medium/large) | ✅ | ✅ `recording.preview_overlay_size` |
 | Notch overlay / menu bar | ✅ | ✅ tray/panel icon (StatusNotifierItem): click = dictate, state badge, tooltip with hotkey |
 
-See [docs/STATUS.md](docs/STATUS.md) for the full done/left ledger (verified
-by a 5-agent audit against the upstream Swift sources),
-[docs/COMPARISON.md](docs/COMPARISON.md) for how this relates to other Linux
-dictation tools (Handy, Vocalinux, nerd-dictation, …),
+See [docs/STATUS.md](docs/STATUS.md) for the full done/left ledger,
+[docs/COMPARISON.md](docs/COMPARISON.md) for other Linux dictation tools,
 [docs/ROADMAP.md](docs/ROADMAP.md) for the forward plan, and
 [docs/UPSTREAM-TRACKING.md](docs/UPSTREAM-TRACKING.md) for the
-macOS-vs-Linux capability matrix and the upstream changelog we track
-(refresh it with `scripts/upstream-diff.sh`).
-
-## Updates
-
-SayItErmano checks GitHub **once per daemon start and once a day** for a
-newer release (10 s timeout, on a background thread — startup is never
-delayed). When a newer release is seen you get **one desktop
-notification**; `sayit-ermano status`, the History window's status row,
-Settings → About and `sayit-ermano doctor` show it too. Nothing is ever
-installed automatically — run:
-
-```bash
-sayit-ermano update    # prints the exact copy-paste upgrade command for
-                       # YOUR install method (deb dpkg -i / one-shot
-                       # installer / pipx upgrade / git pull)
-sayit-ermano update --dismiss   # stop the notification for this release
-```
-
-`doctor` also warns when a system deb (`/opt/sayit-ermano`) and a user
-install (`~/.local/share/sayit-ermano`) coexist — the two-daemon hotkey
-fight this project's lock file guards against at runtime.
-
-### Scripting the daemon (unix socket)
-
-The control socket (JSON lines, filesystem-scoped to your runtime dir —
-no TCP by design) is a scriptable API. Beyond `toggle`/`status`/
-`set-config`/`select-model`, two routes exist for on-device agents:
-
-```python
-from fluidvoice import control
-# transcribe a file through the daemon's WARM model (no reload)
-r = control.request("transcribe", path="/tmp/note.wav", process=True)
-print(r["text"])
-# query stored dictations (chronological, newest last)
-h = control.request("history", limit=5, since_ts=1788800000.0)
-```
-
-```bash
-echo '{"action": "transcribe", "path": "/tmp/note.wav"}' \
-  | socat - UNIX-CONNECT:/run/user/$(id -u)/sayit-ermano.sock
-```
-
-`transcribe` refuses while a dictation is running (the GPU stays
-dedicated to your take); long inputs are chunked automatically
-(ten-minute overlapping chunks, reconciled into one transcript — see
-`fluidvoice/chunking.py`), with a hard ceiling of 6 h of audio;
-`process: true` runs the standard filler/punctuation chain.
-
-**MCP agents** get the same powers over stdio — run `sayit-ermano mcp`
-(register it with any MCP client, e.g. Claude Desktop:
-
-```json
-{"mcpServers": {"sayit-ermano":
-    {"command": "sayit-ermano", "args": ["mcp"]}}}
-```
-
-) and the tools `transcribe_file` / `history` / `status` / `toggle` are
-forwarded to the running daemon — your warm model does the work.
-
-**Security note:** launching the MCP bridge grants the connected client
-the reach of the daemon itself — it can read your **local dictation
-history**, run arbitrary local files through **transcription**, and
-**start/stop dictation takes** (`toggle`). Register `sayit-ermano mcp`
-only with agents you actually trust; any client configured with it
-inherits that access for as long as the bridge runs.
-
-Disable the checks entirely:
-
-```toml
-[updates]
-check = false   # no GitHub probe at all (notify = false keeps checks, drops
-                # only the desktop notification)
-```
-
-(`SAYITERMANO_SKIP_UPDATE_CHECK=1` does the same per-run.)
+macOS-vs-Linux capability matrix — everything under `docs/` is indexed in
+[docs/README.md](docs/README.md).
 
 ## Configuration
 
-Everything lives in `~/.config/sayit-ermano/config.toml` (generated by
-`sayit-ermano config init`; full commented template). Highlights:
-
-```toml
-[hotkey]
-key = "Right_Control"       # any keysym: F9, space, Pause, right_alt...
-mode = "toggle"             # or "hold" (push-to-talk; other keys pass through while held)
-# language_key = "F7"       # optional: cycles the language at runtime
-
-[model]
-name = "small"              # tiny/base/small/medium/large-v3/large-v3-turbo
-# backend = "whisper.cpp"    # use the external whisper-cli binary instead
-whispercpp_model = "ggml-base.bin"  # catalog name or path — download via Settings → Models
-# backend = "parakeet"       # NVIDIA Parakeet TDT via ONNX Runtime (pip install '.[parakeet]')
-# name = "parakeet-tdt-0.6b-v2"     # or parakeet-tdt-0.6b-v3 (multilingual)
-device = "auto"             # auto | cuda | cpu
-# idle_unload_s = 0          # unload the model after N idle seconds (0 = never; 30..86400)
-# Remote OpenAI-compatible STT server — nothing leaves this machine
-# while remote_url is empty (see "Remote STT server" above)
-# remote_url = "http://192.168.1.50:8000"
-# remote_model = "whisper-large-v3"
-# remote_api_key = ""        # optional bearer token
-# remote_timeout_s = 30
-# Vocabulary biasing: words the decoder is steered toward (ADD, unlike the
-# dictionary's replacements) - names, jargon; changes reload the engine.
-# Keep it short (<=20): long bias lists make the decoder hallucinate list words
-# hotwords = ["SayItErmano", "PipeWire"]
-
-[general]
-# Fast language switching: the cycle key steps this list at runtime
-# (state is never persisted); the guard re-decodes once with the first
-# whitelist entry when auto-detection lands outside it
-# language_cycle = ["auto", "en", "sl"]
-# language_whitelist = ["sl", "en"]
-# Case-insensitive WM_CLASS substrings identifying terminals — spoken-send
-# never presses Enter here and typed insertions gain one autocomplete space
-terminal_apps = ["gnome-terminal", "kgx", "konsole", "xterm", "alacritty", "kitty", "wezterm", "ghostty", "foot", "tilix", "terminator", "guake", "yakuake", "st-256color", "warp"]
-# Ignore hotkeys + cancel active dictation while the session is locked
-pause_when_locked = true
-
-[recording]
-mic_priority = ["bluez", "usb-cam"]  # fallback order when the chosen mic vanishes
-# (Bluetooth headset first, then a USB webcam; switch never happens mid-take)
-# Mouse push-to-talk: hold a spare button to dictate (always hold-style,
-# independent of hotkey.mode). Thumb buttons are usually 8/9; 1–5 refused.
-push_to_talk_button = "button8"  # "" = off
-# Spoken-send quiet countdown: 0.5 s of silence after saying the send
-# phrase finishes the dictation by itself (speak again to cancel) — no
-# hotkey press needed. 0 = off; needs spoken-send enabled in Settings.
-spoken_send_countdown_s = 1.2
-# Cancel the take if the mic stream freezes mid-dictation (0 = off)
-stall_timeout_s = 8.0
-
-[processing]
-dictionary = [ { triggers = ["miro board"], replacement = "Miro board" } ]
-# Corrections you make in History teach the dictionary: after the same
-# fix is seen twice, Settings -> Dictation suggests it under "Suggested words"
-# Chat-app literal squeeze: "/ fix the deploy" -> "/fix the deploy",
-# "@ John Smith" -> "@John Smith" (runs after AI cleanup)
-slash_mention_squeeze = true
-
-[insertion]
-mode = "auto"               # typed | paste | auto (paste for long texts)
-# One trailing space after typed insertions in terminal apps so the shell's
-# autocomplete commits
-terminal_autocomplete_space = true
-# Verify the paste landed (selection read) before restoring the clipboard;
-# false = legacy fixed-delay restore
-verify_paste = true
-# Keystroke used to paste in terminal apps (general.terminal_apps); X11
-# terminals pass ctrl+v through to the app, they need ctrl+shift+v
-terminal_paste_key = "ctrl+shift+v"
-```
-
-**Why is my first dictation slow after a break?** With `idle_unload_s`
-set (Settings → Models → Memory), the speech model is released after the
-idle window to free RAM — and VRAM on GPU machines — instead of staying
-pinned in memory forever. The first dictation afterwards pays the model
-load again (a few seconds; the load overlaps your speech), while the
-following ones are instant. Set it to `0` — the default — to keep the
-model always loaded, and check the live state any time with
-`sayit-ermano doctor` (it prints `model: loaded/unloaded (idle Xm;
-policy Ns)`).
+Everything lives in `~/.config/sayit-ermano/config.toml` (`sayit-ermano
+config init` writes the full commented template). The complete annotated
+reference is [docs/guides/configuration.md](docs/guides/configuration.md);
+special-purpose pages: [command mode](docs/guides/command-mode.md),
+[remote STT server](docs/guides/remote-stt.md),
+[file transcription](docs/guides/file-transcription.md), and
+[scripting the daemon / MCP](docs/guides/scripting-and-mcp.md).
 
 ## Development & testing
 
-**Branch layout:** the port lives on `linux` — treat it as this fork's main
-line (all commits, merges, and releases go there). The `main` branch mirrors
-the upstream macOS repo for reference only and is **never** updated with port
-work; to see what moved upstream, run `scripts/upstream-diff.sh`.
-
-```bash
-just test               # unit/contract tier (offline: the conftest network
-                        # guard fails any non-loopback connect in-process;
-                        # no model/display, tests deselected by DECLARED
-                        # requirement — needs_model/needs_display/etc.)
-just test-parallel      # same scope on pytest-xdist (~4-5x faster)
-just test-ui            # display/GTK tier on a VIRTUAL display (Xvfb +
-                        # cairo renderer + parallel workers): nothing flashes
-                        # on your desktop; SAYIT_TEST_REAL_DISPLAY=1 for the
-                        # live display. A skip FAILS in CI's gtk-x11 lane
-just test-process       # model-free process lane: real daemon/socket/CLI
-                        # subprocesses, works headless or under xvfb-run
-just test-integration   # real model + mic + GPU (needs hardware + the
-                        # shared venv; grabs hotkeys — coordinate first)
-just gate               # clean tree + lint + brief validation + unit tier
-                        # with -W error, strict markers, timeout, JUnit
-just coverage           # branch coverage (baseline: docs/research/
-                        # 2026-09-12-coverage-baseline.md)
-```
-
-Tier selection lives in the [justfile](justfile) (`just test`,
-`just test-parallel`, `just test-ui`, `just test-process`,
-`just test-integration`) and is mirrored in the CI workflow — run the
-same recipes locally that CI runs (capability markers: `model`,
-`network`, `desktop`, `packaging`, `gtk`, plus `slow` for duration
-only).
-
-The test suite — run `just test-parallel` for the current count
-(3480 offline unit/contract tests at 2026-09-14, ~20 s on this
-machine; 154 display-tier and 40 integration tests behind their own
-recipes):
-
-| Layer | What it exercises |
-|---|---|
-| Unit + integration-style | processing engines, AI client (mocked transport), daemon + pipeline state machines (stubs), socket API, MCP server, remote-STT + refusal/countdown guards, insertion command construction, config validation + registration meta-tests, overlay/pill painting, GTK app offscreen smoke tests |
-| E2E (slow) | real whisper model transcribing the JFK sample |
-| Integration | real `pw-record` capture + raw→WAV, GPU transcription, streaming preview with the loaded model, a real daemon **subprocess** (socket control incl. get/set-config + select-model, toggle/cancel, clean shutdown), live X11 hotkey grab + overlay pixel proof, real CLI invocations (doctor/transcribe/history/config), live AI polish + rewrite against local Ollama (skipped when absent), .deb extract + relocated-venv import, one-shot installer DRY_RUN download |
-
-Integration tests run against your real PipeWire/X11/CUDA environment and are
-isolated through `SAYITERMANO_CONFIG` / `SAYITERMANO_SOCKET` / `XDG_DATA_HOME`
-env overrides (the same overrides work for running multiple daemons).
-
-Layout: `fluidvoice/backends/` (speech engines) · `processing/` (fillers,
-dictionary, spoken punctuation) · `ai/` (prompts + OpenAI-compatible client) ·
-`context/` (focused-field context seam) · coordinators (`daemon.py`,
-`capture`/`command_coord`/`engine_manager`/`runtime_tasks`) · `insertion.py` +
-`selection.py` (typed/paste insertion + clipboard ownership) · `hotkey.py`
-(XGrabKey) · `control.py`/`control_server.py`/`mcp_server.py` (IPC) · `gtkui/`
-(settings/history/onboarding windows) · `evalharness/` (corpus + eval
-adapters) · `overlay.py` (pill).
+Read [AGENTS.md](AGENTS.md) first — one tree per agent, how tests are
+run, merge-back policy. The tier model (offline unit, display/GTK,
+process, integration) and every recipe live in
+[docs/dev/testing.md](docs/dev/testing.md); `just gate` is the bar every
+commit clears.
 
 ## License & credits
 

@@ -8,6 +8,20 @@ the app itself.
 
 - [README](../README.md) — what it is, install, first dictation,
   configuration overview.
+- [guides/install.md](guides/install.md) — every install route (one-shot
+  installer, Ubuntu .deb, pipx, AUR, source) and updates.
+- [guides/configuration.md](guides/configuration.md) — the complete
+  annotated `config.toml` reference.
+- [guides/wayland.md](guides/wayland.md) — Wayland capability matrix and
+  tool setup (`wtype`/`ydotool`, DE shortcuts, evdev PTT).
+- [guides/command-mode.md](guides/command-mode.md) — voice → terminal
+  agent.
+- [guides/remote-stt.md](guides/remote-stt.md) — pointing dictation at
+  an OpenAI-compatible STT server.
+- [guides/file-transcription.md](guides/file-transcription.md) —
+  `sayit-ermano transcribe` formats, JSON output, chunking.
+- [guides/scripting-and-mcp.md](guides/scripting-and-mcp.md) — the unix
+  control socket API and the MCP bridge (with its security note).
 - [STATUS.md](STATUS.md) — what works today, with evidence, and the
   known limitations.
 - [ROADMAP.md](ROADMAP.md) — everything not built yet.
@@ -25,6 +39,8 @@ the app itself.
   does, with file:line evidence, and where this port differs.
 - [dev/release-gates.md](dev/release-gates.md) — the local gates and
   the release path (nothing ships without them).
+- [dev/testing.md](dev/testing.md) — the test tier model and every
+  recipe, in one canonical place.
 - [dev/quality-queue.md](dev/quality-queue.md) — historical Q1–Q12
   tracker; superseded by the quality plan's implementation log.
 - [dev/context-seam.md](dev/context-seam.md) — the ContextProvider
