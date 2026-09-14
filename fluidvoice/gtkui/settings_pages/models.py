@@ -18,161 +18,17 @@ class ModelsPageMixin:
         page = Adw.PreferencesPage(
             name="models", icon_name="fluidvoice-models-symbolic", title="Models"
         )
-        self.models_group = Adw.PreferencesGroup(
-            title="Speech models",
-            description="faster-whisper models (downloaded on first use)",
-        )
-        page.add(self.models_group)
+        # sections (org plan 5.5): model catalogs, engine policy,
+        # remote STT, per-model language, disk usage
+        self._section_catalogs(page)
+        self._section_state(page)
+        self._section_memory(page)
+        self._section_engine(page)
+        self._section_remote(page)
+        self._section_hotwords(page)
+        self._section_lang_overrides(page)
+        self._section_disk_usage(page)
 
-        self.gguf_group = Adw.PreferencesGroup(
-            title="whisper.cpp GGUF",
-            description="Direct ggml models for the whisper.cpp backend",
-        )
-        page.add(self.gguf_group)
-
-        self.parakeet_group = Adw.PreferencesGroup(
-            title="Parakeet (ONNX)",
-            description="NVIDIA Parakeet TDT via ONNX Runtime — explicit backend",
-        )
-        page.add(self.parakeet_group)
-
-        warm = Adw.PreferencesGroup(title="State")
-        self.warmup_row = Adw.ActionRow(title="Model", subtitle="—")
-        self.warmup_spinner = Gtk.Spinner()
-        self.warmup_row.add_suffix(self.warmup_spinner)
-        warm.add(self.warmup_row)
-        page.add(warm)
-
-        # Memory: idle model unload (model.idle_unload_s). Whole minutes in
-        # the UI (0 = off); the config stores seconds - see _load/_collect.
-        mem = Adw.PreferencesGroup(
-            title="Memory",
-            description="Free RAM/VRAM between dictations (applies live)",
-        )
-        # 0..1440 minutes derives from the registry's 0..86400 seconds.
-        _idle_bounds = ui_range("model", "idle_unload_s") or (0, 86400)
-        adj = Gtk.Adjustment(
-            value=0, lower=0, upper=_idle_bounds[1] // 60, step_increment=1
-        )
-        self._idle_unload_row = Adw.SpinRow(
-            title="Unload model after idle (minutes)",
-            subtitle="0 = keep the model loaded (fastest first word); "
-            "higher frees RAM/VRAM after inactivity — the next "
-            "dictation pays the model load time",
-            adjustment=adj,
-            digits=0,
-        )
-        self._idle_unload_row.connect("notify::value", lambda *_: self._touch())
-        mem.add(self._idle_unload_row)
-        page.add(mem)
-
-        engine = Adw.PreferencesGroup(
-            title="Engine options", description="Changing these reloads the model"
-        )
-        engine.add(
-            self._combo(
-                "model",
-                "backend",
-                "Backend",
-            )
-        )
-        engine.add(
-            self._combo(
-                "model",
-                "device",
-                "Device",
-            )
-        )
-        engine.add(
-            self._combo(
-                "model",
-                "compute",
-                "Compute",
-            )
-        )
-        engine.add(
-            self._entry(
-                "model",
-                "whispercpp_model",
-                "whisper.cpp model — name like ggml-base.bin, or a path",
-            )
-        )
-        engine.add(
-            self._switch(
-                "model",
-                "eager_warmup",
-                "Load at startup",
-                "Warm the model when the daemon starts (needs a daemon restart)",
-            )
-        )
-        page.add(engine)
-
-        # Remote OpenAI-compatible STT server: local-first — everything is
-        # off while the URL is empty; audio goes only to the URL you set.
-        remote = Adw.PreferencesGroup(
-            title="Remote (OpenAI-compatible)",
-            description="Dictation POSTs the recorded WAV to "
-            "<url>/v1/audio/transcriptions — e.g. "
-            "http://lan-box:8000 (vLLM / whisper.cpp server / "
-            "NIM / DGX Spark). Empty URL = local models only; "
-            "audio leaves this machine only toward this URL",
-        )
-        remote.add(self._entry("model", "remote_url", "Server URL"))
-        remote.add(self._entry("model", "remote_model", "Model name"))
-        key_row = Adw.ActionRow(
-            title="API key", subtitle="optional bearer token (never shown)"
-        )
-        key_entry = Gtk.Entry(
-            visibility=False,
-            hexpand=True,
-            valign=Gtk.Align.CENTER,
-            input_purpose=Gtk.InputPurpose.PASSWORD,
-        )
-        key_entry.connect("changed", lambda *_: self._touch())
-        key_row.add_suffix(key_entry)
-        remote.add(key_row)
-        self._rows[("model", "remote_api_key")] = _PasswordProxy(key_entry, key_row)
-        remote.add(
-            self._spin(
-                "model",
-                "remote_timeout_s",
-                "Timeout (seconds)",
-                1,
-                digits=0,
-                subtitle="per-request; retry once on transient network errors",
-            )
-        )
-        page.add(remote)
-
-        hot = Adw.EntryRow(title="Hotwords (comma-separated)")
-        self._rows[("model", "hotwords")] = _ListProxy(hot)
-        hot.connect("changed", lambda *_: self._touch())
-        hot_group = Adw.PreferencesGroup(
-            title="Vocabulary boosting",
-            description="Words the decoder is biased toward (ADD, not "
-            "replace) — fed as faster-whisper hotwords / "
-            "whisper initial-prompt; changing them reloads "
-            "the engine",
-        )
-        hot_group.add(hot)
-        page.add(hot_group)
-
-        self.lang_overrides_group = Adw.PreferencesGroup(
-            title="Per-model language",
-            description="Overrides general.language per model - "
-            "empty = inherit, auto = always detect",
-        )
-        page.add(self.lang_overrides_group)
-
-        self.disk_group = Adw.PreferencesGroup(
-            title="Disk usage",
-            description="Cached models under ~/.cache/sayit-ermano/models "
-            "(deletion needs the daemon)",
-        )
-        self.disk_total_row = Adw.ActionRow(title="Total", subtitle="—")
-        self.disk_group.add(self.disk_total_row)
-        self._disk_rows: list[Adw.ActionRow] = []
-        page.add(self.disk_group)
         page.add(self._save_group())
         self._add_page(page)
 
@@ -677,3 +533,182 @@ class ModelsPageMixin:
         self.toast(f"Switching to parakeet ({name})…")
         self._load()  # resync cfg + rows
         GLib.timeout_add_seconds(1, self._poll_model)
+
+    def _section_catalogs(self, page: Adw.PreferencesPage) -> None:
+        """The three model catalogs (faster-whisper, whisper.cpp GGUF, Parakeet) — rows are filled by _refresh_models."""
+        self.models_group = Adw.PreferencesGroup(
+            title="Speech models",
+            description="faster-whisper models (downloaded on first use)",
+        )
+        page.add(self.models_group)
+
+        self.gguf_group = Adw.PreferencesGroup(
+            title="whisper.cpp GGUF",
+            description="Direct ggml models for the whisper.cpp backend",
+        )
+        page.add(self.gguf_group)
+
+        self.parakeet_group = Adw.PreferencesGroup(
+            title="Parakeet (ONNX)",
+            description="NVIDIA Parakeet TDT via ONNX Runtime — explicit backend",
+        )
+        page.add(self.parakeet_group)
+
+    def _section_state(self, page: Adw.PreferencesPage) -> None:
+        """Live model state row."""
+
+        warm = Adw.PreferencesGroup(title="State")
+        self.warmup_row = Adw.ActionRow(title="Model", subtitle="—")
+        self.warmup_spinner = Gtk.Spinner()
+        self.warmup_row.add_suffix(self.warmup_spinner)
+        warm.add(self.warmup_row)
+        page.add(warm)
+
+    def _section_memory(self, page: Adw.PreferencesPage) -> None:
+        """Idle-unload / memory policy."""
+
+        # Memory: idle model unload (model.idle_unload_s). Whole minutes in
+        # the UI (0 = off); the config stores seconds - see _load/_collect.
+        mem = Adw.PreferencesGroup(
+            title="Memory",
+            description="Free RAM/VRAM between dictations (applies live)",
+        )
+        # 0..1440 minutes derives from the registry's 0..86400 seconds.
+        _idle_bounds = ui_range("model", "idle_unload_s") or (0, 86400)
+        adj = Gtk.Adjustment(
+            value=0, lower=0, upper=_idle_bounds[1] // 60, step_increment=1
+        )
+        self._idle_unload_row = Adw.SpinRow(
+            title="Unload model after idle (minutes)",
+            subtitle="0 = keep the model loaded (fastest first word); "
+            "higher frees RAM/VRAM after inactivity — the next "
+            "dictation pays the model load time",
+            adjustment=adj,
+            digits=0,
+        )
+        self._idle_unload_row.connect("notify::value", lambda *_: self._touch())
+        mem.add(self._idle_unload_row)
+        page.add(mem)
+
+    def _section_engine(self, page: Adw.PreferencesPage) -> None:
+        """Engine selection: backend, model name, device, compute."""
+
+        engine = Adw.PreferencesGroup(
+            title="Engine options", description="Changing these reloads the model"
+        )
+        engine.add(
+            self._combo(
+                "model",
+                "backend",
+                "Backend",
+            )
+        )
+        engine.add(
+            self._combo(
+                "model",
+                "device",
+                "Device",
+            )
+        )
+        engine.add(
+            self._combo(
+                "model",
+                "compute",
+                "Compute",
+            )
+        )
+        engine.add(
+            self._entry(
+                "model",
+                "whispercpp_model",
+                "whisper.cpp model — name like ggml-base.bin, or a path",
+            )
+        )
+        engine.add(
+            self._switch(
+                "model",
+                "eager_warmup",
+                "Load at startup",
+                "Warm the model when the daemon starts (needs a daemon restart)",
+            )
+        )
+        page.add(engine)
+
+    def _section_remote(self, page: Adw.PreferencesPage) -> None:
+        """Remote OpenAI-compatible STT endpoint."""
+
+        # Remote OpenAI-compatible STT server: local-first — everything is
+        # off while the URL is empty; audio goes only to the URL you set.
+        remote = Adw.PreferencesGroup(
+            title="Remote (OpenAI-compatible)",
+            description="Dictation POSTs the recorded WAV to "
+            "<url>/v1/audio/transcriptions — e.g. "
+            "http://lan-box:8000 (vLLM / whisper.cpp server / "
+            "NIM / DGX Spark). Empty URL = local models only; "
+            "audio leaves this machine only toward this URL",
+        )
+        remote.add(self._entry("model", "remote_url", "Server URL"))
+        remote.add(self._entry("model", "remote_model", "Model name"))
+        key_row = Adw.ActionRow(
+            title="API key", subtitle="optional bearer token (never shown)"
+        )
+        key_entry = Gtk.Entry(
+            visibility=False,
+            hexpand=True,
+            valign=Gtk.Align.CENTER,
+            input_purpose=Gtk.InputPurpose.PASSWORD,
+        )
+        key_entry.connect("changed", lambda *_: self._touch())
+        key_row.add_suffix(key_entry)
+        remote.add(key_row)
+        self._rows[("model", "remote_api_key")] = _PasswordProxy(key_entry, key_row)
+        remote.add(
+            self._spin(
+                "model",
+                "remote_timeout_s",
+                "Timeout (seconds)",
+                1,
+                digits=0,
+                subtitle="per-request; retry once on transient network errors",
+            )
+        )
+        page.add(remote)
+
+    def _section_hotwords(self, page: Adw.PreferencesPage) -> None:
+        """Vocabulary hotwords biasing."""
+
+        hot = Adw.EntryRow(title="Hotwords (comma-separated)")
+        self._rows[("model", "hotwords")] = _ListProxy(hot)
+        hot.connect("changed", lambda *_: self._touch())
+        hot_group = Adw.PreferencesGroup(
+            title="Vocabulary boosting",
+            description="Words the decoder is biased toward (ADD, not "
+            "replace) — fed as faster-whisper hotwords / "
+            "whisper initial-prompt; changing them reloads "
+            "the engine",
+        )
+        hot_group.add(hot)
+        page.add(hot_group)
+
+    def _section_lang_overrides(self, page: Adw.PreferencesPage) -> None:
+        """Per-model language overrides."""
+
+        self.lang_overrides_group = Adw.PreferencesGroup(
+            title="Per-model language",
+            description="Overrides general.language per model - "
+            "empty = inherit, auto = always detect",
+        )
+        page.add(self.lang_overrides_group)
+
+    def _section_disk_usage(self, page: Adw.PreferencesPage) -> None:
+        """Cached-model disk usage."""
+
+        self.disk_group = Adw.PreferencesGroup(
+            title="Disk usage",
+            description="Cached models under ~/.cache/sayit-ermano/models "
+            "(deletion needs the daemon)",
+        )
+        self.disk_total_row = Adw.ActionRow(title="Total", subtitle="—")
+        self.disk_group.add(self.disk_total_row)
+        self._disk_rows: list[Adw.ActionRow] = []
+        page.add(self.disk_group)

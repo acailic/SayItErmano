@@ -348,7 +348,42 @@ class HistoryWindow(Adw.ApplicationWindow):
         self._query = ""
         self._search_debounce = 0
 
-        # -- header ---------------------------------------------------------
+        # -- layout ---------------------------------------------------------
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.toast_overlay = Adw.ToastOverlay(child=vbox)
+        self.set_content(self.toast_overlay)
+        vbox.append(self._build_header())
+
+        self.down_banner = Adw.Banner(
+            title="Daemon not running — history works, dictation does not",
+            button_label="Retry", revealed=False)
+        self.down_banner.connect("button-clicked", lambda *_: self.refresh())
+        vbox.append(self.down_banner)
+
+        vbox.append(self._build_status_row())
+        self.search = Gtk.SearchEntry(placeholder_text="Search transcripts, commands, apps…",
+                                      margin_start=12, margin_end=12,
+                                      margin_bottom=6)
+        self.search.connect("changed", self._on_search_changed)
+        vbox.append(self.search)
+
+        self._build_views()
+        self.switcher = Adw.ViewSwitcher(stack=self.view_stack,
+                                        policy=Adw.ViewSwitcherPolicy.WIDE,
+                                        margin_start=12, margin_end=12)
+        vbox.append(self.switcher)
+        vbox.append(self.view_stack)
+
+        self.count_lbl = Gtk.Label(css_classes=["caption", "dim-label"],
+                                   margin_top=6, margin_bottom=10,
+                                   margin_start=12, margin_end=12)
+        vbox.append(self.count_lbl)
+
+        self._wire_actions()
+
+
+    def _build_header(self) -> Adw.HeaderBar:
+        """Window header: toggle button, export/pause menu, settings."""
         header = Adw.HeaderBar()
         self.title_widget = Adw.WindowTitle(title="SayItErmano", subtitle="idle")
         header.set_title_widget(self.title_widget)
@@ -376,19 +411,10 @@ class HistoryWindow(Adw.ApplicationWindow):
                                   tooltip_text="Settings")
         settings_btn.connect("clicked", self._open_settings)
         header.pack_end(settings_btn)
+        return header
 
-        # -- layout ---------------------------------------------------------
-        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.toast_overlay = Adw.ToastOverlay(child=vbox)
-        self.set_content(self.toast_overlay)
-        vbox.append(header)
-
-        self.down_banner = Adw.Banner(
-            title="Daemon not running — history works, dictation does not",
-            button_label="Retry", revealed=False)
-        self.down_banner.connect("button-clicked", lambda *_: self.refresh())
-        vbox.append(self.down_banner)
-
+    def _build_status_row(self) -> Gtk.Box:
+        """Live status strip: state dot, backend/model/warmup, today, update."""
         status = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6,
                          margin_top=8, margin_bottom=4,
                          margin_start=12, margin_end=12)
@@ -413,21 +439,14 @@ class HistoryWindow(Adw.ApplicationWindow):
                   Gtk.Box(hexpand=True),  # spacer
                   self.today_lbl, self.update_lbl):
             status.append(w)
-        vbox.append(status)
+        return status
 
-        self.search = Gtk.SearchEntry(placeholder_text="Search transcripts, commands, apps…",
-                                      margin_start=12, margin_end=12,
-                                      margin_bottom=6)
-        self.search.connect("changed", self._on_search_changed)
-        vbox.append(self.search)
 
+    def _build_views(self) -> None:
+        """Transcripts / Commands / Stats pages onto self.view_stack."""
         # -- Transcripts / Commands pages (v2: command rows get their own
         #    view with output + Copy + confirm-gated Re-run) ------------
         self.view_stack = Adw.ViewStack(vexpand=True)
-        self.switcher = Adw.ViewSwitcher(stack=self.view_stack,
-                                        policy=Adw.ViewSwitcherPolicy.WIDE,
-                                        margin_start=12, margin_end=12)
-        vbox.append(self.switcher)
 
         scroll = Gtk.ScrolledWindow(hexpand=True, vexpand=True)
         self.listbox = Gtk.ListBox(css_classes=["boxed-list-separate"],
@@ -514,13 +533,9 @@ class HistoryWindow(Adw.ApplicationWindow):
         self.view_stack.add_titled(stats_scroll, "stats", "Stats")
         self.view_stack.connect("notify::visible-child",
                                 lambda *_: self._update_count())
-        vbox.append(self.view_stack)
 
-        self.count_lbl = Gtk.Label(css_classes=["caption", "dim-label"],
-                                   margin_top=6, margin_bottom=10,
-                                   margin_start=12, margin_end=12)
-        vbox.append(self.count_lbl)
-
+    def _wire_actions(self) -> None:
+        """Window actions, Ctrl+F shortcut, initial load/refresh/poll."""
         self.install_action("hist.clear", None, self._on_clear_all)
         self.install_action("hist.export", None, self._on_export)
         self.install_action("hist.export-text", None, self._on_export_text)
@@ -596,11 +611,15 @@ class HistoryWindow(Adw.ApplicationWindow):
         gap = 6.0
         bar_w = max(3.0, (width - gap * (n + 1)) / n)
         top, bottom = 18.0, height - 22.0
-        ok, accent = self.chart.lookup_color("accent_bg_color")
-        if ok:
-            bar_rgba = accent
-        else:
-            bar_rgba = self._fallback_accent
+        # theme accent when the widget API can resolve it (GTK >= 4.16
+        # has GtkWidget.lookup_color; 4.14 — Ubuntu 24.04's GTK — does
+        # NOT, and the call would raise AttributeError mid-draw)
+        accent = None
+        lookup = getattr(self.chart, "lookup_color", None)
+        if lookup is not None:
+            ok, found = lookup("accent_bg_color")
+            accent = found if ok else None
+        bar_rgba = accent if accent is not None else self._fallback_accent
         # baseline hairline under the bars
         cr.set_source_rgba(0.5, 0.5, 0.5, 0.25)
         cr.set_line_width(1.0)
@@ -615,7 +634,7 @@ class HistoryWindow(Adw.ApplicationWindow):
                                    bar_rgba.blue, 0.95)
             else:
                 cr.set_source_rgba(0.5, 0.5, 0.5, 0.25)
-            cr.rounded_rectangle(x, bottom - h, bar_w, h, 3.0)
+            self._rounded_bar_path(cr, x, bottom - h, bar_w, h)
             cr.fill()
             if span == 7 or i % 5 == 0:
                 cr.set_source_rgba(0.5, 0.5, 0.5, 0.8)
@@ -629,6 +648,21 @@ class HistoryWindow(Adw.ApplicationWindow):
             cr.set_font_size(9.0)
             cr.move_to(gap, 12)
             cr.show_text(f"peak {peak}/day")
+
+    @staticmethod
+    def _rounded_bar_path(cr, x: float, y: float, w: float, h: float,
+                          r: float = 3.0) -> None:
+        """Rounded-rect path via arcs — pycairo has no
+        Context.rounded_rectangle (the 4.16-era call this replaced
+        never existed here, so bars failed to draw at all)."""
+        import math
+        r = max(0.0, min(r, w / 2, h / 2))
+        cr.new_sub_path()
+        cr.arc(x + w - r, y + r, r, -math.pi / 2, 0)
+        cr.arc(x + w - r, y + h - r, r, 0, math.pi / 2)
+        cr.arc(x + r, y + h - r, r, math.pi / 2, math.pi)
+        cr.arc(x + r, y + r, r, math.pi, 3 * math.pi / 2)
+        cr.close_path()
 
     # calm blue, used only when accent_bg_color fails to resolve
     _fallback_accent = Gdk.RGBA()
