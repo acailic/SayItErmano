@@ -13,6 +13,10 @@ not reproduced here.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [v0.8.2] — reliability sweep, verified pasting, deb contract (2026-09-14)
+
 **Reliability sweep + focused-field context + verified pasting** — the
 P0–P2 program, the quality plan's code halves, and six live-reproduced
 defect fixes from the first night desktop matrix.
@@ -76,6 +80,8 @@ defect fixes from the first night desktop matrix.
   self-contained under `tools/factory/`, historical ADW plans archived
   under `docs/plans/archive/`, and the documentation truth pass fixed
   the drifted claims (test counts, paths, feature states).
+
+Full notes: [v0.8.2](https://github.com/acailic/SayItErmano/releases/tag/v0.8.2).
 
 Packaging and documentation correctness (plan P0.6).
 
@@ -191,6 +197,15 @@ The Wayland + streaming release.
   activation, paste-last, per-shortcut prompt profiles.
 - **Settings & UI** — prompt profiles, per-model language, spoken
   formatting actions, stats page, pill hover chips.
+- **Lock suppression** — while the session is locked or suspended
+  (logind LockedHint + Lock/Unlock signals + screensaver fallbacks,
+  `general.pause_when_locked`, default on) hotkeys are ignored and an
+  active dictation is cancelled.
+- **Dictionary auto-learning** — History inline-repair diffs become
+  suggest-only dictionary entries (2-occurrence threshold, permanent
+  dismiss; nothing enters the dictionary without an explicit Accept) —
+  upstream v1.6.3's feature with our D1–D7 divergences (see
+  docs/STATUS.md).
 - **Reliability & distribution** — terminal-safe and clipboard-safe
   insertion, check-and-assist updater, AUR recipe.
 
@@ -222,5 +237,9 @@ The rebrand release: same app, own name and face.
 - **Migration from `fluidvoice-linux`** — the new deb replaces the old
   package, moves config/data/cache to `sayit-ermano` paths on first run,
   and retires the legacy daemon.
+- **Mic priority fallback** — `recording.mic_priority`: when the chosen
+  microphone vanishes, the daemon switches to the first matching
+  priority pattern (e.g. Bluetooth before webcam) and notifies; switching
+  never happens mid-take.
 
 [Full notes](https://github.com/acailic/SayItErmano/releases/tag/v0.4.0)

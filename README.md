@@ -170,7 +170,8 @@ refusals into your document — the raw transcript is used instead; see
 | Overlay sizes (pill/small/medium/large) | ✅ | ✅ `recording.preview_overlay_size` |
 | Notch overlay / menu bar | ✅ | ✅ tray/panel icon (StatusNotifierItem): click = dictate, state badge, tooltip with hotkey |
 
-See [docs/STATUS.md](docs/STATUS.md) for the full done/left ledger,
+See [docs/STATUS.md](docs/STATUS.md) for what works today and the
+known limitations,
 [docs/COMPARISON.md](docs/COMPARISON.md) for other Linux dictation tools,
 [docs/ROADMAP.md](docs/ROADMAP.md) for the forward plan, and
 [docs/UPSTREAM-TRACKING.md](docs/UPSTREAM-TRACKING.md) for the

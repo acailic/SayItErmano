@@ -1,9 +1,9 @@
 # Organization and improvement plan
 
 - Date: 2026-09-12
-- Status: ACTIVE — Phases 1–3 shipped 2026-09-13/14 (v0.8.2 published
-  with provenance evidence); Phase 4 started 2026-09-14 (this file moved
-  to `docs/plans/`); see the implementation log at the end
+- Status: ACTIVE — Phases 1–4 shipped 2026-09-13/14 (v0.8.2 published
+  with provenance evidence; docs architecture complete); see the
+  implementation log at the end
 - Audited source: `59aa282` on `linux`, application version `0.8.1`
   (113 commits unreleased since the `v0.8.1` tag)
 - Scope: repository layout, documentation, code structure, tests/CI,
@@ -434,5 +434,22 @@ TOML highlights were replaced by a 3-key quick start plus the
 generated 108-key reference; the duplicated intro sentence (a 4.2
 assembly artifact) fixed in passing.
 
-Remaining: 4.4 (STATUS trim), Phase 5 items, Phase 6 as external
-access arrives.
+### 2026-09-14 — Phase 4.4 (Phase 4 complete)
+
+STATUS.md rewritten from a 44 KB narrative ledger to a 15 KB
+"works today + known limitations" doc: per-area capability bullets,
+a consolidated limitations section (paste-verify residuals, Wayland
+degradations + pending matrices, English-only guards, no real-speech
+corpus), the divergence table kept (the one unique decision ledger,
+cells tightened), verification pointers to dev/testing.md + the
+evidence index. The narrative moved to the CHANGELOG, which also got
+the fixes it owed: the [Unreleased] section was actually the v0.8.2
+release notes (release-prepare never retitled it) — now `## [v0.8.2]`
+with a fresh empty Unreleased above; backfilled the never-mentioned
+lock suppression + dictionary auto-learning (v0.6.0) and mic priority
+fallback (v0.4.0).
+
+Remaining: Phase 5 items (5.1 single tier source, 5.2 coverage floor,
+5.3 control-route table, 5.4 CLI table, 5.5 page builders, 5.6
+silent-swallow lint, 5.7 typing ratchet), Phase 6 as external access
+arrives; 5.8/5.9 opportunistically.
