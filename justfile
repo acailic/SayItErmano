@@ -126,6 +126,7 @@ gate:
         exit 1
     fi
     {{python}} -m ruff check .
+    {{python}} scripts/check_docs_links.py
     {{python}} scripts/validate_requests.py
     mkdir -p build/test-results
     {{python}} -m pytest -q -W error -ra --strict-markers --strict-config \

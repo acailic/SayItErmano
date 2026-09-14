@@ -45,7 +45,7 @@ Command (from the worktree root, shared venv, per AGENTS.md):
 
 † The serial runs and the gate **hang after printing the summary** for ~4–6.5
 minutes before the process exits — reproduced observation, see
-[below](#observed-post-summary-hang). pytest's own reported duration
+[below](#observed-post-summary-hang-reproduced-defect-signal-not-fixed). pytest's own reported duration
 (92–95 s) is the true suite time; the extra wall time is interpreter-exit
 blocking.
 
