@@ -475,6 +475,13 @@ re-run green. Infra side-fix `707b3e0`: a bleeding-edge user-site
 numpy (PEP 695 stubs) had silently broken `just typecheck` — the
 recipe now runs under PYTHONNOUSERSITE=1, restoring the 3.11 floor.
 
-Remaining: Phase 5 items (5.4 CLI table, 5.5 page builders, 5.6
-silent-swallow lint, 5.7 typing ratchet), Phase 6 as external access
-arrives; 5.8/5.9 opportunistically.
+### 2026-09-14 — Phase 5.4
+
+`cli.main` (241 lines) → `_build_parser()` with `set_defaults(func=…)`
+per subcommand + one `_cmd_*` handler each (the five control
+round-trips share `_cmd_remote`); `main()` is 7 lines. Bodies
+verbatim, CLI suites unchanged and green.
+
+Remaining: Phase 5 items (5.5 page builders, 5.6 silent-swallow lint,
+5.7 typing ratchet), Phase 6 as external access arrives; 5.8/5.9
+opportunistically.
