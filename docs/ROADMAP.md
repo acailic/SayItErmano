@@ -5,18 +5,19 @@ in [STATUS.md](STATUS.md); the reasoning behind locked decisions lives
 in [adr/](adr/) (index: [adr/README.md](adr/README.md)); the evidence
 base is [research/](research/), especially
 [reliability-first improvement program](plans/archive/2026-09-10-reliability-first-improvement-program.md)
-(the "plan" below). **Reconciled 2026-09-11 (phase 0, plan item 1):**
-plan P1 and the P2 code work are complete and in tree (unreleased,
-shaping v0.8.2+); the current prioritized backlog is the **live Wayland
-+ context smoke matrices** and the **plan P3 capability backlog** below.
+(the "plan" below). **Reconciled 2026-09-11 (phase 0, plan item 1),
+release note 2026-09-14:** plan P1 and the P2 code work shipped in
+**v0.8.2**; the current prioritized backlog is the **live Wayland +
+context smoke matrices** and the **plan P3 capability backlog** below.
 
 Terminology follows the [glossary](glossary.md). Request briefs carry a
 `STATUS:` header (`just validate-requests` enforces it).
 
 ## Shipped in tree — plan P1 (v0.9: architecture and measurement)
 
-The 2026-09-10 P1 wave landed 2026-09-10 and is in tree, unreleased
-(evidence: merges `49452fb` eval, `4230b38` config, `5d6d6b3` seam,
+The 2026-09-10 P1 wave landed 2026-09-10, in tree, and was released
+with **v0.8.2** (evidence: merges `49452fb` eval, `4230b38` config,
+`5d6d6b3` seam,
 `de2e045`+`9cec4c9` RuntimeTasks, `309896e` EngineManager/Command/
 Capture coordinators; STATUS.md "P1 wave 1" header). Items kept here
 only as history — do not re-implement:
@@ -36,10 +37,10 @@ only as history — do not re-implement:
 
 ## Next — plan P2 live validation (gates both Wayland parity and the context default)
 
-The P2 code shipped 2026-09-10 in tree, **prototype OFF by default**
-(`context.enabled = false`), merged `b1e9011` (seam `e7fa15c`, profiles
-`fdbcf73`, take-path consumers `e47f763`; STATUS.md "Contextual
-dictation seam"):
+The P2 code shipped 2026-09-10, released with v0.8.2, **prototype OFF
+by default** (`context.enabled = false`), merged `b1e9011` (seam
+`e7fa15c`, profiles `fdbcf73`, take-path consumers `e47f763`; STATUS.md
+"Contextual dictation seam"):
 
 - ~~`ContextProvider` seam: X11 and AT-SPI adapters~~ — shipped.
 - ~~Per-app behavior profiles with legacy-key migration~~ — shipped.
