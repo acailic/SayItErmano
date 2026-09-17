@@ -49,3 +49,25 @@ lost; uncommitted work was.
    production daemon is a two-step (stop the unit, run the repo daemon,
    then `systemctl --user start sayit-ermano` afterwards); restore any
    config keys you flip in `~/.config/sayit-ermano/config.toml`.
+
+## Landing site (GitHub Pages)
+
+The public landing site is the hand-crafted static tree in `site/`,
+deployed to https://acailic.github.io/SayItErmano/ by
+`.github/workflows/pages.yml` (GitHub Pages `build_type: workflow`,
+artifact = `site/` verbatim; deploys on pushes to `linux` touching
+`site/**` or the workflow). It is served under a repo subpath, so all
+asset URLs in `site/` must stay RELATIVE (no leading-slash paths); fonts
+are bundled under `site/assets/fonts/` (SIL OFL) — no CDN. Every
+factual claim on the page traces to README/CHANGELOG/docs; the
+"unofficial community port, not affiliated" attribution must stay
+visible. Check edits locally: serve `site/` (`python3 -m http.server`)
+and render headless; `python3 scripts/check_docs_links.py` covers
+`docs/`, not the site.
+
+## Maintaining this file
+
+Keep this file for knowledge useful to almost every future agent session in this project.
+Do not repeat what the codebase already shows; point to the authoritative file or command instead.
+Prefer rewriting or pruning existing entries over appending new ones.
+When updating this file, preserve this bar for all agents and keep entries concise.

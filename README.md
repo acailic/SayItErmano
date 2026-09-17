@@ -10,6 +10,10 @@
 </p>
 
 <p align="center">
+  🌐 <a href="https://acailic.github.io/SayItErmano/"><strong>Landing site</strong></a> — a one-page tour of what it does, the privacy story, and every install route.
+</p>
+
+<p align="center">
   <a href="https://github.com/acailic/SayItErmano/releases"><img src="https://img.shields.io/github/v/release/acailic/SayItErmano?color=blue&label=release" alt="latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/acailic/SayItErmano?color=blue" alt="license GPL-3.0"></a>
   <img src="https://img.shields.io/badge/platform-Linux%20%C2%B7%20X11%20%C2%B7%20Wayland%20%C2%B7%20GTK%204-blue" alt="Linux · X11 · Wayland · GTK 4">

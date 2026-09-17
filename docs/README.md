@@ -8,6 +8,8 @@ the app itself.
 
 - [README](../README.md) — what it is, install, first dictation,
   configuration overview.
+- [Landing site](https://acailic.github.io/SayItErmano/) — the public
+  one-pager (served from [`site/`](../site/) via GitHub Pages).
 - [guides/install.md](guides/install.md) — every install route (one-shot
   installer, Ubuntu .deb, pipx, AUR, source) and updates.
 - [guides/configuration.md](guides/configuration.md) — the complete
