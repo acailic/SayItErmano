@@ -58,6 +58,11 @@ claim without support.
 
 ## Release-to-evidence binding
 
+Latest local baseline: [2026-09-17 Phase 6 readiness](../research/2026-09-17-phase6-readiness.md)
+at `a3cab30`: unit gate 3508 passed / 4 skipped, display 172 passed,
+process 13 passed, focused typing clean. The report also refreshes
+Wayland and VM prerequisites; it does not clear the live evidence gates.
+
 release-prepare binds the deb to its exact source (manifest: package
 sha256, tracked-source digest, lock sha256, run id); release-publish
 re-verifies the chain against the release SHA and records the operator's

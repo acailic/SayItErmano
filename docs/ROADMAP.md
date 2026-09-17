@@ -49,9 +49,11 @@ by default** (`context.enabled = false`), merged `b1e9011` (seam
 
 What remains open, REQUIRED-BEFORE-PARITY, is the live matrices —
 [dev/wayland-smoke-matrix.md](dev/wayland-smoke-matrix.md) has the full
-case list ("Runs: none yet"). Blocked on a real Wayland session on the
-dev machine (noted 2026-09-08: no compositor installed, GNOME runs X11
-there; unit coverage is complete in `tests/test_wayland_capabilities.py`).
+case list and dated X11 runs. Wayland rows remain blocked on a real
+Wayland login: the 2026-09-17 readiness check found GNOME Wayland
+session entries installed, but `/etc/gdm3/custom.conf` sets
+`WaylandEnable=false` and the active session is X11. sway is not on
+PATH. See the [Phase 6 readiness report](research/2026-09-17-phase6-readiness.md).
 Per compositor, GNOME-Wayland first, then sway:
   1. Baseline, no tools installed: daemon starts foreground AND under
      the systemd user unit; tray/socket/`status` alive; a dictation

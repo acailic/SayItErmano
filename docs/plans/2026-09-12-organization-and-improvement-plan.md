@@ -318,10 +318,10 @@ complete and the blockers are named.
 
 | Item | Blocker | Next action |
 |---|---|---|
-| 6.1 Wayland/X11 live matrix ([brief](../../requests/wayland-matrix-execution.md)) | no Wayland session on the dev machine (ROADMAP: no compositor installed, GNOME runs X11) | install/enable a GNOME-Wayland or sway session on the same box, or use a VM without GPU passthrough (the CPU `base` model is enough for insertion cases) |
+| 6.1 Wayland/X11 live matrix ([brief](../../requests/wayland-matrix-execution.md)) | active session is X11; GNOME Wayland session entries exist but GDM disables Wayland (2026-09-17 check); sway absent from PATH | arrange a GNOME-Wayland login or provision sway; run the existing matrices in that session |
 | 6.2 Real-speech corpus ([brief](../../requests/speech-corpus-recording.md)) | consent text + storage approval | approve `docs/eval/consent-text.md` and the `eval-private/` location; then recruit |
-| 6.3 Q8 speech/perf baseline | 6.2 (partially covered by the `agent/f3-bench` TTS baseline) | merge `655f778` as the interim synthetic-voice baseline, clearly labeled as not real speech |
-| 6.4 Q9 install/upgrade/rollback + soak | disposable VMs | one Ubuntu 24.04 VM snapshot + one Arch VM; script the soak with `scripts/soak.py` |
+| 6.3 Q8 speech/perf baseline | 6.2; interim TTS baseline already merged via `2cc130c` | retain the synthetic-voice label; real-speech evidence still depends on 6.2 |
+| 6.4 Q9 install/upgrade/rollback + soak | no VMs defined in either local libvirt connection at the 2026-09-17 check; QEMU/libvirt installed, `/dev/kvm` absent | provision disposable Ubuntu 24.04 and Arch VMs with snapshots; run the Q9 install sequence and realistic workload soak |
 | 6.5 Q10 recovery UX | evidence from 6.1–6.3 | start only after 6.1 lands |
 | 6.6 Product phases 1–5 (user tests, monetization) | the gates above | per the product-excellence plan; no billing work before its gates |
 
@@ -533,3 +533,13 @@ folders; no bulk move). **5.9** stays deferred per its own item.
 Remaining: Phase 6 as external access arrives (6.1 Wayland session,
 6.2 corpus consent, 6.4 VMs); 5.9 opportunistically with subsystem
 rework.
+
+### 2026-09-17 — Phase 6 readiness refresh
+
+[Readiness report](../research/2026-09-17-phase6-readiness.md) records
+the current blockers and next execution sequence. GNOME Wayland session
+entries exist, but GDM disables Wayland; both local libvirt connections
+have no defined guests and `/dev/kvm` is absent. Corrected the stale
+6.3 merge action (already merged via `2cc130c`). Refreshed automated
+baseline at `a3cab30`: unit gate 3508 passed / 4 skipped, display 172
+passed, process 13 passed, typing clean. Live evidence gates remain open.
