@@ -1,0 +1,46 @@
+name: Pages
+
+# Deploy the landing site (site/) to GitHub Pages. Static hand-crafted
+# files only — no build step, the artifact is the directory itself.
+# Trigger: pushes to `linux` touching the site or this workflow, plus
+# manual dispatch. Never runs on `main` (it mirrors upstream).
+on:
+  push:
+    branches: [linux]
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+# Permissions required by actions/deploy-pages; the environment is
+# pinned to github-pages so concurrent runs queue instead of racing.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; a newer run cancels the stale in-flight one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy site to GitHub Pages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # The site is committed ready-to-serve under site/ — no build.
+          path: site
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

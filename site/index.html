@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SayItErmano — 100% local dictation for Linux</title>
+  <meta name="description" content="Press a key, speak, and polished text lands in any app. 100% local speech-to-text, optional AI polish, native GTK 4. The community Linux port of FluidVoice.">
+  <meta name="color-scheme" content="light dark">
+  <link rel="canonical" href="https://acailic.github.io/SayItErmano/">
+
+  <!-- social cards -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="SayItErmano">
+  <meta property="og:title" content="SayItErmano — 100% local dictation for Linux">
+  <meta property="og:description" content="Press a key, speak, and polished text lands in any app. Local speech-to-text, optional AI polish, native GTK 4 — the community Linux port of FluidVoice.">
+  <meta property="og:url" content="https://acailic.github.io/SayItErmano/">
+  <meta property="og:image" content="https://acailic.github.io/SayItErmano/assets/img/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="SayItErmano — 100% local dictation for Linux">
+  <meta name="twitter:description" content="Press a key, speak, and polished text lands in any app. Local speech-to-text, optional AI polish, native GTK 4.">
+  <meta name="twitter:image" content="https://acailic.github.io/SayItErmano/assets/img/og-image.png">
+
+  <!-- icons -->
+  <link rel="icon" href="assets/img/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="assets/img/favicon-16.png" type="image/png" sizes="16x16">
+  <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+
+  <!-- fonts: Geist + Geist Mono (SIL OFL 1.1), bundled — no CDN -->
+  <link rel="preload" href="assets/fonts/Geist-var.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/GeistMono-var.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/css/site.css">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "SayItErmano",
+    "operatingSystem": "Linux",
+    "applicationCategory": "UtilitiesApplication",
+    "softwareVersion": "0.8.2",
+    "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "description": "Dictation app for Linux — press a key, speak, and polished text lands in any app. 100% local speech-to-text, optional AI polish, native GTK 4. Unofficial community port of FluidVoice."
+  }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- ============ header ============ -->
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="#top" aria-label="SayItErmano home">
+        <img src="assets/img/icon-64.png" alt="" width="25" height="25">
+        SayItErmano
+      </a>
+      <nav class="site-nav" aria-label="Sections">
+        <a href="#how-it-works">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#privacy">Privacy</a>
+        <a href="#install">Install</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <div class="header-actions">
+        <span class="ver-chip" title="Latest release">v0.8.2</span>
+        <a class="gh-btn" href="https://github.com/acailic/SayItErmano" rel="noopener">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          GitHub
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <span id="top"></span>
+
+    <!-- ============ hero ============ -->
+    <section class="hero hero-dots" aria-labelledby="hero-title">
+      <div class="container hero-grid">
+        <div>
+          <p class="eyebrow" data-reveal>100% local dictation for Linux</p>
+          <h1 class="h-display" id="hero-title" data-reveal>Press a key.<br>Speak.<br>It types.</h1>
+          <p class="lede" data-reveal>
+            SayItErmano turns your voice into polished text in any app —
+            editors, browsers, terminals, chat. Speech-to-text runs entirely
+            on your machine; an optional AI polish step cleans up the rest.
+          </p>
+
+          <div class="cmd" data-reveal>
+            <div class="cmd-label"><span>one-shot install</span><span>no sudo by default</span></div>
+            <div class="cmd-box">
+              <code>curl -fsSL https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/install-one-shot.sh | bash</code>
+              <button class="copy-btn" type="button" data-copy="curl -fsSL https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/install-one-shot.sh | bash">copy</button>
+            </div>
+          </div>
+
+          <div class="kbd-row" data-reveal>
+            <kbd>Right Ctrl</kbd><span>start</span>
+            <span class="flow">→</span>
+            <span>speak</span>
+            <span class="flow">→</span>
+            <kbd>Right Ctrl</kbd><span>done</span>
+          </div>
+
+          <div class="hero-links" data-reveal>
+            <a href="https://youtu.be/HWyjH-VCBAw" rel="noopener">▶ watch the one-minute demo</a>
+            <a href="https://github.com/acailic/SayItErmano/releases">releases ↗</a>
+            <a href="#install">all install routes ↓</a>
+          </div>
+
+          <p class="hero-note" data-reveal>
+            Unofficial, community-maintained Linux port of
+            <a href="https://github.com/altic-dev/FluidVoice" rel="noopener">FluidVoice</a>
+            for macOS — not affiliated with or endorsed by altic-dev. GPLv3.
+          </p>
+        </div>
+
+        <div class="hero-visual" data-reveal>
+          <div class="pill-frame">
+            <div class="caption">
+              <span>live overlay</span>
+              <span><span class="rec-dot">●</span> recording</span>
+            </div>
+            <img src="assets/img/overlay-pill.png" width="900" height="240"
+                 alt="The SayItErmano pill overlay while recording: a dark rounded bar with a live waveform and streaming transcription text">
+          </div>
+          <span class="float-tag a"><span class="dot"></span>streaming text</span>
+          <span class="float-tag b">any app, X11 &amp; Wayland</span>
+        </div>
+      </div>
+
+      <div class="container">
+        <svg class="wave" viewBox="0 0 860 60" width="860" height="60" role="img" aria-label="voice waveform" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect class="bar" style="animation-delay:1.34s" x="0.0" y="26.5" width="7" height="7" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:1.12s" x="19.8" y="26.5" width="7" height="7" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:1.41s" x="39.7" y="26.5" width="7" height="7" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:1.23s" x="59.5" y="26.5" width="7" height="7" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:1.9s" x="79.3" y="25.5" width="7" height="8.9" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:0.73s" x="99.2" y="26.5" width="7" height="7" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:1.94s" x="119.0" y="26.5" width="7" height="7" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:0.1s" x="138.9" y="21.4" width="7" height="17.2" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:2.32s" x="158.7" y="16.9" width="7" height="26.1" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:1.48s" x="178.5" y="19.5" width="7" height="21.0" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:0.04s" x="198.4" y="25.3" width="7" height="9.5" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:0.14s" x="218.2" y="19.3" width="7" height="21.4" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:0.58s" x="238.0" y="23.9" width="7" height="12.1" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:1.11s" x="257.9" y="26.3" width="7" height="7.4" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:2.02s" x="277.7" y="18.7" width="7" height="22.6" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:1.54s" x="297.6" y="16.7" width="7" height="26.7" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:1.59s" x="317.4" y="16.5" width="7" height="26.9" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:0.67s" x="337.2" y="17.0" width="7" height="26.0" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:2.39s" x="357.1" y="5.5" width="7" height="49.1" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:1.7s" x="376.9" y="8.3" width="7" height="43.3" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:0.55s" x="396.7" y="19.3" width="7" height="21.4" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:0.17s" x="416.6" y="19.8" width="7" height="20.4" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:0.96s" x="436.4" y="9.5" width="7" height="40.9" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:0.93s" x="456.3" y="7.9" width="7" height="44.1" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:2.03s" x="476.1" y="5.9" width="7" height="48.3" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:0.5s" x="495.9" y="26.1" width="7" height="7.7" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:1.13s" x="515.8" y="7.8" width="7" height="44.4" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:0.95s" x="535.6" y="7.1" width="7" height="45.8" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:1.51s" x="555.4" y="25.1" width="7" height="9.8" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:0.65s" x="575.3" y="12.6" width="7" height="34.8" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:0.8s" x="595.1" y="25.3" width="7" height="9.4" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:1.82s" x="615.0" y="11.5" width="7" height="37.0" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:0.59s" x="634.8" y="25.4" width="7" height="9.1" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:0.14s" x="654.6" y="26.0" width="7" height="7.9" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:0.43s" x="674.5" y="17.7" width="7" height="24.6" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:1.07s" x="694.3" y="21.7" width="7" height="16.7" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:1.76s" x="714.1" y="26.3" width="7" height="7.4" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:1.54s" x="734.0" y="26.5" width="7" height="7" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:1.01s" x="753.8" y="26.5" width="7" height="7" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:0.65s" x="773.7" y="26.5" width="7" height="7" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:1.93s" x="793.5" y="25.4" width="7" height="9.3" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:2.12s" x="813.3" y="26.5" width="7" height="7" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:0.95s" x="833.2" y="26.5" width="7" height="7" rx="3.5" fill="currentColor"/>
+<rect class="bar" style="animation-delay:1.54s" x="853.0" y="26.5" width="7" height="7" rx="3.5" fill="currentColor"/>
+</svg>
+      </div>
+    </section>
+
+    <!-- ============ works-with strip ============ -->
+    <aside class="strip" aria-label="Works with">
+      <div class="container">
+        <span class="strip-title">works with</span>
+        <ul>
+          <li>X11</li>
+          <li>Wayland · wtype / ydotool</li>
+          <li>GTK 4 / libadwaita</li>
+          <li>PipeWire</li>
+          <li>NVIDIA CUDA or CPU</li>
+          <li>any Linux app</li>
+          <li class="dim">Python 3.11+</li>
+        </ul>
+      </div>
+    </aside>
+
+    <!-- ============ what it does ============ -->
+    <section class="section" id="features" aria-labelledby="features-title">
+      <div class="container">
+        <div class="section-head" data-reveal>
+          <p class="eyebrow">01 — what it does</p>
+          <h2 class="h-section" id="features-title">A dictation pipeline that respects your voice — and your privacy.</h2>
+          <p class="lede">Everything below ships today, in v0.8.2. No cloud account, no background uploads, no telemetry.</p>
+        </div>
+
+        <div class="cards">
+          <article class="card" data-reveal>
+            <span class="idx">f/01</span>
+            <h3 class="h-card">Types into any app</h3>
+            <p>Text lands as typed keystrokes — clipboard-free — or as a <em>verified</em> paste: SayItErmano proves the target read the text, then restores your clipboard. Terminals, browsers, chat: all covered.</p>
+          </article>
+          <article class="card" data-reveal>
+            <span class="idx">f/02</span>
+            <h3 class="h-card">Spoken punctuation</h3>
+            <p>The full FluidVoice rule table — all 108 aliases. Say <code>literal comma</code>, <code>literal new line</code>, or <code>example literal dot com</code> and get exactly that.</p>
+          </article>
+          <article class="card" data-reveal>
+            <span class="idx">f/03</span>
+            <h3 class="h-card">Optional AI polish</h3>
+            <p>The verbatim FluidVoice dictation prompt, sent to any OpenAI-compatible endpoint — Ollama, LM Studio, llama.cpp, Groq, OpenAI. Off unless you enable it.</p>
+          </article>
+          <article class="card" data-reveal>
+            <span class="idx">f/04</span>
+            <h3 class="h-card">Fillers &amp; your dictionary</h3>
+            <p>“Um” and “uh” are stripped automatically; a custom dictionary fixes names and jargon — and repairs you make in History can become dictionary suggestions.</p>
+          </article>
+          <article class="card" data-reveal>
+            <span class="idx">f/05</span>
+            <h3 class="h-card">Command mode</h3>
+            <p>A dedicated hotkey turns voice into a terminal agent: proposals in a live panel, every command confirmed, destructive ones behind a two-press strong confirm.</p>
+          </article>
+          <article class="card" data-reveal>
+            <span class="idx">f/06</span>
+            <h3 class="h-card">A real native app</h3>
+            <p>GTK 4 / libadwaita windows for History and Settings — model downloads, hotkeys, languages, mic picker, per-app prompts — plus a tray icon, sounds and notifications.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ privacy ============ -->
+    <section class="section dark dots" id="privacy" aria-labelledby="privacy-title">
+      <div class="container">
+        <div class="section-head" data-reveal>
+          <p class="eyebrow">02 — privacy</p>
+          <h2 class="h-section" id="privacy-title">Your voice never leaves the machine.</h2>
+        </div>
+
+        <div class="privacy-grid">
+          <div>
+            <ol class="privacy-list" data-reveal>
+              <li>
+                <span class="n">p/1</span>
+                <div>
+                  <strong>100% local speech-to-text</strong>
+                  <p>Whisper runs on your GPU when available, CPU otherwise. Nothing is uploaded, ever.</p>
+                </div>
+              </li>
+              <li>
+                <span class="n">p/2</span>
+                <div>
+                  <strong>No telemetry — by design</strong>
+                  <p>Upstream FluidVoice ships opt-in analytics. This port ships none, deliberately.</p>
+                </div>
+              </li>
+              <li>
+                <span class="n">p/3</span>
+                <div>
+                  <strong>API keys never touch the disk</strong>
+                  <p>Cloud AI endpoints, if you use them, read their key from an environment variable. The tooling never writes it out.</p>
+                </div>
+              </li>
+              <li>
+                <span class="n">p/4</span>
+                <div>
+                  <strong>No network listener, ever</strong>
+                  <p>The daemon exposes one user-owned Unix socket — no TCP port is opened under any configuration (a locked architecture decision).</p>
+                </div>
+              </li>
+              <li>
+                <span class="n">p/5</span>
+                <div>
+                  <strong>AI polish is opt-in and fails safe</strong>
+                  <p>It only runs against an endpoint you configure. If it fails — or the model refuses — the raw transcript is typed instead. Junk is never typed.</p>
+                </div>
+              </li>
+            </ol>
+            <p class="privacy-fine" data-reveal>
+              One caveat, stated plainly: if you point AI polish or the remote-STT
+              backend at a cloud endpoint, that audio or text goes where you pointed it.
+              Local by default; your choice, your endpoint —
+              <a href="https://github.com/acailic/SayItErmano/blob/linux/docs/STATUS.md">full details in STATUS.md ↗</a>.
+            </p>
+          </div>
+
+          <aside class="privacy-stat" data-reveal aria-label="Privacy by the numbers">
+            <p class="big">0 bytes<br><em>leave your machine</em></p>
+            <p>in the default configuration — local transcription, local post-processing, typed insertion.</p>
+            <div class="rows">
+              <div><b>0</b> <span>telemetry events</span></div>
+              <div><b>0</b> <span>network listeners</span></div>
+              <div><b>0</b> <span>keys written to disk</span></div>
+              <div><b>100%</b> <span>local by default</span></div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ showcase ============ -->
+    <section class="section dark" id="showcase" aria-labelledby="showcase-title">
+      <div class="container">
+        <div class="section-head" data-reveal>
+          <p class="eyebrow">03 — the overlay</p>
+          <h2 class="h-section" id="showcase-title">A quiet pill that shows you the truth, live.</h2>
+          <p class="lede">While you speak, the overlay streams the running transcript with a live waveform — so you know exactly what was heard before anything is typed.</p>
+        </div>
+
+        <div class="shot-duo" data-reveal>
+          <figure class="shot">
+            <img src="assets/img/overlay-pill.png" width="900" height="240"
+                 alt="Recording overlay: dark pill with waveform, streaming words and a send indicator">
+            <figcaption><span class="tag">recording</span><span>live waveform + streaming text</span></figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="assets/img/overlay-processing.png" width="900" height="240"
+                 alt="Processing overlay: dark pill with a state label while the transcript is finalized">
+            <figcaption><span class="tag">processing</span><span>polish + insertion, honest states</span></figcaption>
+          </figure>
+        </div>
+
+        <div class="demo-wrap" data-reveal>
+          <figure class="shot">
+            <img src="assets/img/demo.gif" width="800" height="483" loading="lazy"
+                 alt="Animated demo: press Right Ctrl, the pill shows a live waveform and streaming transcription, then the polished sentence is typed into a chat app">
+            <figcaption>
+              <span class="tag">end-to-end</span>
+              <span><a href="https://youtu.be/HWyjH-VCBAw" rel="noopener" style="color:inherit">watch with sound on YouTube ↗</a></span>
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ how it works ============ -->
+    <section class="section" id="how-it-works" aria-labelledby="how-title">
+      <div class="container">
+        <div class="section-head" data-reveal>
+          <p class="eyebrow">04 — pipeline</p>
+          <h2 class="h-section" id="how-title">From keypress to keystroke, in six steps.</h2>
+        </div>
+
+        <div class="steps" data-reveal>
+          <div class="step">
+            <span class="num">01</span>
+            <h3>Press the hotkey</h3>
+            <p class="step-body">Default <code>Right Ctrl</code>, toggle or hold — any key works. The pill overlay appears with a live waveform.</p>
+          </div>
+          <div class="step">
+            <span class="num">02</span>
+            <h3>Speak</h3>
+            <p class="step-body">16&nbsp;kHz mono capture through PipeWire, with watchdogs for muted mics and runaway takes. Streaming text appears as you talk.</p>
+          </div>
+          <div class="step">
+            <span class="num">03</span>
+            <h3>Transcribe locally</h3>
+            <p class="step-body"><code>faster-whisper</code> on CUDA or CPU int8 — with <code>whisper.cpp</code>, torch and Parakeet&nbsp;TDT (ONNX) as alternative backends, and multi-language cycling.</p>
+          </div>
+          <div class="step">
+            <span class="num">04</span>
+            <h3>Clean up</h3>
+            <p class="step-body">Filler removal, your custom dictionary, and spoken punctuation — the full upstream rule table.</p>
+          </div>
+          <div class="step">
+            <span class="num">05</span>
+            <h3>Polish (optional)</h3>
+            <p class="step-body">The verbatim FluidVoice prompt goes to any OpenAI-compatible endpoint you configure. Guardrails keep refusals and junk out of your document.</p>
+          </div>
+          <div class="step">
+            <span class="num">06</span>
+            <h3>Insert, verified</h3>
+            <p class="step-body">Typed keystrokes, or a paste that is verified against the target field and followed by clipboard restore. History keeps every take.</p>
+            <div class="example">
+              <p class="say">“um lets meet on tuesday around 3 no wait 4 p.m.”</p>
+              <p class="get">“Let’s meet on Tuesday at 4 p.m.”</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ install ============ -->
+    <section class="section" id="install" aria-labelledby="install-title" style="background: var(--bg-well);">
+      <div class="container">
+        <div class="section-head" data-reveal>
+          <p class="eyebrow">05 — install</p>
+          <h2 class="h-section" id="install-title">Four routes onto your machine.</h2>
+          <p class="lede">User-space by default, no sudo unless a system package is missing. First use downloads a Whisper model (default <code class="inline-code">small</code> ≈ 484&nbsp;MB).</p>
+        </div>
+
+        <div class="install-grid">
+          <article class="route recommended" data-reveal>
+            <div class="route-kicker"><h3>One-shot installer</h3><span class="badge">any distro</span></div>
+            <p>App-launcher entry, login autostart, no terminal needed afterwards. Add <code class="inline-code">-s -- --system</code> for a system-wide install.</p>
+            <div class="cmd-box">
+              <code>curl -fsSL https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/install-one-shot.sh | bash</code>
+              <button class="copy-btn" type="button" data-copy="curl -fsSL https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/install-one-shot.sh | bash">copy</button>
+            </div>
+          </article>
+
+          <article class="route" data-reveal>
+            <div class="route-kicker"><h3>Ubuntu 24.04 .deb</h3><span class="badge">official package</span></div>
+            <p>A pinned, reproducible build — honestly labeled 24.04&nbsp;/&nbsp;x86_64&nbsp;/&nbsp;Python&nbsp;3.12 only.</p>
+            <div class="cmd-box">
+              <code>curl -LO https://github.com/acailic/SayItErmano/releases/download/v0.8.2/sayit-ermano_0.8.2-1_amd64.deb<br>sudo apt install ./sayit-ermano_0.8.2-1_amd64.deb</code>
+              <button class="copy-btn" type="button" data-copy="curl -LO https://github.com/acailic/SayItErmano/releases/download/v0.8.2/sayit-ermano_0.8.2-1_amd64.deb &amp;&amp; sudo apt install ./sayit-ermano_0.8.2-1_amd64.deb">copy</button>
+            </div>
+          </article>
+
+          <article class="route" data-reveal>
+            <div class="route-kicker"><h3>From source</h3><span class="badge">any distro</span></div>
+            <p>Clone and run the installer script — it provisions the venv and system tools (reuses your CUDA torch if present).</p>
+            <div class="cmd-box">
+              <code>git clone https://github.com/acailic/SayItErmano.git -b linux &amp;&amp; cd SayItErmano &amp;&amp; ./scripts/install.sh</code>
+              <button class="copy-btn" type="button" data-copy="git clone https://github.com/acailic/SayItErmano.git -b linux &amp;&amp; cd SayItErmano &amp;&amp; ./scripts/install.sh">copy</button>
+            </div>
+          </article>
+
+          <article class="route" data-reveal>
+            <div class="route-kicker"><h3>pipx</h3><span class="badge">any distro · py 3.11+</span></div>
+            <p>Isolated under <code class="inline-code">~/.local</code>, never touches system Python. Upgrades are one command (<code class="inline-code">sayit-ermano update</code>).</p>
+            <div class="cmd-box">
+              <code>pipx install git+https://github.com/acailic/SayItErmano.git@linux</code>
+              <button class="copy-btn" type="button" data-copy="pipx install git+https://github.com/acailic/SayItErmano.git@linux">copy</button>
+            </div>
+          </article>
+        </div>
+
+        <div class="install-foot" data-reveal>
+          <a href="https://github.com/acailic/SayItErmano/blob/linux/docs/guides/install.md">all routes &amp; updates ↗</a>
+          <a href="https://github.com/acailic/SayItErmano/blob/linux/docs/guides/wayland.md">Wayland setup (wtype / ydotool) ↗</a>
+          <a href="https://github.com/acailic/SayItErmano/blob/linux/docs/guides/configuration.md">configuration reference ↗</a>
+        </div>
+        <p class="hero-note" style="margin-top:1.25rem" data-reveal>
+          Arch users: a native AUR recipe (<span class="inline-code">sayit-ermano</span>) lives in-tree — its first push is pending, so until it lands use pipx or source. The install guide keeps the current state.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============ native app ============ -->
+    <section class="section" id="app" aria-labelledby="app-title">
+      <div class="container">
+        <div class="section-head" data-reveal>
+          <p class="eyebrow">06 — the native app</p>
+          <h2 class="h-section" id="app-title">Native GTK 4 windows, not a web wrapper.</h2>
+          <p class="lede">History and Settings follow your system theme and mirror the macOS app’s layout — the Settings sidebar even keeps the Mac’s section order.</p>
+        </div>
+
+        <div class="app-grid" data-reveal>
+          <figure class="shot">
+            <img src="assets/img/history-window.png" width="720" height="606" loading="lazy"
+                 alt="History window: status header, search field, and a list of dictation entries with replay buttons">
+            <figcaption><span class="tag">history</span><span>search · replay · repair · export</span></figcaption>
+          </figure>
+          <div class="app-trio">
+            <figure>
+              <img src="assets/img/settings-general.png" width="560" height="467" loading="lazy" alt="Settings window, General page">
+              <figcaption>general</figcaption>
+            </figure>
+            <figure>
+              <img src="assets/img/settings-models.png" width="560" height="467" loading="lazy" alt="Settings window, Models page with one-click switch and downloads">
+              <figcaption>models</figcaption>
+            </figure>
+            <figure>
+              <img src="assets/img/settings-dictation.png" width="560" height="467" loading="lazy" alt="Settings window, Dictation page with hotkeys, languages and mic picker">
+              <figcaption>dictation</figcaption>
+            </figure>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ faq ============ -->
+    <section class="section" id="faq" aria-labelledby="faq-title">
+      <div class="container">
+        <div class="section-head" data-reveal>
+          <p class="eyebrow">07 — questions</p>
+          <h2 class="h-section" id="faq-title">Asked, answered.</h2>
+        </div>
+
+        <div class="faq" data-reveal>
+          <details>
+            <summary>Is it really 100% local?</summary>
+            <p>Yes — in the default configuration. Transcription runs on your hardware, insertion is keystroke-based, and there is no telemetry. The two opt-in exceptions are AI polish and a remote STT backend: both are inert until you configure an endpoint, and both go exactly where you point them.</p>
+          </details>
+          <details>
+            <summary>What does it need to run?</summary>
+            <p>Linux with Python 3.11+, PipeWire, and a few small tools (<span class="inline-code">xdotool</span>, <span class="inline-code">xclip</span>, <span class="inline-code">libnotify-bin</span>). A Whisper model — the default <span class="inline-code">small</span> is ≈ 484 MB — downloads on first use. A CUDA GPU is welcome but optional; CPU int8 works fine.</p>
+          </details>
+          <details>
+            <summary>Does Wayland work?</summary>
+            <p>Yes, additively: a session probe detects Wayland and the doctor tells you exactly which capabilities need which tools. Typing works via <span class="inline-code">wtype</span> or <span class="inline-code">ydotool</span>, hotkeys bind through your desktop environment, and there is an optional evdev push-to-talk path. Some X11 niceties (the pill overlay, full paste verification) degrade gracefully — see the <a href="https://github.com/acailic/SayItErmano/blob/linux/docs/guides/wayland.md">Wayland guide ↗</a>.</p>
+          </details>
+          <details>
+            <summary>Which speech models can I use?</summary>
+            <p>faster-whisper (CUDA / CPU int8) is the default; whisper.cpp (GGUF, with in-app downloads), OpenAI Whisper on torch, NVIDIA Parakeet TDT via ONNX, and any OpenAI-compatible remote STT endpoint are also supported. You can switch models with one click, cycle languages at runtime, and set per-model language overrides.</p>
+          </details>
+          <details>
+            <summary>What is the relationship to FluidVoice?</summary>
+            <p>SayItErmano is an unofficial, community-maintained Linux port of <a href="https://github.com/altic-dev/FluidVoice" rel="noopener">FluidVoice</a>, the open-source macOS dictation app. It is not built by, affiliated with, or endorsed by the FluidVoice authors. The GPLv3-licensed prompts, rules and sounds were ported where the license allows — the behavior spec documents every match with file:line evidence.</p>
+          </details>
+          <details>
+            <summary>Is there a macOS or Windows version?</summary>
+            <p>macOS is upstream’s home — use <a href="https://github.com/altic-dev/FluidVoice" rel="noopener">FluidVoice</a> there. This port is Linux-only, a locked decision: X11 and Wayland are the only targets it will ever claim. The <a href="https://github.com/acailic/SayItErmano/blob/linux/docs/COMPARISON.md">comparison doc</a> maps the wider dictation landscape.</p>
+          </details>
+          <details>
+            <summary>What does it cost?</summary>
+            <p>Nothing — GPLv3, free as in freedom and in beer. If you enable cloud AI polish, you pay your provider for those tokens; with a local model (Ollama, LM Studio, llama.cpp) even that is free.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ roadmap ============ -->
+    <section class="section dark dots" id="roadmap" aria-labelledby="roadmap-title">
+      <div class="container">
+        <div class="section-head" data-reveal>
+          <p class="eyebrow">08 — roadmap</p>
+          <h2 class="h-section" id="roadmap-title">Not built yet — and honest about it.</h2>
+          <p class="lede">The roadmap is public, prioritized, and nothing on this page claims more than ships. A taste of what’s next:</p>
+        </div>
+
+        <div class="roadmap-grid">
+          <div class="road-item" data-reveal>
+            <span class="k">next up</span>
+            <h3>Live Wayland + context smoke matrices</h3>
+            <p>Running the full live-session matrices that gate Wayland parity claims and the focused-field context default.</p>
+          </div>
+          <div class="road-item" data-reveal>
+            <span class="k">capability backlog</span>
+            <h3>Diarization &amp; true streaming</h3>
+            <p>Speaker labels only if an offline adapter passes the accuracy/redistribution benchmark; true streaming once a real adapter exists.</p>
+          </div>
+          <div class="road-item" data-reveal>
+            <span class="k">platform polish</span>
+            <h3>Light overlay theme, layer-shell pill, Nix</h3>
+            <p>A system/light overlay theme, a wlroots layer-shell preview pill, a native Nix flake, clean-chroot AUR verification.</p>
+          </div>
+          <div class="road-item" data-reveal>
+            <span class="k">standing items</span>
+            <h3>AT-SPI insertion &amp; mic-list reordering</h3>
+            <p>An AT-SPI insertion route as a fallback ladder rung, and drag-to-reorder for the mic priority list.</p>
+          </div>
+        </div>
+
+        <div class="install-foot" style="margin-top:2.25rem" data-reveal>
+          <a style="color:var(--dark-ink-3); border-color:var(--dark-line)" href="https://github.com/acailic/SayItErmano/blob/linux/docs/ROADMAP.md">full roadmap ↗</a>
+          <a style="color:var(--dark-ink-3); border-color:var(--dark-line)" href="https://github.com/acailic/SayItErmano/blob/linux/docs/STATUS.md">what works today ↗</a>
+          <a style="color:var(--dark-ink-3); border-color:var(--dark-line)" href="https://github.com/acailic/SayItErmano/blob/linux/CHANGELOG.md">changelog ↗</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ cta ============ -->
+    <section class="cta dark" aria-labelledby="cta-title">
+      <div class="container">
+        <h2 class="h-section" id="cta-title" data-reveal>Stop typing. Start talking.</h2>
+        <p data-reveal>One command. One keypress. Your words, polished, anywhere.</p>
+        <div class="cmd" data-reveal>
+          <div class="cmd-label"><span>get started</span><span>v0.8.2 · GPLv3</span></div>
+          <div class="cmd-box">
+            <code>curl -fsSL https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/install-one-shot.sh | bash</code>
+            <button class="copy-btn" type="button" data-copy="curl -fsSL https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/install-one-shot.sh | bash">copy</button>
+          </div>
+        </div>
+        <div class="cta-links" data-reveal>
+          <a href="https://youtu.be/HWyjH-VCBAw" rel="noopener">▶ watch the demo</a>
+          <a href="https://github.com/acailic/SayItErmano/releases">releases ↗</a>
+          <a href="https://github.com/acailic/SayItErmano">source on GitHub ↗</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ footer ============ -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a class="brand" href="#top">
+            <img src="assets/img/icon-64.png" alt="" width="25" height="25">
+            SayItErmano
+          </a>
+          <p>Dictation for Linux — press a key, speak, and polished text lands in any app. 100% local speech-to-text, optional AI polish, native GTK 4.</p>
+        </div>
+        <nav class="footer-col" aria-label="Project">
+          <h3>project</h3>
+          <ul>
+            <li><a href="https://github.com/acailic/SayItErmano/releases">Releases</a></li>
+            <li><a href="https://github.com/acailic/SayItErmano/blob/linux/CHANGELOG.md">Changelog</a></li>
+            <li><a href="https://github.com/acailic/SayItErmano/blob/linux/docs/STATUS.md">Status</a></li>
+            <li><a href="https://github.com/acailic/SayItErmano/blob/linux/docs/ROADMAP.md">Roadmap</a></li>
+            <li><a href="https://github.com/acailic/SayItErmano/blob/linux/docs/COMPARISON.md">Vs. other tools</a></li>
+          </ul>
+        </nav>
+        <nav class="footer-col" aria-label="Documentation">
+          <h3>docs</h3>
+          <ul>
+            <li><a href="https://github.com/acailic/SayItErmano/blob/linux/docs/guides/install.md">Install</a></li>
+            <li><a href="https://github.com/acailic/SayItErmano/blob/linux/docs/guides/configuration.md">Configuration</a></li>
+            <li><a href="https://github.com/acailic/SayItErmano/blob/linux/docs/guides/wayland.md">Wayland</a></li>
+            <li><a href="https://github.com/acailic/SayItErmano/blob/linux/docs/guides/command-mode.md">Command mode</a></li>
+            <li><a href="https://github.com/acailic/SayItErmano/blob/linux/docs/guides/scripting-and-mcp.md">Scripting &amp; MCP</a></li>
+          </ul>
+        </nav>
+        <nav class="footer-col" aria-label="Community">
+          <h3>community</h3>
+          <ul>
+            <li><a href="https://github.com/acailic/SayItErmano">GitHub</a></li>
+            <li><a href="https://github.com/acailic/SayItErmano/issues">Issues</a></li>
+            <li><a href="https://github.com/acailic/SayItErmano/discussions">Discussions</a></li>
+            <li><a href="https://youtu.be/HWyjH-VCBAw" rel="noopener">Demo video</a></li>
+            <li><a href="https://github.com/altic-dev/FluidVoice" rel="noopener">FluidVoice (macOS) ↗</a></li>
+          </ul>
+        </nav>
+      </div>
+
+      <div class="legal">
+        <p>
+          SayItErmano is an unofficial, community-maintained Linux port of
+          <a href="https://github.com/altic-dev/FluidVoice" rel="noopener">FluidVoice</a>.
+          It is not affiliated with or endorsed by altic-dev. Licensed
+          <a href="https://www.gnu.org/licenses/gpl-3.0.html">GPL-3.0</a>; the dictation/edit
+          prompts and start/stop sounds are copied from upstream under GPLv3.
+          Speech by <a href="https://github.com/SYstran/faster-whisper" rel="noopener">faster-whisper</a>,
+          <a href="https://github.com/ggml-org/whisper.cpp" rel="noopener">whisper.cpp</a> and
+          <a href="https://github.com/openai/whisper" rel="noopener">OpenAI Whisper</a> (MIT).
+        </p>
+        <p class="fine">
+          site: hand-crafted html/css, no tracking, no cookies · typeface: Geist &amp; Geist Mono (SIL OFL 1.1) ·
+          <a href="https://github.com/acailic/SayItErmano/blob/linux/site/assets/fonts/Geist-OFL.txt">font license</a>
+        </p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/js/site.js" defer></script>
+</body>
+</html>

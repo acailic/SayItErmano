@@ -33,8 +33,8 @@ Python versions: use [pipx](#pipx--pip-any-distro-python-311) below or the
 [AUR package](#arch-linux-aur).
 
 ```bash
-curl -LO https://github.com/acailic/SayItErmano/releases/download/v0.8.1/sayit-ermano_0.8.1-1_amd64.deb
-sudo apt install ./sayit-ermano_0.8.1-1_amd64.deb
+curl -LO https://github.com/acailic/SayItErmano/releases/download/v0.8.2/sayit-ermano_0.8.2-1_amd64.deb
+sudo apt install ./sayit-ermano_0.8.2-1_amd64.deb
 ```
 
 Grab a specific version from the [releases page](https://github.com/acailic/SayItErmano/releases).
