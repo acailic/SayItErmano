@@ -163,19 +163,6 @@ a:hover {
 
 /* ---------- typography primitives ---------- */
 
-.mono-label {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 500;
-  letter-spacing: var(--tr-label);
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
-
-.dark .mono-label {
-  color: var(--dark-ink-3);
-}
-
 .eyebrow {
   display: inline-flex;
   align-items: center;
@@ -235,14 +222,6 @@ a:hover {
   color: var(--dark-ink-2);
 }
 
-.muted {
-  color: var(--ink-3);
-}
-
-.dark .muted {
-  color: var(--dark-ink-3);
-}
-
 /* ---------- layout primitives ---------- */
 
 .container {
@@ -288,8 +267,7 @@ a:hover {
   background-size: 22px 22px;
 }
 
-.dark.dots,
-.dots-on-dark {
+.dark.dots {
   background-image: radial-gradient(circle, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
   background-size: 22px 22px;
 }
@@ -339,11 +317,6 @@ a:hover {
   width: 1.55rem;
   height: 1.55rem;
   border-radius: 4px;
-}
-
-.brand .tld {
-  color: var(--ink-3);
-  font-weight: 400;
 }
 
 .site-nav {
@@ -947,16 +920,8 @@ kbd {
 
 /* ---------- showcase (dark) ---------- */
 
-.shot-grid {
-  display: grid;
-  gap: 1.25rem;
-}
-
-.shot {
+figure.shot {
   position: relative;
-}
-
-.shot figure {
   border: 1px solid var(--dark-line);
   border-radius: var(--radius);
   overflow: hidden;

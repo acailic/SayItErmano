@@ -45,16 +45,29 @@
     }, 1400);
   }
 
+  function selectText(el) {
+    var range = document.createRange();
+    range.selectNodeContents(el);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
   Array.prototype.forEach.call(
     document.querySelectorAll("[data-copy]"),
     function (btn) {
       btn.addEventListener("click", function () {
         var text = btn.getAttribute("data-copy");
         var done = function () { flash(btn, "copied"); };
+        var degrade = function () {
+          var code = btn.previousElementSibling;
+          if (code && code.tagName === "CODE") selectText(code);
+          flash(btn, "selected");
+        };
         if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(done, function () {
-            /* fall through silently — clipboard API unavailable */
-          });
+          navigator.clipboard.writeText(text).then(done, degrade);
+        } else {
+          degrade();
         }
       });
     }
