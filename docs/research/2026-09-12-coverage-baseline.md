@@ -46,6 +46,13 @@ privacy/safety surfaces.
   first-use funnel, evalharness, chunking) grew faster than the unit
   suite, superseding the 09-12 79.9%/78.9% recording as the floor.
   Raise the flag as meaningful assertions land.
+- **2026-10-14 (Q5 queue-row verification):** fresh runs for the
+  quality-queue row evidence — `just coverage` **71.97%** total
+  (3510 passed, 4 capability skips, floor 71 green; headroom +0.97pt,
+  so the floor stays 71), `just coverage-ui` **30%** total
+  (172 passed, 0 skipped — the display suite grew 132→172 with the
+  mirrored `tests/gtkui/` widget-proxy + page-action suite, c8069b9;
+  main_window.py 78%, onboarding.py 85% in that tier).
 - The unit-tier branch percentage must not regress: CI's unit job
   uploads `build/coverage/unit.xml`; a drop below the enforced floor
   is a review blocker even when tests pass (and now FAILS the lane).
