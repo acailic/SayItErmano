@@ -239,3 +239,35 @@ class TestBuildDebContract:
                   "update-constraints.sh").read_text()
         assert "locklib.py" in script and "--wheels-dir" in script
         assert "m pip hash" not in script  # only the E3 history comment remains
+
+
+class TestCommittedLock:
+    """The COMMITTED packaging/deb/constraints.txt (not just synthetic
+    fixtures) must stay hash-locked and cover pyproject's runtime deps —
+    makes the Q3 queue-row evidence a permanent CI gate instead of a
+    one-off manual run."""
+
+    LOCK = REPO / "packaging" / "deb" / "constraints.txt"
+    PYPROJECT = REPO / "pyproject.toml"
+
+    def test_committed_constraints_are_hash_locked(self):
+        """E3 invariant on the real artifact: every non-comment line is
+        an exact `name==version` pin carrying a full sha256 — no
+        pin-only, mixed, duplicate, malformed, or moving-version lines."""
+        pins = locklib.validate_lock_text(
+            self.LOCK.read_text(encoding="utf-8"),
+            require_hashes=True)
+        assert len(pins) >= 3  # the deb's runtime closure, not a stub
+        # belt-and-braces: the exact byte shape locklib enforces
+        for raw in self.LOCK.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if line and not line.startswith("#"):
+                assert re.fullmatch(
+                    r"[A-Za-z0-9][A-Za-z0-9._-]*==\S+ "
+                    r"--hash=sha256:[0-9a-f]{64}", line), line
+
+    def test_committed_constraints_cover_pyproject_runtime_deps(self):
+        """E4 companion: a stale lock (runtime dep without an exact pin)
+        fails here, not at the release container."""
+        summary = locklib.check_pins_coverage(self.PYPROJECT, self.LOCK)
+        assert "runtime deps exactly pinned" in summary
