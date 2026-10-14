@@ -66,10 +66,18 @@ class TestLocalModeStaysLocal:
     def test_ai_client_never_invoked_when_disabled(self, isolated):
         """Default config: AI polish off. If anything in the pipeline
         were to reach for the AI client anyway, the spy raises and the
-        conftest network guard would catch any real HTTP attempt."""
+        conftest network guard would catch any real HTTP attempt.
+        base_url/model are CONFIGURED while enabled stays False, so a
+        bypassed enabled-gate reaches AIClient.chat instead of dying
+        earlier on the unconfigured-client AIError (which _polish
+        swallows) — the mutation check pinned exactly that weakness."""
         tmp_path, _ = isolated
         cfg = copy.deepcopy(DEFAULTS)
         assert cfg["ai"]["enabled"] is False  # the default under test
+        # configured-but-disabled: the client is fully usable, the GATE
+        # is the only thing keeping local mode local
+        cfg["ai"]["base_url"] = "https://ai.example.internal/v1"
+        cfg["ai"]["model"] = "some-model"
 
         def must_not_be_called(*a, **k):
             raise AssertionError("AI client invoked while ai.enabled=False")
@@ -125,21 +133,24 @@ class TestSecretsStayMasked:
                       use_hotkey=False, use_sounds=False)
         d.backend = StubBackend("x")
         for surface in (json.dumps(d.handle_request({"action": "status"})),
-                        json.dumps(d.handle_request({"action": "get_config"}))):
+                        json.dumps(d.handle_request({"action": "get-config"}))):
             assert SECRET_AI not in surface
             assert SECRET_REMOTE not in surface
 
     def test_doctor_cli_output_never_contains_secrets(self, tmp_path):
         """A real `python -m fluidvoice doctor` subprocess with secrets
         configured: stdout/stderr must not leak either key (update probe
-        kill-switched; a doctor that cannot reach the mic still runs)."""
-        xdg = tmp_path / "xdata"
-        (xdg / "sayit-ermano").mkdir(parents=True)
+        kill-switched; a doctor that cannot reach the mic still runs).
+        The config is written into the XDG_CONFIG_HOME the env points at
+        — writing it under XDG_DATA_HOME left the subprocess on DEFAULTS
+        and the assertion vacuous (found by the Q11 mutation check)."""
+        conf = tmp_path / "xconf" / "sayit-ermano"
+        conf.mkdir(parents=True)
         cfg = self._secret_cfg()
         from fluidvoice.config import save_config
-        save_config(cfg, xdg / "sayit-ermano" / "config.toml")
+        save_config(cfg, conf / "config.toml")
         env = {**os.environ,
-               "XDG_DATA_HOME": str(xdg),
+               "XDG_DATA_HOME": str(tmp_path / "xdata"),
                "XDG_CONFIG_HOME": str(tmp_path / "xconf"),
                "XDG_CACHE_HOME": str(tmp_path / "xcache"),
                "SAYITERMANO_SKIP_UPDATE_CHECK": "1"}
