@@ -2,10 +2,12 @@
 
 The suite proves application behavior; these prove the gates have not
 silently rotted: the lint floor matches the oldest supported interpreter
-(F10) and the thread-exception filter actually fails a run that deserves
-to fail (N6)."""
+(F10), the thread-exception filter actually fails a run that deserves
+to fail (N6), and the flaky-test registry keeps its owner+expiry
+contract (Q12's "never unlimited reruns")."""
 from __future__ import annotations
 
+import datetime as _dt
 import subprocess
 import sys
 import tomllib
@@ -73,3 +75,45 @@ class TestThreadExceptionGate:
             + proc.stdout + proc.stderr
         assert "PytestUnhandledThreadExceptionWarning" \
             in proc.stdout + proc.stderr
+
+
+class TestFlakyRegistry:
+    """Q12: flaky tests carry an owner and an expiry, never unlimited
+    reruns. The registry lives in docs/dev/testing.md (visible next to
+    the tier docs, not buried in CI config); these tests keep its shape
+    honest so the practice cannot silently decay into "rerun until
+    green": every row must carry a test id, dates, owner and expiry,
+    and no OPEN row may sit past its expiry date."""
+
+    DOC = Path(__file__).resolve().parent.parent / "docs" / "dev" / "testing.md"
+
+    @classmethod
+    def _rows(cls) -> list[dict]:
+        text = cls.DOC.read_text(encoding="utf-8")
+        header = "| Test | First seen | Symptom / lane | Owner | Expiry | Status |"
+        assert header in text, \
+            "flaky-test registry table missing from docs/dev/testing.md"
+        start = text.index(header)
+        body = text[start + len(header):].split("\n\n", 1)[0]
+        rows = []
+        for line in body.splitlines():
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cells) == 6 and cells[0] and cells[0] != "---":
+                rows.append(dict(zip(
+                    ("test", "first_seen", "symptom", "owner", "expiry", "status"),
+                    cells)))
+        assert rows, "registry table present but empty of entries"
+        return rows
+
+    def test_every_row_has_owner_and_dates(self):
+        for row in self._rows():
+            assert row["owner"], row
+            for field in ("first_seen", "expiry"):
+                _dt.date.fromisoformat(row[field])  # raises on junk
+
+    def test_no_open_row_is_past_its_expiry(self):
+        today = _dt.date.today()
+        for row in self._rows():
+            if not row["status"].startswith("closed"):
+                assert _dt.date.fromisoformat(row["expiry"]) >= today, \
+                    f"flaky entry expired open — re-triage or close it: {row}"
