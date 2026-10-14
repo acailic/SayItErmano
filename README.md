@@ -192,6 +192,16 @@ special-purpose pages: [command mode](docs/guides/command-mode.md),
 [file transcription](docs/guides/file-transcription.md), and
 [scripting the daemon / MCP](docs/guides/scripting-and-mcp.md).
 
+## Troubleshooting
+
+Something misbehaving — no audio, dead hotkey, Wayland quirks, a stuck
+model download, GPU questions, install trouble? **`sayit-ermano doctor`
+first** (it probes the microphone, tools, session capabilities, hotkey
+grab and models cache), then the
+[troubleshooting FAQ](docs/dev/FAQ.md) — the 15 most common problems
+with concrete fixes, grouped by audio · hotkeys · Wayland · model
+download · GPU/CPU · installation.
+
 ## Development & testing
 
 Read [AGENTS.md](AGENTS.md) first — one tree per agent, how tests are
