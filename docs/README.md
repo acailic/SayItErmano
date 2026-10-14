@@ -24,6 +24,9 @@ the app itself.
   `sayit-ermano transcribe` formats, JSON output, chunking.
 - [guides/scripting-and-mcp.md](guides/scripting-and-mcp.md) — the unix
   control socket API and the MCP bridge (with its security note).
+- [dev/FAQ.md](dev/FAQ.md) — the troubleshooting FAQ: the 15 most common
+  problems (audio, hotkeys, Wayland, model download, GPU/CPU, install)
+  with concrete fixes. `sayit-ermano doctor` is the first stop.
 - [STATUS.md](STATUS.md) — what works today, with evidence, and the
   known limitations.
 - [ROADMAP.md](ROADMAP.md) — everything not built yet.
