@@ -211,17 +211,20 @@ class CaptureCoordinator:
         context = self.rewrite_context
         self.take_mode = "dictate"
         self.rewrite_context = None
-        self._fold_mic_baseline(wav)
+        device = getattr(self._recorder(), "device", "") or ""
+        self._tasks.spawn("mic-baseline", self._fold_mic_baseline,
+                          args=(wav, device))
         self._on_take_complete(Path(wav), self.app_hint, mode, context)
 
-    def _fold_mic_baseline(self, wav) -> None:
+    def _fold_mic_baseline(self, wav, device: str = "") -> None:
         """Fold this take's speech level into the device's rolling
-        baseline (best-effort: a broken sidecar must never fail a take)."""
+        baseline (best-effort: a broken sidecar must never fail a take).
+        Runs on its own thread: stop_locked's recording->complete window
+        must stay short (wait_until polls it)."""
         try:
             from . import mic_quality
             summary = mic_quality.analyze_wav(wav)
             if summary.get("speech_dbfs") is not None:
-                device = getattr(self._recorder(), "device", "") or ""
                 mic_quality.update_baseline(device, summary["speech_dbfs"])
         except Exception as e:  # noqa: BLE001 - baseline is advisory
             try:

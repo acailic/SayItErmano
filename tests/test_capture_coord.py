@@ -497,7 +497,8 @@ class TestMicQualityWatch:
         with coord._lock:
             coord.start_locked()
             coord.stop_locked()
-        assert folded == [("alsa_input.usb-cam", -21.5)]
+        # the fold runs on its own thread (stop path stays short)
+        assert wait_until(lambda: folded == [("alsa_input.usb-cam", -21.5)])
 
     def test_baseline_failure_never_fails_the_take(self, monkeypatch):
         import fluidvoice.mic_quality as mq
@@ -508,4 +509,5 @@ class TestMicQualityWatch:
         with coord._lock:
             coord.start_locked()
             coord.stop_locked()
+        time.sleep(0.2)  # let the fold thread fail
         assert coord.recording is False  # take completed normally
