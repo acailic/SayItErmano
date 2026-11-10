@@ -198,3 +198,10 @@ class TestAnalyzeWav:
 
     def test_unreadable_is_empty(self, tmp_path):
         assert analyze_wav(tmp_path / "nope.wav") == {}
+
+
+class TestConfigKey:
+    def test_registered_default_on(self):
+        from fluidvoice.config import DEFAULTS, RESTART_REQUIRED
+        assert DEFAULTS["recording"]["mic_warnings"] is True
+        assert "recording.mic_warnings" not in RESTART_REQUIRED

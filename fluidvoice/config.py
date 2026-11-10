@@ -685,6 +685,11 @@ _spec("recording", "stall_timeout_s", 8.0, _num("float", 0.0, 300.0),
       description="Cancel the take when the capture stream freezes\n"
                   "mid-dictation for this many seconds (device glitch/route\n"
                   "change) - 0 = off")
+_spec("recording", "mic_warnings", True, _bool(),
+      description="Proactive mic-quality notices while dictating: digital\n"
+                  "silence (dead source), speech far below this device's\n"
+                  "usual level (too far away/quiet) or clipping. Warns at\n"
+                  "most once per cause per take.")
 _spec("recording", "sample_rate", 16000,
       _reject("fixed hardware constant (16 kHz mono FLAC)"),
       persistence=PERSIST_NONE,

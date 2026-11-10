@@ -70,6 +70,7 @@ drift: `python scripts/gen_config_reference.py` regenerates it.
 | `skip_silent` | `false` |  | Skip recordings <= 4s that are pure silence |
 | `first_pcm_timeout` | `2.0` |  | Stop early when the microphone sends no audio at all (muted/wrong device); 0 = off |
 | `stall_timeout_s` | `8.0` |  | Cancel the take when the capture stream freezes mid-dictation for this many seconds (device glitch/route change) - 0 = off |
+| `mic_warnings` | `true` |  | Proactive mic-quality notices while dictating: digital silence (dead source), speech far below this device's usual level (too far away/quiet) or clipping. Warns at most once per cause per take. |
 | `sample_rate` | `16000` |  | Fixed hardware capture rate - the whisper models want 16 kHz mono; not UI-settable |
 | `spoken_send_enabled` | `false` |  | Spoken-send: a trailing phrase strips and presses Enter after typing |
 | `spoken_send_phrase` | `"send it"` |  | Trailing phrase that strips and presses Enter |
