@@ -81,6 +81,8 @@ append new ones at the top):
 |---|---|---|---|---|---|
 | `test_settings_sections.py::TestMainWindowSections::test_activity_chart_draws_without_crashing` | 2026-09-14 | CI gtk lane: PyGObject without pycairo bindings could not build a real `cairo.Context` | acailic | 2026-09-14 | closed 2026-09-14 — `FakeCairo` recording context, assertions on the draw calls (`586cb8c`) |
 | `test_spoken_send_countdown.py::test_vad_auto_stop_cancels_pending_countdown` | 2026-09-14 | 2-core CI runner: `recording=False` flips before the process thread lands `last_result` | acailic | 2026-09-14 | closed 2026-09-14 — poll `wait_result()` on the seam (`586cb8c`); same file's second CI timing strike (first: 2026-09-12, `95978c3`) |
+| `test_capture_coord.py::TestAutoStop::test_watchdog_stops_the_take` | 2026-11-10 | CI-only, 8/25 under local CPU load with `--cov`: `wait_until(not recording)` polls inside stop_locked's recording→complete window (widened briefly by the mic-baseline fold, latent before it) | acailic | 2026-11-10 | closed 2026-11-10 — fold moved off the take-stop path AND the test waits for the terminal `complete` state, not the flag flip |
+| `test_lifecycle_sequences.py::TestLockAndMicTransitions::test_mic_disappearance_mid_take_defers_reselect_to_idle` | 2026-11-10 | CI py3.11: `wait_for(not busy)` sampled the pre-take `busy=False` before the process thread flipped it, so the manual idle poll still saw busy and deferred | acailic | 2026-11-10 | closed 2026-11-10 — wait for `busy=True` before releasing the blocking backend's gate |
 
 The recurring seam lesson from that file: threads flip observable flags
 before the work they announce is done — tests wait on the seam

@@ -271,7 +271,12 @@ class TestAutoStop:
         coord, rec, calls = make(cfg=cfg)
         with coord._lock:
             coord.start_locked()
-        assert wait_until(lambda: not coord.recording)
+        # wait for the TERMINAL state, not the recording flip: stop_locked
+        # sets recording=False before _on_take_complete, and a loaded
+        # runner's 10 ms poll can land inside that window (registry:
+        # flaky 2026-11-10, CI-only under coverage/load)
+        assert wait_until(lambda: calls["complete"])
+        assert coord.recording is False
         assert len(calls["complete"]) == 1  # processed, not discarded
 
     def test_auto_stop_after_cancel_starts_nothing(self):

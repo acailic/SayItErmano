@@ -252,6 +252,11 @@ class TestLockAndMicTransitions:
         assert d.recording is True          # mid-dictation safety held
         assert reselects == []              # nothing reselected mid-take
         assert d.toggle() is False          # stop -> processing
+        # wait for busy=True BEFORE releasing the gate: on a slow runner
+        # the processing thread may not have flipped busy yet and
+        # wait_for(not busy) would pass on the pre-take False (registry:
+        # flaky 2026-11-10, CI py3.11 lane)
+        wait_for(lambda: d.busy, what="processing started")
         backend.gate.set()
         wait_for(lambda: not d.busy, what="take finished")
         # the next watcher poll (idle now) performs the deferred reselect
