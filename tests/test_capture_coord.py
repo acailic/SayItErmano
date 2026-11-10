@@ -427,3 +427,86 @@ class TestDisplayHooks:
         coord, _, _ = make()
         coord.announce_language("de")
         assert shown == ["Language: de"]
+
+
+class TestMicQualityWatch:
+    """Proactive dead/far/clip notices (mic-quality-warning.md): the
+    monitor spawns per take, respects recording.mic_warnings, stops with
+    the take, and folds the finished WAV into the device baseline."""
+
+    def _patch_monitor(self, monkeypatch):
+        import fluidvoice.mic_quality as mq
+        calls = {"spawns": [], "events": []}
+        real_event = threading.Event
+
+        def fake_monitor(raw_path, device="", *, floor_dbfs=None, notify=None,
+                         log=None, poll_s=0.3, stop=None):
+            calls["spawns"].append(
+                {"raw": Path(raw_path), "device": device,
+                 "has_notify": notify is not None, "stop": stop})
+            if stop is not None:
+                calls["events"].append(stop)
+            return mq.LevelWatch()
+
+        monkeypatch.setattr(mq, "monitor", fake_monitor)
+        return calls
+
+    def test_monitor_spawns_with_device_and_stop(self, monkeypatch):
+        calls = self._patch_monitor(monkeypatch)
+        coord, rec, _ = make()
+        with coord._lock:
+            coord.start_locked()
+        assert len(calls["spawns"]) == 1
+        assert calls["spawns"][0]["has_notify"] is True
+        assert calls["spawns"][0]["stop"] is not None
+        with coord._lock:
+            coord.stop_locked()
+        assert calls["events"][0].is_set()  # take end stops the watch
+
+    def test_disabled_by_config(self, monkeypatch):
+        calls = self._patch_monitor(monkeypatch)
+        cfg = copy.deepcopy(DEFAULTS)
+        cfg["recording"]["mic_warnings"] = False
+        coord, rec, _ = make(cfg=cfg)
+        with coord._lock:
+            coord.start_locked()
+            coord.stop_locked()
+        assert calls["spawns"] == []
+
+    def test_cancel_stops_the_watch(self, monkeypatch):
+        calls = self._patch_monitor(monkeypatch)
+        coord, rec, _ = make()
+        with coord._lock:
+            coord.start_locked()
+            coord.cancel_locked()
+        assert calls["events"][0].is_set()
+
+    def test_stop_folds_baseline(self, monkeypatch):
+        import fluidvoice.mic_quality as mq
+        folded = []
+
+        def fake_analyze(wav):
+            return {"elapsed_s": 3.0, "speech_frac": 0.8,
+                    "speech_dbfs": -21.5, "clip_ratio": 0.0}
+
+        monkeypatch.setattr(mq, "analyze_wav", fake_analyze)
+        monkeypatch.setattr(
+            mq, "update_baseline",
+            lambda dev, dbfs, path=None: folded.append((dev, dbfs)))
+        coord, rec, _ = make()
+        rec.device = "alsa_input.usb-cam"
+        with coord._lock:
+            coord.start_locked()
+            coord.stop_locked()
+        assert folded == [("alsa_input.usb-cam", -21.5)]
+
+    def test_baseline_failure_never_fails_the_take(self, monkeypatch):
+        import fluidvoice.mic_quality as mq
+        monkeypatch.setattr(
+            mq, "analyze_wav",
+            lambda wav: (_ for _ in ()).throw(RuntimeError("boom")))
+        coord, rec, calls = make()
+        with coord._lock:
+            coord.start_locked()
+            coord.stop_locked()
+        assert coord.recording is False  # take completed normally

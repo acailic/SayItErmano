@@ -10,6 +10,8 @@ from fluidvoice.mic_quality import (
     LevelWatch,
     level_floor_for,
     load_baselines,
+    analyze_wav,
+    monitor,
     update_baseline,
 )
 
@@ -131,3 +133,68 @@ class TestBaseline:
         assert not list(tmp_path.glob("*.tmp"))
         import os
         assert (os.stat(p).st_mode & 0o777) == 0o600
+
+
+class TestMonitor:
+    def test_dead_take_fires_one_notice(self, tmp_path):
+        import threading
+
+        p = tmp_path / "take.raw"
+        p.write_bytes(pcm_silence(3.0))
+        got: list[tuple[str, str]] = []
+        ended = threading.Event()
+
+        def notify(title, body):
+            got.append((title, body))
+            ended.set()  # end the loop at the first verdict
+
+        monitor(p, "usb-cam", notify=notify, poll_s=0.01, stop=ended)
+        assert len(got) == 1
+        assert got[0][0] == "SayItErmano"
+        assert "silent" in got[0][1].lower()
+
+    def test_healthy_take_no_notice(self, tmp_path):
+        import threading
+
+        p = tmp_path / "take.raw"
+        p.write_bytes(speech_like(3.0, 0.2))
+        got: list[tuple] = []
+        ended = threading.Event()
+
+        def stop_soon():
+            ended.set()
+
+        import time as _t
+        threading.Timer(0.2, stop_soon).start()
+        monitor(p, "usb-cam", notify=lambda *a: got.append(a),
+                poll_s=0.01, stop=ended)
+        assert got == []
+
+    def test_stop_event_ends_loop(self, tmp_path):
+        import threading
+
+        p = tmp_path / "take.raw"
+        p.write_bytes(pcm_silence(10.0))
+        ended = threading.Event()
+        ended.set()  # already ended: must return immediately
+        watch = monitor(p, "usb-cam", poll_s=0.5, stop=ended)
+        assert watch.elapsed_s == 0.0  # never read anything
+
+
+class TestAnalyzeWav:
+    def test_summary_from_wav_file(self, tmp_path):
+        import wave
+
+        p = tmp_path / "take.wav"
+        pcm = speech_like(3.0, 0.2)
+        with wave.open(str(p), "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(RATE)
+            w.writeframes(pcm)
+        s = analyze_wav(p)
+        assert s["speech_frac"] > 0.5
+        assert -35 < s["speech_dbfs"] < -10
+
+    def test_unreadable_is_empty(self, tmp_path):
+        assert analyze_wav(tmp_path / "nope.wav") == {}

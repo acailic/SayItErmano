@@ -216,3 +216,62 @@ def level_floor_for(source: str, path=None) -> float:
         return FIXED_FLOOR_DBFS
     return max(FIXED_FLOOR_DBFS,
                entry["speech_dbfs"] - FAR_BELOW_BASELINE_DB)
+
+
+def monitor(raw_path, device: str = "", *, floor_dbfs: float | None = None,
+            notify=None, log=None, poll_s: float = 0.3, stop=None):
+    """Tail the growing headerless raw-PCM take file (16 kHz s16 mono —
+    the same file the preview engines tail) and fire one notification per
+    verdict kind. Returns the LevelWatch for post-take summary/baseline
+    use. `stop` is a threading.Event (tests + the take-end paths)."""
+    import threading
+    import time
+    from pathlib import Path
+
+    watch = LevelWatch()
+    floor = floor_dbfs if floor_dbfs is not None else level_floor_for(device)
+    path = Path(raw_path)
+    ended = stop if stop is not None else threading.Event()
+    off = 0
+    while not ended.is_set():
+        try:
+            size = path.stat().st_size
+        except OSError:
+            size = 0
+        if size > off:
+            try:
+                with open(path, "rb") as fh:
+                    fh.seek(off)
+                    chunk = fh.read()
+            except OSError:
+                chunk = b""
+            off += len(chunk)
+            watch.feed(chunk)
+            for kind in watch.verdicts(floor):
+                if log:
+                    try:
+                        log(f"mic warning: {kind} {watch.summary()}")
+                    except Exception:  # noqa: S110 - logging is best-effort
+                        pass
+                if notify:
+                    try:
+                        notify("SayItErmano", MESSAGES[kind])
+                    except Exception:  # noqa: S110 - notice is best-effort
+                        pass
+        time.sleep(poll_s)
+    return watch
+
+
+def analyze_wav(path) -> dict:
+    """One-shot summary of a finished take's WAV (baseline fold-in and
+    doctor); {} when unreadable."""
+    import wave
+    try:
+        with wave.open(str(path), "rb") as w:
+            rate = w.getframerate()
+            pcm = w.readframes(w.getnframes())
+    except Exception:
+        return {}
+    watch = LevelWatch(rate=rate)
+    watch.feed(pcm)
+    return watch.summary()

@@ -99,6 +99,8 @@ class CaptureCoordinator:
         # -- preview (engine, display) + the pill awaiting the done beat ----
         self.preview: Any = None
         self.closing_display: Any = None
+        # -- mic-quality watch (dead/far/clip notices during a take) -------
+        self._micq_stop: threading.Event | None = None
 
     # -- take lifecycle (callers hold the shared lock) ------------------------
 
@@ -133,7 +135,9 @@ class CaptureCoordinator:
         # Upstream firstPCMTimeout (2s): a live-but-silent source (muted mic,
         # wrong device, Bluetooth glitch) should fail fast, not record air
         # until max_seconds.
-        self.start_preview(getattr(recorder, "raw_path", None))
+        raw = getattr(recorder, "raw_path", None)
+        self.start_preview(raw)
+        self._start_mic_quality(recorder, raw)
         pcm_timeout = float(self.cfg["recording"].get("first_pcm_timeout", 2.0))
         if pcm_timeout > 0:
             # tracked + cancelled by every take-end path (stop/cancel/
@@ -150,16 +154,38 @@ class CaptureCoordinator:
         # cancels the take with a clear error
         stall_s = float(self.cfg["recording"].get("stall_timeout_s", 8.0)
                         or 0.0)
-        raw = getattr(recorder, "raw_path", None)
         if stall_s > 0 and raw is not None:
             self._tasks.spawn("stall", self.stall_monitor,
                               args=(Path(raw), stall_s))
+
+    # -- proactive mic-quality watch (mic-quality-warning.md) -------------------
+
+    def _start_mic_quality(self, recorder, raw_path) -> None:
+        """Watch the take's PCM for dead/far/clip input and warn once per
+        kind (config: recording.mic_warnings, default on)."""
+        if raw_path is None or \
+                not self.cfg["recording"].get("mic_warnings", True):
+            return
+        from . import mic_quality
+        self._stop_mic_quality()
+        self._micq_stop = threading.Event()
+        device = getattr(recorder, "device", "") or ""
+        self._tasks.spawn(
+            "mic-quality", mic_quality.monitor, args=(raw_path,),
+            kwargs={"device": device, "notify": self._notify,
+                    "log": self._log, "stop": self._micq_stop})
+
+    def _stop_mic_quality(self) -> None:
+        ev, self._micq_stop = self._micq_stop, None
+        if ev is not None:
+            ev.set()
 
     def stop_locked(self) -> None:
         if self.watchdog:
             self.watchdog.cancel()
             self.watchdog = None
         self.cancel_first_pcm_timer_locked()
+        self._stop_mic_quality()
         self.stop_preview(finishing=True)
         # Stop cue fires at capture stop (upstream behavior), before waiting
         # for the recorder process to flush and exit.
@@ -182,7 +208,23 @@ class CaptureCoordinator:
         context = self.rewrite_context
         self.take_mode = "dictate"
         self.rewrite_context = None
+        self._fold_mic_baseline(wav)
         self._on_take_complete(Path(wav), self.app_hint, mode, context)
+
+    def _fold_mic_baseline(self, wav) -> None:
+        """Fold this take's speech level into the device's rolling
+        baseline (best-effort: a broken sidecar must never fail a take)."""
+        try:
+            from . import mic_quality
+            summary = mic_quality.analyze_wav(wav)
+            if summary.get("speech_dbfs") is not None:
+                device = getattr(self._recorder(), "device", "") or ""
+                mic_quality.update_baseline(device, summary["speech_dbfs"])
+        except Exception as e:  # noqa: BLE001 - baseline is advisory
+            try:
+                self._log(f"WARN mic baseline update failed: {e}")
+            except Exception:  # noqa: S110 - logging is best-effort
+                pass
 
     def cancel_locked(self) -> None:
         """Cancel-the-take body (caller holds the lock): no transcription,
@@ -191,6 +233,7 @@ class CaptureCoordinator:
             self.watchdog.cancel()
             self.watchdog = None
         self.cancel_first_pcm_timer_locked()
+        self._stop_mic_quality()
         self.stop_preview()
         self._recorder().cancel()
         self.recording = False
@@ -216,6 +259,7 @@ class CaptureCoordinator:
         if self.recording:
             self._recorder().cancel()
             self.recording = False
+        self._stop_mic_quality()
         if self.watchdog:
             self.watchdog.cancel()
         if self.first_pcm_timer:
