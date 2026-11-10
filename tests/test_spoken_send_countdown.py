@@ -158,6 +158,12 @@ def test_vad_auto_stop_cancels_pending_countdown(cfg, tmp_path):
     timer = d._capture.send_countdown_timer
     d._capture.vad_auto_stop()
     assert d.recording is False
+    # poll the timer's death instead of asserting instantly: Timer.cancel()
+    # during the thread's bootstrap leaves is_alive() True until the thread
+    # notices the finished event (registry: third strike 2026-11-10, CI)
+    deadline = time.monotonic() + 5.0
+    while timer.is_alive() and time.monotonic() < deadline:
+        time.sleep(0.02)
     assert not timer.is_alive()
     assert wait_done(d)
 
