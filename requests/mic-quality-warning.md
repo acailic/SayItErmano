@@ -1,6 +1,16 @@
 Proactive mic-quality warnings: while dictating, tell the user the microphone is bad (dead path, clipping/distortion) or they are too far away (speech present but level very low) — today every guard is REACTIVE (dead-mic notice 3157fdf and hallucination guard b73ecd2 fire after a take; preview "silenced" mutes mid-take but never says why at the input level; micmon watches device hotplug only, not levels).
 
-STATUS: QUEUED
+STATUS: SHIPPED
+
+<!-- shipped in ca2d956 (verdicts+baseline) 8a94e41 (monitor+capture hooks)
+     f7f78dd (mic_warnings key) 13c869f (doctor line) 3029f76 (observability);
+     live-verified 2026-11-10 on the e2e virtual-mic sandbox: dead @1.6s,
+     far @1.6s (-46 dBFS vs -38 floor), baseline folded per device
+     (/tmp sandbox), loud-but-clean 0.895 FS take correctly NOT flagged
+     (sandbox chain attenuates clipping below the 0.98 FS threshold - the
+     clip positive is unit-covered with FS-pinned PCM). Known edge: a
+     noise-only take with speech_frac in 0.05-0.4 gets no verdict (the
+     hallucination guard + post-take dead-mic notice still cover it). -->
 
 Context anchors: audio_utils.AudioStats (peak/rms/max_frame_rms, 20 ms frames) + is_digital_silence already exist; preview.py:116-142 already computes per-frame RMS for VAD; capture.py:436-443 already has a "silenced → notice" precedent; save_audio stays ON (BT-incident directive: saved wavs are the ground truth for tuning thresholds). 2026-09-10 BT incident (b73ecd2 memory): garbage-mic + wedged-PipeWire-silence are REAL recurring failure modes on this machine — this brief is the upstream UX for them.
 

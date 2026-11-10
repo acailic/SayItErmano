@@ -124,10 +124,14 @@ and page order:
   inline audio replay, **Export as ZIP or plain text**, **Pause saving**.
 - **Settings** — **General** / **Dictation** (hotkeys, languages, mic,
   commands) / **Models** (radio-marked active, one-click switch +
-  download) / **AI polish** (any OpenAI-compatible endpoint, prompt
-  profiles, per-app prompts) / **History** / **Wayland** / **About**.
-  Saving hot-applies what the daemon can take live and says what needs
-  a restart.
+  download) / **AI polish** (any OpenAI-compatible endpoint, provider
+  profiles, prompt profiles, per-app prompts) / **History** / **Wayland**
+  / **About**. Saving hot-applies what the daemon can take live and says
+  what needs a restart.
+- **Mic-quality warnings** — while dictating: digital silence (dead
+  source), speech far below the mic's usual level (too far away) or
+  clipping each get a once-per-take notice (`recording.mic_warnings`,
+  default on; `sayit-ermano doctor` shows the learned per-mic baseline).
 - **Onboarding** — opens once on first launch with a real 3-second tryout.
 
 With the daemon stopped, History still works and Settings writes the
