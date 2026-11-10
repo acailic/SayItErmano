@@ -80,6 +80,11 @@ def ai_profiles_file() -> Path:
     return config_dir() / "ai-profiles.json"
 
 
+def mic_baseline_file() -> Path:
+    """Per-device rolling input-level baselines for mic warnings."""
+    return config_dir() / "mic-baseline.json"
+
+
 def audio_dir() -> Path:
     return data_dir() / "audio"
 
