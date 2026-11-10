@@ -19,6 +19,7 @@ Structure:
 """
 from __future__ import annotations
 
+import logging
 import os
 import signal
 import sys
@@ -288,7 +289,24 @@ class Daemon:
             mics.append({"kind": "check", "label": m["description"],
                          "checked": device == m["name"],
                          "action": lambda n=m["name"]: self._set_device(n)})
-        return [
+        ai_profile_items: list[dict] = []
+        try:
+            from .ai.provider_profiles import load_profiles, switch_patch
+            active_profile = self.cfg["ai"].get("profile", "")
+            for name in sorted(load_profiles()):
+                def _apply_profile(n=name):
+                    try:
+                        self._set_config(switch_patch(n))
+                    except Exception as e:  # store changed since menu build
+                        logging.getLogger(__name__).warning(
+                            "AI profile switch failed: %s", e)
+                ai_profile_items.append(
+                    {"kind": "check", "label": name,
+                     "checked": name == active_profile,
+                     "action": _apply_profile})
+        except Exception:
+            ai_profile_items = []
+        menu = [
             {"kind": "item", "label": status, "enabled": False},
             {"kind": "item", "label": "Cancel Dictation (Esc)",
              "enabled": recording, "action": self.cancel},
@@ -304,6 +322,13 @@ class Daemon:
             {"kind": "item", "label": "Quit SayItErmano",
              "action": self._quit_gracefully},
         ]
+        if ai_profile_items:
+            mic_idx = next(i for i, it in enumerate(menu)
+                           if it.get("label") == "Microphone")
+            menu.insert(mic_idx + 1,
+                        {"kind": "item", "label": "AI profile",
+                         "children": ai_profile_items})
+        return menu
 
     def _copy_last_transcript(self) -> None:
         text = (self.last_result or {}).get("text") or ""

@@ -191,3 +191,67 @@ class TestFallback:
         from fluidvoice.config import DEFAULTS
         assert DEFAULTS["general"]["tray_enabled"] is True
         assert DEFAULTS["recording"]["preview_bottom_offset"] == 64
+
+
+class TestAIProfileMenu:
+    def _daemon(self, cfg=None):
+        import copy
+
+        import fluidvoice.daemon as dm
+        from fluidvoice.config import DEFAULTS
+        from tests.test_daemon import StubRecorder
+        return dm.Daemon(cfg or copy.deepcopy(DEFAULTS),
+                         recorder=StubRecorder(),
+                         backend_factory=lambda c: None,
+                         use_hotkey=False, use_sounds=False)
+
+    def test_hidden_when_store_empty(self, monkeypatch, tmp_path):
+        from fluidvoice import paths
+        monkeypatch.setattr(paths, "ai_profiles_file",
+                            lambda: tmp_path / "ai-profiles.json")
+        d = self._daemon()
+        labels = [i.get("label") for i in d._build_tray_menu()]
+        assert "AI profile" not in labels
+
+    def test_lists_profiles_with_active_checkmark(self, monkeypatch, tmp_path):
+        from fluidvoice import paths
+        from fluidvoice.ai import provider_profiles as pp
+        p = tmp_path / "ai-profiles.json"
+        pp.save_named("GLM", {"base_url": "https://api.z.ai/api/paas/v4",
+                              "model": "glm-4.7", "api_key_env": "K"}, path=p)
+        pp.save_named("Local", {"base_url": "http://x", "model": "m",
+                                "api_key_env": ""}, path=p)
+        import copy
+
+        from fluidvoice.config import DEFAULTS
+        monkeypatch.setattr(paths, "ai_profiles_file", lambda: p)
+        cfg = copy.deepcopy(DEFAULTS)
+        cfg["ai"]["profile"] = "Local"
+        d = self._daemon(cfg)
+        menu = d._build_tray_menu()
+        sub = next(i for i in menu if i.get("label") == "AI profile")
+        assert [c["label"] for c in sub["children"]] == ["GLM", "Local"]
+        checked = [c for c in sub["children"] if c.get("checked")]
+        assert [c["label"] for c in checked] == ["Local"]
+        mic = next(i for i in menu if i.get("label") == "Microphone")
+        assert menu.index(sub) == menu.index(mic) + 1
+
+    def test_switch_action_applies_set_config(self, monkeypatch, tmp_path):
+        import fluidvoice.config as config_mod
+        from fluidvoice import paths
+        from fluidvoice.ai import provider_profiles as pp
+        p = tmp_path / "ai-profiles.json"
+        pp.save_named("GLM", {"base_url": "https://api.z.ai/api/paas/v4",
+                              "model": "glm-4.7", "api_key_env": "K"},
+                      path=p)
+        monkeypatch.setattr(paths, "ai_profiles_file", lambda: p)
+        monkeypatch.setattr(config_mod, "save_config",
+                            lambda c, path=None: None)
+        d = self._daemon()
+        sub = next(i for i in d._build_tray_menu()
+                   if i.get("label") == "AI profile")
+        glm = next(c for c in sub["children"] if c["label"] == "GLM")
+        glm["action"]()
+        assert d.cfg["ai"]["profile"] == "GLM"
+        assert d.cfg["ai"]["base_url"] == "https://api.z.ai/api/paas/v4"
+        assert d.cfg["ai"]["model"] == "glm-4.7"
