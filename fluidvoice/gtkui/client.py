@@ -232,3 +232,27 @@ class Client:
     def prompt_profile_delete(self, name: str) -> dict:
         from ..ai.profiles import delete_profile
         return self._profile_call(delete_profile, name)
+
+    # -- provider profiles (ai-profiles.json sidecar; same direct-access
+    #    precedent - but the SWITCH goes through set_config because the
+    #    endpoint values land in config.toml, which the daemon owns) ------
+
+    def provider_profiles(self) -> dict[str, dict]:
+        """Named AI-polish endpoint presets ({} when unreadable)."""
+        from ..ai import provider_profiles
+        try:
+            return provider_profiles.load_profiles()
+        except Exception:
+            return {}  # a broken sidecar must not take the window down
+
+    def provider_profile_save(self, name: str, profile: dict) -> dict:
+        from ..ai.provider_profiles import save_named
+        return self._profile_call(save_named, name, profile)
+
+    def provider_profile_rename(self, old: str, new: str) -> dict:
+        from ..ai.provider_profiles import rename_profile
+        return self._profile_call(rename_profile, old, new)
+
+    def provider_profile_delete(self, name: str) -> dict:
+        from ..ai.provider_profiles import delete_profile
+        return self._profile_call(delete_profile, name)

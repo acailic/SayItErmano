@@ -14,6 +14,32 @@ class AIPageMixin:
         page = Adw.PreferencesPage(
             name="ai", icon_name="fluidvoice-polish-symbolic", title="AI"
         )
+        # provider profiles: one click switches the whole endpoint
+        # (base_url/model/key-env); values land in [ai] via set-config
+        self._prov_group = Adw.PreferencesGroup(
+            title="Provider profiles",
+            description="Named endpoint presets — selecting one switches "
+            "the AI polish provider instantly",
+        )
+        self._prov_rows: dict[str, Adw.ActionRow] = {}
+        self._prov_checks: dict[str, Gtk.CheckButton] = {}
+        self._pending_provider_clear = False
+        add_prov_row = Adw.ActionRow(
+            title="Add profile",
+            subtitle="Manual entry, or start from a built-in template",
+        )
+        add_btn = Gtk.Button(label="Add…", css_classes=["flat"])
+        add_btn.set_valign(Gtk.Align.CENTER)
+        add_btn.connect("clicked", lambda *_: self._provider_add_dialog())
+        add_prov_row.add_suffix(add_btn)
+        tmpl_btn = Gtk.Button(label="From template", css_classes=["flat"])
+        tmpl_btn.set_valign(Gtk.Align.CENTER)
+        tmpl_btn.connect("clicked",
+                         lambda *_: self._provider_template_dialog())
+        add_prov_row.add_suffix(tmpl_btn)
+        self._prov_group.add(add_prov_row)
+        page.add(self._prov_group)
+
         grp = Adw.PreferencesGroup(
             title="AI polish",
             description="Any OpenAI-compatible endpoint — Ollama, LM Studio, "
@@ -25,8 +51,13 @@ class AIPageMixin:
         self.provider_img.set_valign(Gtk.Align.CENTER)
         url_row.add_prefix(self.provider_img)
         url_row.connect("changed", lambda *_: self._update_provider_logo())
+        url_row.connect("changed",
+                        lambda *_: self._provider_queue_pointer_clear())
         grp.add(url_row)
-        grp.add(self._entry("ai", "model", "Model — e.g. qwen3:8b"))
+        model_row = self._entry("ai", "model", "Model — e.g. qwen3:8b")
+        model_row.connect("changed",
+                           lambda *_: self._provider_queue_pointer_clear())
+        grp.add(model_row)
         grp.add(self._entry("ai", "api_key_env", "API key env var (preferred)"))
         grp.add(self._spin("ai", "temperature", "Temperature", 0.1, digits=1))
         grp.add(self._spin("ai", "timeout_seconds", "Timeout (s)", 5))
@@ -125,6 +156,10 @@ class AIPageMixin:
         self._add_page(page)
         self.install_action("profile.rename", "s", self._profile_rename_action)
         self.install_action("profile.delete", "s", self._profile_delete_action)
+        self.install_action("provider.rename", "s",
+                            self._provider_rename_action)
+        self.install_action("provider.delete", "s",
+                            self._provider_delete_action)
 
     def _update_provider_logo(self) -> None:
         """Show the macOS-style provider logo matching the AI base URL."""
@@ -321,6 +356,203 @@ class AIPageMixin:
             self.toast(ok_msg)
         else:
             self.toast(str(resp.get("error") or "profile operation failed"))
+
+    # -- provider profiles ---------------------------------------------------
+
+    def _provider_profiles_refresh(self) -> None:
+        """Rebuild the provider radio rows: Custom (pointer "") plus every
+        stored name; a broken sidecar degrades to just Custom."""
+        self._suppress_touch = True
+        try:
+            for row in self._prov_rows.values():
+                self._prov_group.remove(row)
+            self._prov_rows.clear()
+            self._prov_checks.clear()
+            active = str(self.cfg.get("ai", {}).get("profile") or "")
+            group: Gtk.CheckButton | None = None
+            for name in ["", *sorted(self.c.provider_profiles())]:
+                label = "Custom (hand-set endpoint)" if not name else name
+                check = Gtk.CheckButton()
+                if group is None:
+                    group = check
+                else:
+                    check.set_group(group)
+                check.set_active(name == active)
+                check.connect("toggled", self._on_provider_toggled, name)
+                row = Adw.ActionRow(title=label)
+                row.add_prefix(check)
+                row.set_activatable_widget(check)
+                if name:
+                    menu = Gio.Menu()
+                    menu.append("Rename…", f"win.provider.rename::{name}")
+                    menu.append("Delete", f"win.provider.delete::{name}")
+                    mb = Gtk.MenuButton(icon_name="view-more-symbolic",
+                                        css_classes=["flat"], menu_model=menu,
+                                        valign=Gtk.Align.CENTER,
+                                        tooltip_text="Profile actions")
+                    row.add_suffix(mb)
+                self._prov_rows[name] = row
+                self._prov_checks[name] = check
+                self._prov_group.add(row)
+        finally:
+            self._suppress_touch = False
+
+    def _on_provider_toggled(self, check: Gtk.CheckButton, name: str) -> None:
+        if not check.get_active() or self._loading or self._suppress_touch:
+            return
+        self._provider_apply(name)
+
+    def _provider_apply(self, name: str) -> None:
+        """Instant switch: name == "" only clears the pointer (Custom).
+        The patch is built from the CLIENT's store view (the single source
+        the UI renders), not the sidecar file directly."""
+        try:
+            profiles = self.c.provider_profiles()
+            if name and name not in profiles:
+                raise KeyError(f"no AI provider profile named {name!r}")
+            body = ({"ai": {"profile": ""}} if not name
+                    else {"ai": {**profiles[name], "profile": name}})
+            resp = self.c.set_config(body)
+            if not resp.get("ok"):
+                raise RuntimeError(
+                    "rejected: " + ", ".join(resp.get("rejected") or []))
+            self.cfg.setdefault("ai", {}).update(body["ai"])
+            self._pending_provider_clear = False
+            self.toast(f"AI profile: {name or 'Custom'}")
+        except Exception as e:
+            self.toast(f"Profile switch failed: {e}")
+        self._provider_profiles_refresh()
+
+    def _provider_queue_pointer_clear(self) -> None:
+        """Hand-edits to the endpoint make the active profile stale; the
+        next Save writes ai.profile = "" (back to Custom)."""
+        if self.cfg.get("ai", {}).get("profile"):
+            self._pending_provider_clear = True
+
+    def _after_provider_call(self, resp: dict, ok_msg: str) -> None:
+        if resp.get("ok"):
+            self.toast(ok_msg)
+        else:
+            self.toast(str(resp.get("error") or "profile operation failed"))
+        self._provider_profiles_refresh()
+
+    def _provider_add_dialog(self, *_args) -> None:
+        dlg = Adw.MessageDialog(
+            transient_for=self, modal=True, heading="New provider profile",
+            body="Stored beside the config; only the env-var NAME is kept "
+            "- never the key itself.",
+        )
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        entries: dict[str, Adw.EntryRow] = {}
+        for key, title in (("name", "Name (e.g. GLM)"),
+                           ("base_url", "Base URL"),
+                           ("model", "Model"),
+                           ("api_key_env", "API key env var")):
+            e = Adw.EntryRow(title=title)
+            entries[key] = e
+            box.append(e)
+        dlg.set_extra_child(box)
+        dlg.add_response("cancel", "Cancel")
+        dlg.add_response("add", "Add")
+        dlg.set_response_appearance("add", Adw.ResponseAppearance.SUGGESTED)
+
+        def responded(_dlg, response):
+            if response != "add":
+                return
+            name = entries["name"].get_text().strip()
+            if not name:
+                self.toast("Enter a profile name first")
+                return
+            profile = {
+                "base_url": entries["base_url"].get_text().strip(),
+                "model": entries["model"].get_text().strip(),
+                "api_key_env": entries["api_key_env"].get_text().strip(),
+            }
+            resp = self.c.provider_profile_save(name, profile)
+            self._after_provider_call(resp, f"Added profile \u201c{name}\u201d")
+
+        dlg.connect("response", responded)
+        dlg.present()
+
+    def _provider_template_dialog(self, *_args) -> None:
+        from ...ai.provider_profiles import TEMPLATES
+        dlg = Adw.MessageDialog(
+            transient_for=self, modal=True, heading="Add from template",
+            body="Copied into your profiles - edit freely afterwards.",
+        )
+        names = list(TEMPLATES)
+        box = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        for name in names:
+            t = TEMPLATES[name]
+            row = Adw.ActionRow(
+                title=name,
+                subtitle=f"{t['model'] or '(pick a model)'} - {t['base_url']}")
+            box.append(row)
+
+        def activated(_box, row):
+            name = names[row.get_index()]
+            dlg.close()
+            final = name
+            while final in self.c.provider_profiles():
+                final += " 2"
+            resp = self.c.provider_profile_save(
+                final, dict(TEMPLATES[name]))
+            self._after_provider_call(
+                resp, f"Added profile \u201c{final}\u201d from template")
+
+        box.connect("row-activated", activated)
+        dlg.set_extra_child(box)
+        dlg.add_response("cancel", "Close")
+        dlg.present()
+
+    def _provider_rename_action(self, _win, _action, param) -> None:
+        old = (param.get_string() if param is not None else "")
+        if old not in self.c.provider_profiles():
+            return
+
+        def done(new: str) -> None:
+            if not new or new == old:
+                return
+            self._provider_rename_confirmed(old, new)
+
+        self._ask_profile_name(f"Rename \u201c{old}\u201d to", old, done)
+
+    def _provider_rename_confirmed(self, old: str, new: str) -> None:
+        resp = self.c.provider_profile_rename(old, new)
+        if resp.get("ok") and \
+                self.cfg.get("ai", {}).get("profile") == old:
+            self.c.set_config({"ai": {"profile": new}})
+            self.cfg["ai"]["profile"] = new
+        self._after_provider_call(resp, f"Renamed to \u201c{new}\u201d")
+
+    def _provider_delete_action(self, _win, _action, param) -> None:
+        name = (param.get_string() if param is not None else "")
+        if name not in self.c.provider_profiles():
+            return
+        dlg = Adw.MessageDialog(
+            transient_for=self, modal=True,
+            heading=f"Delete profile \u201c{name}\u201d?",
+            body="Removed from the profile store. Settings and the tray "
+            "menu update immediately.",
+        )
+        dlg.add_response("cancel", "Cancel")
+        dlg.add_response("delete", "Delete")
+        dlg.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
+        dlg.connect("response", self._on_delete_provider_response, name)
+        dlg.present()
+
+    def _on_delete_provider_response(self, _dlg, response, name: str) -> None:
+        if response != "delete":
+            return
+        self._provider_delete_confirmed(name)
+
+    def _provider_delete_confirmed(self, name: str) -> None:
+        resp = self.c.provider_profile_delete(name)
+        if resp.get("ok") and \
+                self.cfg.get("ai", {}).get("profile") == name:
+            self.c.set_config({"ai": {"profile": ""}})
+            self.cfg["ai"]["profile"] = ""
+        self._after_provider_call(resp, f"Deleted profile \u201c{name}\u201d")
 
     def _load_rules(self, rules: list) -> None:
         for r in list(self._rule_rows):

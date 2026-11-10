@@ -403,6 +403,7 @@ class SettingsWindow(
             list(self.cfg.get("general", {}).get("language_cycle") or [])
         )
         self._load_profiles()
+        self._provider_profiles_refresh()
         self._dirty = False
         self._sync_save_rows()
         self._refresh_models()
@@ -472,6 +473,10 @@ class SettingsWindow(
 
     def save(self) -> bool:
         body = self._collect()
+        if getattr(self, "_pending_provider_clear", False):
+            # endpoint hand-edits stale the active provider profile
+            body.setdefault("ai", {})["profile"] = ""
+            self._pending_provider_clear = False
         resp = self.c.set_config(body)
         changed = resp.get("changed") or []
         rejected = resp.get("rejected") or []
