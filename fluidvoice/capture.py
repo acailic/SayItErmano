@@ -170,6 +170,9 @@ class CaptureCoordinator:
         self._stop_mic_quality()
         self._micq_stop = threading.Event()
         device = getattr(recorder, "device", "") or ""
+        floor = mic_quality.level_floor_for(device)
+        self._log(f"mic watch started (device={device or 'default'}, "
+                  f"floor={floor:.1f} dBFS)")
         self._tasks.spawn(
             "mic-quality", mic_quality.monitor, args=(raw_path,),
             kwargs={"device": device, "notify": self._notify,
