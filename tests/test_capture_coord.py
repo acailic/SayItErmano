@@ -437,7 +437,6 @@ class TestMicQualityWatch:
     def _patch_monitor(self, monkeypatch):
         import fluidvoice.mic_quality as mq
         calls = {"spawns": [], "events": []}
-        real_event = threading.Event
 
         def fake_monitor(raw_path, device="", *, floor_dbfs=None, notify=None,
                          log=None, poll_s=0.3, stop=None):

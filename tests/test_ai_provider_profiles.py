@@ -95,7 +95,6 @@ class TestTemplates:
 
 class TestConfigKey:
     def test_registered_with_empty_default(self):
-        import copy
 
         from fluidvoice import config
         assert config.DEFAULTS["ai"]["profile"] == ""

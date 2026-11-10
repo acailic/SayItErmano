@@ -8,9 +8,9 @@ import math
 from fluidvoice.mic_quality import (
     FIXED_FLOOR_DBFS,
     LevelWatch,
+    analyze_wav,
     level_floor_for,
     load_baselines,
-    analyze_wav,
     monitor,
     update_baseline,
 )
@@ -164,7 +164,6 @@ class TestMonitor:
         def stop_soon():
             ended.set()
 
-        import time as _t
         threading.Timer(0.2, stop_soon).start()
         monitor(p, "usb-cam", notify=lambda *a: got.append(a),
                 poll_s=0.01, stop=ended)
