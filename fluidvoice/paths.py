@@ -75,6 +75,11 @@ def prompt_profiles_file() -> Path:
     return config_dir() / "prompt-profiles.json"
 
 
+def ai_profiles_file() -> Path:
+    """Named AI-polish provider profiles ({name: {base_url, model, ...}})."""
+    return config_dir() / "ai-profiles.json"
+
+
 def audio_dir() -> Path:
     return data_dir() / "audio"
 
