@@ -11,6 +11,7 @@ from importlib import resources
 
 # (logo key, substrings matched against the lowercased base URL)
 PROVIDERS: list[tuple[str, tuple[str, ...]]] = [
+    ("glm", ("z.ai", "bigmodel")),
     ("openai", ("api.openai.com",)),
     ("groq", ("api.groq.com",)),
     ("anthropic", ("api.anthropic.com",)),

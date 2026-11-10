@@ -62,3 +62,15 @@ class TestProviderFor:
         assert os.path.isfile(light)
         assert logo_path(None) is None
         assert logo_path("nope") is None
+
+
+class TestGLMLogo:
+    def test_glm_provider_detected(self):
+        assert provider_for("https://api.z.ai/api/paas/v4") == "glm"
+        assert provider_for("https://open.bigmodel.cn/api/paas/v4") == "glm"
+
+    def test_glm_logo_assets_exist(self):
+        normal = logo_path("glm")
+        light = logo_path("glm", dark=True)
+        assert normal and os.path.isfile(normal)
+        assert light and os.path.isfile(light)
