@@ -234,3 +234,26 @@ that reads as a model refusal — "I'm sorry, I can't assist with that." —
 is never typed into your document; the raw transcript is used instead
 and a notification explains why. Opt out with `refusal_guard = false` if
 you want the model's reply verbatim (English patterns only in v1).
+
+**Provider profiles** (`ai.profile`, plus the `ai-profiles.json` sidecar
+beside your config): named endpoint presets — base URL, model, key env
+var, optional temperature — switchable with one click in
+Settings → AI or from the tray's *AI profile* submenu. Switching writes
+the preset's values into `[ai]` and takes effect on the next dictation
+(no restart); `ai.profile` records the active name (`""` = custom
+endpoint settings). Editing the base URL or model by hand clears the
+pointer back to Custom so the tray checkmark never lies. Profiles store
+the env-var **name** only — never the key itself. GLM example:
+
+```toml
+[ai]
+enabled    = true
+profile    = "GLM"
+base_url   = "https://api.z.ai/api/paas/v4"
+model      = "glm-4.7"
+api_key_env = "ZAI_API_KEY"   # export ZAI_API_KEY=… in your environment
+```
+
+Built-in templates (GLM, OpenAI, Groq, OpenRouter, Ollama, LM Studio)
+are offered under Settings → AI → *Add profile → From template* and
+copied into your store on add — edit them freely afterwards.
