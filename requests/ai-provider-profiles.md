@@ -1,6 +1,14 @@
 Named AI-polish provider profiles (e.g. "GLM") so the endpoint can be switched without retyping base_url/model/key-env — today only prompt-text profiles exist (fluidvoice/ai/profiles.py stores prompts, not providers).
 
-STATUS: DRAFT
+STATUS: SHIPPED
+
+<!-- shipped in e48bdb1 (store) 29f10d9 (config key) 1314679 (tray) cd2bb70
+     (settings UI) b1d6a26 (GLM logo) 0d2ce74 (docs); live-verified on the
+     repo daemon 2026-11-10 (DBusMenu shows AI profile -> GLM; switch
+     hot-applied via socket; restore done). Open: Z.ai paas/v4 answers 401
+     without a key - the user must export ZAI_API_KEY (their ZAI_* env vars
+     are coding-plan OAuth, not a Bearer key); installed v0.8.1 daemon lags
+     the repo until the next release. -->
 
 Design agreed 2026-11-10 (approach: sidecar store + switch-writes-config; hot-applies, no daemon changes to the polish path).
 
