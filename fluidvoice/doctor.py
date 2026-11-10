@@ -336,6 +336,24 @@ def _classify_probe(data: bytes) -> str:
     return "silent" if data.count(b"\x00") == len(data) else "live"
 
 
+def _baseline_line(source: str) -> str:
+    """Mic-warnings context for the default source: its learned speech
+    level and the too-far floor derived from it."""
+    try:
+        from . import mic_quality
+        base = mic_quality.load_baselines().get(source) if source else None
+        if base:
+            floor = mic_quality.level_floor_for(source)
+            return (f"  level baseline: speech {base['speech_dbfs']:.1f} "
+                    f"dBFS over {base['takes']} takes "
+                    f"(too-far warning below {floor:.1f} dBFS)")
+        return ("  level baseline: none yet - the fixed "
+                f"{mic_quality.FIXED_FLOOR_DBFS:.0f} dBFS too-far floor "
+                "applies until a few takes are recorded")
+    except Exception:
+        return "  level baseline: unavailable"
+
+
 def _microphone_lines() -> tuple[list[str], bool]:
     """Default-source health probe: records ~1.5 s via pw-record and
     flags digital silence (2026-09-10 incident: a wedged PipeWire path
@@ -351,6 +369,7 @@ def _microphone_lines() -> tuple[list[str], bool]:
                      for l in info.splitlines()
                      if l.startswith("Default Source")), "")
         lines.append(f"  default source: {name or '?'}")
+        lines.append(_baseline_line(name))
     except Exception:
         lines.append("  default source: unknown (pactl info failed)")
     import tempfile
