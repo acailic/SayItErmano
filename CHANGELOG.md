@@ -13,6 +13,8 @@ not reproduced here.
 
 ## [Unreleased]
 
+## [v0.8.3] — AI provider profiles + mic-quality warnings (2026-11-10)
+
 **AI provider profiles + proactive mic-quality warnings** — switch the
 AI-polish endpoint from the tray or Settings (GLM, OpenAI, Groq,
 OpenRouter, Ollama, LM Studio presets ship built in), and get told
@@ -55,6 +57,8 @@ mid-dictation when the microphone is silent, too far away or clipping.
   quality verifications recorded (dependency lock, coverage baseline,
   lifecycle/failure sequences, publication↔source binding, recurring
   flaky-sweep practice).
+
+Full notes: [v0.8.3](https://github.com/acailic/SayItErmano/releases/tag/v0.8.3).
 
 ## [v0.8.2] — reliability sweep, verified pasting, deb contract (2026-09-14)
 
