@@ -138,6 +138,7 @@ drift: `python scripts/gen_config_reference.py` regenerates it.
 | `per_app_prompts` | `[]` |  | Upstream per-app prompt sets: [{"apps": ["zed"], "instructions": "..."}] (first match wins) |
 | `base_prompt` | `""` |  | Custom base prompt for AI polish (empty = the built-in dictation prompt; Settings -> AI can save named presets of it) |
 | `refusal_guard` | `true` |  | Refusal guardrail: a polish reply that reads as a model refusal ("I'm sorry, I can't assist...") never reaches the doc - the raw transcript is typed instead, with a notification. false = trust the model blindly. |
+| `profile` | `""` |  | Active AI provider profile name ("" = custom endpoint settings). Switching via Settings -> AI or the tray's AI profile submenu writes the profile's endpoint values into [ai] and points here; editing the endpoint by hand clears it back to "". |
 
 ### `[insertion]`
 

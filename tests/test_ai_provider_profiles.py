@@ -91,3 +91,23 @@ class TestTemplates:
 
     def test_glm_template(self):
         assert pp.TEMPLATES["GLM"] == _glm()
+
+
+class TestConfigKey:
+    def test_registered_with_empty_default(self):
+        import copy
+
+        from fluidvoice import config
+        assert config.DEFAULTS["ai"]["profile"] == ""
+        assert "ai.profile" not in config.RESTART_REQUIRED
+
+    def test_apply_settings_accepts_pointer(self):
+        import copy
+
+        from fluidvoice import config
+        cfg = copy.deepcopy(config.DEFAULTS)
+        changed, rejected = config.apply_settings(
+            cfg, {"ai": {"profile": "GLM"}})
+        assert changed == ["ai.profile"]
+        assert not rejected
+        assert cfg["ai"]["profile"] == "GLM"

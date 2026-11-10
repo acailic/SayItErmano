@@ -877,6 +877,12 @@ _spec("ai", "refusal_guard", True, _bool(),
       'refusal ("I\'m sorry, I can\'t assist...") never reaches the doc -\n'
       "the raw transcript is typed instead, with a notification. false =\n"
       "trust the model blindly.")
+_spec("ai", "profile", "", _str(64, allow_empty=True),
+      empty_meaningful=True,
+      description="Active AI provider profile name (\"\" = custom endpoint\n"
+      "settings). Switching via Settings -> AI or the tray's AI profile\n"
+      "submenu writes the profile's endpoint values into [ai] and points\n"
+      "here; editing the endpoint by hand clears it back to \"\".")
 
 # -- [insertion] -------------------------------------------------------------
 
