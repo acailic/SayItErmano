@@ -13,6 +13,32 @@ not reproduced here.
 
 ## [Unreleased]
 
+**AI provider profiles + proactive mic-quality warnings** — switch the
+AI-polish endpoint from the tray or Settings (GLM, OpenAI, Groq,
+OpenRouter, Ollama, LM Studio presets ship built in), and get told
+mid-dictation when the microphone is silent, too far away or clipping.
+
+- **AI provider profiles (Settings → AI + tray submenu)** — named
+  endpoint presets (`base_url` / model / key env var, optional
+  temperature) stored in `ai-profiles.json` beside the config.
+  Selecting a profile in Settings or the new tray "AI profile" submenu
+  switches the whole endpoint instantly — no restart, effective on the
+  next dictation. Built-in templates for GLM (`api.z.ai`, glm-4.7),
+  OpenAI, Groq, OpenRouter, Ollama and LM Studio are copied into your
+  store on first use; a GLM logo shows next to the endpoint. Profiles
+  store the env-var NAME only — never the key itself — and editing the
+  endpoint by hand drops the pointer back to "Custom" so the tray
+  checkmark never lies. Renaming/deleting the active profile keeps the
+  pointer in sync.
+- **Mic-quality warnings (dead / too far / clipping)** — while
+  dictating, the growing audio is watched for three failure modes and
+  each warns at most once per take (~1.5 s in): digital silence ("check
+  the input device" — the wedged-PipeWire/Bluetooth failure mode),
+  speech far below the mic's own usual level ("move closer / raise the
+  volume", judged against a per-device rolling baseline learned from
+  recent takes) and clipping ("lower the mic volume"). Off switch:
+  `recording.mic_warnings = false`; `sayit-ermano doctor` prints the
+  learned baseline and too-far floor for the default source.
 - **Fixed: Stats activity chart never drew on Ubuntu 24.04** — the
   GTK 4.14 stack has no `GtkWidget.lookup_color` and pycairo has no
   `Context.rounded_rectangle`; the chart's draw callback raised
@@ -20,6 +46,15 @@ not reproduced here.
   accent lookup is guarded with the existing fallback color and bars
   use an arc-based rounded path. Found by the new per-section display
   tests (org plan 5.5).
+- **Under the hood** — settings-window page split into per-section
+  builders with mirrored `tests/gtkui/` coverage (widget proxies +
+  page actions); docs reorganized into `docs/guides/` with a generated
+  settings reference that cannot drift from the registry, a public
+  landing page and a 15-problem troubleshooting FAQ; CI hardened
+  (action bumps, lane fixes, clean-checkout gate) and the v0.8.3
+  quality verifications recorded (dependency lock, coverage baseline,
+  lifecycle/failure sequences, publication↔source binding, recurring
+  flaky-sweep practice).
 
 ## [v0.8.2] — reliability sweep, verified pasting, deb contract (2026-09-14)
 
