@@ -13,6 +13,16 @@ not reproduced here.
 
 ## [Unreleased]
 
+## [v0.8.3.1] — tray flap hotfix (2026-11-12; no GitHub release)
+
+Hotfix post-release, installed directly from the `linux` branch (no
+tagged release): a flapping tray host (ubuntu-appindicators churning its
+StatusNotifierWatcher name, ~368 Hz for 57 min on 2026-11-11) drove
+1.26M "tray icon registered" journal lines, 82 CPU-minutes and a journal
+vacuum. The daemon now coalesces re-registrations (≥2 s apart), throttles
+registration logs to one per minute, and answers the
+`IconAccessibleDesc`/`AttentionAccessibleDesc` properties hosts query.
+
 ## [v0.8.3] — AI provider profiles + mic-quality warnings (2026-11-10)
 
 **AI provider profiles + proactive mic-quality warnings** — switch the
