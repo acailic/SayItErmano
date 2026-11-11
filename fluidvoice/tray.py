@@ -33,6 +33,14 @@ SNI_TITLE = "SayItErmano"
 
 TRAY_SIZE = 64  # px; hosts scale down to their panel size
 
+# A flapping tray host (2026-11-11: ubuntu-appindicators churned its
+# watcher name ~368 Hz for 57 min) must not turn every NameOwnerChanged
+# into a synchronous re-registration + journal line - that flood logged
+# 1.26M lines, burned 82 CPU-minutes and vacuumed the user journal's
+# whole prior history. Coalesce re-registrations; throttle their logs.
+REREGISTER_MIN_INTERVAL = 2.0  # s - min gap between registration attempts
+REREGISTER_LOG_INTERVAL = 60.0  # s - max one registered/retry line per minute
+
 # menu item kinds understood by build_menu() models
 KIND_ITEM = "item"
 KIND_SEPARATOR = "separator"
@@ -237,8 +245,13 @@ def _build_item_class(dbus, owner: "TrayIcon"):
                 "WindowId": dbus.Int32(0),
                 "IconName": dbus.String(""),
                 "IconPixmap": pixmap,
+                # hosts (ubuntu-appindicators) refresh *AccessibleDesc and
+                # logError on InvalidArgs - 26k shell log lines in the
+                # 2026-11-11 flap incident; answer with benign empty strings
+                "IconAccessibleDesc": dbus.String(""),
                 "AttentionIconName": dbus.String(""),
                 "AttentionIconPixmap": pixmap,
+                "AttentionAccessibleDesc": dbus.String(""),
                 "OverlayIconName": dbus.String(""),
                 "OverlayIconPixmap": empty,
                 "ToolTip": tip,
@@ -388,6 +401,10 @@ class TrayIcon:
         self._menu = None
         self._bus = None
         self._pixmaps = render_pixmaps()
+        self._last_register = 0.0          # monotonic; flap debounce state
+        self._last_register_log: float | None = None
+        self._last_register_error: str | None = None
+        self._pending_reregister = False
 
     # -- lifecycle ----------------------------------------------------------
 
@@ -424,7 +441,7 @@ class TrayIcon:
             self._menu = menu_cls(bus, self)
             # register with the host; re-register whenever a (new) watcher
             # appears - the shell may reload and drop us at any time
-            self._register()
+            self._register_now()
             bus.add_signal_receiver(
                 self._watcher_changed, signal_name="NameOwnerChanged",
                 dbus_interface="org.freedesktop.DBus", arg0=WATCHER)
@@ -439,21 +456,60 @@ class TrayIcon:
             self._loop.run()
 
     def _register(self) -> bool:
+        """One best-effort registration attempt (no logging, no rate limit -
+        use _register_now)."""
         try:
             watcher = self._dbus.Interface(
                 self._bus.get_object(WATCHER, "/StatusNotifierWatcher"), WATCHER)
             watcher.RegisterStatusNotifierItem(_bus_name(), timeout=5)
-            self._log("tray icon registered")
             self._glib.idle_add(self._apply_state)  # real icon+tooltip at once
             return True
         except Exception as e:
-            self._log(f"no tray host yet ({e.__class__.__name__}); will retry "
-                      "when a StatusNotifierWatcher appears")
+            self._last_register_error = f"{e.__class__.__name__}: {e}"
             return False
+
+    def _register_now(self) -> None:
+        """Register and log the outcome at most once per
+        REREGISTER_LOG_INTERVAL - a flapping host must not flood the
+        journal (2026-11-11: 1.26M lines in 57 minutes)."""
+        now = time.monotonic()
+        self._last_register = now
+        quiet = (self._last_register_log is None or
+                 now - self._last_register_log >= REREGISTER_LOG_INTERVAL)
+        ok = self._register()
+        if not quiet:
+            return
+        if ok:
+            self._log("tray icon registered" if self._last_register_log is None
+                      else "tray icon re-registered (tray host reloaded)")
+        else:
+            self._log(f"no tray host yet ({self._last_register_error}); will "
+                      "retry when a StatusNotifierWatcher appears")
+        self._last_register_log = now
+
+    def _schedule_register(self) -> bool:  # on the GLib loop; False = run once
+        """Coalesce watcher-flap re-registrations: register at most once
+        per REREGISTER_MIN_INTERVAL; bursts collapse into one delayed
+        attempt (a later real reload still re-registers on its own)."""
+        if self._pending_reregister:
+            return False
+        wait_ms = int((self._last_register + REREGISTER_MIN_INTERVAL
+                       - time.monotonic()) * 1000)
+        if wait_ms <= 0:
+            self._register_now()
+        else:
+            self._pending_reregister = True
+            self._glib.timeout_add(wait_ms, self._register_pending)
+        return False
+
+    def _register_pending(self) -> bool:  # on the GLib loop; False = run once
+        self._pending_reregister = False
+        self._register_now()
+        return False
 
     def _watcher_changed(self, name, old_owner, new_owner) -> None:
         if new_owner and name == WATCHER:
-            self._glib.idle_add(self._register)
+            self._glib.idle_add(self._schedule_register)
 
     def stop(self) -> None:
         self.active = False
