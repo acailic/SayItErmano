@@ -39,7 +39,7 @@
     "name": "SayItErmano",
     "operatingSystem": "Linux",
     "applicationCategory": "UtilitiesApplication",
-    "softwareVersion": "0.8.2",
+    "softwareVersion": "0.8.3",
     "license": "https://www.gnu.org/licenses/gpl-3.0.html",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
     "description": "Dictation app for Linux — press a key, speak, and polished text lands in any app. 100% local speech-to-text, optional AI polish, native GTK 4. Unofficial community port of FluidVoice."
@@ -64,7 +64,7 @@
         <a href="#faq">FAQ</a>
       </nav>
       <div class="header-actions">
-        <span class="ver-chip" title="Latest release">v0.8.2</span>
+        <span class="ver-chip" title="Latest release">v0.8.3</span>
         <a class="gh-btn" href="https://github.com/acailic/SayItErmano" rel="noopener">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
           GitHub
@@ -203,7 +203,7 @@
         <div class="section-head" data-reveal>
           <p class="eyebrow">01 — what it does</p>
           <h2 class="h-section" id="features-title">A dictation pipeline that respects your voice — and your privacy.</h2>
-          <p class="lede">Everything below ships today, in v0.8.2. No cloud account, no background uploads, no telemetry.</p>
+          <p class="lede">Everything below ships today, in v0.8.3. No cloud account, no background uploads, no telemetry.</p>
         </div>
 
         <div class="cards">
@@ -220,7 +220,7 @@
           <article class="card" data-reveal>
             <span class="idx">f/03</span>
             <h3 class="h-card">Optional AI polish</h3>
-            <p>The verbatim FluidVoice dictation prompt, sent to any OpenAI-compatible endpoint — Ollama, LM Studio, llama.cpp, Groq, OpenAI. Off unless you enable it.</p>
+            <p>The verbatim FluidVoice dictation prompt, sent to any OpenAI-compatible endpoint. Provider presets — GLM, OpenAI, Groq, OpenRouter, Ollama, LM Studio — switch from Settings or the tray. Off unless you enable it.</p>
           </article>
           <article class="card" data-reveal>
             <span class="idx">f/04</span>
@@ -362,7 +362,7 @@
           <div class="step">
             <span class="num">02</span>
             <h3>Speak</h3>
-            <p class="step-body">16&nbsp;kHz mono capture through PipeWire, with watchdogs for muted mics and runaway takes. Streaming text appears as you talk.</p>
+            <p class="step-body">16&nbsp;kHz mono capture through PipeWire, with watchdogs for muted mics and runaway takes — and once-per-take notices when the mic is dead, too far away or clipping. Streaming text appears as you talk.</p>
           </div>
           <div class="step">
             <span class="num">03</span>
@@ -415,8 +415,8 @@
             <div class="route-kicker"><h3>Ubuntu 24.04 .deb</h3><span class="badge">official package</span></div>
             <p>A pinned, reproducible build — honestly labeled 24.04&nbsp;/&nbsp;x86_64&nbsp;/&nbsp;Python&nbsp;3.12 only.</p>
             <div class="cmd-box">
-              <code>curl -LO https://github.com/acailic/SayItErmano/releases/download/v0.8.2/sayit-ermano_0.8.2-1_amd64.deb<br>sudo apt install ./sayit-ermano_0.8.2-1_amd64.deb</code>
-              <button class="copy-btn" type="button" data-copy="curl -LO https://github.com/acailic/SayItErmano/releases/download/v0.8.2/sayit-ermano_0.8.2-1_amd64.deb &amp;&amp; sudo apt install ./sayit-ermano_0.8.2-1_amd64.deb">copy</button>
+              <code>curl -LO https://github.com/acailic/SayItErmano/releases/download/v0.8.3/sayit-ermano_0.8.3-1_amd64.deb<br>sudo apt install ./sayit-ermano_0.8.3-1_amd64.deb</code>
+              <button class="copy-btn" type="button" data-copy="curl -LO https://github.com/acailic/SayItErmano/releases/download/v0.8.3/sayit-ermano_0.8.3-1_amd64.deb &amp;&amp; sudo apt install ./sayit-ermano_0.8.3-1_amd64.deb">copy</button>
             </div>
           </article>
 
@@ -570,7 +570,7 @@
         <h2 class="h-section" id="cta-title" data-reveal>Stop typing. Start talking.</h2>
         <p data-reveal>One command. One keypress. Your words, polished, anywhere.</p>
         <div class="cmd" data-reveal>
-          <div class="cmd-label"><span>get started</span><span>v0.8.2 · GPLv3</span></div>
+          <div class="cmd-label"><span>get started</span><span>v0.8.3 · GPLv3</span></div>
           <div class="cmd-box">
             <code>curl -fsSL https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/install-one-shot.sh | bash</code>
             <button class="copy-btn" type="button" data-copy="curl -fsSL https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/install-one-shot.sh | bash">copy</button>

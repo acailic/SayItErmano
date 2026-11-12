@@ -1,6 +1,6 @@
 # SayItErmano — Status
 
-Last updated: 2026-09-14 · this file tracks **what works today and the
+Last updated: 2026-11-12 · this file tracks **what works today and the
 known limitations** — release history lives in the
 [CHANGELOG](../CHANGELOG.md), locked decisions in [adr/](adr/)
 ([index](adr/README.md)), future work in [ROADMAP.md](ROADMAP.md).
@@ -29,7 +29,10 @@ night matrices) plus the automated tiers (see Verification below).
   grabs (a refused combo re-arms and is surfaced in status/tray/doctor).
 - **Recording** through PipeWire/PulseAudio, configurable device; watchdogs:
   max duration, first-PCM timeout (muted mic fails fast), mid-take stall
-  cancel, opt-in silence gate; digital-silence notice for a dead mic.
+  cancel, opt-in silence gate; mic-quality warnings — once-per-take
+  notices for a dead (digitally silent) source, speech far below the
+  mic's learned baseline (too far away) or clipping, per-device baseline
+  shown by `doctor` (`recording.mic_warnings`).
 - **Backends**: faster-whisper (CUDA, CPU-int8 fallback), whisper-torch,
   whisper.cpp, Parakeet TDT v2/v3 (ONNX), and a remote
   OpenAI-compatible STT endpoint that wins while configured; auto
@@ -68,7 +71,10 @@ longest-first); slash/mention literal squeeze; terminal send-safety.
 ### AI polish (prompts byte-identical to upstream)
 All five upstream prompts; `${transcript}` placeholder; faithful request
 params (reasoning models, Responses API, think-tag stripping); works
-with any OpenAI-compatible endpoint (live-tested against Ollama); AI
+with any OpenAI-compatible endpoint (live-tested against Ollama);
+provider profiles — named endpoint presets (base URL / model / key env
+var) for GLM, OpenAI, Groq, OpenRouter, Ollama and LM Studio, switchable
+from Settings or the tray's "AI profile" submenu without a restart; AI
 failure falls back to the raw transcript; custom base prompt + named
 presets; per-app prompt rules.
 

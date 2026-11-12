@@ -47,6 +47,20 @@
 
 ## What's new
 
+**Unreleased** — tray-icon hardening: a tray host that flaps its
+StatusNotifierWatcher name (seen in the wild: an ubuntu-appindicators
+reload loop) now gets at most one re-registration every 2 s and one log
+line per minute, instead of a registration per flap (a 57-minute flap
+once produced 1.26 M journal lines).
+
+**[v0.8.3](https://github.com/acailic/SayItErmano/releases/tag/v0.8.3)** — the
+AI-endpoints release: **AI provider profiles** (named endpoint presets —
+GLM, OpenAI, Groq, OpenRouter, Ollama, LM Studio — stored beside the
+config, switchable from Settings or a new tray submenu, no restart) and
+**mic-quality warnings** (per-take notices for a dead source, speech too
+far below the mic's usual level, or clipping; a per-device baseline is
+learned and shown by `doctor`).
+
 **[v0.8.2](https://github.com/acailic/SayItErmano/releases/tag/v0.8.2)** — the
 reliability + correctness release: **verified pasting** (paste mode proves
 the target read the clipboard and the field got the text — duplicated
@@ -144,7 +158,7 @@ through the UI (use the env var).
 ```toml
 [ai]
 enabled  = true
-base_url = "http://localhost:11434/v1"   # Ollama; or OpenAI/Groq/LM Studio
+base_url = "http://localhost:11434/v1"   # Ollama; or GLM/OpenAI/Groq/OpenRouter/LM Studio presets
 model    = "qwen3:8b"                    # pick a general-purpose chat model
 ```
 
@@ -167,7 +181,7 @@ refusals into your document — the raw transcript is used instead; see
 | Hotkeys pause while the screen is locked | ✅ | ✅ `general.pause_when_locked` (logind watch, resolves the session under the systemd user unit too; active dictation cancels, tray notes `paused (locked)`) |
 | Filler-word removal + custom dictionary | ✅ | ✅ (same defaults) |
 | Spoken punctuation ("literal comma") | ✅ full rule table | ✅ ported (dot/slash/at-sign contexts included) |
-| AI polish with the original prompt | ✅ (local Fluid Intelligence or cloud) | ✅ (any OpenAI-compatible endpoint; no bundled local LLM yet) |
+| AI polish with the original prompt | ✅ (local Fluid Intelligence or cloud) | ✅ (any OpenAI-compatible endpoint + switchable provider profiles; no bundled local LLM yet) |
 | Start/stop sounds | ✅ | ✅ (same GPLv3 SFX) |
 | Live streaming preview overlay | ✅ | ✅ Mac-style pill (live waveform, mode accent colors, state labels, send indicator) |
 | Write/Rewrite selected text | ✅ (⌥R) | ✅ dedicated rewrite hotkey |
@@ -202,9 +216,9 @@ Something misbehaving — no audio, dead hotkey, Wayland quirks, a stuck
 model download, GPU questions, install trouble? **`sayit-ermano doctor`
 first** (it probes the microphone, tools, session capabilities, hotkey
 grab and models cache), then the
-[troubleshooting FAQ](docs/dev/FAQ.md) — the 15 most common problems
+[troubleshooting FAQ](docs/dev/FAQ.md) — the 16 most common problems
 with concrete fixes, grouped by audio · hotkeys · Wayland · model
-download · GPU/CPU · installation.
+download · GPU/CPU · installation · tray.
 
 ## Development & testing
 

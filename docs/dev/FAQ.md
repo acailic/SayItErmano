@@ -313,6 +313,32 @@ language_whitelist = ["sl", "en"]     # wrong-language guard: "auto"
 upstream
 [#1033](https://github.com/altic-dev/FluidVoice/issues/1033).*
 
+## Tray icon
+
+### 16. The tray icon vanished, or the journal floods with "tray icon registered"
+
+Seen in the wild: a GNOME session whose tray-host extension (e.g.
+ubuntu-appindicators) enters a reload loop and flaps its
+`org.kde.StatusNotifierWatcher` bus name. The daemon used to
+re-register on every flap — one incident logged 1.26 M lines in 57
+minutes and vacuumed the user journal's prior history.
+
+- Since v0.8.3.1 the daemon coalesces: at most one re-registration per
+  2 s and at most one log line per minute, so a flapping host can no
+  longer flood the journal or burn CPU.
+- The icon coming back after the storm is normal — registration
+  retries whenever a (new) watcher appears. If it stays gone, check who
+  owns the name: `busctl --user status org.kde.StatusNotifierWatcher`
+  (a healthy GNOME session shows `gnome-shell`); a missing owner means
+  the AppIndicator extension itself is disabled or crashed — re-enable
+  it or restart the session.
+- Fix the host, not the daemon: reload the extension or log out/in
+  once; the flap state lives in the old shell session and does not
+  survive it.
+
+*Sources: CHANGELOG [v0.8.3.1](../../CHANGELOG.md); incident verified
+on the daily-driver desktop 2026-11-11.*
+
 ---
 
 Still stuck? `sayit-ermano doctor` first, then the
