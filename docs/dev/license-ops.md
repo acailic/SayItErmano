@@ -75,6 +75,10 @@ What the endpoint guarantees:
   misconfiguration) instead of issuing a wrong key.
 - Unknown event types are acknowledged (200) without issuing.
 
+The buyer-facing emails for this flow (Paddle's confirmation + the
+key-and-download email) are drafted in
+[purchase-email.md](purchase-email.md).
+
 ### Sandbox test (acceptance for #16)
 
 1. Point a Paddle **sandbox** webhook at the deployed endpoint and

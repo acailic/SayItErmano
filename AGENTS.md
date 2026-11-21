@@ -63,12 +63,16 @@ deployed to https://acailic.github.io/SayItErmano/ by
 artifact = `site/` verbatim; deploys on pushes to `linux` touching
 `site/**` or the workflow). It is served under a repo subpath, so all
 asset URLs in `site/` must stay RELATIVE (no leading-slash paths); fonts
-are bundled under `site/assets/fonts/` (SIL OFL) — no CDN. Every
+are bundled under `site/assets/fonts/` (SIL OFL) — no CDN. The one
+third-party script is Paddle.js (`site/assets/js/store.js`), loaded
+lazily on the first buy-click; its config block is the sandbox/live
+flag. Every
 factual claim on the page traces to README/CHANGELOG/docs; the
 "unofficial community port, not affiliated" attribution must stay
 visible. Check edits locally: serve `site/` (`python3 -m http.server`)
 and render headless; `python3 scripts/check_docs_links.py` covers
-`docs/`, not the site.
+`docs/`, not the site — the site equivalent is
+`tests/test_site_links.py`.
 
 ## Maintaining this file
 
