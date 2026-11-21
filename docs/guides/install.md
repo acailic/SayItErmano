@@ -1,24 +1,14 @@
 # Installing and updating SayItErmano
 
-Part of the [documentation index](../README.md). Routes below are
-ordered **best-converting first** (least friction for a first-time
-paying user) — then updates and the update-check switches. Every route
-is verified on fresh VMs per distro before a paid release:
-[install matrix](../quality/install-matrix/README.md).
+Part of the [documentation index](../README.md). The routes below are
+ordered **best-converting first** — the zero-sudo one-shot install,
+then the .deb with its signed apt update channel, then `--system`,
+pipx, the AUR, source — a ranking the fresh-VM
+[install matrix](../quality/install-matrix/README.md) keeps honest
+(issue #14). A Flatpak/Flathub route is pending (issue #12). The page
+closes with updates and the update-check switches.
 
-### Routes at a glance — best-converting first
-
-| # | Route | Best for | Update path |
-|---|---|---|---|
-| 1 | [one-shot installer (user-space)](#quick-start--one-shot-installer) | Ubuntu 24.04 — one command, no sudo | rerun, or `--update` |
-| 2 | [one-shot `--system`](#quick-start--one-shot-installer) | Ubuntu 24.04, root-owned `/opt` | `--update` (signed apt repo) |
-| 3 | [official .deb + signed apt repo](#ubuntu-2404--official-deb--signed-apt-repo) | Ubuntu 24.04 — apt does the updates | `sudo apt upgrade` |
-| 4 | [pipx](#pipx--pip-any-distro-python-311) | Fedora and any distro (Python 3.11+) | `pipx upgrade` |
-| 5 | [AUR package](#arch-linux-aur) | Arch | rebuild from the new release tag |
-| 6 | Flatpak from Flathub | any distro — *planned, not yet published* | `flatpak update` |
-| 7 | [source](#from-source-development) | development | `git pull` |
-
-### Quick start — one-shot installer
+### Quick start — one-shot installer (user-space)
 
 One download + one command, then SayItErmano appears in your app launcher,
 autostarts at login, and needs no terminal. The default install is
@@ -30,13 +20,11 @@ package (GTK/pygobject, xdotool, …) is missing:
 curl -fsSL https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/install-one-shot.sh | bash
 ```
 
-Prefer the classic system-wide .deb (root-owned, `/opt` runtime)?
+Prefer a system-wide install? The [official .deb + apt repo](#ubuntu-2404--official-deb--signed-apt-repo)
+sits right below, and the same one-shot installer has a
+[`--system` variant](#one-shot-installer--system-wide---system).
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/install-one-shot.sh | bash -s -- --system
-```
-
-Updating later? Re-run either command, or add `--update` to refresh the
+Updating later? Re-run the command, or add `--update` to refresh the
 existing installation in place (see [Updates](#updates)).
 
 ### Ubuntu 24.04 — official .deb + signed apt repo
@@ -102,6 +90,21 @@ the pinned environment, and the reviewed `constraints.txt` lock.
 - Removes cleanly with `sudo apt remove sayit-ermano` — upgrading from the
   pre-rename `fluidvoice-linux` package replaces it automatically; your
   config, history and downloaded models are kept
+
+### One-shot installer — system-wide (`--system`)
+
+The same one-shot installer can lay down the classic system-wide .deb
+(root-owned `/opt` runtime) in one command — it downloads the same
+package the route above documents and installs it with sudo:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/install-one-shot.sh | bash -s -- --system
+```
+
+Since that package is the .deb, the signed apt repo comes with it:
+updates from then on are `sudo apt update && sudo apt upgrade
+sayit-ermano`, or re-run the command with `--update` (see
+[Updates](#updates)).
 
 ### pipx / pip (any distro, Python 3.11+)
 

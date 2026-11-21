@@ -28,6 +28,7 @@ claim without support.
 | Secrets never appear in user-visible surfaces | unit: `test_privacy_contracts.py` (status/get_config/doctor subprocess), `test_config_registry.py`, `test_remote_stt.py` | — |
 | Deb installs exactly the reviewed dependency set | unit: `test_deb_lock.py` (hash-locked round trip, pip `--require-hashes` consumer) | hashed-lock deb build 2026-09-12 (Q3 acceptance, 66M artifact, every wheel verified) |
 | A release contains what CI tested | unit: `test_release_verify.py` (manifest→bytes→source→lock→evidence chain, all rejection cases) | per-release: prepare manifest + summary sha256; publish verifies and records `evidence` input |
+| Every install route works on a fresh VM (paid-launch gate) | unit: `test_qa_matrix.py` (route probes, skip reasons, evidence files, generated summary) | [install matrix](install-matrix/README.md) — cells PENDING the owner's fresh-VM runs (issue #14) |
 
 ## Speech quality
 

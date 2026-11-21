@@ -108,13 +108,12 @@ curl -fsSL https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/i
 
 Press **Right Ctrl**, speak, press **Right Ctrl** again. Done.
 
-All routes — the one-shot installer (user or `--system`), the official
-Ubuntu 24.04 .deb, pipx/pip on any distro, the AUR package, building
-from source, and how updates work — are documented in
-[docs/guides/install.md](docs/guides/install.md), ordered
-best-converting first. Every route is verified on fresh VMs per distro
-before a paid release — evidence in the
-[install matrix](docs/quality/install-matrix/README.md). Updates are one command
+All routes — ordered best-converting first: the one-shot installer
+(user-space, no sudo), the official Ubuntu 24.04 .deb with its **signed
+apt repository**, one-shot `--system`, pipx/pip on any distro, the AUR
+package, and building from source; plus how updates work on each — are
+documented in
+[docs/guides/install.md](docs/guides/install.md). Updates are one command
 on every route: the .deb configures a **signed apt repository**
 (`sudo apt update && sudo apt upgrade sayit-ermano`), the installer has
 `--update` for in-place refreshes (works for pipx/Fedora too), and

@@ -1,16 +1,26 @@
-"""scripts/qa_matrix.py — the install-matrix harness's decision logic.
+"""Fresh-VM install matrix harness (issue #14) — offline rehearsal.
 
-Fake environments and fake exec runners only (the acceptance for #14's
-agent scope): no root, no network, no package operations — the tests
-pin WHICH rows run where, the skip reasons, the evidence files and the
-generated summary/checklist. The real installs happen on fresh VMs
-(owner action; see docs/quality/install-matrix/README.md).
+The harness (scripts/qa_matrix.py) runs real installs only on the
+owner's fresh VMs; everything here drives it with injected
+environments and FAKE command runners, so the unit tier proves the
+whole contract with no root, no network and no installs:
+
+* skip honesty — every route that cannot run here says SKIP with a
+  reason (wrong distro, root vs regular user, missing tool), and a
+  route only executes when its probe passes;
+* stage gating — onboarding/dictation need a GUI session; a failed
+  install skips the rest of the funnel instead of cascading noise;
+* evidence — one file per route per distro, created with a PENDING
+  STATUS header and sentinel block; recording prepends entries, trims
+  history, never touches manual content, and only ever LOWERS a cell
+  to FAIL (the owner alone marks PASS);
+* the generated README table reflects the cell files and its relative
+  links resolve (the repo docs link checker covers these files in the
+  gate).
 """
 from __future__ import annotations
 
-import dataclasses
 import importlib.util
-import json
 import sys
 from pathlib import Path
 
@@ -21,317 +31,372 @@ REPO = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location(
     "qa_matrix", REPO / "scripts" / "qa_matrix.py")
 qm = importlib.util.module_from_spec(_spec)
-# register before exec: py3.11 dataclasses resolves annotations through
-# sys.modules[cls.__module__] at class-creation time
-sys.modules["qa_matrix"] = qm
+sys.modules["qa_matrix"] = qm  # dataclasses resolves annotations via this
 _spec.loader.exec_module(qm)
 
+ALL_TOOLS = {name: True for name in qm.TOOLS}
+CELLS = {(r.id, d) for r in qm.ROUTES.values() for d in r.distros}
 
-# ---------------------------------------------------------------------------
-# helpers
-# ---------------------------------------------------------------------------
-
-def mk_env(**overrides) -> qm.Env:
-    base = dict(
-        distro_key="ubuntu-24.04", distro_pretty="Ubuntu 24.04 LTS",
-        arch="x86_64", is_root=False, has_display=False,
-        tools={name: True for name in qm.TOOLS},
-        flathub="no", git_head=None)
-    base.update(overrides)
-    return qm.Env(**base)
+UBUNTU = 'ID=ubuntu\nVERSION_ID="24.04"\nNAME="Ubuntu 24.04 LTS"\n'
+FEDORA = 'ID=fedora\nVERSION_ID="42"\n'
+ARCH = "ID=arch\n"
+DEBIAN = 'ID=debian\nVERSION_ID="12"\n'
 
 
-class FakeExec:
-    """Records commands, never spawns anything."""
+def env(distro="ubuntu-24.04", euid=1000, display=True,
+        tools=None, host="vm-test") -> qm.Env:
+    return qm.Env(distro=distro, euid=euid, display=display,
+                  tools={**ALL_TOOLS, **(tools or {})}, host=host)
 
-    def __init__(self, returncode: int = 0):
+
+def ok_runner(cmd: qm.Cmd, scratch: Path) -> tuple[int, str]:
+    return 0, "fake-ok"
+
+
+class ScriptedRunner:
+    """Fails the first command whose argv contains `fail_in`."""
+
+    def __init__(self, fail_in: str = "\0none"):
+        self.fail_in = fail_in
         self.calls: list[tuple[str, ...]] = []
-        self.returncode = returncode
 
-    def __call__(self, argv, timeout):
-        self.calls.append(tuple(argv))
-        return qm.ExecResult(self.returncode, "fake output")
-
-
-ALL_COMBOS = [(r.key, dk) for r in qm.ROUTES.values() for dk in r.distros]
-
-
-def run_all(tmp_path: Path, env: qm.Env, exec_fn: qm.ExecFn | None = None):
-    return qm.run_matrix(env, repo=REPO, out_dir=tmp_path,
-                         exec_fn=exec_fn or FakeExec())
+    def __call__(self, cmd: qm.Cmd, scratch: Path) -> tuple[int, str]:
+        self.calls.append(cmd.argv)
+        if self.fail_in in " ".join(cmd.argv):
+            return 3, "boom: scripted failure"
+        return 0, "fake-ok"
 
 
 # ---------------------------------------------------------------------------
-# skip logic — the row never runs unless every gate is green
+# environment probe
 # ---------------------------------------------------------------------------
 
-def test_wrong_distro_skips_with_fresh_vm_reason() -> None:
-    env = mk_env(distro_key=None, distro_pretty="Debian GNU/Linux 12")
-    ev = qm.run_route(qm.ROUTES["oneshot-user"], qm.DISTROS["ubuntu-24.04"],
-                      env, repo=REPO, exec_fn=FakeExec())
-    assert ev["status"] == "SKIPPED"
-    assert "fresh Ubuntu 24.04 VM" in ev["skip_reason"]
-    # distro is checked FIRST: this env also lacks root, but the reason
-    # must name the VM, not sudo (deterministic reason precedence)
-    assert "root" not in ev["skip_reason"]
-    assert all(s["status"] == "SKIP" for s in ev["steps"])
+class TestMatrixDistro:
+    def test_maps_matrix_distros(self):
+        assert qm.matrix_distro(qm.parse_os_release(UBUNTU)) == "ubuntu-24.04"
+        assert qm.matrix_distro(qm.parse_os_release(FEDORA)) == "fedora"
+        assert qm.matrix_distro(qm.parse_os_release(ARCH)) == "arch"
 
+    def test_off_matrix_distros_are_none(self):
+        for text in (DEBIAN, 'ID=ubuntu\nVERSION_ID="24.10"\n', "",
+                     'ID="unknown"\n'):
+            assert qm.matrix_distro(qm.parse_os_release(text)) is None
 
-@pytest.mark.parametrize("route_key", ["oneshot-system", "deb"])
-def test_root_routes_skip_without_root(route_key: str) -> None:
-    ev = qm.run_route(qm.ROUTES[route_key], qm.DISTROS["ubuntu-24.04"],
-                      mk_env(is_root=False), repo=REPO, exec_fn=FakeExec())
-    assert ev["status"] == "SKIPPED"
-    assert "root" in ev["skip_reason"]
-
-
-def test_oneshot_user_runs_unprivileged_on_ubuntu() -> None:
-    ev = qm.run_route(qm.ROUTES["oneshot-user"], qm.DISTROS["ubuntu-24.04"],
-                      mk_env(is_root=False), repo=REPO, exec_fn=FakeExec())
-    assert ev["skip_reason"] is None
-
-
-def test_oneshot_needs_deb_tools() -> None:
-    env = mk_env(tools={**{n: True for n in qm.TOOLS}, "dpkg-deb": False})
-    ev = qm.run_route(qm.ROUTES["oneshot-user"], qm.DISTROS["ubuntu-24.04"],
-                      env, repo=REPO, exec_fn=FakeExec())
-    assert ev["status"] == "SKIPPED"
-    assert "deb-based" in ev["skip_reason"]
-
-
-def test_deb_route_skips_off_amd64() -> None:
-    ev = qm.run_route(qm.ROUTES["deb"], qm.DISTROS["ubuntu-24.04"],
-                      mk_env(is_root=True, arch="aarch64"),
-                      repo=REPO, exec_fn=FakeExec())
-    assert ev["status"] == "SKIPPED"
-    assert "amd64" in ev["skip_reason"]
-
-
-def test_aur_refuses_root_but_runs_as_user() -> None:
-    route, distro = qm.ROUTES["aur"], qm.DISTROS["arch"]
-    as_root = qm.run_route(route, distro, mk_env(distro_key="arch",
-                                                 is_root=True),
-                           repo=REPO, exec_fn=FakeExec())
-    assert as_root["status"] == "SKIPPED"
-    assert "root" in as_root["skip_reason"]
-    as_user = qm.run_route(route, distro, mk_env(distro_key="arch",
-                                                 is_root=False),
-                           repo=REPO, exec_fn=FakeExec())
-    assert as_user["skip_reason"] is None
-
-
-def test_flatpak_blocked_until_flathub_listing_exists() -> None:
-    route, distro = qm.ROUTES["flatpak"], qm.DISTROS["fedora"]
-    pending = qm.run_route(route, distro, mk_env(distro_key="fedora",
-                                                 flathub="no"),
-                           repo=REPO, exec_fn=FakeExec())
-    assert pending["status"] == "SKIPPED"
-    assert "#12" in pending["skip_reason"]
-    unknown = qm.run_route(route, distro, mk_env(distro_key="fedora",
-                                                 flathub="unknown"),
-                           repo=REPO, exec_fn=FakeExec())
-    assert unknown["status"] == "SKIPPED"
-    assert "unknown" in unknown["skip_reason"]
-
-
-def test_pipx_route_is_cross_distro() -> None:
-    for distro in ("ubuntu-24.04", "fedora", "arch"):
-        env = mk_env(distro_key=distro,
-                     distro_pretty=distro)
-        ev = qm.run_route(qm.ROUTES["pipx"], qm.DISTROS[distro], env,
-                          repo=REPO, exec_fn=FakeExec())
-        assert ev["skip_reason"] is None, distro
+    def test_probe_environment_wires_the_facts_together(self):
+        e = qm.probe_environment(os_release_text=FEDORA, euid=1000,
+                                 display=False, tools={"pipx": False},
+                                 host="h")
+        assert (e.distro, e.euid, e.display, e.host) == ("fedora", 1000,
+                                                         False, "h")
 
 
 # ---------------------------------------------------------------------------
-# step execution — what actually runs when a row is available
+# skip logic — a route only executes when its probe passes
 # ---------------------------------------------------------------------------
 
-def steps_by_key(ev: dict) -> dict:
-    return dict(zip(("install", "onboard", "dictate", "update"),
-                    ev["steps"]))
+class TestRouteAvailability:
+    def test_off_matrix_host_skips_every_route_with_reason(self):
+        e = env(distro=None)
+        for route in qm.ROUTES.values():
+            ok, reason = qm.route_availability(route, e)
+            assert not ok and "not a matrix target" in reason, route.id
 
+    def test_route_skips_on_distros_it_does_not_apply_to(self):
+        ok, reason = qm.route_availability(qm.ROUTES["deb"], env("fedora"))
+        assert not ok and "not a Fedora" in reason
+        ok, reason = qm.route_availability(qm.ROUTES["aur"],
+                                           env("ubuntu-24.04"))
+        assert not ok and "not a Ubuntu 24.04 route" in reason
 
-def test_available_row_runs_steps_and_marks_dictation_manual() -> None:
-    exec_fn = FakeExec()
-    ev = qm.run_route(qm.ROUTES["oneshot-user"], qm.DISTROS["ubuntu-24.04"],
-                      mk_env(has_display=False), repo=REPO, exec_fn=exec_fn)
-    steps = steps_by_key(ev)
-    assert steps["install"]["status"] == "PASS"
-    assert exec_fn.calls[0][:2] == ("bash",
-                                    str(REPO / "scripts"
-                                        / "install-one-shot.sh"))
-    # no display: onboarding skips with a reason, not a failure
-    assert steps["onboard"]["status"] == "SKIP"
-    assert "display" in steps["onboard"]["detail"]
-    # dictation is a human step by design — GPU + CPU machines
-    assert steps["dictate"]["status"] == "MANUAL"
-    assert "GPU" in steps["dictate"]["detail"]
-    assert steps["update"]["status"] == "PASS"
-    assert exec_fn.calls[-1][-1] == "--update"
-    # manual step outstanding -> the row is PENDING, not PASS
-    assert ev["status"] == "PENDING"
+    def test_root_routes_need_root_user_routes_refuse_it(self):
+        user = env("ubuntu-24.04", euid=1000)
+        root = env("ubuntu-24.04", euid=0)
+        for rid in ("deb", "oneshot-system"):
+            ok, reason = qm.route_availability(qm.ROUTES[rid], user)
+            assert not ok and "needs root" in reason and "--route" in reason
+            assert qm.route_availability(qm.ROUTES[rid], root)[0]
+        for rid in ("oneshot-user", "pipx", "flatpak"):
+            ok, reason = qm.route_availability(qm.ROUTES[rid], root)
+            assert not ok and "regular user" in reason
+            assert qm.route_availability(qm.ROUTES[rid], user)[0]
 
+    def test_missing_tool_skips_with_the_tool_named(self):
+        e = env("ubuntu-24.04", tools={"pipx": False})
+        ok, reason = qm.route_availability(qm.ROUTES["pipx"], e)
+        assert not ok and "pipx is not installed" in reason
+        e = env("arch", tools={"makepkg": False})
+        ok, reason = qm.route_availability(qm.ROUTES["aur"], e)
+        assert not ok and "makepkg is not installed" in reason
+        e = env("fedora", tools={"flatpak": False})
+        ok, reason = qm.route_availability(qm.ROUTES["flatpak"], e)
+        assert not ok and "flatpak is not installed" in reason
 
-def test_display_lets_onboarding_run() -> None:
-    exec_fn = FakeExec()
-    ev = qm.run_route(qm.ROUTES["pipx"], qm.DISTROS["fedora"],
-                      mk_env(distro_key="fedora", has_display=True),
-                      repo=REPO, exec_fn=exec_fn)
-    steps = steps_by_key(ev)
-    assert steps["install"]["cmd"] == ["pipx", "install", "sayit-ermano"]
-    assert steps["onboard"]["status"] == "PASS"
-    assert steps["onboard"]["cmd"] == ["sayit-ermano", "app", "--onboard"]
-
-
-def test_failed_install_red_row_and_downstream_skip() -> None:
-    exec_fn = FakeExec(returncode=1)
-    ev = qm.run_route(qm.ROUTES["pipx"], qm.DISTROS["arch"],
-                      mk_env(distro_key="arch"), repo=REPO, exec_fn=exec_fn)
-    steps = steps_by_key(ev)
-    assert steps["install"]["status"] == "FAIL"
-    assert steps["install"]["returncode"] == 1
-    assert steps["onboard"]["status"] == "SKIP"
-    assert steps["update"]["status"] == "SKIP"
-    assert "install step did not pass" in steps["update"]["detail"]
-    assert ev["status"] == "FAIL"
-
-
-def test_deb_install_resolution_failure_is_red(monkeypatch) -> None:
-    monkeypatch.setattr(qm, "latest_release_deb", lambda: None)
-    ev = qm.run_route(qm.ROUTES["deb"], qm.DISTROS["ubuntu-24.04"],
-                      mk_env(is_root=True), repo=REPO, exec_fn=FakeExec())
-    steps = steps_by_key(ev)
-    assert steps["install"]["status"] == "FAIL"
-    assert "lookup failed" in steps["install"]["detail"]
-    assert ev["status"] == "FAIL"
-
-
-def test_latest_release_deb_parses_gh_output(monkeypatch) -> None:
-    class Proc:
-        returncode = 0
-        stdout = "v0.8.3 sayit-ermano_0.8.3-1_amd64.deb\n"
-    monkeypatch.setattr(qm.shutil, "which", lambda n: "/usr/bin/gh")
-    monkeypatch.setattr(qm.subprocess, "run", lambda *a, **k: Proc())
-    url = qm.latest_release_deb()
-    assert url == ("https://github.com/acailic/SayItErmano/releases/"
-                   "download/v0.8.3/sayit-ermano_0.8.3-1_amd64.deb")
+    def test_expected_cells_of_the_matrix(self):
+        assert CELLS == {
+            ("oneshot-user", "ubuntu-24.04"), ("oneshot-user", "fedora"),
+            ("oneshot-user", "arch"),
+            ("oneshot-system", "ubuntu-24.04"), ("oneshot-system", "fedora"),
+            ("deb", "ubuntu-24.04"),
+            ("pipx", "ubuntu-24.04"), ("pipx", "fedora"), ("pipx", "arch"),
+            ("aur", "arch"),
+            ("flatpak", "ubuntu-24.04"), ("flatpak", "fedora"),
+            ("flatpak", "arch"),
+        }
 
 
 # ---------------------------------------------------------------------------
-# evidence files + generated README
+# execution + stage gating (fake runners only — nothing real runs)
 # ---------------------------------------------------------------------------
 
-def test_evidence_file_shape(tmp_path: Path) -> None:
-    path = qm.write_evidence(
-        tmp_path, qm.run_route(qm.ROUTES["deb"], qm.DISTROS["ubuntu-24.04"],
-                               mk_env(), repo=REPO, exec_fn=FakeExec()))
-    assert path.name == "deb-ubuntu-24.04.json"
-    ev = json.loads(path.read_text(encoding="utf-8"))
-    assert ev["schema"] == qm.SCHEMA
-    assert (ev["route"], ev["distro"], ev["status"]) == \
-        ("deb", "ubuntu-24.04", "SKIPPED")
-    assert ev["skip_reason"]
-    assert len(ev["steps"]) == 4
-    assert ev["environment"]["distro_pretty"] == "Ubuntu 24.04 LTS"
-    assert ev["notes"] == []
+class TestRunRoute:
+    def test_off_matrix_host_runs_nothing(self):
+        r = qm.run_route(qm.ROUTES["pipx"], env(distro=None), ok_runner,
+                         Path("."))
+        assert (r.status, r.stages) == (qm.SKIP, [])
+        assert "not a matrix target" in r.reason
 
+    def test_unavailable_route_runs_no_commands(self):
+        runner = ScriptedRunner()
+        r = qm.run_route(qm.ROUTES["deb"], env(euid=1000), runner,
+                         Path("."))
+        assert r.status == qm.SKIP and "needs root" in r.reason
+        assert runner.calls == []
 
-def test_full_matrix_on_foreign_host_writes_every_row(tmp_path: Path) -> None:
-    env = mk_env(distro_key=None, distro_pretty="Debian GNU/Linux 12",
-                 is_root=False, has_display=False)
-    evidences = run_all(tmp_path, env)
-    assert len(evidences) == len(ALL_COMBOS) == 12
-    for route_key, distro_key in ALL_COMBOS:
-        f = tmp_path / f"{route_key}-{distro_key}.json"
-        assert f.exists(), f
-        ev = json.loads(f.read_text(encoding="utf-8"))
-        assert ev["status"] == "SKIPPED"
-        assert "fresh" in ev["skip_reason"]
-    readme = (tmp_path / "README.md").read_text(encoding="utf-8")
-    for route_key, distro_key in ALL_COMBOS:
-        assert f"`{route_key}-{distro_key}.json`" in readme
+    def test_headless_host_skips_gui_stages_not_the_funnel(self):
+        runner = ScriptedRunner()
+        r = qm.run_route(qm.ROUTES["pipx"], env(display=False), runner,
+                         Path("."))
+        by_stage = {s.stage: s.status for s in r.stages}
+        assert by_stage == {"install": qm.PASS, "onboarding": qm.SKIP,
+                            "dictation": qm.SKIP, "update": qm.PASS}
+        assert "GUI session" in r.stages[1].detail
+        assert r.status == qm.PASS  # skips with reasons are not failures
+        # only the non-GUI stages' commands reached the runner
+        assert runner.calls == [("pipx", "install", "sayit-ermano"),
+                                ("pipx", "upgrade", "sayit-ermano")]
 
+    def test_failed_install_skips_the_rest_of_the_funnel(self):
+        runner = ScriptedRunner(fail_in="pipx install")
+        r = qm.run_route(qm.ROUTES["pipx"], env(), runner, Path("."))
+        by_stage = {s.stage: (s.status, s.detail) for s in r.stages}
+        assert by_stage["install"][0] == qm.FAIL
+        assert "exited 3" in by_stage["install"][1]
+        for stage in ("onboarding", "dictation", "update"):
+            assert by_stage[stage][0] == qm.SKIP
+            assert "install stage failed" in by_stage[stage][1]
+        assert r.status == qm.FAIL
+        assert runner.calls == [("pipx", "install", "sayit-ermano")]
 
-def test_readme_carries_checklist_and_red_row_policy() -> None:
-    readme = qm.render_readme(
-        [qm.run_route(qm.ROUTES[r], qm.DISTROS[d], mk_env(),
-                      repo=REPO, exec_fn=FakeExec())
-         for r, d in ALL_COMBOS])
-    assert "GPU" in readme and "CPU" in readme
-    assert "docs/guides/install.md" in readme  # known-issue workaround spot
-    assert "--check" in readme
-    # per-distro checklist sections with each route's install command
-    for section in ("Ubuntu 24.04", "Fedora", "Arch Linux"):
-        assert f"### {section}" in readme
-    assert "install-one-shot.sh" in readme
-    assert "makepkg -si" in readme
-    assert qm.FLATHUB_APP_ID in readme
-
-
-def test_skipped_row_makes_no_network_calls(monkeypatch) -> None:
-    """The deb route resolves the latest-release URL lazily — a skipped
-    row must not so much as build its install command."""
-    exec_fn = FakeExec()
-
-    def boom():
-        raise AssertionError("skipped rows must not resolve commands")
-    monkeypatch.setattr(qm, "latest_release_deb", boom)
-    ev = qm.run_route(qm.ROUTES["deb"], qm.DISTROS["ubuntu-24.04"],
-                      mk_env(distro_key=None), repo=REPO, exec_fn=exec_fn)
-    assert ev["status"] == "SKIPPED"
-    assert exec_fn.calls == []
+    def test_multi_command_stage_fails_on_first_bad_command(self):
+        runner = ScriptedRunner(fail_in="makepkg")
+        r = qm.run_route(qm.ROUTES["aur"], env("arch"), runner, Path("."))
+        # clone ok, makepkg -si failed -> install FAIL, update not reached
+        assert r.status == qm.FAIL
+        assert [c for c in runner.calls if c[0] == "git"] == [
+            ("git", "clone", "https://aur.archlinux.org/sayit-ermano.git",
+             "aur")]
+        assert r.stages[0].status == qm.FAIL
 
 
 # ---------------------------------------------------------------------------
-# the --check gate
+# evidence files
 # ---------------------------------------------------------------------------
 
-def test_check_green_on_full_skipped_matrix(tmp_path: Path) -> None:
-    run_all(tmp_path, mk_env(distro_key=None, distro_pretty="Debian 12"))
-    assert qm.check_matrix(tmp_path) == []
+@pytest.fixture()
+def tree(tmp_path: Path) -> Path:
+    qm.init_tree(tmp_path)
+    return tmp_path
 
 
-def test_check_flags_red_row_missing_and_stale(tmp_path: Path) -> None:
-    run_all(tmp_path, mk_env(distro_key=None, distro_pretty="Debian 12"))
-    red = tmp_path / "pipx-arch.json"
-    ev = json.loads(red.read_text(encoding="utf-8"))
-    ev["status"] = "FAIL"
-    red.write_text(json.dumps(ev), encoding="utf-8")
-    problems = qm.check_matrix(tmp_path)
-    assert any("red row" in p for p in problems)
-    (tmp_path / "deb-ubuntu-24.04.json").unlink()
-    problems = qm.check_matrix(tmp_path)
-    assert any("missing evidence" in p for p in problems)
-    stale = tmp_path / "aur-arch.json"
-    ev = json.loads(stale.read_text(encoding="utf-8"))
-    ev["schema"] = 0
-    stale.write_text(json.dumps(ev), encoding="utf-8")
-    assert any("schema" in p for p in qm.check_matrix(tmp_path))
+class TestInitTree:
+    def test_creates_one_file_per_route_per_distro(self, tree):
+        assert {(p.parent.name, p.stem) for p in tree.rglob("*.md")
+                if p.parent != tree} == CELLS
+
+    def test_every_cell_has_status_sentinels_and_checklist(self, tree):
+        for route_id, distro in CELLS:
+            text = qm.cell_path(tree, route_id, distro).read_text()
+            assert qm.read_status(text) == "PENDING"
+            assert text.count(qm.BEGIN) == 1 and text.count(qm.END) == 1
+            for needle in ("onboarding", "dictation", "update",
+                           "GPU machine", "CPU machine", "install guide"):
+                assert needle in text, (route_id, distro, needle)
+            assert "_No automated run recorded yet." in text
+
+    def test_reinit_never_touches_existing_files(self, tree):
+        cell = qm.cell_path(tree, "pipx", "fedora")
+        cell.write_text(cell.read_text().replace("STATUS: PENDING",
+                                                 "STATUS: PASS")
+                        + "\nmanual note: mic was a USB headset\n")
+        assert qm.init_tree(tree) == []
+        assert qm.read_status(cell.read_text()) == "PASS"
+        assert "USB headset" in cell.read_text()
 
 
-def test_check_requires_readme(tmp_path: Path) -> None:
-    assert any("README.md" in p for p in qm.check_matrix(tmp_path))
+class TestRecordResult:
+    def _pass_result(self):
+        return qm.RunResult("pipx", "fedora", qm.PASS, stages=[
+            qm.StageResult("install", qm.PASS, "1 command(s) ok"),
+            qm.StageResult("onboarding", qm.SKIP, "needs a GUI session"),
+        ])
+
+    def _fail_result(self):
+        return qm.RunResult("pipx", "fedora", qm.FAIL, stages=[
+            qm.StageResult("install", qm.FAIL, "`pipx install` exited 3"),
+        ])
+
+    def test_records_entry_inside_sentinels_only(self, tree):
+        cell = qm.cell_path(tree, "pipx", "fedora")
+        before = cell.read_text()
+        qm.record_result(cell, self._pass_result(), env())
+        after = cell.read_text()
+        # manual parts untouched, placeholder gone, entry inside the block
+        assert after.startswith(before.split(qm.BEGIN)[0])
+        assert "_No automated run" not in after
+        block = after[after.index(qm.BEGIN) + len(qm.BEGIN):
+                      after.index(qm.END)]
+        assert "result=PASS" in block and "| install | PASS |" in block
+        assert "needs a GUI session" in block
+        # PASS does not touch the owner's STATUS header
+        assert qm.read_status(after) == "PENDING"
+
+    def test_failed_run_lowers_status_and_keeps_manual_content(self, tree):
+        cell = qm.cell_path(tree, "pipx", "fedora")
+        text = cell.read_text().replace(
+            "- [ ] GPU machine: install succeeds end to end",
+            "- [x] GPU machine: install succeeds end to end  (manual tick)")
+        cell.write_text(text)
+        qm.record_result(cell, self._fail_result(), env())
+        after = cell.read_text()
+        assert qm.read_status(after) == qm.FAIL
+        assert "(manual tick)" in after          # manual edit preserved
+        assert "exited 3" in after
+
+    def test_skip_result_records_the_reason_without_touching_status(
+            self, tree):
+        cell = qm.cell_path(tree, "deb", "ubuntu-24.04")
+        qm.record_result(cell, qm.RunResult(
+            "deb", "ubuntu-24.04", qm.SKIP,
+            reason="needs root — on the VM run: sudo python3 …"), env())
+        after = cell.read_text()
+        assert qm.read_status(after) == "PENDING"
+        assert "route skipped: needs root" in after
+
+    def test_entries_prepend_and_trim_to_the_cap(self, tree):
+        cell = qm.cell_path(tree, "pipx", "fedora")
+        for i in range(qm.MAX_RUN_ENTRIES + 2):
+            result = self._pass_result()
+            qm.record_result(cell, result,
+                             env(host=f"host-{i}"))
+        block = cell.read_text().split(qm.BEGIN)[1].split(qm.END)[0]
+        assert block.count("\n### ") == qm.MAX_RUN_ENTRIES
+        assert "host-6" in block      # newest first
+        assert "host-0" not in block  # oldest trimmed
 
 
 # ---------------------------------------------------------------------------
-# os-release parsing (probe is pure up to this seam)
+# the generated README
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("text,key", [
-    ('ID=ubuntu\nVERSION_ID="24.04"\nPRETTY_NAME="Ubuntu 24.04 LTS"\n',
-     "ubuntu-24.04"),
-    ("ID=fedora\nVERSION_ID=42\nPRETTY_NAME=\"Fedora Linux 42\"\n",
-     "fedora"),
-    ("ID=arch\nPRETTY_NAME=\"Arch Linux\"\n", "arch"),  # no VERSION_ID
-    ("ID=debian\nVERSION_ID=\"12\"\n", None),           # not in matrix
-])
-def test_distro_key_for_os_release(text: str, key: str | None) -> None:
-    assert qm.distro_key_for(qm.parse_os_release(text)) == key
+class TestReadme:
+    def test_table_has_a_row_per_cell_with_resolving_links(self, tree):
+        readme = qm.build_readme(tree)
+        for route_id, distro in CELLS:
+            rel = f"{route_id}/{distro}.md"
+            assert f"]({rel})" in readme
+            assert (tree / rel).exists()
+        assert readme.count("\n| ") == len(CELLS) + 1  # + header row
+
+    def test_table_reflects_manual_and_automated_outcomes(self, tree):
+        cell = qm.cell_path(tree, "deb", "ubuntu-24.04")
+        qm.record_result(cell, qm.RunResult(
+            "deb", "ubuntu-24.04", qm.FAIL,
+            stages=[qm.StageResult("install", qm.FAIL, "apt died")]),
+            env(host="gpu-vm"))
+        qm.record_result(qm.cell_path(tree, "aur", "arch"),
+                         qm.RunResult("aur", "arch", qm.SKIP,
+                                      reason="not a Arch Linux route"),
+                         env(distro=None))
+        readme = qm.build_readme(tree)
+        deb_row = next(line for line in readme.splitlines()
+                       if "deb/ubuntu-24.04.md" in line)
+        assert "| FAIL |" in deb_row and "FAIL @ 20" in deb_row
+        aur_row = next(line for line in readme.splitlines()
+                       if "aur/arch.md" in line)
+        assert "SKIPPED (not a Arch Linux route" in aur_row
+        pipx_row = next(line for line in readme.splitlines()
+                        if "pipx/ubuntu-24.04.md" in line)
+        assert "| PENDING | — |" in pipx_row
+
+    def test_owner_workflow_and_red_row_policy_are_documented(self, tree):
+        readme = qm.build_readme(tree)
+        for needle in ("--execute", "sudo python3", "Zero red rows",
+                       "known issue", "best-converting"):
+            assert needle in readme, needle
 
 
-def test_env_snapshot_roundtrip() -> None:
-    env = mk_env(git_head="43a0013")
-    ev = qm.run_route(qm.ROUTES["pipx"], qm.DISTROS["fedora"], env,
-                      repo=REPO, exec_fn=FakeExec())
-    assert ev["environment"] == dataclasses.asdict(env)
+# ---------------------------------------------------------------------------
+# CLI (still offline: probe-only + monkeypatched env/runner)
+# ---------------------------------------------------------------------------
+
+class TestMain:
+    def test_init_writes_tree_and_readme(self, tmp_path):
+        out = tmp_path / "matrix"
+        assert qm.main(["init", "--out", str(out)]) == 0
+        assert (out / "README.md").exists()
+        assert len(list(out.rglob("*.md"))) == len(CELLS) + 1
+        assert qm.main(["init", "--out", str(out)]) == 0  # idempotent
+
+    def test_check_without_execute_records_nothing(self, tmp_path, capsys):
+        out = tmp_path / "matrix"
+        qm.main(["init", "--out", str(out)])
+        before = {p: p.read_text() for p in out.rglob("*.md")}
+        # real probe of THIS host, but no --execute: plan printed, no writes
+        assert qm.main(["check", "--out", str(out)]) == 0
+        assert "--execute" in capsys.readouterr().out
+        after = {p: p.read_text() for p in out.rglob("*.md")}
+        assert after == before
+
+    def test_check_execute_on_a_faked_vm_records_evidence(
+            self, tmp_path, monkeypatch):
+        out = tmp_path / "matrix"
+        qm.main(["init", "--out", str(out)])
+        monkeypatch.setattr(
+            qm, "probe_environment",
+            lambda: env("ubuntu-24.04", euid=1000, display=False,
+                        host="gpu-vm"))
+        monkeypatch.setattr(qm, "real_run", ok_runner)
+        rc = qm.main(["check", "--out", str(out), "--execute",
+                      "--route", "pipx", "--route", "deb"])
+        assert rc == 0  # deb skipped (needs root) — skips are not failures
+        pipx_cell = qm.cell_path(out, "pipx", "ubuntu-24.04").read_text()
+        assert "result=PASS" in pipx_cell
+        assert qm.read_status(pipx_cell) == "PENDING"
+        deb_cell = qm.cell_path(out, "deb", "ubuntu-24.04").read_text()
+        assert "route skipped: needs root" in deb_cell
+        row = next(line for line in (out / "README.md").read_text()
+                   .splitlines() if "pipx/ubuntu-24.04.md" in line)
+        assert "PASS @ 20" in row
+
+    def test_check_execute_exit_is_red_iff_a_stage_failed(
+            self, tmp_path, monkeypatch):
+        out = tmp_path / "matrix"
+        qm.main(["init", "--out", str(out)])
+        monkeypatch.setattr(qm, "probe_environment",
+                            lambda: env("ubuntu-24.04", host="bad-vm"))
+        monkeypatch.setattr(qm, "real_run", ScriptedRunner(fail_in="install"))
+        rc = qm.main(["check", "--out", str(out), "--execute",
+                      "--route", "pipx"])
+        assert rc == 1
+        assert qm.read_status(
+            qm.cell_path(out, "pipx", "ubuntu-24.04").read_text()) == qm.FAIL
+
+    def test_off_matrix_execute_host_is_printed_not_recorded(
+            self, tmp_path, monkeypatch):
+        out = tmp_path / "matrix"
+        qm.main(["init", "--out", str(out)])
+        before = qm.cell_path(out, "pipx", "fedora").read_text()
+        monkeypatch.setattr(qm, "probe_environment", lambda: env(distro=None))
+        monkeypatch.setattr(qm, "real_run", ok_runner)
+        assert qm.main(["check", "--out", str(out), "--execute"]) == 0
+        assert qm.cell_path(out, "pipx", "fedora").read_text() == before
