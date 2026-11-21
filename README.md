@@ -124,7 +124,9 @@ on every route: the .deb configures a **signed apt repository**
 Settings → About has a manual "Check for updates". Requirements in brief:
 Python 3.11+, `pipewire`/`xdotool`/`xclip`/`libnotify-bin`, a whisper
 model on first use (default `small` ≈ 484 MB), GPU optional. On Wayland
-you need `wtype`/`ydotool` and a DE shortcut:
+the hotkey binds through the **GlobalShortcuts portal** (or a DE
+shortcut on sway/COSMIC) and insertion uses the **RemoteDesktop/EIS
+portal** or `wtype`/`ydotool`:
 [docs/guides/wayland.md](docs/guides/wayland.md).
 
 ## The native app

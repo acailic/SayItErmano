@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from fluidvoice import backends
+from fluidvoice import session as session_mod
 from fluidvoice.config import DEFAULTS
 
 
@@ -303,3 +304,89 @@ class TestFasterWhisperWarmup:
     def test_warmup_swallows_inference_errors(self):
         be = self._backend(self._fake_model(fail=True))
         be.warmup()  # must not raise - load errors still would
+
+
+class TestWaylandInputBackendSelection:
+    """ADR-0006: eis/wtype selection by RUNTIME PROBE, never by
+    desktop-environment name (resolve_wayland_tool with probes)."""
+
+    @staticmethod
+    def resolve(pref="auto", *, desktop="sway", installed=(),
+                probes=None):
+        return session_mod.resolve_wayland_tool(
+            pref, desktop,
+            which=lambda n: f"/usr/bin/{n}" if n in installed else None,
+            probes=probes)
+
+    def test_auto_prefers_eis_when_portal_probe_passes(self):
+        tool, _ = self.resolve(installed=("wtype", "ydotool"),
+                               probes={"remote_desktop": True,
+                                       "virtual_keyboard": True})
+        assert tool == "eis"
+
+    def test_auto_skips_eis_when_portal_probe_fails(self):
+        tool, reason = self.resolve(installed=("wtype",),
+                                    probes={"remote_desktop": False,
+                                            "virtual_keyboard": True})
+        assert tool == "wtype"
+        assert "RemoteDesktop portal probe failed" in reason
+
+    def test_wtype_skipped_when_registry_probe_says_no(self):
+        """Not by name: a NON-GNOME desktop without the protocol must
+        not resolve wtype (KWin does not implement it either)."""
+        tool, reason = self.resolve(desktop="kde",
+                                    installed=("wtype", "ydotool"),
+                                    probes={"remote_desktop": False,
+                                            "virtual_keyboard": False})
+        assert tool == "ydotool"
+        assert "zwp virtual-keyboard protocol" in reason
+
+    def test_wtype_selected_when_registry_probe_passes(self):
+        """And a GNOME-brand desktop WITH the protocol (a patched
+        mutter) resolves wtype - the name heuristic is dead."""
+        tool, _ = self.resolve(desktop="ubuntu:GNOME",
+                               installed=("wtype",),
+                               probes={"remote_desktop": False,
+                                       "virtual_keyboard": True})
+        assert tool == "wtype"
+
+    def test_indeterminate_probe_keeps_legacy_gnome_tiebreak(self):
+        tool, reason = self.resolve(desktop="GNOME",
+                                    installed=("wtype", "ydotool"),
+                                    probes={"remote_desktop": False,
+                                            "virtual_keyboard": None})
+        assert tool == "ydotool"
+        assert "registry probe indeterminate" in reason
+
+    def test_indeterminate_probe_on_wlroots_keeps_wtype(self):
+        tool, _ = self.resolve(desktop="sway", installed=("wtype",),
+                               probes={"remote_desktop": False,
+                                       "virtual_keyboard": None})
+        assert tool == "wtype"
+
+    def test_explicit_eis_without_probe_falls_through(self):
+        tool, _ = self.resolve("eis", installed=("wtype",),
+                               probes={"remote_desktop": False,
+                                       "virtual_keyboard": True})
+        assert tool == "wtype"
+
+    def test_explicit_wtype_wins_over_a_failed_probe(self):
+        tool, _ = self.resolve("wtype", installed=("wtype",),
+                               probes={"remote_desktop": False,
+                                       "virtual_keyboard": False})
+        assert tool == "wtype"
+
+    def test_eis_needs_dbus_next(self, monkeypatch):
+        monkeypatch.setattr(session_mod, "_eis_importable", lambda: False)
+        tool, reason = self.resolve(installed=("ydotool",),
+                                    probes={"remote_desktop": True,
+                                            "virtual_keyboard": False})
+        assert tool == "ydotool"
+        assert "dbus-next" in reason
+
+    def test_no_probes_is_the_pure_legacy_resolution(self):
+        tool, _ = self.resolve(desktop="sway", installed=("wtype",))
+        assert tool == "wtype"
+        tool, _ = self.resolve(desktop="GNOME", installed=("wtype",
+                                                           "ydotool"))
+        assert tool == "ydotool"

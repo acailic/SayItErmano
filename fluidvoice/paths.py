@@ -70,6 +70,12 @@ def update_state_file() -> Path:
     return config_dir() / "update-state.json"
 
 
+def portal_state_file() -> Path:
+    """Portal session state (RemoteDesktop restore token; ADR-0006).
+    Machine-local like update-state — the token is useless off-host."""
+    return config_dir() / "portal-state.json"
+
+
 def prompt_profiles_file() -> Path:
     """Named presets of the AI base prompt ({name: prompt})."""
     return config_dir() / "prompt-profiles.json"

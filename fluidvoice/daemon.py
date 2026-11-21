@@ -209,6 +209,7 @@ class Daemon:
     def run(self) -> None:
         log(f"SayItErmano v{__version__} starting")
         self._session = session_mod.probe()
+        self._install_runtime_probes()
         self._log_session()
         self._sweep_stale_tmp()
         self._engines.startup_load()
@@ -219,6 +220,7 @@ class Daemon:
             self._start_hotkey()
         self._start_mouse_ptt()
         self._start_evdev_ptt()
+        self._start_portal_eis()
 
         self._start_tray()
         self._start_micmon()
@@ -660,6 +662,7 @@ class Daemon:
             self._mouse_ptt.stop()
         if self._evdev_ptt:
             self._evdev_ptt.stop()
+        self._stop_portal_eis()
         if self._rewrite_hotkey:
             self._rewrite_hotkey.stop()
         if self._command_hotkey:
@@ -705,12 +708,25 @@ class Daemon:
 
     def _start_hotkey(self) -> str | None:
         """(Re-)grab the dictation hotkeys. Returns the first error, if any.
-        Wayland sessions skip the X grabs entirely (they cannot work) and
-        say so once: the declared wayland hotkey is the DE-shortcut assist."""
+
+        Wayland: the GlobalShortcuts portal is the primary path
+        (hotkey.wayland_portal; Activated/Deactivated give native
+        hold-PTT). When it cannot run - no backend (sway, COSMIC),
+        library missing, bind refused - the DE-shortcut assist stays
+        the fallback: a custom shortcut running `sayit-ermano toggle`
+        over the control socket."""
         if self._session.is_wayland:
+            if self.cfg["hotkey"].get("wayland_portal", True):
+                error = self._start_portal_hotkey()
+                if error is None:
+                    return None  # portal hotkey bound
+                if "not installed" not in error:
+                    log(f"WARN portal hotkey unavailable: {error} - "
+                        "falling back to the DE-shortcut assist")
             script = session_mod.ensure_toggle_script()
-            log("hotkey: wayland session - global grabs do not exist; bind a "
-                f"DE custom shortcut to {script or '`sayit-ermano toggle`'} "
+            log("hotkey: wayland session - global grabs do not exist; "
+                f"bind a DE custom shortcut to "
+                f"{script or '`sayit-ermano toggle`'} "
                 "(sayit-ermano doctor prints per-DE steps)")
             return None
         from .hotkey import HotkeyError, HotkeyListener
@@ -816,6 +832,80 @@ class Daemon:
                 log(f"WARN {label} unavailable: {e}")
                 error = error or str(e)
         return error
+
+    def _install_runtime_probes(self) -> None:
+        """Hand insertion the cached runtime protocol probes (ADR-0006:
+        eis/wtype selection by probe, never by desktop name)."""
+        try:
+            from . import input_probes, insertion
+
+            def _probes() -> dict:
+                p = input_probes.probe_input_backends()
+                return {"virtual_keyboard": p.virtual_keyboard,
+                        "remote_desktop": p.remote_desktop}
+
+            insertion.set_runtime_probes(_probes)
+        except Exception as e:  # noqa: BLE001 - probes never block startup
+            log(f"WARN could not install input probes: {e}")
+
+    def _start_portal_eis(self) -> None:
+        """Warm the RemoteDesktop/EIS insertion backend on wayland when
+        the runtime resolver picks it: the FIRST ensure() shows the
+        portal consent dialog (persisted on portal >= 1.21), so it runs
+        on a supervised background thread - daemon start never blocks
+        on a human."""
+        if not self._session.is_wayland:
+            return
+        from . import insertion
+        tool, _reason = insertion._resolve_wayland_tool(self.cfg)
+        if tool != "eis":
+            return
+        log("insertion: warming the RemoteDesktop/EIS backend "
+            "(one-time consent dialog if the portal asks)")
+
+        def _warm() -> None:
+            try:
+                inserter = insertion.eis_inserter()
+                if inserter is not None:
+                    inserter.ensure()
+            except Exception as e:  # noqa: BLE001 - supervised + logged
+                log(f"WARN EIS warmup failed: {e}")
+
+        self._tasks.spawn("eis-warmup", _warm)
+
+    def _stop_portal_eis(self) -> None:
+        """Close the EIS connection + portal session (consent token
+        stays persisted for the next start)."""
+        try:
+            from . import insertion
+            if insertion._eis_inserter is not None:
+                insertion._eis_inserter.stop()
+        except Exception as e:  # noqa: BLE001 - teardown must not raise
+            log(f"WARN stopping EIS insertion failed: {e}")
+
+    def _start_portal_hotkey(self) -> str | None:
+        """Bind the dictation hotkey through the GlobalShortcuts portal
+        (ADR-0006). None = bound and healthy; the error string otherwise
+        (caller falls back to the DE-shortcut assist). Re-called on every
+        start()/restart - i.e. BindShortcuts fires once per portal
+        session, the cure for the KDE rebind bug."""
+        from .portal_hotkey import PortalHotkeyError, PortalHotkeyListener
+        hk = self.cfg["hotkey"]
+        try:
+            self._hotkey = PortalHotkeyListener(
+                key=hk["key"], modifiers=hk.get("modifiers", []),
+                mode=hk.get("mode", "toggle"),
+                on_toggle=self.toggle,
+                on_cancel=self.cancel,
+                log=log,
+                on_grab_change=lambda healthy: self._refresh_tray())
+            self._hotkey.start()
+            for line in self._hotkey.summary:
+                log(line)
+            return None
+        except PortalHotkeyError as e:
+            self._hotkey = None
+            return str(e)
 
     def _log_grab_state(self, listener, label: str, key: str) -> None:
         """Startup honesty: a refused grab (another client already holds

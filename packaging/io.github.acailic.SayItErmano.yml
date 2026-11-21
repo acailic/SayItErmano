@@ -1,6 +1,8 @@
-# SPIKE manifest (issue #10/#11, ADR-0006) — proves the sandbox story on X11.
-# Not the shipping manifest: no metainfo/desktop/icons yet, and permissions
-# are the spike set (fallback-x11 for the XGrabKey+xdotool path).
+# SPIKE manifest (issue #10/#11, ADR-0006) — proves the sandbox input story.
+# Not the shipping manifest: no metainfo/desktop/icons yet. Permissions are
+# the spike set: fallback-x11 for the XGrabKey+xdotool row, plus the D-Bus
+# session socket (portals) — flatpak always exposes the session bus, the
+# explicit --socket=dbus is documentation here.
 # GPU/model download not exercised by the spike (doctor runs model-free).
 id: io.github.acailic.SayItErmano
 runtime: org.gnome.Platform
@@ -30,9 +32,21 @@ modules:
   - name: deps
     buildsystem: simple
     build-commands:
-      - pip3 install --prefix=/app python_xlib-0.33-py2.py3-none-any.whl pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+      # python-xlib/pillow: core deps. dbus-next (MIT) +
+      # global-shortcut-portal (AGPL-3.0-only — combined with this
+      # GPL-3.0-or-later program per the FSF one-way GPLv3/AGPLv3
+      # compatibility guidance; section 13 is inert for a desktop app):
+      # the GlobalShortcuts portal hotkey + RemoteDesktop/EIS insertion
+      # (ADR-0006; vendored wheels — the build sandbox has no network).
+      - pip3 install --prefix=/app python_xlib-0.33-py2.py3-none-any.whl pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl dbus_next-0.2.3-py3-none-any.whl global_shortcut_portal-0.1.0-py3-none-any.whl
     sources:
       - type: file
         path: wheels/python_xlib-0.33-py2.py3-none-any.whl
       - type: file
         path: wheels/pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+      - type: file
+        path: wheels/dbus_next-0.2.3-py3-none-any.whl
+        sha256: 58948f9aff9db08316734c0be2a120f6dc502124d9642f55e90ac82ffb16a18b
+      - type: file
+        path: wheels/global_shortcut_portal-0.1.0-py3-none-any.whl
+        sha256: b4512ca320f2478f86680b12b6bc7fec5e2ec453799e01f2513247bdd86817f0
