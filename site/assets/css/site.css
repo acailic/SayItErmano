@@ -1509,3 +1509,47 @@ figure.shot {
     padding-block: 1.5rem;
   }
 }
+
+/* ============ pricing (GH#19, Paddle review) ============ */
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 2rem;
+  max-width: 760px;
+  margin: 0 auto;
+}
+.price-card {
+  border: 1px solid rgba(125, 125, 125, 0.25);
+  border-radius: 16px;
+  padding: 2rem 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: rgba(125, 125, 125, 0.04);
+}
+.price-card.featured {
+  border-color: var(--fg);
+  background: var(--bg);
+  box-shadow: 0 0 0 1px var(--fg) inset;
+}
+.plan-name { font-family: var(--font-mono, monospace); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.75; }
+.plan-price { font-size: 2.4rem; font-weight: 700; letter-spacing: -0.02em; }
+.plan-strike { font-size: 0.9rem; font-weight: 500; opacity: 0.65; text-decoration: line-through; margin-left: 0.35rem; }
+.plan-tag { opacity: 0.8; }
+.plan-list { list-style: none; padding: 0; margin: 0.5rem 0 1rem; display: grid; gap: 0.55rem; }
+.plan-list li { padding-left: 1.25rem; position: relative; font-size: 0.95rem; }
+.plan-list li::before { content: "→"; position: absolute; left: 0; opacity: 0.6; }
+.plan-cta {
+  margin-top: auto;
+  display: inline-block;
+  text-align: center;
+  padding: 0.7rem 1.2rem;
+  border-radius: 10px;
+  border: 1px solid var(--fg);
+  background: var(--fg);
+  color: var(--bg);
+  font-weight: 600;
+  text-decoration: none;
+}
+.plan-cta.ghost { background: transparent; color: var(--fg); }
+.plan-note { font-size: 0.85rem; opacity: 0.7; margin-top: 0.5rem; }
