@@ -110,6 +110,14 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true",
                    help="raw JSON output")
     p.set_defaults(func=_cmd_update)
+
+    p = sub.add_parser(
+        "license",
+        help="import a license key from your purchase email, or show "
+             "the current license status")
+    p.add_argument("key", nargs="?", default=None,
+                   help="the license key (omit to show status)")
+    p.set_defaults(func=_cmd_license)
     return parser
 
 
@@ -120,6 +128,27 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 0
     return args.func(args)
+
+
+def _cmd_license(args: argparse.Namespace) -> int:
+    from . import license as license_mod
+    from .license import LicenseError
+    if args.key is None:
+        info = license_mod.status()
+        if info is None:
+            print("no license imported (this build stays fully functional without one)")
+            return 0
+        print(f"licensed to {info.email} (purchased {info.purchased}, "
+              f"covers major versions <= {license_mod.FOREVER if info.max_version == license_mod.FOREVER else info.max_version})")
+        return 0
+    try:
+        info = license_mod.import_key(args.key)
+    except LicenseError as e:
+        print(f"error: license key rejected: {e}", file=sys.stderr)
+        return 1
+    print(f"license imported: {info.email} "
+          f"(purchased {info.purchased}, key #{info.key_id})")
+    return 0
 
 
 def _cmd_daemon(args: argparse.Namespace) -> int:

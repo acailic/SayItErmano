@@ -85,6 +85,14 @@ def mic_baseline_file() -> Path:
     return config_dir() / "mic-baseline.json"
 
 
+def license_file() -> Path:
+    """Imported license key (ADR-0005 / issue #16): one line, mode 0600.
+
+    Machine-local entitlement bookkeeping beside the config — like
+    update-state, not user content."""
+    return config_dir() / "license.key"
+
+
 def audio_dir() -> Path:
     return data_dir() / "audio"
 
