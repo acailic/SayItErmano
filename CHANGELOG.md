@@ -13,6 +13,21 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **Offline license keys (#16)** — purchases now record an entitlement
+  without any phoning home. A key is an Ed25519-signed statement
+  (email, purchase date, covered major version or `forever`) verified
+  fully offline by an inline RFC 8032 implementation — zero new runtime
+  dependencies, pinned to the official RFC test vectors. In-app:
+  `sayit-ermano license <KEY>` imports (mode-0600 storage beside the
+  config), Settings → About shows the license state, and no feature
+  ever gates on it (GPL: the key records support entitlement, not
+  permission). Issuing stays out of the installed package:
+  `scripts/license_keygen.py` (owner CLI — keypair/issue/verify/
+  support lookup; the private seed never enters the repo) and
+  `scripts/license_webhook.py` (Paddle Billing `transaction.completed`
+  receiver with signature + replay protection and an append-only flock'd
+  issue log; Paddle's own license keys are deprecated). Owner runbook:
+  docs/dev/license-ops.md (includes the Polar runner-up wiring).
 - **Update channel for non-Flatpak installs (#22)** — installing the
   official .deb now configures a **signed apt repository** (served from
   this repo's GitHub Pages, published by `release-publish` via reprepro;

@@ -34,14 +34,18 @@ sayit-ermano license            # show status
 sayit-ermano license <KEY>      # verify and import
 ```
 
+Settings → About → License shows the same state (email, purchase date,
+covered releases).
+
 The key is stored at `~/.config/sayit-ermano/license.key` (mode 0600).
 Delete the file to remove it. A corrupted file is reported as "no
 license" and can be replaced by importing again.
 
 ## Lost keys, refunds, redistribution
 
-- **Lost key:** support re-issues from the purchase record (Paddle
-  order lookup) — the email in the payload is the identity.
+- **Lost key:** support re-issues from the issue log kept at the store
+  (operator runbook: [dev/license-ops.md](../dev/license-ops.md)) — the
+  email in the payload is the identity.
 - **Refunds:** 14 days, handled by Paddle as merchant of record.
 - **Redistribution:** the software is GPL-3.0. If someone shares your
   key or their build with others, that is permitted by the license;

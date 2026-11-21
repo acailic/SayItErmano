@@ -72,6 +72,9 @@ the app itself.
 - [dev/wayland-smoke-matrix.md](dev/wayland-smoke-matrix.md),
   [dev/desktop-matrix.md](dev/desktop-matrix.md) — the live session ×
   application matrices (the standing evidence gaps).
+- [dev/license-ops.md](dev/license-ops.md) — issuing offline license
+  keys: seed custody, the keygen CLI, the Paddle webhook receiver,
+  support lookup, and the Polar runner-up wiring.
 
 ## I want the evidence
 
