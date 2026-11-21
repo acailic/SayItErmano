@@ -18,6 +18,10 @@ contract with no display, no daemon and no compositor:
   (append-only journal with a manual checklist the owner ticks);
 * CLI — --dry-run plans without a display and records nothing, a
   headless live run without --session is exit 2, a red row is exit 1;
+* tracker — docs/quality/wayland/README.md is the generated session
+  index (--init, headless-safe): PENDING until a dated run lands,
+  GREEN/RED + manual-tick counts from the recorded evidence, and the
+  committed copy cannot drift from what --init regenerates;
 * the row/invoke table embedded in docs/dev/wayland-smoke-matrix.md is
   exactly what --print-rows generates (no drift).
 """
@@ -435,6 +439,94 @@ class TestCli:
         assert out.startswith(ws.ROWS_BEGIN)
         assert out.rstrip("\n").endswith(ws.ROWS_END)
         assert "`sway-insert-wtype-tools`" in out
+
+
+# ---------------------------------------------------------------------------
+# the evidence tracker README (docs/quality/wayland/README.md)
+# ---------------------------------------------------------------------------
+
+class TestEvidenceTracker:
+    def _record(self, tmp_path, env, run=None, when=None):
+        session = ws.detect_session(env)
+        results = ws.run_matrix(session, ws.select_rows(session.key),
+                                all_tools(), run or ok_runner)
+        return ws.record_evidence(tmp_path, session, results, env,
+                                  all_tools(), host="smoke-vm",
+                                  sha="abc1234", now=when)
+
+    def test_init_headless_writes_pending_tracker_only(
+            self, tmp_path, monkeypatch, capsys):
+        for var in ("XDG_SESSION_TYPE", "WAYLAND_DISPLAY", "DISPLAY"):
+            monkeypatch.delenv(var, raising=False)
+        assert ws.main(["--init", "--out", str(tmp_path)]) == 0
+        assert "tracker regenerated" in capsys.readouterr().out
+        entries = sorted(p.name for p in tmp_path.iterdir())
+        assert entries == ["README.md"]      # nothing else, headless-safe
+        readme = (tmp_path / "README.md").read_text()
+        for skey, _gate in ws.TRACKED_SESSIONS:
+            assert f"| {ws.TRACKER_LABELS[skey]} " in readme
+        assert readme.count("PENDING") == len(ws.TRACKED_SESSIONS)
+
+    def test_tracker_reflects_recorded_runs_and_stays_pending_elsewhere(
+            self, tmp_path):
+        import datetime as dt
+
+        when = dt.datetime(2026, 11, 21, 9, 30, tzinfo=dt.timezone.utc)
+        sway_dir = self._record(tmp_path, SWAY_ENV, when=when)
+        x11_dir = self._record(tmp_path, X11_ENV,
+                               run=FailRunner("sayit-ermano"),
+                               when=dt.datetime(2026, 11, 21, 11, 0,
+                                                tzinfo=dt.timezone.utc))
+        readme = ws.build_readme(tmp_path)
+        sway_rel = sway_dir.relative_to(tmp_path).as_posix()
+        x11_rel = x11_dir.relative_to(tmp_path).as_posix()
+        assert ("| sway | required (Matrix B) | GREEN @ "
+                "2026-11-21T09:30:00Z (`abc1234`) | 0/"
+                in readme)
+        assert f"[{sway_rel}/]({sway_rel})" in readme
+        assert ("| X11 (control) | required (Matrix C + zero-delta "
+                "regression) | RED @ 2026-11-21T11:00:00Z" in readme)
+        assert f"[{x11_rel}/]({x11_rel})" in readme
+        assert "| GNOME Wayland | required (Matrix A) | PENDING" in readme
+
+    def test_tracker_counts_owner_ticked_manual_rows(self, tmp_path):
+        run_dir = self._record(tmp_path, SWAY_ENV)
+        report = run_dir / "report.md"
+        report.write_text(report.read_text().replace(
+            "- [ ] **sway-hotkey-compositor-bind**",
+            "- [x] **sway-hotkey-compositor-bind**", 1))
+        readme = ws.build_readme(tmp_path)
+        assert "| 1/" in readme and "ticked" in readme
+
+    def test_newest_dated_run_wins(self, tmp_path):
+        import datetime as dt
+
+        self._record(tmp_path, SWAY_ENV,
+                     when=dt.datetime(2026, 11, 20, 8, 0,
+                                      tzinfo=dt.timezone.utc))
+        self._record(tmp_path, SWAY_ENV,
+                     when=dt.datetime(2026, 11, 21, 9, 30,
+                                      tzinfo=dt.timezone.utc))
+        readme = ws.build_readme(tmp_path)
+        assert "2026-11-21T09:30:00Z" in readme
+        assert "2026-11-20T08:00:00Z" not in readme
+
+    def test_init_is_idempotent_and_never_touches_runs(self, tmp_path):
+        run_dir = self._record(tmp_path, SWAY_ENV)
+        before = (run_dir / "results.json").read_text()
+        assert ws.main(["--init", "--out", str(tmp_path)]) == 0
+        first = (tmp_path / "README.md").read_text()
+        assert ws.main(["--init", "--out", str(tmp_path)]) == 0
+        assert (tmp_path / "README.md").read_text() == first
+        assert (run_dir / "results.json").read_text() == before
+
+
+class TestTrackerNoDrift:
+    def test_committed_readme_is_exactly_the_generated_one(self):
+        committed = (REPO / "docs" / "quality" / "wayland" / "README.md"
+                     ).read_text(encoding="utf-8")
+        assert committed == ws.build_readme(
+            REPO / "docs" / "quality" / "wayland")
 
 
 # ---------------------------------------------------------------------------
