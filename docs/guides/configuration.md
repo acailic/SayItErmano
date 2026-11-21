@@ -38,6 +38,7 @@ drift: `python scripts/gen_config_reference.py` regenerates it.
 | `language_cycle` | `[]` |  | Ordered language codes the cycle hotkey steps through, e.g. ["auto", "en", "sl"] - may include "auto"; empty = the cycle key is off. The cycle override is RUNTIME daemon state and never persisted. |
 | `language_whitelist` | `[]` |  | Wrong-language guard: when language = "auto" detects a language NOT in this list, the take is re-decoded once with the first entry, e.g. ["sl", "en"]. Empty = off. |
 | `copy_to_clipboard` | `false` |  | Also copy every transcription to the clipboard |
+| `ui_language` | `"system"` |  | Language of the app UI (Settings, History, tray, notifications, onboarding): "system" follows the desktop locale, or a shipped code: en, sr-Latn, sr (Cyrillic), bs. Applies live — no restart needed. |
 | `tray_enabled` | `true` |  | Panel/tray icon while the daemon runs |
 | `terminal_apps` | `["gnome-terminal", "kgx", "konsole", "xterm", "alacritty", "kitty", "wezterm", "ghostty", "foot", "tilix", "terminator", "guake", "yakuake", "st-256color", "warp"]` |  | Case-insensitive WM_CLASS substrings identifying terminals. In these apps spoken-send never presses Enter (a half-typed shell line would EXECUTE) and typed insertions gain one trailing space so autocomplete commits. |
 | `pause_when_locked` | `true` |  | Ignore hotkeys and cancel an active dictation while the session is locked/suspended (logind lock watch; the tray notes "paused (locked)") |

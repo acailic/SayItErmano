@@ -54,6 +54,8 @@ the app itself.
   lookup log.
 - [dev/testing.md](dev/testing.md) — the test tier model and every
   recipe, in one canonical place.
+- [dev/translations.md](dev/translations.md) — UI translations: the
+  gettext framework, catalog workflow and the completeness gates.
 - [dev/quality-queue.md](dev/quality-queue.md) — historical Q1–Q12
   tracker; superseded by the quality plan's implementation log.
 - [dev/context-seam.md](dev/context-seam.md) — the ContextProvider

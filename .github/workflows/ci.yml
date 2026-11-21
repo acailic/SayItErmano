@@ -122,6 +122,15 @@ jobs:
           python -m mypy --python-version 3.12
       - name: Request briefs carry a valid STATUS (same as `just gate`)
         run: python scripts/validate_requests.py
+
+      - name: UI translations extraction report (same as `just translations`)
+        # Issue #23: every user-facing string flows through gettext; the
+        # shipped catalogs (po/*.po) must cover the extraction output
+        # exactly — zero untranslated, zero orphaned msgids — and the
+        # committed .mo files must match their .po sources.
+        run: |
+          python scripts/extract_translations.py --check
+          python scripts/build_translations.py --check
       - name: Byte-compile everything
         run: |
           pip install -e . pytest

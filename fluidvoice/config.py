@@ -596,6 +596,11 @@ _spec("general", "language_whitelist", [], _coerce_language_whitelist,
                   'the first entry, e.g. ["sl", "en"]. Empty = off.')
 _spec("general", "copy_to_clipboard", False, _bool(),
       description="Also copy every transcription to the clipboard")
+_spec("general", "ui_language", "system", _enum("system", "en", "sr-Latn", "sr", "bs"),
+      description='Language of the app UI (Settings, History, tray,\n'
+                  'notifications, onboarding): "system" follows the desktop\n'
+                  'locale, or a shipped code: en, sr-Latn, sr (Cyrillic), bs.\n'
+                  'Applies live — no restart needed.')
 _spec("general", "tray_enabled", True, _bool(),
       description="Panel/tray icon while the daemon runs")
 _spec("general", "terminal_apps", [

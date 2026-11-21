@@ -17,6 +17,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from .. import history as history_mod
 from ..history import format_today
+from ..i18n import _, _n
 from .client import Client
 from .style import load_style
 
@@ -51,7 +52,7 @@ class AudioReplayer(Gtk.Box):
         self.media = None
         self.play_btn.set_visible(False)
         self.pos.set_visible(False)
-        btn = Gtk.Button(label="Open audio", icon_name="folder-open-symbolic",
+        btn = Gtk.Button(label=_("Open audio"), icon_name="folder-open-symbolic",
                          css_classes=["flat"])
         btn.connect("clicked", lambda *_: subprocess.Popen(
             ["xdg-open", str(self.path)],
@@ -121,7 +122,7 @@ class HistoryEntryRow(Gtk.ListBoxRow):
     one step away) and honest confidence dots (research §5)."""
 
     CONFIDENCE_DOTS = {2: "●●●", 1: "●●○", 0: "●○○"}
-    CONFIDENCE_WORD = {2: "high", 1: "mixed", 0: "low"}
+    CONFIDENCE_WORD = {2: _("high"), 1: _("mixed"), 0: _("low")}
     MODE_ICONS = {"dictate": "audio-input-microphone-symbolic",
                   "rewrite": "document-edit-symbolic",
                   "command": "utilities-terminal-symbolic"}
@@ -143,6 +144,9 @@ class HistoryEntryRow(Gtk.ListBoxRow):
             meta.append(Gtk.Image(icon_name=self.MODE_ICONS[mode],
                                   tooltip_text=mode.capitalize(),
                                   css_classes=["dim-label"]))
+        # NOTE: mode.capitalize() above is a stable internal word
+        # (dictate/rewrite/command) kept as-is; the visible tag below
+        # goes through _() at display time.
         meta.append(_meta_label(
             datetime.fromtimestamp(ts).strftime("%a %d %b, %H:%M")))
         if entry.get("duration_s"):
@@ -160,32 +164,32 @@ class HistoryEntryRow(Gtk.ListBoxRow):
                 tooltip=f"Recognition confidence: "
                         f"{self.CONFIDENCE_WORD[conf]}"))
         if entry.get("mode") and entry.get("mode") != "dictate":
-            meta.append(Gtk.Label(label=mode.capitalize(),
+            meta.append(Gtk.Label(label=_(mode).capitalize(),
                                   css_classes=["tag", "outline"],
-                                  tooltip_text="Dictation mode"))
+                                  tooltip_text=_("Dictation mode")))
         if entry.get("ai"):
-            meta.append(Gtk.Label(label="AI polished",
+            meta.append(Gtk.Label(label=_("AI polished"),
                                   css_classes=["tag", "accent"],
-                                  tooltip_text="Text after AI polish"))
+                                  tooltip_text=_("Text after AI polish")))
         if on_insert is not None:
             ins_btn = Gtk.Button(icon_name="edit-paste-symbolic",
                                  css_classes=["flat"],
-                                 tooltip_text="Insert at cursor")
+                                 tooltip_text=_("Insert at cursor"))
             ins_btn.connect("clicked", on_insert, self)
             meta.append(ins_btn)
         copy_btn = Gtk.Button(icon_name="edit-copy-symbolic",
                               css_classes=["flat"],
-                              tooltip_text="Copy text")
+                              tooltip_text=_("Copy text"))
         copy_btn.connect("clicked", on_copy, self)
         meta.append(copy_btn)
         edit_btn = Gtk.Button(icon_name="document-edit-symbolic",
                               css_classes=["flat"],
-                              tooltip_text="Edit text")
+                              tooltip_text=_("Edit text"))
         edit_btn.connect("clicked", self._start_edit)
         meta.append(edit_btn)
         del_btn = Gtk.Button(icon_name="user-trash-symbolic",
                              css_classes=["flat", "destructive-action"],
-                             tooltip_text="Delete entry")
+                             tooltip_text=_("Delete entry"))
         del_btn.connect("clicked", on_delete, self)
         meta.append(del_btn)
         box.append(meta)
@@ -220,8 +224,8 @@ class HistoryEntryRow(Gtk.ListBoxRow):
             str(self.entry.get("text") or self.entry.get("raw") or ""))
         btns = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6,
                        halign=Gtk.Align.END)
-        cancel = Gtk.Button(label="Cancel", css_classes=["flat"])
-        save = Gtk.Button(label="Save", css_classes=["suggested-action"])
+        cancel = Gtk.Button(label=_("Cancel"), css_classes=["flat"])
+        save = Gtk.Button(label=_("Save"), css_classes=["suggested-action"])
         btns.append(cancel)
         btns.append(save)
         box.append(view)
@@ -251,9 +255,9 @@ def date_header_label(ts: float, now: datetime | None = None) -> str:
     day = datetime.fromtimestamp(ts).date()
     now = now or datetime.now()
     if day == now.date():
-        return "Today"
+        return _("Today")
     if day == (now - timedelta(days=1)).date():
-        return "Yesterday"
+        return _("Yesterday")
     return day.strftime("%a %d %b")
 
 
@@ -298,14 +302,14 @@ class CommandRow(Gtk.ListBoxRow):
             meta.append(_sep())
             meta.append(_meta_label(f"{float(entry['duration_ms']):.0f} ms"))
         if entry.get("destructive"):
-            meta.append(Gtk.Label(label="\u26a0 destructive",
+            meta.append(Gtk.Label(label="\u26a0 " + _("destructive"),
                                   css_classes=["warning", "caption"]))
         meta.append(Gtk.Box(hexpand=True))  # spacer
 
         output = str(entry.get("output") or "")
         self.output_revealer = None
         if output.strip():
-            self.output_btn = Gtk.ToggleButton(label="Output",
+            self.output_btn = Gtk.ToggleButton(label=_("Output"),
                                                css_classes=["flat"])
             self.output_btn.connect("toggled", self._on_toggle_output)
             meta.append(self.output_btn)
@@ -317,14 +321,15 @@ class CommandRow(Gtk.ListBoxRow):
                 child=out_lbl, reveal_child=False,
                 transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN)
         copy_btn = Gtk.Button(icon_name="edit-copy-symbolic",
-                              css_classes=["flat"], tooltip_text="Copy command")
+                              css_classes=["flat"],
+                              tooltip_text=_("Copy command"))
         copy_btn.connect("clicked", on_copy, self)
         meta.append(copy_btn)
         self.copy_btn = copy_btn
         rerun_btn = Gtk.Button(icon_name="media-playback-start-symbolic",
-                               label="Re-run", css_classes=["flat"],
-                               tooltip_text="Propose re-run (confirm with the "
-                                            "command hotkey)")
+                               label=_("Re-run"), css_classes=["flat"],
+                               tooltip_text=_("Propose re-run (confirm with "
+                                              "the command hotkey)"))
         rerun_btn.connect("clicked", on_rerun, self)
         meta.append(rerun_btn)
         self.rerun_btn = rerun_btn
@@ -355,13 +360,15 @@ class HistoryWindow(Adw.ApplicationWindow):
         vbox.append(self._build_header())
 
         self.down_banner = Adw.Banner(
-            title="Daemon not running — history works, dictation does not",
-            button_label="Retry", revealed=False)
+            title=_("Daemon not running — history works, dictation "
+                    "does not"),
+            button_label=_("Retry"), revealed=False)
         self.down_banner.connect("button-clicked", lambda *_: self.refresh())
         vbox.append(self.down_banner)
 
         vbox.append(self._build_status_row())
-        self.search = Gtk.SearchEntry(placeholder_text="Search transcripts, commands, apps…",
+        self.search = Gtk.SearchEntry(
+            placeholder_text=_("Search transcripts, commands, apps…"),
                                       margin_start=12, margin_end=12,
                                       margin_bottom=6)
         self.search.connect("changed", self._on_search_changed)
@@ -390,25 +397,26 @@ class HistoryWindow(Adw.ApplicationWindow):
 
         self.mic_btn = Gtk.Button(icon_name="audio-input-microphone-symbolic",
                                   css_classes=["suggested-action"],
-                                  tooltip_text="Toggle dictation")
+                                  tooltip_text=_("Toggle dictation"))
         self.mic_btn.connect("clicked", self._on_toggle)
         header.pack_start(self.mic_btn)
 
         menu = Gio.Menu()
         export_section = Gio.Menu()
-        export_section.append("Export as ZIP…", "win.hist.export")
-        export_section.append("Export as Text…", "win.hist.export-text")
+        export_section.append(_("Export as ZIP…"), "win.hist.export")
+        export_section.append(_("Export as Text…"), "win.hist.export-text")
         danger_section = Gio.Menu()
-        danger_section.append("Pause saving", "win.hist.pause")
-        danger_section.append("Clear All…", "win.hist.clear")
+        danger_section.append(_("Pause saving"), "win.hist.pause")
+        danger_section.append(_("Clear All…"), "win.hist.clear")
         menu.append_section(None, export_section)
         menu.append_section(None, danger_section)
         self.menu_model = menu
         self._danger_section = danger_section
         header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic",
-                                       menu_model=menu, tooltip_text="Menu"))
+                                       menu_model=menu,
+                                       tooltip_text=_("Menu")))
         settings_btn = Gtk.Button(icon_name="preferences-system-symbolic",
-                                  tooltip_text="Settings")
+                                  tooltip_text=_("Settings"))
         settings_btn.connect("clicked", self._open_settings)
         header.pack_end(settings_btn)
         return header
@@ -454,12 +462,13 @@ class HistoryWindow(Adw.ApplicationWindow):
                                    margin_top=2, margin_bottom=12)
         self.listbox.set_selection_mode(Gtk.SelectionMode.NONE)
         self.listbox.set_placeholder(Adw.StatusPage(
-            title="No dictations yet",
-            description="Press your hotkey and speak — transcripts land here.",
+            title=_("No dictations yet"),
+            description=_("Press your hotkey and speak — transcripts land "
+                          "here."),
             icon_name="sayit-ermano",
             vexpand=True))
         scroll.set_child(self.listbox)
-        self.view_stack.add_titled(scroll, "transcripts", "Transcripts")
+        self.view_stack.add_titled(scroll, "transcripts", _("Transcripts"))
 
         cmd_scroll = Gtk.ScrolledWindow(hexpand=True, vexpand=True)
         self.cmd_listbox = Gtk.ListBox(css_classes=["boxed-list-separate"],
@@ -467,13 +476,14 @@ class HistoryWindow(Adw.ApplicationWindow):
                                        margin_top=2, margin_bottom=12)
         self.cmd_listbox.set_selection_mode(Gtk.SelectionMode.NONE)
         self.cmd_listbox.set_placeholder(Adw.StatusPage(
-            title="No commands yet",
-            description="Voice command runs land here — re-run any of them "
-                        "(always confirmed) or copy the command line.",
+            title=_("No commands yet"),
+            description=_("Voice command runs land here — re-run any of "
+                          "them (always confirmed) or copy the command "
+                          "line."),
             icon_name="utilities-terminal-symbolic",
             vexpand=True))
         cmd_scroll.set_child(self.cmd_listbox)
-        self.view_stack.add_titled(cmd_scroll, "commands", "Commands")
+        self.view_stack.add_titled(cmd_scroll, "commands", _("Commands"))
 
         # -- Stats page (B6, upstream StatsView parity) ---------------------
         stats_scroll = Gtk.ScrolledWindow(hexpand=True, vexpand=True)
@@ -485,11 +495,11 @@ class HistoryWindow(Adw.ApplicationWindow):
         self.streak_lbl = Gtk.Label(css_classes=["title-3"], halign=Gtk.Align.START)
         stats_box.append(self.streak_lbl)
 
-        today_g = Adw.PreferencesGroup(title="Today")
+        today_g = Adw.PreferencesGroup(title=_("Today"))
         self._today_vals: dict[str, Gtk.Label] = {}
-        for key, title in (("dictations", "Dictations"),
-                           ("minutes", "Minutes dictated"),
-                           ("words", "Words")):
+        for key, title in (("dictations", _("Dictations")),
+                           ("minutes", _("Minutes dictated")),
+                           ("words", _("Words"))):
             row = Adw.ActionRow(title=title)
             val = Gtk.Label(css_classes=["dim-label", "numeric"])
             row.add_suffix(val)
@@ -497,14 +507,14 @@ class HistoryWindow(Adw.ApplicationWindow):
             today_g.add(row)
         stats_box.append(today_g)
 
-        all_g = Adw.PreferencesGroup(title="All time")
+        all_g = Adw.PreferencesGroup(title=_("All time"))
         self._all_vals: dict[str, Gtk.Label] = {}
-        for key, title in (("dictations", "Dictations"),
-                           ("words", "Words"),
-                           ("minutes", "Minutes dictated"),
-                           ("avg", "Avg per dictation"),
-                           ("best", "Best streak (days)"),
-                           ("saved", "Time saved (dictating vs typing)")):
+        for key, title in (("dictations", _("Dictations")),
+                           ("words", _("Words")),
+                           ("minutes", _("Minutes dictated")),
+                           ("avg", _("Avg per dictation")),
+                           ("best", _("Best streak (days)")),
+                           ("saved", _("Time saved (dictating vs typing)"))):
             row = Adw.ActionRow(title=title)
             val = Gtk.Label(css_classes=["dim-label", "numeric"])
             row.add_suffix(val)
@@ -513,12 +523,13 @@ class HistoryWindow(Adw.ApplicationWindow):
         stats_box.append(all_g)
 
         chart_g = Adw.PreferencesGroup(
-            title="Activity",
-            description="dictations per day")
+            title=_("Activity"),
+            description=_("dictations per day"))
         chart_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         self._span_btns: dict[int, Gtk.ToggleButton] = {}
         for span in (7, 30):
-            tb = Gtk.ToggleButton(label=f"{span} days",
+            tb = Gtk.ToggleButton(label=_n("{n} day", "{n} days", span)
+                                  .format(n=span),
                                   css_classes=["flat"], valign=Gtk.Align.CENTER)
             tb.set_active(span == 7)
             tb.connect("toggled", lambda b, s=span: self._on_span(b, s))
@@ -530,7 +541,7 @@ class HistoryWindow(Adw.ApplicationWindow):
         chart_g.add(self.chart)
         stats_box.append(chart_g)
 
-        self.view_stack.add_titled(stats_scroll, "stats", "Stats")
+        self.view_stack.add_titled(stats_scroll, "stats", _("Stats"))
         self.view_stack.connect("notify::visible-child",
                                 lambda *_: self._update_count())
 
@@ -575,7 +586,9 @@ class HistoryWindow(Adw.ApplicationWindow):
         s = history_mod.usage_stats(entries)
         self._stats = s
         self.streak_lbl.set_label(
-            f"{s['streak']}-day streak" + (" — keep going!" if s["streak"] else ""))
+            _n("{n}-day streak", "{n}-day streak", s["streak"]).format(
+                n=s["streak"])
+            + (" — " + _("keep going!") if s["streak"] else ""))
         t = s["today"]
         self._today_vals["dictations"].set_label(str(t["dictations"]))
         self._today_vals["minutes"].set_label(f"{int(t['seconds']) // 60} min")
@@ -729,13 +742,13 @@ class HistoryWindow(Adw.ApplicationWindow):
                            "commands") is self.view_stack.get_visible_child())
         if on_commands:
             n = sum(1 for e in self._entries if e.get("mode") == "command")
-            unit = "command" if n == 1 else "commands"
+            unit = _n("command", "commands", n)
         else:
             n = len(self._entries)
-            unit = "ent" + ("ry" if n == 1 else "ries")
+            unit = _n("entry", "entries", n)
         self.count_lbl.set_text(
             f"{n} {unit}"
-            + (" (showing latest 200)" if n >= 200 else ""))
+            + (" " + _("(showing latest 200)") if n >= 200 else ""))
 
     @staticmethod
     def _header_row(label: str) -> Gtk.ListBoxRow:
@@ -751,7 +764,8 @@ class HistoryWindow(Adw.ApplicationWindow):
             st = self.c.today_stats()
         except Exception:
             return
-        self.today_lbl.set_text("today: " + format_today(st))
+        self.today_lbl.set_text(_("today: {stats}").format(
+            stats=format_today(st)))
 
     # -- actions ----------------------------------------------------------------
 
@@ -763,7 +777,7 @@ class HistoryWindow(Adw.ApplicationWindow):
             cb = Gdk.Display.get_default().get_clipboard()
             cb.set(Gdk.ContentProvider.new_for_bytes(
                 "text/plain;charset=utf-8", GLib.Bytes.new(text.encode())))
-        self._toast("Copied")
+        self._toast(_("Copied"))
 
     def _on_copy_command(self, _btn, row) -> None:
         text = row.command
@@ -773,7 +787,7 @@ class HistoryWindow(Adw.ApplicationWindow):
             cb = Gdk.Display.get_default().get_clipboard()
             cb.set(Gdk.ContentProvider.new_for_bytes(
                 "text/plain;charset=utf-8", GLib.Bytes.new(text.encode())))
-        self._toast("Command copied")
+        self._toast(_("Command copied"))
 
     def _on_rerun_command(self, _btn, row) -> None:
         """Re-run ONLY re-posts the stored command as a pending proposal
@@ -781,9 +795,10 @@ class HistoryWindow(Adw.ApplicationWindow):
         silent, strong-confirm included for destructive commands)."""
         try:
             self.c.command_rerun(row.command, row.entry.get("purpose"))
-            self._toast("Re-run proposed — confirm with the command hotkey")
+            self._toast(_("Re-run proposed — confirm with the command "
+                          "hotkey"))
         except Exception as e:  # noqa: BLE001 - daemon down/busy -> toast
-            self._toast(f"Re-run failed: {e}")
+            self._toast(_("Re-run failed: {error}").format(error=e))
 
     def _on_insert_row(self, _btn, row) -> None:
         text = str(row.entry.get("text") or "")
@@ -791,9 +806,9 @@ class HistoryWindow(Adw.ApplicationWindow):
             return
         try:
             self.c.insert_text(text)
-            self._toast("Inserted at cursor")
+            self._toast(_("Inserted at cursor"))
         except Exception as e:  # noqa: BLE001 - daemon down/busy -> toast
-            self._toast(f"Insert failed: {e}")
+            self._toast(_("Insert failed: {error}").format(error=e))
 
     def _on_edit_row(self, row, new_text: str) -> bool:
         try:
@@ -803,9 +818,9 @@ class HistoryWindow(Adw.ApplicationWindow):
             saved = False
         if saved:
             row.entry["text"] = new_text
-            self._toast("Saved")
+            self._toast(_("Saved"))
         else:
-            self._toast("Save failed")
+            self._toast(_("Save failed"))
         return bool(saved)
 
     def _on_delete_row(self, _btn, row) -> None:
@@ -814,12 +829,12 @@ class HistoryWindow(Adw.ApplicationWindow):
                 self.c.history_delete(row.entry.get("ts", 0))
                 self._load_history()
         dlg = Adw.MessageDialog(
-            transient_for=self, modal=True, heading="Delete this entry?",
-            body="The transcription"
-                 + (" and its audio" if row.entry.get("audio") else "")
-                 + " will be removed.")
-        dlg.add_response("cancel", "Cancel")
-        dlg.add_response("delete", "Delete")
+            transient_for=self, modal=True, heading=_("Delete this entry?"),
+            body=_("The transcription")
+                 + (" " + _("and its audio") if row.entry.get("audio") else "")
+                 + " " + _("will be removed."))
+        dlg.add_response("cancel", _("Cancel"))
+        dlg.add_response("delete", _("Delete"))
         dlg.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
         dlg.connect("response", confirmed)
         dlg.present()
@@ -829,13 +844,14 @@ class HistoryWindow(Adw.ApplicationWindow):
             if response == "clear":
                 removed = self.c.history_clear()
                 self._load_history()
-                self._toast(f"Removed {removed} entries")
+                self._toast(_n("Removed {n} entry", "Removed {n} entries",
+                               removed).format(n=removed))
         dlg = Adw.MessageDialog(
-            transient_for=self, modal=True, heading="Clear all history?",
-            body="Every saved transcription and any retained audio will be "
-                 "deleted. This cannot be undone.")
-        dlg.add_response("cancel", "Cancel")
-        dlg.add_response("clear", "Clear All")
+            transient_for=self, modal=True, heading=_("Clear all history?"),
+            body=_("Every saved transcription and any retained audio will "
+                   "be deleted. This cannot be undone."))
+        dlg.add_response("cancel", _("Cancel"))
+        dlg.add_response("clear", _("Clear All"))
         dlg.set_response_appearance("clear", Adw.ResponseAppearance.DESTRUCTIVE)
         dlg.connect("response", confirmed)
         dlg.present()
@@ -851,8 +867,8 @@ class HistoryWindow(Adw.ApplicationWindow):
 
     def _on_export(self, *_args) -> None:
         dlg = Gtk.FileChooserNative.new(
-            "Export history", self, Gtk.FileChooserAction.SAVE,
-            "_Export", "_Cancel")
+            _("Export history"), self, Gtk.FileChooserAction.SAVE,
+            _("_Export"), _("_Cancel"))
         dlg.set_current_name(
             f"sayitermano-history-{time.strftime('%Y%m%d-%H%M%S')}.zip")
         dlg.connect("response", self._on_export_response)
@@ -873,18 +889,21 @@ class HistoryWindow(Adw.ApplicationWindow):
         from an idle callback (everything stays on the main thread)."""
         self._exporting = True
         self.action_set_enabled("hist.export", False)
-        self._toast("Exporting…")
+        self._toast(_("Exporting…"))
         GLib.idle_add(self._export_now, path)
 
     def _export_now(self, path: str) -> bool:
         try:
             n, notes = self.c.export_zip(path)
-            msg = f"Exported {n} entries"
+            msg = _n("Exported {n} entry", "Exported {n} entries", n).format(
+                n=n)
             if notes:
-                msg += f", {len(notes)} audio files skipped"
+                msg += ", " + _n("{n} audio file skipped",
+                                 "{n} audio files skipped",
+                                 len(notes)).format(n=len(notes))
             self._toast(msg)
         except Exception as e:  # noqa: BLE001 - surfaced as a toast
-            self._toast(f"export failed: {e}")
+            self._toast(_("export failed: {error}").format(error=e))
         finally:
             self._exporting = False
             self.action_set_enabled("hist.export", True)
@@ -894,8 +913,8 @@ class HistoryWindow(Adw.ApplicationWindow):
 
     def _on_export_text(self, *_args) -> None:
         dlg = Gtk.FileChooserNative.new(
-            "Export history as text", self, Gtk.FileChooserAction.SAVE,
-            "_Export", "_Cancel")
+            _("Export history as text"), self, Gtk.FileChooserAction.SAVE,
+            _("_Export"), _("_Cancel"))
         dlg.set_current_name(
             f"sayitermano-history-{time.strftime('%Y%m%d-%H%M%S')}.txt")
         dlg.connect("response", self._on_export_text_response)
@@ -921,9 +940,10 @@ class HistoryWindow(Adw.ApplicationWindow):
                              f"{text}\n")
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write("\n".join(lines))
-            self._toast(f"Exported {len(entries)} entries")
+            self._toast(_n("Exported {n} entry", "Exported {n} entries",
+                           len(entries)).format(n=len(entries)))
         except Exception as e:  # noqa: BLE001 - surfaced as a toast
-            self._toast(f"export failed: {e}")
+            self._toast(_("export failed: {error}").format(error=e))
 
     def _open_settings(self, _btn) -> None:
         app = self.get_application()
@@ -946,16 +966,18 @@ class HistoryWindow(Adw.ApplicationWindow):
             self.c.set_config({"history": {"save": resume}})
             self._history_paused = not resume
             self._sync_pause_label(not resume)
-            self._toast("History saving resumed" if resume else
-                        "History paused — new dictations are not saved")
+            self._toast(_("History saving resumed") if resume else
+                        _("History paused — new dictations are not saved"))
         except Exception as e:  # noqa: BLE001 - daemon down -> toast
-            self._toast(f"Could not toggle (daemon needed): {e}")
+            self._toast(_("Could not toggle (daemon needed): {error}")
+                        .format(error=e))
 
     def _sync_pause_label(self, paused: bool) -> None:
         self._danger_section.remove_all()
         self._danger_section.append(
-            "Resume saving" if paused else "Pause saving", "win.hist.pause")
-        self._danger_section.append("Clear All…", "win.hist.clear")
+            _("Resume saving") if paused else _("Pause saving"),
+            "win.hist.pause")
+        self._danger_section.append(_("Clear All…"), "win.hist.clear")
 
     def _toast(self, text: str) -> None:
         self.toast_overlay.add_toast(Adw.Toast(title=text))
@@ -975,7 +997,7 @@ class HistoryWindow(Adw.ApplicationWindow):
         if st is None:
             self.down_banner.set_revealed(True)
             self.mic_btn.set_sensitive(False)
-            self.state_lbl.set_text("daemon offline")
+            self.state_lbl.set_text(_("daemon offline"))
             self.state_dot.set_from_icon_name("dialog-warning-symbolic")
             self.state_dot.set_css_classes(["warning"])
             self.update_lbl.set_visible(False)
@@ -985,43 +1007,50 @@ class HistoryWindow(Adw.ApplicationWindow):
         recording = bool(st.get("recording"))
         busy = bool(st.get("busy"))
         if recording:
-            self.state_lbl.set_text("recording")
+            self.state_lbl.set_text(_("recording"))
             self.state_dot.set_css_classes(["error"])
             self.state_dot.set_from_icon_name("media-record-symbolic")
             self.mic_btn.set_icon_name("media-playback-stop-symbolic")
             self.mic_btn.add_css_class("destructive-action")
             self.mic_btn.remove_css_class("suggested-action")
         else:
-            self.state_lbl.set_text("processing…" if busy else "idle")
+            self.state_lbl.set_text(_("processing…") if busy
+                                    else _("idle"))
             self.state_dot.set_css_classes(["warning"] if busy else ["success"])
             self.state_dot.set_from_icon_name(
                 "emblem-synchronizing-symbolic" if busy else "object-select-symbolic")
             self.mic_btn.set_icon_name("audio-input-microphone-symbolic")
             self.mic_btn.add_css_class("suggested-action")
             self.mic_btn.remove_css_class("destructive-action")
-        self.backend_lbl.set_text(f"backend {st.get('backend') or '—'}")
-        self.gpu_lbl.set_text("GPU yes" if st.get("cuda") else "GPU no")
+        self.backend_lbl.set_text(_("backend {name}").format(
+            name=st.get("backend") or "—"))
+        self.gpu_lbl.set_text(_("GPU yes") if st.get("cuda")
+                              else _("GPU no"))
         model = st.get("active_model") or self._active_model_from_config()
-        self.model_lbl.set_text(f"model {model or '—'}")
+        self.model_lbl.set_text(_("model {name}").format(
+            name=model or "—"))
         warm = st.get("warmup") or {}
         if warm.get("running"):
             self.warmup_spinner.set_visible(True)
             self.warmup_spinner.start()
-            self.warmup_lbl.set_text(f"loading {warm.get('model') or ''}…")
+            self.warmup_lbl.set_text(_("loading {model}…").format(
+                model=warm.get("model") or ""))
         else:
             self.warmup_spinner.stop()
             self.warmup_spinner.set_visible(False)
             self.warmup_lbl.set_text(
-                f"model error: {warm['error']}" if warm.get("error") else "")
+                _("model error: {error}").format(error=warm["error"])
+                if warm.get("error") else "")
         upd = st.get("update_available")
         if upd:
             # text + tooltip only; the upgrade command comes from the status
             # payload (no network in the UI)
-            self.update_lbl.set_text(f"update available: v{upd}")
+            self.update_lbl.set_text(
+                _("update available: v{version}").format(version=upd))
             self.update_lbl.set_css_classes(["dim-label", "warning"])
             self.update_lbl.set_tooltip_text(
                 (st.get("update") or {}).get("upgrade_command")
-                or "run 'sayit-ermano update' for the upgrade command")
+                or _("run 'sayit-ermano update' for the upgrade command"))
             self.update_lbl.set_visible(True)
         else:
             self.update_lbl.set_visible(False)

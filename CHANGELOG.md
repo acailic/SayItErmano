@@ -13,6 +13,20 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **UI translations (#23)** — the whole interface (Settings, History,
+  tray menu, notifications, onboarding) is now gettext-localized and
+  ships complete **Serbian Latin (sr-Latn)**, **Serbian Cyrillic (sr)**
+  and **Bosnian (bs)** catalogs (501 strings each; English is the
+  source). The UI follows the system locale by default; the new
+  **Settings → General → Language** selector switches it live — no
+  restart, including the tray menu and desktop notifications
+  (`general.ui_language`, overridable with `SAYITERMANO_UI_LANGUAGE`).
+  Tooling: `scripts/extract_translations.py` (AST extraction, orphan +
+  completeness report, `--check` gate), `scripts/build_translations.py`
+  (dependency-free msgfmt, plural forms included) and
+  `just translations` / `just gate` enforcement.
+
+||||||| 43a0013
 - **Bundled local AI polish (#21)** — polished output with zero setup
   and zero cloud key, closing the "no bundled local LLM yet" parity
   gap end to end. One toggle: **Settings → AI → "Local polish (works
