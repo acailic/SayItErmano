@@ -1553,3 +1553,57 @@ figure.shot {
 }
 .plan-cta.ghost { background: transparent; color: var(--fg); }
 .plan-note { font-size: 0.85rem; opacity: 0.7; margin-top: 0.5rem; }
+
+/* ---------- pricing comparison table (verified comps, docs/PRICING.md) ---------- */
+
+.compare {
+  margin-top: 3rem;
+  max-width: 960px;
+  margin-left: auto;
+  margin-right: auto;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.compare table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  min-width: 640px;
+}
+.compare caption {
+  caption-side: top;
+  text-align: left;
+  padding-bottom: 0.9rem;
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+.compare caption .eyebrow { margin: 0 0 0.25rem; }
+.compare th,
+.compare td {
+  text-align: left;
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--line-soft);
+  white-space: nowrap;
+}
+.compare thead th {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: var(--tr-label);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border-bottom: 1px solid var(--line);
+}
+.compare tbody th {
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.compare td.us {
+  font-weight: 600;
+  color: var(--accent-deep);
+}
+.compare-note {
+  font-size: 0.8rem;
+  opacity: 0.6;
+  margin: 0.75rem 0 0;
+}

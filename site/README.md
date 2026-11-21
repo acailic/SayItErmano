@@ -15,6 +15,23 @@ verbatim — there is no build step).
   1.1 — license file alongside; no CDN). JS is progressive
   enhancement: the page is fully readable with it disabled, and
   motion respects `prefers-reduced-motion`.
+- `assets/js/paddle-config.js` + `paddle-checkout.js` — the buy flow
+  (#17). All Paddle constants live in `paddle-config.js`:
+  - until `clientToken`/`priceId` are filled, the buy button shows the
+    reserve fallback and links to the launch thread — nothing loads
+    from Paddle;
+  - once configured, a click loads Paddle.js (sandbox or production
+    per `mode`), opens the overlay checkout, and the button's href
+    becomes the hosted `paymentLink` tagged with the measurement-plan
+    UTM ids (`utm_source=landing&utm_medium=cta&utm_campaign=store`,
+    [docs/pricing-funnel-decision-rule.md](../docs/pricing-funnel-decision-rule.md)).
+    Paddle.js loads only on that first click, so the footer's
+    "no tracking, no cookies" stays true for everyone who never opens
+    the checkout;
+  - **go-live flip**: paste the live `clientToken`, `priceId` and
+    `paymentLink` from the Paddle dashboard and set `mode: "live"` —
+    that one file is the whole flip (sandbox test purchases use the
+    sandbox values the same way).
 - `assets/img/` — web-optimized copies of `docs/screenshots/`
   (compressed/resized for the page), the favicon set generated from
   `fluidvoice/assets/icon.png`, and the typographic `og-image.png`.

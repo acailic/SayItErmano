@@ -519,7 +519,7 @@
           </details>
           <details>
             <summary>What does it cost?</summary>
-            <p>Nothing — GPLv3, free as in freedom and in beer. If you enable cloud AI polish, you pay your provider for those tokens; with a local model (Ollama, LM Studio, llama.cpp) even that is free.</p>
+            <p>The app is free software (GPL-3.0) — every feature works without paying, forever. An optional $49 supporter license (intro price $39) buys the packaged build with its update channel and priority support; checkout is one-time, handled by Paddle. If you enable cloud AI polish, you pay your provider for those tokens; with a local model (Ollama, LM Studio, llama.cpp) even that is free.</p>
           </details>
         </div>
       </div>
@@ -597,12 +597,68 @@
               <li>License key identifies you to support; works offline</li>
               <li>14-day refund, no questions asked</li>
             </ul>
-            <a class="plan-cta" href="https://github.com/acailic/SayItErmano/discussions/35" id="buy-cta" rel="noopener">Reserve $39 intro — checkout opens at launch</a>
-            <p class="plan-note" id="pricing-note">Reserving is free and holds the intro price for
-            30 days after launch. Payment at launch is handled by Paddle
-            (merchant of record: payment, VAT, and refunds are processed by Paddle.com).
-            <a href="https://github.com/acailic/SayItErmano/discussions/35" rel="noopener">How it works</a>.</p>
+            <a class="plan-cta" id="buy-cta" data-paddle-buy
+               href="https://github.com/acailic/SayItErmano/discussions/35" rel="noopener">Buy now — $39 intro price</a>
+            <p class="plan-note" id="pricing-note">One-time purchase, checkout runs on
+            <a href="https://paddle.com" rel="noopener">Paddle</a> (merchant of record —
+            payment, VAT invoice and the 14-day refund are handled by Paddle.com).
+            Paid or free, <a href="#privacy">your audio never leaves your machine</a>.</p>
           </div>
+        </div>
+
+        <div class="compare" data-reveal>
+          <table>
+            <caption>
+              <span class="eyebrow">verified at primary sources, 2026-11-21</span>
+              numbers and links: <a href="https://github.com/acailic/SayItErmano/blob/linux/docs/PRICING.md">docs/PRICING.md ↗</a>
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col"></th>
+                <th scope="col">SayItErmano</th>
+                <th scope="col">Voicy</th>
+                <th scope="col">MacWhisper</th>
+                <th scope="col">Vibe Typer</th>
+                <th scope="col">Wispr Flow</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Linux</th>
+                <td class="us">yes</td>
+                <td>yes</td>
+                <td>no (macOS)</td>
+                <td>yes</td>
+                <td>no (waitlist)</td>
+              </tr>
+              <tr>
+                <th scope="row">Audio processed</th>
+                <td class="us">on your machine only</td>
+                <td>cloud (offline mode exists)</td>
+                <td>on your Mac</td>
+                <td>—</td>
+                <td>cloud</td>
+              </tr>
+              <tr>
+                <th scope="row">Price</th>
+                <td class="us">$49 once ($39 intro)</td>
+                <td>$8.49/mo · $260 lifetime</td>
+                <td>EUR 64 once</td>
+                <td>$96/yr</td>
+                <td>$15/mo</td>
+              </tr>
+              <tr>
+                <th scope="row">Open source</th>
+                <td class="us">GPL-3.0</td>
+                <td>no</td>
+                <td>no</td>
+                <td>—</td>
+                <td>no</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="compare-note">“—” = not verified at the source on 2026-11-21; we do not
+          print claims we have not checked. Wispr Flow has no Linux client.</p>
         </div>
       </div>
     </section>
@@ -700,5 +756,7 @@
   </footer>
 
   <script src="assets/js/site.js" defer></script>
+  <script src="assets/js/paddle-config.js" defer></script>
+  <script src="assets/js/paddle-checkout.js" defer></script>
 </body>
 </html>
