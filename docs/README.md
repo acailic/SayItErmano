@@ -65,6 +65,10 @@ the app itself.
 - [quality/funnel/](quality/funnel/) — the no-telemetry conversion
   funnel: Flathub installs + Paddle checkout stages, weekly report,
   cron line ([decision rule](pricing-funnel-decision-rule.md)).
+- [quality/install-matrix/README.md](quality/install-matrix/README.md) —
+  the fresh-VM install-route QA gate (issue #14): one evidence file
+  per route per distro, the owner checklist and the harness
+  (`scripts/qa_matrix.py`).
 - [../requests/](../requests/) — the brief ledger; a request's STATUS
   header is the authority on whether it shipped.
 - [plans/](plans/) — active plans, each with a Status header:
