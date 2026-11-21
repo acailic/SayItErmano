@@ -340,7 +340,7 @@ msgstr "Naredba je kopirana"
 msgid "Command key (optional, needs AI)"
 msgstr "Taster za naredbe (opciono, zahteva AI)"
 
-#: fluidvoice/daemon.py:1117
+#: fluidvoice/daemon.py:1119
 msgid "Command mode unavailable: {reason}"
 msgstr "Režim naredbi nije dostupan: {reason}"
 
@@ -805,6 +805,11 @@ msgstr "Jezik"
 msgid "Language whitelist — e.g. sl, en"
 msgstr "Lista dozvoljenih jezika — npr. sl, en"
 
+#: fluidvoice/capture.py:607
+#: fluidvoice/capture.py:604
+msgid "Language: {lang}"
+msgstr "Jezik: {lang}"
+
 #: fluidvoice/gtkui/settings_pages/dictation.py:367
 msgid "Languages"
 msgstr "Jezici"
@@ -1077,7 +1082,7 @@ msgstr "Ikonica u panelu dok daemon radi (promjena se primjenjuje odmah)"
 msgid "Parakeet (ONNX)"
 msgstr "Parakeet (ONNX)"
 
-#: fluidvoice/daemon.py:1307
+#: fluidvoice/daemon.py:1309
 msgid "Paste last: {detail}"
 msgstr "Zalijepi posljednje: {detail}"
 
@@ -1466,7 +1471,7 @@ msgstr "Prebacujem na whisper.cpp ({name})…"
 msgid "Switching to {name}…"
 msgstr "Prebacujem na {name}…"
 
-#: fluidvoice/i18n.py:173
+#: fluidvoice/i18n.py:179
 msgid "System default"
 msgstr "Sistemsko zadano"
 
@@ -1547,7 +1552,7 @@ msgstr "Uključi/isključi diktiranje"
 msgid "Total"
 msgstr "Ukupno"
 
-#: fluidvoice/daemon.py:1358
+#: fluidvoice/daemon.py:1360
 msgid "Transcription failed: {error}"
 msgstr "Transkripcija nije uspjela: {error}"
 
@@ -1888,6 +1893,10 @@ msgstr "spremaj lokalne brojače podešavanja (JSON u direktorijumu konfiguracij
 #: fluidvoice/gtkui/settings_pages/common.py:143
 msgid "key saved — type to replace"
 msgstr "ključ je spremljen — otkucajte za zamenu"
+
+#: fluidvoice/capture.py:601
+msgid "lang: {lang}"
+msgstr "jez.: {lang}"
 
 #: fluidvoice/gtkui/settings_pages/models.py:132
 msgid "latest unknown (offline or GitHub unreachable)"

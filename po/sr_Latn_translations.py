@@ -187,6 +187,8 @@ LATIN = {
     "Keep audio": "Zadrži zvuk",
     "Key": "Taster",
     "Language": "Jezik",
+    "Language: {lang}": "Jezik: {lang}",
+    "lang: {lang}": "jez.: {lang}",
     "Language whitelist — e.g. sl, en": "Lista dozvoljenih jezika — npr. sl, en",
     "Languages": "Jezici",
     "Let's fix it — most first-run failures are one of these:\n{hints}\n\nAfter fixing, dictate once more and report back.": "Hajde da popravimo — većina prvih neuspeha je jedna od ovih stvari:\n{hints}\n\nNakon popravke, diktirajte još jednom i javite kako je prošlo.",

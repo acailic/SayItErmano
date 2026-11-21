@@ -337,7 +337,7 @@ msgstr ""
 msgid "Command key (optional, needs AI)"
 msgstr ""
 
-#: fluidvoice/daemon.py:1117
+#: fluidvoice/daemon.py:1119
 msgid "Command mode unavailable: {reason}"
 msgstr ""
 
@@ -798,6 +798,11 @@ msgstr ""
 msgid "Language whitelist — e.g. sl, en"
 msgstr ""
 
+#: fluidvoice/capture.py:607
+#: fluidvoice/capture.py:604
+msgid "Language: {lang}"
+msgstr ""
+
 #: fluidvoice/gtkui/settings_pages/dictation.py:367
 msgid "Languages"
 msgstr ""
@@ -1066,7 +1071,7 @@ msgstr ""
 msgid "Parakeet (ONNX)"
 msgstr ""
 
-#: fluidvoice/daemon.py:1307
+#: fluidvoice/daemon.py:1309
 msgid "Paste last: {detail}"
 msgstr ""
 
@@ -1449,7 +1454,7 @@ msgstr ""
 msgid "Switching to {name}…"
 msgstr ""
 
-#: fluidvoice/i18n.py:173
+#: fluidvoice/i18n.py:179
 msgid "System default"
 msgstr ""
 
@@ -1530,7 +1535,7 @@ msgstr ""
 msgid "Total"
 msgstr ""
 
-#: fluidvoice/daemon.py:1358
+#: fluidvoice/daemon.py:1360
 msgid "Transcription failed: {error}"
 msgstr ""
 
@@ -1864,6 +1869,10 @@ msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/common.py:143
 msgid "key saved — type to replace"
+msgstr ""
+
+#: fluidvoice/capture.py:601
+msgid "lang: {lang}"
 msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/models.py:132
