@@ -447,6 +447,7 @@
         </div>
         <p class="hero-note" style="margin-top:1.25rem" data-reveal>
           Arch users: a native AUR recipe (<span class="inline-code">sayit-ermano</span>) lives in-tree — its first push is pending, so until it lands use pipx or source. The install guide keeps the current state.
+          A Flathub listing is in review too — the badge at the bottom of this page links the listing the day it goes live.
         </p>
       </div>
     </section>
@@ -531,8 +532,15 @@
           </details>
           <details>
             <summary>What does it cost?</summary>
-            <p>Nothing — GPLv3, free as in freedom and in beer. If you enable cloud AI polish, you pay your provider for those tokens; with a local model (Ollama, LM Studio, llama.cpp) even that is free.</p>
+            <p>Nothing — GPLv3, free as in freedom and in beer; every feature works without a license. There is an optional <a href="#pricing">supporter license ($39 intro)</a> that buys packaged builds with the update channel, priority support, and a 14-day refund. If you enable cloud AI polish, you pay your provider for those tokens; with a local model (Ollama, LM Studio, llama.cpp) even that is free.</p>
           </details>
+        </div>
+
+        <div class="install-foot" data-reveal>
+          <a href="https://github.com/acailic/SayItErmano/blob/linux/docs/dev/FAQ.md">full FAQ ↗</a>
+          <a href="https://github.com/acailic/SayItErmano/blob/linux/SUPPORT.md">support &amp; where to ask ↗</a>
+          <a href="https://github.com/acailic/SayItErmano/blob/linux/docs/guides/license.md">license keys explained ↗</a>
+          <a href="refund.html">refund policy ↗</a>
         </div>
       </div>
     </section>
@@ -704,6 +712,24 @@
             <button class="copy-btn" type="button" data-copy="curl -fsSL https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/install-one-shot.sh | bash">copy</button>
           </div>
         </div>
+        <div class="cta-actions" data-reveal>
+          <a class="cta-buy" data-store-buy
+             href="https://github.com/acailic/SayItErmano/discussions/35"
+             data-utm-source="landing" data-utm-medium="cta" data-utm-campaign="store"
+             rel="noopener">Buy the supporter license — $39</a>
+          <a class="flathub-badge" id="flathub-cta"
+             href="https://github.com/acailic/SayItErmano/issues/12"
+             data-utm-source="landing" data-utm-medium="cta" data-utm-campaign="flathub"
+             rel="noopener">
+            <img src="assets/img/flathub-badge-en.svg" width="153" height="51"
+                 loading="lazy" alt="SayItErmano on Flathub">
+          </a>
+        </div>
+        <p class="cta-note" data-reveal>
+          The app itself is free and GPLv3 — buying is support plus convenience
+          (<a href="#pricing">what the license adds</a>). The Flathub listing is
+          in review; until it merges, every route above installs the same app.
+        </p>
         <div class="cta-links" data-reveal>
           <a href="https://youtu.be/HWyjH-VCBAw" rel="noopener">▶ watch the demo</a>
           <a href="https://github.com/acailic/SayItErmano/releases">releases ↗</a>
@@ -742,6 +768,7 @@
             <li><a href="https://github.com/acailic/SayItErmano/blob/linux/docs/guides/wayland.md">Wayland</a></li>
             <li><a href="https://github.com/acailic/SayItErmano/blob/linux/docs/guides/command-mode.md">Command mode</a></li>
             <li><a href="https://github.com/acailic/SayItErmano/blob/linux/docs/guides/scripting-and-mcp.md">Scripting &amp; MCP</a></li>
+            <li><a href="https://github.com/acailic/SayItErmano/blob/linux/docs/guides/license.md">License keys</a></li>
           </ul>
         </nav>
         <nav class="footer-col" aria-label="Community">
@@ -750,6 +777,7 @@
             <li><a href="https://github.com/acailic/SayItErmano">GitHub</a></li>
             <li><a href="https://github.com/acailic/SayItErmano/issues">Issues</a></li>
             <li><a href="https://github.com/acailic/SayItErmano/discussions">Discussions</a></li>
+            <li><a href="https://github.com/acailic/SayItErmano/blob/linux/SUPPORT.md">Support</a></li>
             <li><a href="https://youtu.be/HWyjH-VCBAw" rel="noopener">Demo video</a></li>
             <li><a href="https://github.com/altic-dev/FluidVoice" rel="noopener">FluidVoice (macOS) ↗</a></li>
           </ul>

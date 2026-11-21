@@ -1,4 +1,4 @@
-"""Landing-site static gate (#17).
+"""Landing-site static gate (#17, extended by #19).
 
 The site/ tree has no build step and no framework, so its invariants
 are checked by parsing the shipped HTML directly — stdlib only, no
@@ -8,9 +8,16 @@ owner runbooks, not by the suite):
 - every local href/src in site/*.html resolves to an existing file;
 - same-page fragment targets (#foo) have a matching id;
 - the legal pages exist and are linked from every page footer;
-- the buy CTA exists, keeps a real no-JS fallback href, and carries
-  the utm data tags from the funnel decision rule
+- every buy CTA (pricing card + closing section, #19) keeps a real
+  no-JS fallback href, shows the price, and carries the utm data
+  tags from the funnel decision rule
   (docs/pricing-funnel-decision-rule.md);
+- the Flathub badge CTA exists with the official badge asset served
+  locally and its own landing attribution tags
+  (utm_campaign=flathub — never the store campaign, so Paddle
+  attribution stays clean);
+- the support cluster is reachable from the landing page:
+  SUPPORT.md, the license-keys guide, the full FAQ, refund policy;
 - the store config defines the sandbox/live flip constants;
 - the privacy section stays above the pricing section on the landing
   page (the store must not bury the local-audio promise).
@@ -30,6 +37,19 @@ EXTERNAL = ("http://", "https://", "mailto:", "data:", "//")
 LANDING_UTM = {"data-utm-source": "landing",
                "data-utm-medium": "cta",
                "data-utm-campaign": "store"}
+# the install-side sibling of the store tag (site/README.md): same
+# grammar, its own campaign, so install clicks never masquerade as
+# store visits in Paddle's attribution
+FLATHUB_UTM = {"data-utm-source": "landing",
+               "data-utm-medium": "cta",
+               "data-utm-campaign": "flathub"}
+FLATHUB_BADGE_ASSET = "assets/img/flathub-badge-en.svg"
+SUPPORT_LINKS = (
+    "https://github.com/acailic/SayItErmano/blob/linux/SUPPORT.md",
+    "https://github.com/acailic/SayItErmano/blob/linux/docs/guides/license.md",
+    "https://github.com/acailic/SayItErmano/blob/linux/docs/dev/FAQ.md",
+    "refund.html",
+)
 STORE_CONFIG_KEYS = ("mode", "clientToken", "priceId", "productId",
                      "fallbackUrl")
 
@@ -56,6 +76,52 @@ def _parse(path: Path) -> _Collector:
     c.feed(path.read_text(encoding="utf-8"))
     c.close()
     return c
+
+
+def _index() -> str:
+    return (SITE / "index.html").read_text(encoding="utf-8")
+
+
+def _anchors(html: str, want) -> list[dict[str, str]]:
+    """Anchors whose attrs satisfy `want`, as attr dicts plus `_text`
+    (label) and `_img_src`/`_img_alt` when the anchor wraps an image.
+    Nested anchors are invalid HTML and not expected."""
+    class P(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__()
+            self.found: list[dict[str, str]] = []
+            self._cur: dict[str, str] | None = None
+            self._buf: list[str] = []
+            self._img: dict[str, str] | None = None
+
+        def handle_starttag(self, tag, attrs):
+            attrd = {k: v or "" for k, v in attrs}
+            if self._cur is None:
+                if tag == "a" and want(attrd):
+                    self._cur = attrd
+                    self._buf = []
+                    self._img = None
+            elif tag == "img":
+                self._img = attrd
+
+        def handle_endtag(self, tag):
+            if tag == "a" and self._cur is not None:
+                el = dict(self._cur)
+                el["_text"] = " ".join(" ".join(self._buf).split())
+                if self._img:
+                    el["_img_src"] = self._img.get("src", "")
+                    el["_img_alt"] = self._img.get("alt", "")
+                self.found.append(el)
+                self._cur = None
+
+        def handle_data(self, data):
+            if self._cur is not None and data.strip():
+                self._buf.append(data.strip())
+
+    p = P()
+    p.feed(html)
+    p.close()
+    return p.found
 
 
 def _html_files() -> list[Path]:
@@ -105,40 +171,55 @@ def test_legal_pages_exist_and_are_linked() -> None:
 
 
 # ---------------------------------------------------------------------------
-# the store CTA (#17 + #18 tags)
+# the store CTAs (#17 + #18 tags; closing link added by #19)
 # ---------------------------------------------------------------------------
 
-def _buy_cta() -> tuple[dict[str, str], str]:
-    text = (SITE / "index.html").read_text(encoding="utf-8")
-
-    class CTA(HTMLParser):
-        attrs: dict[str, str] = {}
-        text_inside = ""
-
-        def handle_starttag(self, tag, attrs):
-            if any(k == "id" and v == "buy-cta" for k, v in attrs):
-                self.attrs = {k: v or "" for k, v in attrs}
-
-        def handle_data(self, data):
-            if self.attrs:
-                self.text_inside += data.strip()
-
-    cta = CTA()
-    cta.feed(text)
-    return cta.attrs, cta.text_inside
+def _buy_ctas() -> list[dict[str, str]]:
+    return _anchors(_index(),
+                    lambda a: a.get("id") == "buy-cta"
+                    or "data-store-buy" in a)
 
 
-def test_buy_cta_present_with_fallback_and_utm_tags() -> None:
-    attrs, label = _buy_cta()
-    assert attrs, "index.html has no element id=buy-cta"
-    href = attrs.get("href", "")
-    assert href.startswith("https://"), (
-        f"buy CTA needs an https no-JS fallback href, got {href!r}")
-    for key, value in LANDING_UTM.items():
-        assert attrs.get(key) == value, (
-            f"buy CTA {key} must be {value!r} (funnel decision rule), "
-            f"got {attrs.get(key)!r}")
-    assert label, "buy CTA label text is empty"
+def test_buy_ctas_present_with_price_fallback_and_utm_tags() -> None:
+    ctas = _buy_ctas()
+    assert len(ctas) >= 2, (
+        "index.html needs the pricing buy CTA (id=buy-cta) and the "
+        "closing-section buy link (data-store-buy)")
+    for el in ctas:
+        href = el.get("href", "")
+        assert href.startswith("https://"), (
+            f"buy CTA {el.get('id', 'closing')!r} needs an https no-JS "
+            f"fallback href, got {href!r}")
+        for key, value in LANDING_UTM.items():
+            assert el.get(key) == value, (
+                f"buy CTA {key} must be {value!r} (funnel decision rule), "
+                f"got {el.get(key)!r}")
+        assert el["_text"], "buy CTA label text is empty"
+        assert re.search(r"\$\d+", el["_text"]), (
+            f"buy CTA label must show the price, got {el['_text']!r}")
+
+
+def test_flathub_badge_cta_present_tagged_and_local() -> None:
+    assert (SITE / FLATHUB_BADGE_ASSET).is_file(), (
+        f"the official Flathub badge must ship locally: {FLATHUB_BADGE_ASSET}")
+    ctas = _anchors(_index(), lambda a: a.get("id") == "flathub-cta")
+    assert len(ctas) == 1, "index.html needs exactly one id=flathub-cta"
+    el = ctas[0]
+    assert el.get("href", "").startswith("https://"), (
+        f"Flathub badge needs an https href, got {el.get('href')!r}")
+    for key, value in FLATHUB_UTM.items():
+        assert el.get(key) == value, (
+            f"Flathub badge {key} must be {value!r}, got {el.get(key)!r}")
+    assert el.get("_img_src") == FLATHUB_BADGE_ASSET, (
+        "Flathub badge must use the local asset copy, no CDN")
+    assert (SITE / el["_img_src"]).is_file()
+    assert el["_img_alt"].strip(), "Flathub badge image needs alt text"
+
+
+def test_support_links_present() -> None:
+    urls = _parse(SITE / "index.html").urls
+    for url in SUPPORT_LINKS:
+        assert url in urls, f"index.html must link the support route {url}"
 
 
 def test_store_config_defines_flip_constants() -> None:
@@ -167,6 +248,8 @@ def test_store_js_only_loads_paddle_when_armed() -> None:
     assert "cdn.paddle.com/paddle/v2/paddle.js" in js
     assert "Environment.set" in js  # sandbox mode honored
     assert "customData" in js      # utm tags reach the transaction
+    # every store CTA on the page opens the overlay when armed (#19)
+    assert 'querySelectorAll("#buy-cta, [data-store-buy]")' in js
     # the loader must be behind the armed check, not top-level
     armed_pos = js.find("if (!armed) return")
     load_pos = js.find("createElement")
