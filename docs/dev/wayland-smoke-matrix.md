@@ -90,7 +90,9 @@ insertion, wtype on GNOME/Plasma) — so no axis cell is silently
 dropped. Evidence lands under
 `docs/quality/wayland/<date>-<session>/` (`results.json` = latest
 run, `report.md` = append-only journal + the manual checklist the
-owner ticks). Exit code 1 iff an executed row failed; skips and gaps
+owner ticks); the tree's [README.md](../quality/wayland/README.md)
+is the generated session tracker (`--init` regenerates it).
+Exit code 1 iff an executed row failed; skips and gaps
 carry reasons, they are never hidden.
 
 ```bash
@@ -98,6 +100,7 @@ python3 scripts/wayland_smoke.py --dry-run                 # plan for THIS sessi
 python3 scripts/wayland_smoke.py --dry-run --session sway   # plan per session, CI-safe
 python3 scripts/wayland_smoke.py                            # run + record (live session)
 python3 scripts/wayland_smoke.py --print-rows               # regenerate the tables below
+python3 scripts/wayland_smoke.py --init                     # regenerate the evidence tracker
 ```
 
 Version pins the rows carry (evidence base verified 2026-11-21,
@@ -120,7 +123,10 @@ X11 regression pass runs on the same build):
 3. Tick the MANUAL checklist in the recorded `report.md`; work the
    session's context matrix (A on GNOME Wayland, B on sway, C on
    X11) above.
-4. Commit the evidence tree; `docs/STATUS.md` and the Flathub
+4. Regenerate the evidence tracker
+   (`python3 scripts/wayland_smoke.py --init` — updates
+   [docs/quality/wayland/README.md](../quality/wayland/README.md)),
+   commit the evidence tree; `docs/STATUS.md` and the Flathub
    supported-environments text must match the recorded evidence.
 
 ### Row tables — the exact invoke line per row (generated)

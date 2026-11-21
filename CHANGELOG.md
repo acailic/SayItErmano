@@ -13,6 +13,23 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **Live Wayland smoke harness (#13)** — the REQUIRED-BEFORE-PARITY
+  Wayland/X11 smoke matrix is now a one-command run per session:
+  `scripts/wayland_smoke.py` detects the session from the environment
+  (same precedence as the daemon's probe), selects the applicable rows
+  of the pinned session × hotkey × insertion axes (GlobalShortcuts
+  portal gaps, wtype/zwp_virtual_keyboard vs ydotool/uinput, EIS,
+  clipboard+Ctrl+V, non-US layout, sleep/wake + lock/unlock + autostart
+  lifecycle, context matrices A/B/C, the X11 same-build zero-delta
+  regression), runs what a machine can check alone, and records dated
+  evidence (`results.json` + an append-only `report.md` with the manual
+  checklist) under `docs/quality/wayland/<date>-<session>/` — exit 1
+  on any red row, skips and gaps never silently dropped. The runbook
+  gained the generated exact-invoke-line row tables; the evidence
+  tree's `README.md` is the generated session tracker
+  (`--init`). Offline proof: `tests/test_wayland_smoke.py` (fake
+  sessions, no display needed). The live rows are owner actions —
+  GNOME Wayland first, then sway, X11 control on the same build.
 - **Offline license keys, end to end (#16)** — the purchase-to-key
   pipeline for the ADR-0005 SKU: a Paddle `transaction.completed`
   webhook receiver (`scripts/license_webhook.py`) verifies the signed
