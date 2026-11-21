@@ -127,6 +127,11 @@ class TestInsertionFailureHints:
     def test_wayland_unavailable_insertion_names_the_tools(
             self, monkeypatch):
         self._env(monkeypatch, "wayland", "ubuntu:GNOME")
+        # pin the legacy (probe-less) resolution: this test exercises the
+        # nothing-installed fallback path, which a portal-equipped live
+        # session (eis needs no binary) would otherwise short-circuit
+        from fluidvoice import session as session_mod
+        monkeypatch.setattr(session_mod, "_wayland_probes", lambda: None)
         hints = insertion_failure_hints({"ok": True}, _cfg(),
                                         which=lambda t: None)
         assert any("no typing tool" in h for h in hints)
@@ -135,6 +140,8 @@ class TestInsertionFailureHints:
     def test_wayland_includes_bind_steps_and_wl_copy_only(
             self, monkeypatch):
         self._env(monkeypatch, "wayland", "ubuntu:GNOME")
+        from fluidvoice import session as session_mod
+        monkeypatch.setattr(session_mod, "_wayland_probes", lambda: None)
         have = {"wl-copy", "wl-paste"}
         which = lambda t: f"/usr/bin/{t}" if t in have else None
         hints = insertion_failure_hints({"ok": True}, _cfg(), which=which)
