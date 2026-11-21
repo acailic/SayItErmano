@@ -240,6 +240,36 @@ class TestToggleScript:
 # ---------------------------------------------------------------------------
 # Phase 1 — daemon status surface + startup log
 # ---------------------------------------------------------------------------
+def _silent_ui():
+    """A daemon.ui stand-in that swallows notifications (X11 hotkey
+    failures WARN + notify headless)."""
+    import types
+    return types.SimpleNamespace(notify=lambda *a, **k: None)
+
+
+def _stub_portal_listener(fail: bool):
+    """PortalHotkeyListener replacement: records kwargs, start() honors
+    `fail`. Classes are per-call so counters never leak across tests."""
+
+    class StubPortalListener:
+        constructed: list[dict] = []
+        started: list[int] = []
+        stopped: list[int] = []
+        start_error = "no portal backend (stub)" if fail else None
+        summary = ["stub portal hotkey bound"]
+
+        def __init__(self, **kwargs):
+            StubPortalListener.constructed.append(kwargs)
+
+        def start(self):
+            StubPortalListener.started.append(1)
+            return not fail
+
+        def stop(self):
+            StubPortalListener.stopped.append(1)
+
+    return StubPortalListener
+
 
 class TestDaemonStatus:
     def _daemon(self, monkeypatch, env):
@@ -279,6 +309,8 @@ class TestDaemonStatus:
         from fluidvoice import paths
         logs: list[str] = []
         monkeypatch.setattr("fluidvoice.daemon.log", logs.append)
+        monkeypatch.setattr("fluidvoice.portal_hotkey.PortalHotkeyListener",
+                            _stub_portal_listener(fail=True))
         script = tmp_path / "toggle"
         monkeypatch.setattr(paths, "toggle_script", lambda: script)
         d = self._daemon(monkeypatch, dict(WL_ENV, XDG_CURRENT_DESKTOP="sway"))
@@ -286,10 +318,11 @@ class TestDaemonStatus:
         assert any("session: wayland (sway)" in line for line in logs)
         assert any("insertion=" in line and "overlay=notifications" in line
                    for line in logs)
-        # the wayland hotkey path writes the bindable script and says so
+        # the wayland hotkey path writes the bindable script and says so;
+        # a failed portal bind (sway: no backend) lands on that fallback
         assert d._start_hotkey() is None
         assert any(str(script) in line for line in logs)  # bind hint logged
-        assert any("global grabs do not exist" in line for line in logs)
+        assert any("DE-shortcut fallback" in line for line in logs)
         assert script.exists()
         # x11 logs the full-experience line and writes nothing
         logs.clear()
@@ -297,7 +330,7 @@ class TestDaemonStatus:
         d = self._daemon(monkeypatch, X11_ENV)
         d._log_session()
         assert any("session: x11" in line for line in logs)
-        assert not any("global grabs" in line for line in logs)
+        assert not any("DE-shortcut fallback" in line for line in logs)
         assert not script.exists()
 
 
@@ -954,16 +987,189 @@ class TestEvdevDaemonWiring:
         assert d._start_evdev_ptt() is None
         assert d._evdev_ptt is None
 
-    def test_wayland_start_hotkey_is_declared_not_attempted(self, monkeypatch):
+    def test_wayland_start_hotkey_tries_portal_then_declares_fallback(
+            self, monkeypatch):
         set_session(monkeypatch, WL_ENV)
         logs: list[str] = []
         monkeypatch.setattr("fluidvoice.daemon.log", logs.append)
+        stub = _stub_portal_listener(fail=True)
+        monkeypatch.setattr("fluidvoice.portal_hotkey.PortalHotkeyListener",
+                            stub)
         d = self._daemon(monkeypatch)
-        assert d._start_hotkey() is None
-        assert any("global grabs do not exist" in line for line in logs)
-        assert any("DE custom shortcut" in line for line in logs)
+        assert d._start_hotkey() is None  # auto: portal failure is not fatal
+        assert stub.started == [1]
+        assert d._portal_hotkey is None
+        assert any("DE-shortcut fallback" in line for line in logs)
         # and the restart hook does not raise on wayland
         d._restart_hotkey()
+
+
+class TestPortalHotkeyDaemonWiring:
+    """hotkey.wayland_portal (auto|on|off): the daemon's wayland hotkey
+    rides the GlobalShortcuts portal first, the DE-shortcut fallback
+    behind it (ADR-0006)."""
+
+    def _daemon(self, monkeypatch, cfg_over=None):
+        import copy
+
+        import fluidvoice.daemon as dm
+
+        class StubRecorder:
+            def start(self, path):
+                pass
+
+            def stop(self):
+                return None
+
+            def cancel(self):
+                pass
+
+        cfg = copy.deepcopy(DEFAULTS)
+        cfg["hotkey"].update(cfg_over or {})
+        return dm.Daemon(cfg, recorder=StubRecorder())
+
+    def test_auto_starts_and_keeps_fallback_hint(self, monkeypatch):
+        set_session(monkeypatch, WL_ENV)
+        logs: list[str] = []
+        monkeypatch.setattr("fluidvoice.daemon.log", logs.append)
+        stub = _stub_portal_listener(fail=False)
+        monkeypatch.setattr("fluidvoice.portal_hotkey.PortalHotkeyListener",
+                            stub)
+        d = self._daemon(monkeypatch)
+        assert d._start_hotkey() is None
+        assert d._portal_hotkey is not None
+        assert any("portal GlobalShortcuts active" in line for line in logs)
+        assert any("DE-shortcut fallback" in line for line in logs)
+        # the bind kwargs carry the config's mode + trigger preference
+        kwargs = stub.constructed[0]
+        assert kwargs["preferred_trigger"] == ""
+        assert kwargs["mode"] == "toggle"
+
+    def test_on_mode_failure_is_an_error(self, monkeypatch):
+        set_session(monkeypatch, WL_ENV)
+        monkeypatch.setattr("fluidvoice.daemon.ui", _silent_ui())
+        stub = _stub_portal_listener(fail=True)
+        monkeypatch.setattr("fluidvoice.portal_hotkey.PortalHotkeyListener",
+                            stub)
+        d = self._daemon(monkeypatch, {"wayland_portal": "on"})
+        error = d._start_hotkey()
+        assert error and "portal" in error
+
+    def test_off_mode_never_constructs_it(self, monkeypatch):
+        set_session(monkeypatch, WL_ENV)
+        stub = _stub_portal_listener(fail=False)
+        monkeypatch.setattr("fluidvoice.portal_hotkey.PortalHotkeyListener",
+                            stub)
+        d = self._daemon(monkeypatch, {"wayland_portal": "off"})
+        assert d._start_hotkey() is None
+        assert stub.constructed == []
+        assert d._portal_hotkey is None
+
+    def test_x11_session_never_starts_it(self, monkeypatch):
+        set_session(monkeypatch, X11_ENV)
+        stub = _stub_portal_listener(fail=False)
+        monkeypatch.setattr("fluidvoice.daemon.log", lambda m: None)
+        monkeypatch.setattr("fluidvoice.portal_hotkey.PortalHotkeyListener",
+                            stub)
+        monkeypatch.setattr("fluidvoice.daemon.ui", _silent_ui())
+        d = self._daemon(monkeypatch, {"wayland_portal": "on"})
+        # the X11 branch takes the XGrabKey path (which fails headless -
+        # that error is the old, unchanged behavior); the portal is
+        # never even constructed
+        d._start_hotkey()
+        assert stub.constructed == []
+        assert d._portal_hotkey is None
+
+    def test_restart_on_hotkey_config_change(self, monkeypatch):
+        set_session(monkeypatch, WL_ENV)
+        monkeypatch.setattr("fluidvoice.daemon.log", lambda m: None)
+        stub = _stub_portal_listener(fail=False)
+        monkeypatch.setattr("fluidvoice.portal_hotkey.PortalHotkeyListener",
+                            stub)
+        d = self._daemon(monkeypatch)
+        assert d._start_hotkey() is None
+        assert len(stub.started) == 1
+        # a hotkey.* settings change re-binds (fresh portal session ->
+        # BindShortcuts again, the KDE-restart workaround)
+        d.apply_config(["hotkey.wayland_portal_trigger"])
+        assert len(stub.started) == 2 and len(stub.stopped) == 1
+
+    def test_flatpak_id_rides_as_app_id(self, monkeypatch):
+        set_session(monkeypatch, WL_ENV)
+        monkeypatch.setattr("fluidvoice.daemon.log", lambda m: None)
+        monkeypatch.setenv("FLATPAK_ID", "io.github.acailic.SayItErmano")
+        stub = _stub_portal_listener(fail=False)
+        monkeypatch.setattr("fluidvoice.portal_hotkey.PortalHotkeyListener",
+                            stub)
+        d = self._daemon(monkeypatch)
+        d._start_hotkey()
+        assert stub.constructed[0]["app_id"] == "io.github.acailic.SayItErmano"
+
+
+class TestEisDaemonWiring:
+    def test_wayland_starts_shared_keyboard(self, monkeypatch):
+        import fluidvoice.daemon as dm
+        import fluidvoice.eis_insertion as ei
+        calls: list = []
+
+        class StubKeyboard:
+            summary = ["stub EIS insertion ready"]
+
+            @property
+            def ready(self):
+                return True
+
+            def stop(self):
+                calls.append("stop")
+
+        def fake_ensure(cfg, log=None):
+            calls.append("ensure")
+            ei._shared = StubKeyboard()
+            return True
+
+        set_session(monkeypatch, WL_ENV)
+        monkeypatch.setattr("fluidvoice.daemon.log", lambda m: None)
+        monkeypatch.setattr(ei, "ensure_shared", fake_ensure)
+        cfg = wl_cfg()
+        cfg["insertion"]["wayland_tool"] = "eis"
+
+        class StubRecorder:
+            def start(self, path):
+                pass
+
+            def stop(self):
+                return None
+
+            def cancel(self):
+                pass
+
+        d = dm.Daemon(cfg, recorder=StubRecorder())
+        assert d._start_eis_insertion() is None
+        assert calls == ["ensure"]
+        d.shutdown()  # tears the shared keyboard down
+        assert "stop" in calls
+
+    def test_x11_never_starts_it(self, monkeypatch):
+        import fluidvoice.daemon as dm
+        import fluidvoice.eis_insertion as ei
+        calls: list = []
+        monkeypatch.setattr(ei, "ensure_shared",
+                            lambda cfg, log=None: calls.append("ensure"))
+        set_session(monkeypatch, X11_ENV)
+
+        class StubRecorder:
+            def start(self, path):
+                pass
+
+            def stop(self):
+                return None
+
+            def cancel(self):
+                pass
+
+        d = dm.Daemon(wl_cfg(), recorder=StubRecorder())
+        assert d._start_eis_insertion() is None
+        assert calls == []
 
 
 class TestWaylandConfigRoundtrip:

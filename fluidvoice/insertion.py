@@ -2,12 +2,16 @@
 or clipboard paste.
 
 Mirrors FluidVoice's TypingService strategies:
-- typed: xdotool type (X11) / wtype / ydotool (Wayland) - keystroke
-  simulation, "clipboard free insert"
+- typed: xdotool type (X11) / wtype / ydotool (Wayland) / the
+  RemoteDesktop+EIS portal keyboard (Wayland, ADR-0006 - the sanctioned
+  path inside the Flatpak sandbox) - keystroke simulation, "clipboard
+  free insert"
 - paste: clipboard + Ctrl+V with clipboard restore ("reliable paste"):
   xclip + verified selection read-observation on X11, wl-clipboard with a
   fixed settle delay on Wayland (cross-client selection reads are
-  impossible there - see WAYLAND_PASTE_SETTLE_S).
+  impossible there - see WAYLAND_PASTE_SETTLE_S); the Ctrl+V keystroke
+  rides whichever backend is live (EIS portal socket included - the
+  out-of-layout-Unicode fallback).
 
 Honest failure contract (first-use funnel F-05/F-18): insertion never
 reports success falsely. Every insert_text failure raises InsertionFailure
@@ -280,9 +284,11 @@ def check_insertion_capability(cfg: dict | None = None, *,
     """Pure capability check against the actual insertion strategy table:
 
     x11/unknown: typing needs xdotool; paste and the emergency clipboard
-    need xclip. wayland: typing needs wtype/ydotool (auto-resolved, GNOME
-    excludes wtype); paste and the fallback need wl-clipboard. No caching
-    here - capability_status() adds it.
+    need xclip. wayland: the RemoteDesktop/EIS portal path (runtime
+    probe, insertion.wayland_tool auto|eis) or the external typing tool
+    wtype/ydotool (auto-resolved, the zwp runtime probe gates wtype);
+    paste and the fallback need wl-clipboard. No caching here -
+    capability_status() adds it.
     """
     if which is None:
         which = shutil.which
@@ -291,8 +297,12 @@ def check_insertion_capability(cfg: dict | None = None, *,
     pref = str(((cfg or {}).get("insertion") or {}).get("wayland_tool",
                                                         "auto"))
     if info.is_wayland:
-        typing_tool, _reason = session_mod.resolve_wayland_tool(
-            pref, info.desktop_all, which)
+        use_eis = _eis_preferred(cfg)
+        typing_tool = "eis" if use_eis else None
+        if typing_tool is None:
+            typing_tool, _reason = session_mod.resolve_wayland_tool(
+                pref, info.desktop_all, which,
+                virtual_keyboard=_virtual_keyboard_probe())
         wanted = list(session_mod.WAYLAND_TYPE_TOOLS) + ["wl-copy", "wl-paste"]
         fallback_tool = "wl-copy"
     else:
@@ -444,9 +454,19 @@ def active_window_class() -> str | None:
 def insert_typed(text: str, delay_ms: int, *, tool: str | None = None) -> None:
     """Simulate typing. tool=None keeps today's xdotool path; "wtype"/
     "ydotool" are the Wayland tools (same leading-dash hazard: xdotool and
-    wtype both parse leading '-' as an option, so such texts must paste)."""
+    wtype both parse leading '-' as an option, so such texts must paste);
+    "eis" types over the RemoteDesktop/EIS portal socket (no argv, but
+    the same routing applies for consistency)."""
     if text.startswith("-"):
         raise InsertError("text starts with '-' needs paste mode")
+    if tool == "eis":
+        from . import eis_insertion
+        try:
+            eis_insertion.type_text(text, max(0, delay_ms))
+        except Exception as e:  # noqa: BLE001 - ladder falls through
+            raise InsertionFailure(f"eis type failed: {e}",
+                                   kind=FailureKind.TOOL_FAILED) from e
+        return
     if tool is None:
         cmd = ["xdotool", "type", "--delay", str(max(0, delay_ms)),
                "--clearmodifiers", text]
@@ -544,15 +564,66 @@ def _clipboard_write(data: bytes) -> None:
 # flag fix is a one-line change.
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Portal/EIS backend helpers (ADR-0006): lazy imports keep the module
+# importable without dbus-next/global-shortcut-portal installed; the
+# runtime probes decide, never the desktop name.
+# ---------------------------------------------------------------------------
+
+def _virtual_keyboard_probe() -> bool | None:
+    """zwp_virtual_keyboard_manager_v1 registry probe; None when there is
+    no compositor socket to ask (not a wayland session / headless)."""
+    try:
+        from . import wayland_probe
+        return wayland_probe.probe_virtual_keyboard() or None
+    except Exception:  # noqa: BLE001 - probe verdict, not a crash
+        return None
+
+
+def _eis_preferred(cfg: dict) -> bool:
+    """True when insertion.wayland_tool picks the RemoteDesktop/EIS path
+    AND the runtime portal probe passes (shared keyboard counts as a
+    pass even before a fresh probe: it IS the proof)."""
+    try:
+        from . import eis_insertion
+        if eis_insertion.shared_keyboard() is not None:
+            return True
+        return eis_insertion.resolve_eis(cfg)
+    except Exception:  # noqa: BLE001 - probe verdict, not a crash
+        return False
+
+
+def _send_key_combo(tool: str | None, spec: str) -> None:
+    """One keystroke combo via the resolved backend: wtype/ydotool run
+    their argv; the eis backend sends it over the portal EIS socket."""
+    if tool == "eis":
+        from . import eis_insertion
+        try:
+            eis_insertion.press_key(spec)
+        except Exception as e:  # noqa: BLE001 - ladder falls through
+            raise InsertionFailure(f"eis key press failed: {e}",
+                                   kind=FailureKind.TOOL_FAILED) from e
+        return
+    proc = _run(_key_cmd(tool, spec), timeout=10)
+    if proc.returncode != 0:
+        stderr = proc.stderr.decode(errors="replace")[:200]
+        raise InsertionFailure(f"paste keystroke failed: {stderr}",
+                               kind=_tool_failure_kind(stderr))
+
+
 def _resolve_wayland_tool(cfg: dict,
                           which: Callable[[str], str | None] | None = None
                           ) -> tuple[str | None, str]:
-    """insertion.wayland_tool (auto|wtype|ydotool) -> (tool, reason), via
-    the shared resolver (GNOME excludes wtype in auto; missing tools fall
-    through). The reason feeds doctor, not a user notification."""
+    """insertion.wayland_tool (auto|eis|wtype|ydotool) -> (tool, reason).
+    The EIS portal backend wins in auto/eis when its runtime probe
+    passes; otherwise the external-tool resolver (zwp probe gates wtype)
+    decides. The reason feeds doctor, not a user notification."""
     info = session_mod.current()
     pref = str((cfg.get("insertion", {}) or {}).get("wayland_tool", "auto"))
-    return session_mod.resolve_wayland_tool(pref, info.desktop_all, which)
+    if pref in ("auto", "eis") and _eis_preferred(cfg):
+        return "eis", "RemoteDesktop/EIS portal (runtime probe)"
+    return session_mod.resolve_wayland_tool(pref, info.desktop_all, which,
+                                            virtual_keyboard=_virtual_keyboard_probe())
 
 
 def _wtype_type_cmd(text: str, delay_ms: int) -> list[str]:
@@ -659,7 +730,9 @@ def _insert_paste_wayland(text: str, *, key: str = "ctrl+v",
                           tool: str | None = None,
                           on_notice: Callable[[str], None] | None = None) -> None:
     """Wayland clipboard paste: wl-copy the text, keystroke via the typing
-    tool, fixed settle, wl-copy restore.
+    backend (wtype/ydotool argv, or the EIS portal socket - the ADR-0006
+    out-of-layout-Unicode fallback is exactly clipboard + EIS-sent
+    Ctrl+V), fixed settle, wl-copy restore.
 
     Two deliberate divergences from the X11 verified-paste design (see
     docs/STATUS.md): the paste CANNOT be verified by observing the target
@@ -686,11 +759,7 @@ def _insert_paste_wayland(text: str, *, key: str = "ctrl+v",
             # the auto-mode ladder can fall through to typed insertion
             raise InsertionFailure(f"wl-copy failed: {e}",
                                    kind=FailureKind.TOOL_FAILED) from e
-        proc = _run(_key_cmd(tool, key), timeout=10)
-        if proc.returncode != 0:
-            stderr = proc.stderr.decode(errors="replace")[:200]
-            raise InsertionFailure(f"paste keystroke failed: {stderr}",
-                                   kind=_tool_failure_kind(stderr))
+        _send_key_combo(tool, key)
         time.sleep(WAYLAND_PASTE_SETTLE_S)  # verification impossible: settle
     finally:
         _wl_restore_clipboard(previous, mime, on_notice)
@@ -1014,17 +1083,21 @@ def _insert_text_wayland(text: str, cfg: dict,
                         on_result: Callable[[InsertResult], None] | None = None
                         ) -> str:
     """Wayland insert: the same mode/threshold/leading-dash routing as the
-    X11 body, over the wtype/ydotool + wl-clipboard backends.
+    X11 body, over the ADR-0006 backend ladder: RemoteDesktop/EIS portal
+    (auto/eis preference with a passing runtime probe) -> wtype/ydotool
+    + wl-clipboard -> clipboard-only.
 
     Degradation ladder (each step only when the previous is impossible):
-      tool+typed -> tool+wl-clipboard paste -> wl-copy + "paste manually"
+      eis typed (in-layout text) or eis/clipboard paste (out-of-layout
+      Unicode: wl-copy + EIS-sent Ctrl+V) -> external tool typed ->
+      external tool + wl-clipboard paste -> wl-copy + "paste manually"
       notice ("clipboard-fallback") -> honest structured InsertionFailure
       (the pipeline notifies; history still records the take). Terminal
-    quirks apply ONLY when an app identity was supplied (P2: the context
-    seam passes the AT-SPI identity at insertion time); wm_class None
-    keeps today's behavior - without an identity ctrl+shift+v and the
-    autocomplete space stay off (a wrong plain ctrl+v in a terminal is
-    recoverable, a mistyped terminal-paste is not)."""
+      quirks apply ONLY when an app identity was supplied (P2: the context
+      seam passes the AT-SPI identity at insertion time); wm_class None
+      keeps today's behavior - without an identity ctrl+shift+v and the
+      autocomplete space stay off (a wrong plain ctrl+v in a terminal is
+      recoverable, a mistyped terminal-paste is not)."""
     report = capability_status(cfg)  # pre-flight (cached): enrich failures
     wm = wm_class
     terminal = bool(wm and is_terminal_app(wm, cfg))
@@ -1032,7 +1105,22 @@ def _insert_text_wayland(text: str, cfg: dict,
     threshold = cfg["insertion"].get("paste_threshold_chars", 1200)
     delay = cfg["insertion"].get("type_delay_ms", 8)
     tool, _reason = _resolve_wayland_tool(cfg)
-    use_paste = (mode == "paste" or len(text) > threshold or text.startswith("-"))
+    # the next rung when the portal backend cannot serve the text
+    # (out-of-layout Unicode) - external tools type Unicode natively
+    external_tool = None
+    if tool == "eis":
+        external_tool, _r = session_mod.resolve_wayland_tool(
+            str((cfg.get("insertion", {}) or {}).get("wayland_tool",
+                                                     "auto")),
+            session_mod.current().desktop_all, None,
+            virtual_keyboard=_virtual_keyboard_probe())
+    # EIS-only sessions (the Flatpak sandbox: no wtype/ydotool inside)
+    # cannot type out-of-layout Unicode - the ADR-0006 fallback is
+    # clipboard + EIS-sent Ctrl+V, i.e. the paste path
+    eis_needs_paste = (tool == "eis" and external_tool is None
+                       and not _eis_encodable(text))
+    use_paste = (mode == "paste" or len(text) > threshold
+                 or text.startswith("-") or eis_needs_paste)
     if use_paste:
         key = (cfg["insertion"].get("terminal_paste_key", "ctrl+shift+v")
                if terminal else "ctrl+v")
@@ -1047,7 +1135,25 @@ def _insert_text_wayland(text: str, cfg: dict,
                              on_notice=on_notice, on_result=on_result)
             if on_notice is not None:
                 on_notice("Paste did not land - trying to type instead")
-    if tool is not None:
+    if tool == "eis":
+        # the portal keyboard handles both branches of the ADR ladder:
+        # in-layout text as keycodes, out-of-layout Unicode via the
+        # clipboard + EIS-sent Ctrl+V (paste, above)
+        if _eis_encodable(text):
+            if cfg["insertion"].get("terminal_autocomplete_space", True) \
+                    and terminal:
+                text = terminal_trailing_space(text)
+            try:
+                insert_typed(text, delay, tool="eis")
+                _ok_result("typed", report, on_result)
+                return "typed"
+            except InsertError:
+                if on_notice is not None:
+                    on_notice("EIS typing failed - trying the other "
+                              "wayland tools")
+        tool = None  # the eis attempt is spent; fall to the next rung
+    if external_tool is not None or tool is not None:
+        tool = external_tool if external_tool is not None else tool
         try:
             if cfg["insertion"].get("terminal_autocomplete_space", True) \
                     and terminal:
@@ -1088,17 +1194,32 @@ def clipboard_fallback(text: str) -> ClipboardResult:
     return copy_to_clipboard(text)  # auto-detects the session
 
 
+def _eis_encodable(text: str) -> bool:
+    """Can the EIS path type this text as keycodes? (Shared keyboard
+    not started -> pure table check; out-of-layout Unicode routes to
+    the clipboard paste path instead.)"""
+    try:
+        from . import eis_insertion
+        return eis_insertion.encodable(text)
+    except Exception:  # noqa: BLE001 - probe verdict, not a crash
+        return False
+
+
 def press_key(spec: str, *, tool: str | None = None) -> None:
     """Press a key combo (e.g. 'enter', 'shift+enter') in the focused window.
     tool=None keeps today's xdotool path on X11/unknown sessions and
-    auto-resolves the wayland tool on a wayland session (no cfg at this
-    call depth -> the "auto" preference; spoken-send, paste-last and
-    command-mode reruns get wayland for free)."""
+    auto-resolves the wayland backend on a wayland session (EIS portal
+    keyboard when ready, else wtype/ydotool; no cfg at this call depth ->
+    the "auto" preference; spoken-send, paste-last and command-mode
+    reruns get wayland for free)."""
     if tool is None and session_mod.current().is_wayland:
         tool, _reason = _resolve_wayland_tool({})
         if tool is None:
             raise InsertError("no wayland typing tool for the keystroke "
                               "(install wtype or ydotool)")
+    if tool == "eis":
+        _send_key_combo("eis", spec)
+        return
     if tool is None:
         cmd = ["xdotool", "key", "--clearmodifiers", spec]
         name = "xdotool"

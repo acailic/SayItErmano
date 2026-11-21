@@ -1,6 +1,10 @@
-# SPIKE manifest (issue #10/#11, ADR-0006) — proves the sandbox story on X11.
+# SPIKE manifest (issue #10/#11, ADR-0006) — proves the sandbox story.
 # Not the shipping manifest: no metainfo/desktop/icons yet, and permissions
-# are the spike set (fallback-x11 for the XGrabKey+xdotool path).
+# are the spike set. Portals (GlobalShortcuts hotkey, RemoteDesktop/EIS
+# insertion) need no finish-args — the sandbox grants portal D-Bus by
+# default. --socket=wayland covers the wlroots zwp_virtual_keyboard
+# (wtype) row of the ADR matrix; fallback-x11 covers the X11 row
+# (XGrabKey + xdotool).
 # GPU/model download not exercised by the spike (doctor runs model-free).
 id: io.github.acailic.SayItErmano
 runtime: org.gnome.Platform
@@ -9,7 +13,8 @@ sdk: org.gnome.Sdk
 command: sayit-ermano
 
 finish-args:
-  - --socket=fallback-x11      # X11 row of the ADR-0006 matrix (XGrabKey + xdotool)
+  - --socket=wayland        # wlroots row: wtype/zwp_virtual_keyboard via --socket=wayland
+  - --socket=fallback-x11   # X11 row of the ADR-0006 matrix (XGrabKey + xdotool)
   - --share=ipc                # X11 needs the ipc socket
   - --socket=pulseaudio        # PipeWire/Pulse capture (doctor mic probe)
   - --device=dri               # GPU device nodes (Vulkan path, later slices)
@@ -30,9 +35,13 @@ modules:
   - name: deps
     buildsystem: simple
     build-commands:
-      - pip3 install --prefix=/app python_xlib-0.33-py2.py3-none-any.whl pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+      - pip3 install --prefix=/app python_xlib-0.33-py2.py3-none-any.whl pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl dbus_next-0.2.3-py3-none-any.whl global_shortcut_portal-0.2.1-py3-none-any.whl
     sources:
       - type: file
         path: wheels/python_xlib-0.33-py2.py3-none-any.whl
       - type: file
         path: wheels/pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+      - type: file
+        path: wheels/dbus_next-0.2.3-py3-none-any.whl
+      - type: file
+        path: wheels/global_shortcut_portal-0.2.1-py3-none-any.whl

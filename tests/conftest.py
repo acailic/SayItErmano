@@ -98,9 +98,16 @@ atexit.register(shutil.rmtree, TEST_XDG_ROOT, ignore_errors=True)
 REAL_SESSION_ENV = {
     "XDG_SESSION_TYPE": os.environ.get("XDG_SESSION_TYPE"),
     "WAYLAND_DISPLAY": os.environ.get("WAYLAND_DISPLAY"),
+    "DBUS_SESSION_BUS_ADDRESS": os.environ.get("DBUS_SESSION_BUS_ADDRESS"),
 }
 os.environ["XDG_SESSION_TYPE"] = "x11"
 os.environ.pop("WAYLAND_DISPLAY", None)
+# Portal hermeticity (ADR-0006 spike): the RemoteDesktop/GlobalShortcuts
+# probes must resolve "no session bus" inside the unit tier - a dev
+# machine's live portal would otherwise flip wayland-backend selection
+# mid-suite. Real-subsystem tiers restore the address from the snapshot
+# above (same pattern as the session-type pin).
+os.environ.pop("DBUS_SESSION_BUS_ADDRESS", None)
 
 
 def _fingerprint(p: Path):

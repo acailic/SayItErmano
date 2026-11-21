@@ -23,6 +23,16 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="sayit-ermano",
         description="SayItErmano - local voice dictation with AI polish (community Linux port of FluidVoice)")
     parser.add_argument("--version", action="version", version=__version__)
+    # ADR-0006 cross-DE fallback flags: bindable in ANY desktop's custom
+    # shortcuts (the same control-socket round-trip as the subcommands -
+    # `sayit-ermano --toggle` is the documented sway path).
+    remote = parser.add_mutually_exclusive_group()
+    remote.add_argument("--toggle", action="store_true",
+                        help="start/stop a recording (DE-shortcut bindable)")
+    remote.add_argument("--cancel", action="store_true",
+                        help="cancel the running recording (no transcription)")
+    remote.add_argument("--status", action="store_true",
+                        help="daemon status")
     sub = parser.add_subparsers(dest="cmd")
 
     p = sub.add_parser("daemon", help="run the dictation daemon (foreground)")
@@ -125,6 +135,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     if not args.cmd:
+        if args.toggle or args.cancel or args.status:
+            args.cmd = ("toggle" if args.toggle
+                        else "cancel" if args.cancel else "status")
+            args.json = False
+            return _cmd_remote(args)
         parser.print_help()
         return 0
     return args.func(args)

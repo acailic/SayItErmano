@@ -653,6 +653,19 @@ _spec("hotkey", "wayland_evdev", False, _bool(),
                   "read straight from /dev/input (PRIVILEGED: needs the input\n"
                   "group and python-evdev). Off by default; the DE-shortcut\n"
                   "assist is the primary wayland hotkey.")
+_spec("hotkey", "wayland_portal", "auto", _enum("auto", "on", "off"),
+      description="GlobalShortcuts portal hotkey (ADR-0006): the sanctioned\n"
+                  "Wayland trigger on GNOME 48+/Plasma 5.27+/Hyprland.\n"
+                  "auto = try the portal, fall back to a DE custom shortcut\n"
+                  "(bind `sayit-ermano --toggle`); on = portal only (its\n"
+                  "failure WARNs); off = DE-shortcut/evdev paths only.\n"
+                  "sway and COSMIC have no portal backend - auto lands on\n"
+                  "the fallback there.")
+_spec("hotkey", "wayland_portal_trigger", "", _str(64),
+      description='Preferred trigger SENT to the portal at bind time, e.g.\n'
+                  '"ctrl+alt+space" (XDG shortcuts-spec token format).\n'
+                  'Never required: the desktop decides and remembers the\n'
+                  'actual key per app id; empty = no preference.')
 _spec("hotkey", "wayland_evdev_device", "", _str(128),
       description='Device-name substring matching /dev/input devices, e.g.\n'
                   '"Keyboard"')
@@ -911,10 +924,14 @@ _spec("insertion", "terminal_paste_key", "ctrl+shift+v", _str(32),
       description="Keystroke used to paste in terminal apps\n"
       "(general.terminal_apps); X11 terminals pass ctrl+v through to the\n"
       "app, they need ctrl+shift+v")
-_spec("insertion", "wayland_tool", "auto", _enum("auto", "wtype", "ydotool"),
-      description="Wayland typing tool: auto | wtype | ydotool (wtype needs\n"
-      "wlroots/KDE; ydotool works everywhere but needs ydotoold +\n"
-      "/dev/uinput access). Ignored on X11 sessions.")
+_spec("insertion", "wayland_tool", "auto",
+      _enum("auto", "eis", "wtype", "ydotool"),
+      description="Wayland typing backend: auto (RemoteDesktop/EIS portal\n"
+                  "first where the runtime probe passes, then wtype where\n"
+                  "the compositor advertises zwp_virtual_keyboard_manager_v1\n"
+                  "- runtime probes decide, never the desktop name -, then\n"
+                  "ydotool) | eis | wtype (wlroots/KDE) | ydotool (needs\n"
+                  "ydotoold + /dev/uinput access). Ignored on X11 sessions.")
 
 # -- [context] / [profiles] (P2: insertion-time context + behavior profiles)
 

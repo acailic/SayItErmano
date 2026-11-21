@@ -93,18 +93,23 @@ def current() -> SessionInfo:
 # ---------------------------------------------------------------------------
 
 def resolve_wayland_tool(preference: str = "auto", desktop: str = "",
-                         which: Callable[[str], str | None] | None = None
+                         which: Callable[[str], str | None] | None = None,
+                         virtual_keyboard: bool | None = None
                          ) -> tuple[str | None, str]:
     """Pick the text-insertion tool for a Wayland session.
 
     preference: insertion.wayland_tool ("auto" | "wtype" | "ydotool").
-    GNOME does not implement the zwp virtual-keyboard protocol wtype needs,
-    so "auto" skips wtype there; an EXPLICIT wtype choice is honored (the
-    user override wins) with a warning in the reason. A missing preferred
-    tool falls through to the other one (wtype -> ydotool -> None).
+    virtual_keyboard is the RUNTIME protocol probe verdict (does the
+    compositor advertise zwp_virtual_keyboard_manager_v1, see
+    wayland_probe.probe_virtual_keyboard): True -> wtype eligible on
+    any desktop, False -> wtype skipped with the honest reason. None =
+    no probe was run; the old desktop-name heuristic then applies as a
+    documented guess (back-compat for pure calls; the daemon and
+    insertion always pass a probe result).
 
-    Returns (tool, reason); tool is None when neither is installed. The
-    reason feeds doctor and the insertion-time notice.
+    A missing preferred tool falls through to the other one
+    (wtype -> ydotool -> None). Returns (tool, reason); the reason
+    feeds doctor and the insertion-time notice.
     """
     if which is None:
         which = shutil.which
@@ -115,18 +120,30 @@ def resolve_wayland_tool(preference: str = "auto", desktop: str = "",
         candidates = list(WAYLAND_TYPE_TOOLS)  # wtype first, ydotool behind
     else:
         candidates = [pref] + [t for t in WAYLAND_TYPE_TOOLS if t != pref]
-    gnome = is_gnome_desktop(desktop)
+    unprobed_gnome = virtual_keyboard is None and is_gnome_desktop(desktop)
     notes: list[str] = []
     for tool in candidates:
-        if tool == "wtype" and gnome and pref != "wtype":
-            notes.append("wtype skipped: GNOME has no virtual-keyboard "
-                         "protocol")
-            continue
+        if tool == "wtype":
+            if virtual_keyboard is False:
+                notes.append("wtype skipped: compositor does not "
+                             "advertise zwp_virtual_keyboard_manager_v1 "
+                             "(runtime probe)")
+                continue
+            if unprobed_gnome and pref != "wtype":
+                # no probe ran (pure call): keep the documented guess
+                notes.append("wtype skipped: GNOME has no virtual-keyboard "
+                             "protocol")
+                continue
         if which(tool):
-            if tool == "wtype" and gnome:
-                notes.append("wtype does NOT work on GNOME "
-                             "(no virtual-keyboard protocol) - consider "
-                             "ydotool")
+            if tool == "wtype":
+                if virtual_keyboard is False:
+                    notes.append("wtype does NOT work here "
+                                 "(no virtual-keyboard protocol) - "
+                                 "consider ydotool")
+                elif unprobed_gnome:
+                    notes.append("wtype does NOT work on GNOME "
+                                 "(no virtual-keyboard protocol) - consider "
+                                 "ydotool")
             if tool != pref and pref in WAYLAND_TYPE_TOOLS:
                 notes.append(f"preferred tool '{pref}' not found, "
                              f"using {tool}")
@@ -137,10 +154,21 @@ def resolve_wayland_tool(preference: str = "auto", desktop: str = "",
 
 def capabilities(info: SessionInfo,
                  which: Callable[[str], str | None] | None = None,
-                 cfg: Mapping | None = None) -> dict[str, str]:
+                 cfg: Mapping | None = None, *,
+                 virtual_keyboard: bool | None = None,
+                 eis_available: bool | None = None,
+                 portal_hotkey: bool | None = None) -> dict[str, str]:
     """Per-capability backend resolution — one entry per capability, the
-    value naming the resolved backend. Pure function of (info, which, cfg)
-    so daemon, doctor and the settings page share one truth.
+    value naming the resolved backend. Pure function of (info, which,
+    cfg, probe verdicts) so daemon, doctor and the settings page share
+    one truth.
+
+    Probe verdicts (None = not probed, the honest back-compat default):
+    virtual_keyboard gates wtype (zwp registry probe), eis_available
+    promotes the RemoteDesktop/EIS portal path over the external tools,
+    portal_hotkey marks the GlobalShortcuts portal as the hotkey backend
+    (else the DE-shortcut fallback). Callers that HAVE a wayland session
+    should pass the live verdicts (daemon, doctor); pure/tests may omit.
 
     Capabilities: hotkey, insertion, clipboard, overlay, preview, tray,
     app-hint. Values: see the README "Wayland support" matrix.
@@ -151,17 +179,23 @@ def capabilities(info: SessionInfo,
     wl_clipboard = bool(which("wl-copy")) and bool(which("wl-paste"))
     caps: dict[str, str] = {}
     if info.is_wayland:
-        caps["hotkey"] = "de-shortcut"
-        tool, _reason = resolve_wayland_tool(
-            str(ins_cfg.get("wayland_tool", "auto")), info.desktop_all, which)
-        if tool is not None:
-            caps["insertion"] = tool
-        elif wl_clipboard:
-            # no keystroke tool: text can reach the clipboard (wl-copy)
-            # but nothing can press ctrl+v - "paste manually" notices
-            caps["insertion"] = "wl-clipboard-only"
+        caps["hotkey"] = ("portal-shortcut" if portal_hotkey
+                          else "de-shortcut")
+        pref = str(ins_cfg.get("wayland_tool", "auto"))
+        if eis_available and pref in ("auto", "eis"):
+            caps["insertion"] = "eis"
         else:
-            caps["insertion"] = "unavailable"
+            tool, _reason = resolve_wayland_tool(
+                pref, info.desktop_all, which,
+                virtual_keyboard=virtual_keyboard)
+            if tool is not None:
+                caps["insertion"] = tool
+            elif wl_clipboard:
+                # no keystroke tool: text can reach the clipboard (wl-copy)
+                # but nothing can press ctrl+v - "paste manually" notices
+                caps["insertion"] = "wl-clipboard-only"
+            else:
+                caps["insertion"] = "unavailable"
         caps["clipboard"] = "wl-clipboard" if wl_clipboard else "unavailable"
         caps["overlay"] = "notifications"  # layer-shell pill: future work
         caps["app-hint"] = "unavailable"   # AT-SPI: future work

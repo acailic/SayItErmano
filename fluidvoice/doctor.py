@@ -621,9 +621,20 @@ def _session_matrix_lines(cfg: dict) -> list[str]:
     """Session type + per-capability backend matrix (the wayland port's
     honest surface: one row per capability naming the resolved backend,
     with per-tool found/missing detail and the install hint when insertion
-    is unavailable)."""
+    is unavailable). Wayland rows carry the ADR-0006 runtime probes
+    (RemoteDesktop/ConnectToEIS via the portal, zwp_virtual_keyboard via
+    the compositor registry) - selection is probed, never name-gated."""
     info = session_mod.probe()
-    caps = session_mod.capabilities(info, cfg=cfg)
+    vk_probe = False
+    eis_probe = None
+    if info.is_wayland:
+        from . import eis_insertion, wayland_probe
+        vk_probe = wayland_probe.probe_virtual_keyboard()
+        eis_probe = eis_insertion.probe()
+    caps = session_mod.capabilities(
+        info, cfg=cfg,
+        eis_available=(eis_probe.ok if eis_probe else None),
+        virtual_keyboard=(vk_probe or None))
     where = info.type + (f" ({info.desktop})" if info.desktop else "")
     lines = [f"session: {where}  DISPLAY={os.environ.get('DISPLAY', '-')} "
              f"WAYLAND_DISPLAY={os.environ.get('WAYLAND_DISPLAY', '-')}"]
@@ -645,13 +656,25 @@ def _session_matrix_lines(cfg: dict) -> list[str]:
             elif cap in ("overlay", "preview"):
                 note = " (X11 pill not possible here; layer-shell pill: future)"
             elif cap == "hotkey":
-                note = " (no global grabs on wayland - bind a DE shortcut)"
+                note = (" (GlobalShortcuts portal; sway/COSMIC have no "
+                        "backend - bind `sayit-ermano --toggle`)"
+                        if value == "portal-shortcut" else
+                        " (no portal backend or hotkey.wayland_portal=off - "
+                        "bind a DE shortcut)")
         lines.append(f"  {label}: {value}{note}")
     if info.is_wayland:
+        assert eis_probe is not None
+        lines.append(f"  remote desktop/EIS: {eis_probe.describe}; consent "
+                     "persists on portal >= 1.21, dialog per session on "
+                     "older")
+        lines.append("  zwp virtual keyboard: "
+                     + ("advertised (wtype eligible)"
+                        if vk_probe else
+                        "not advertised (wtype skipped - runtime probe)"))
         _tool, reason = session_mod.resolve_wayland_tool(
             str((cfg.get("insertion", {}) or {}).get("wayland_tool",
                                                        "auto")),
-            info.desktop_all)
+            info.desktop_all, virtual_keyboard=(vk_probe or None))
         if reason:
             lines.append(f"  note: {reason}")
         lines.append("  paste verification: fixed delay only - cross-client "

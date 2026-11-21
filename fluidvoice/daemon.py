@@ -139,6 +139,7 @@ class Daemon:
         self._process_thread: threading.Thread | None = None
         self._session = session_mod.probe()  # session type + capabilities
         self._evdev_ptt: Any = None  # optional evdev push-to-talk (wayland)
+        self._portal_hotkey: Any = None  # GlobalShortcuts portal (wayland)
 
     # -- engine state (owned by SpeechEngineManager; daemon-visible) -------
 
@@ -206,6 +207,7 @@ class Daemon:
             self._start_hotkey()
         self._start_mouse_ptt()
         self._start_evdev_ptt()
+        self._start_eis_insertion()
 
         self._start_tray()
         self._start_micmon()
@@ -234,10 +236,19 @@ class Daemon:
 
     def _log_session(self) -> None:
         """One honest startup line: the session type and the capability
-        backends it resolves to (fluidvoice/session.py). The wayland
-        bind-script hint is logged by _start_hotkey, not duplicated here."""
+        backends it resolves to (fluidvoice/session.py). Wayland rows
+        carry the live runtime probe verdicts (zwp registry, portal
+        RemoteDesktop/EIS). The wayland bind-script hint is logged by
+        _start_hotkey, not duplicated here."""
         info = self._session
         caps = session_mod.capabilities(info, cfg=self.cfg)
+        if info.is_wayland:
+            from . import eis_insertion, wayland_probe
+            caps = session_mod.capabilities(
+                info, cfg=self.cfg,
+                eis_available=eis_insertion.resolve_eis(self.cfg) or None,
+                virtual_keyboard=wayland_probe.probe_virtual_keyboard()
+                or None)
         where = f"{info.type}" + (f" ({info.desktop})" if info.desktop else "")
         summary = " ".join(f"{k}={v}" for k, v in caps.items())
         log(f"session: {where} - capabilities: {summary}")
@@ -641,6 +652,10 @@ class Daemon:
             self._mouse_ptt.stop()
         if self._evdev_ptt:
             self._evdev_ptt.stop()
+        if self._portal_hotkey:
+            self._portal_hotkey.stop()
+        from . import eis_insertion as _eis_insertion
+        _eis_insertion.stop_shared()
         if self._rewrite_hotkey:
             self._rewrite_hotkey.stop()
         if self._command_hotkey:
@@ -686,14 +701,20 @@ class Daemon:
 
     def _start_hotkey(self) -> str | None:
         """(Re-)grab the dictation hotkeys. Returns the first error, if any.
-        Wayland sessions skip the X grabs entirely (they cannot work) and
-        say so once: the declared wayland hotkey is the DE-shortcut assist."""
+        Wayland sessions try the GlobalShortcuts portal (ADR-0006,
+        hotkey.wayland_portal: auto/on/off) and then say the DE-shortcut
+        fallback once: both are first-class; sway/COSMIC have no portal
+        backend and land on the fallback."""
         if self._session.is_wayland:
+            error = self._start_portal_hotkey()
             script = session_mod.ensure_toggle_script()
-            log("hotkey: wayland session - global grabs do not exist; bind a "
-                f"DE custom shortcut to {script or '`sayit-ermano toggle`'} "
+            log("hotkey: wayland session - "
+                + ("portal GlobalShortcuts active; "
+                   if self._portal_hotkey is not None else "")
+                + "DE-shortcut fallback: bind a custom shortcut to "
+                f"{script or '`sayit-ermano toggle`'} "
                 "(sayit-ermano doctor prints per-DE steps)")
-            return None
+            return error
         from .hotkey import HotkeyError, HotkeyListener
         error = None
         hk = self.cfg["hotkey"]
@@ -831,7 +852,7 @@ class Daemon:
         if not self.use_hotkey:
             return
         for attr in ("_hotkey", "_rewrite_hotkey", "_command_hotkey",
-                     "_language_hotkey"):
+                     "_language_hotkey", "_portal_hotkey"):
             listener = getattr(self, attr)
             if listener is not None:
                 try:
@@ -839,6 +860,7 @@ class Daemon:
                 except Exception as e:
                     log(f"WARN stopping old hotkey grab failed: {e}")
                 setattr(self, attr, None)
+        self._extra_hotkeys.clear()
         error = self._start_hotkey()
         if error:
             raise RuntimeError(f"hotkey re-bind failed: {error} "
@@ -925,6 +947,83 @@ class Daemon:
 
     # -- wayland evdev push-to-talk (hotkey.wayland_evdev) --------------------
 
+    def _start_eis_insertion(self) -> str | None:
+        """Start the shared RemoteDesktop/EIS portal keyboard when the
+        preference and the runtime probe agree (ADR-0006 insertion path).
+        Best-effort: failures WARN and the insertion ladder keeps
+        wtype/ydotool/clipboard. Returns the first error, if any."""
+        if not self._session.is_wayland:
+            return None
+        from . import eis_insertion
+        try:
+            if eis_insertion.ensure_shared(self.cfg, log=log):
+                for line in eis_insertion.shared_keyboard().summary:
+                    log(line)
+                return None
+            if eis_insertion.preference(self.cfg) == "eis":
+                return "EIS insertion unavailable (see the daemon log)"
+            return None
+        except Exception as e:  # noqa: BLE001 - never fatal (the plan)
+            log(f"WARN EIS insertion unavailable: {e}")
+            return str(e)
+
+    def _start_portal_hotkey(self) -> str | None:
+        """(Re-)start the GlobalShortcuts portal hotkey on wayland
+        (hotkey.wayland_portal: auto|on|off). auto = try, fall back to
+        the DE shortcut; on = portal only (failure WARNs and returns the
+        error); off = never. Never raises."""
+        hk = self.cfg["hotkey"]
+        setting = str(hk.get("wayland_portal", "auto")).strip().lower()
+        if setting not in ("auto", "on", "off"):
+            setting = "auto"
+        if setting == "off":
+            return None
+        from .portal_hotkey import PortalHotkeyListener
+        try:
+            listener = PortalHotkeyListener(
+                mode=hk.get("mode", "toggle"),
+                on_press=self.toggle,
+                on_release=self.toggle,
+                on_toggle=self.toggle,
+                app_id=os.environ.get("FLATPAK_ID", ""),
+                preferred_trigger=str(hk.get("wayland_portal_trigger",
+                                             "") or ""),
+                log=log)
+            if not listener.start():
+                self._portal_hotkey = None
+                if setting == "on":
+                    error = listener.start_error or "portal hotkey failed"
+                    ui.notify("SayItErmano",
+                              f"Portal hotkey unavailable: {error}",
+                              timeout_ms=8000,
+                              enabled=self.cfg["notifications"]["enabled"])
+                    return error
+                return None  # auto: the DE shortcut is the documented fallback
+            self._portal_hotkey = listener
+            for line in listener.summary:
+                log(line)
+            return None
+        except Exception as e:  # noqa: BLE001 - never fatal (the plan)
+            self._portal_hotkey = None
+            log(f"WARN portal hotkey unavailable: {e}")
+            return str(e)
+
+    def _restart_portal_hotkey(self) -> None:
+        """Re-bind the portal hotkey after a settings change (frees the
+        old session first - BindShortcuts is once per portal session, a
+        fresh session re-binds). Raises on failure so the settings UI
+        can surface it (the evdev/hotkey twin contract)."""
+        if self._portal_hotkey is not None:
+            try:
+                self._portal_hotkey.stop()
+            except Exception as e:
+                log(f"WARN stopping old portal hotkey failed: {e}")
+            self._portal_hotkey = None
+        error = self._start_portal_hotkey()
+        if error:
+            raise RuntimeError(f"portal hotkey re-bind failed: {error} "
+                               "(check hotkey.wayland_portal and save again)")
+
     def _start_evdev_ptt(self) -> str | None:
         """Optional physical push-to-talk on wayland: hold a key read from
         /dev/input (privileged path - input group + python-evdev). Off by
@@ -1005,6 +1104,13 @@ class Daemon:
             _try("hotkeys", self._restart_hotkey)
             if self._session.is_wayland:
                 _try("evdev push-to-talk", self._restart_evdev_ptt)
+        if any(k.startswith("insertion.") for k in changed) \
+                and self._session.is_wayland:
+            from . import eis_insertion
+            eis_insertion.stop_shared()
+            eis_insertion.reset_probe_cache()
+            insertion.reset_capability_cache()
+            _try("EIS insertion", self._start_eis_insertion)
         if any(k in ("recording.push_to_talk_button",
                      "recording.push_to_talk_modifiers") for k in changed):
             _try("mouse push-to-talk", self._restart_mouse_ptt)
