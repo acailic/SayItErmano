@@ -140,6 +140,10 @@ drift: `python scripts/gen_config_reference.py` regenerates it.
 | `base_prompt` | `""` |  | Custom base prompt for AI polish (empty = the built-in dictation prompt; Settings -> AI can save named presets of it) |
 | `refusal_guard` | `true` |  | Refusal guardrail: a polish reply that reads as a model refusal ("I'm sorry, I can't assist...") never reaches the doc - the raw transcript is typed instead, with a notification. false = trust the model blindly. |
 | `profile` | `""` |  | Active AI provider profile name ("" = custom endpoint settings). Switching via Settings -> AI or the tray's AI profile submenu writes the profile's endpoint values into [ai] and points here; editing the endpoint by hand clears it back to "". |
+| `local_polish` | `false` |  | Local polish (works offline): route AI polish through a daemon-managed llama.cpp server spawned on demand — no cloud key, nothing leaves the machine. Needs the chat model downloaded (Settings -> Models -> AI polish model) and an llama-server binary (llama.cpp package or ai.local_server_binary). Off = zero footprint: no process, no listener. Your cloud [ai] endpoint stays configured but is only used while this is off. |
+| `local_model` | `"qwen3-4b-instruct-2507-q4_k_m.gguf"` |  | GGUF chat model for local polish (the CHAT_GGUF_CATALOG key; qwen3-4b-class, ~2.5 GB on disk) |
+| `local_idle_s` | `300` |  | Stop the local-polish llama.cpp server after this many idle seconds (0 = keep it until the daemon exits; range 30..86400 when set). The next polish call pays the model load again. |
+| `local_server_binary` | `""` |  | Explicit path to an llama-server binary ("" = auto-discover: llama-server on PATH) |
 
 ### `[insertion]`
 

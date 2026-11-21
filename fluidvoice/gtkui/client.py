@@ -89,6 +89,11 @@ class Client:
         ClientError when the daemon is down."""
         return self._request("model-delete", kind=kind, name=name)
 
+    def local_polish_stop(self) -> dict:
+        """Stop the managed llama.cpp child now (Settings memory hygiene).
+        Raises ClientError when the daemon is down."""
+        return self._request("local-polish-stop")
+
     def mics(self) -> list[dict]:
         """Microphone list (socket action; direct tray query if down)."""
         try:

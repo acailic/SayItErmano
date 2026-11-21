@@ -67,6 +67,7 @@ class ModelsPageMixin:
             self.models_group.add(row)
             self._model_rows.append(row)
         self._refresh_gguf_rows()
+        self._refresh_chat_rows()
         self._refresh_parakeet_rows()
         self._refresh_model_language_rows()
         self._refresh_disk_rows()
@@ -251,7 +252,8 @@ class ModelsPageMixin:
             if entries
             else "empty"
         )
-        active = self._active_model() or self._active_gguf() or self._active_parakeet()
+        active = (self._active_model() or self._active_gguf()
+                  or self._active_parakeet() or self._active_chat())
         for e in entries:
             row = Adw.ActionRow(
                 title=e["name"],
@@ -427,6 +429,130 @@ class ModelsPageMixin:
         self._load()  # resync cfg + rows
         GLib.timeout_add_seconds(1, self._poll_model)
 
+    # -- local-polish chat GGUF (#21) -----------------------------------------
+
+    def _active_chat(self) -> str | None:
+        """The chat model local polish would use (ai.local_model; shown
+        as Active regardless of the toggle — selecting it is orthogonal
+        to enabling it)."""
+        ai = self.cfg.get("ai", {})
+        if not ai.get("local_polish"):
+            return None
+        val = str(ai.get("local_model", "")).strip() \
+            or model_catalog.CHAT_MODEL_DEFAULT
+        return val if val in model_catalog.CHAT_GGUF_CATALOG else None
+
+    def _refresh_chat_rows(self) -> None:
+        for row in self._chat_rows:
+            self.chat_group.remove(row)
+        self._chat_rows = []
+        active = self._active_chat()
+        for name, info in model_catalog.CHAT_GGUF_CATALOG.items():
+            row = Adw.ActionRow(
+                title=name,
+                subtitle=f"{info['size']} · {info['note']}",
+            )
+            if name == active:
+                radio = Gtk.CheckButton()
+                radio.set_active(True)
+                radio.set_sensitive(False)
+                radio.set_valign(Gtk.Align.CENTER)
+                radio.set_tooltip_text("Model used by local polish")
+                row.add_prefix(radio)
+                row.add_suffix(
+                    Gtk.Label(label="Active", css_classes=["success", "caption"])
+                )
+            elif (
+                name in self._chat_dl
+                and not self._chat_dl[name].get("done")
+                and not self._chat_dl[name].get("error")
+            ):
+                row.set_subtitle(self._chat_dl_subtitle(name))
+                row.add_suffix(Gtk.Spinner(spinning=True))
+            elif model_catalog.chat_model_downloaded(name):
+                btn = Gtk.Button(label="Use", css_classes=["suggested-action"])
+                btn.set_valign(Gtk.Align.CENTER)
+                btn.connect("clicked", self._use_chat, name)
+                row.add_suffix(btn)
+            else:
+                btn = Gtk.Button(
+                    label="Download & use", css_classes=["suggested-action"]
+                )
+                btn.set_valign(Gtk.Align.CENTER)
+                btn.connect("clicked", self._download_chat, name)
+                row.add_suffix(btn)
+            self.chat_group.add(row)
+            self._chat_rows.append(row)
+
+    def _chat_dl_subtitle(self, name: str) -> str:
+        st = self._chat_dl.get(name) or {}
+        b, t = st.get("bytes", 0), st.get("total")
+
+        def mb(n):
+            return f"{n / 1_000_000:.0f} MB"
+
+        return f"downloading… {mb(b)} / {mb(t)}" if t else f"downloading… {mb(b)}"
+
+    def _download_chat(self, _btn, name: str) -> None:
+        if name in self._chat_dl and not (
+            self._chat_dl[name].get("done") or self._chat_dl[name].get("error")
+        ):
+            return  # already running
+        self._chat_dl[name] = {
+            "bytes": 0,
+            "total": None,
+            "done": False,
+            "error": None,
+        }
+        self._refresh_models()
+
+        def work():
+            st = self._chat_dl[name]
+            try:
+                model_download.download_chat_model(
+                    name, progress=lambda b, t: st.update(bytes=b, total=t)
+                )
+                st["done"] = True
+            except Exception as e:  # noqa: BLE001 - surfaced as a toast
+                st["error"] = str(e)[:300]
+
+        threading.Thread(target=work, daemon=True).start()
+        GLib.timeout_add(400, self._poll_chat_dl, name)
+
+    def _poll_chat_dl(self, name: str) -> bool:
+        st = self._chat_dl.get(name)
+        if st is None or not (st.get("done") or st.get("error")):
+            # still running: rebuild rows for a live subtitle
+            self._refresh_models()
+            return True
+        self._refresh_models()
+        if st.get("error"):
+            self.toast(f"download failed: {st['error']}")
+        else:
+            self.toast(f"{name} downloaded — enable Local polish in "
+                       "Settings → AI")
+        return False
+
+    def _use_chat(self, _btn, name: str) -> None:
+        """Select the chat model for local polish (ai.local_model; no
+        engine reload — the llama.cpp server loads it at the next spawn)."""
+        if not model_catalog.chat_model_downloaded(name):
+            self.toast(f"{name} is not downloaded yet")
+            return
+        try:
+            resp = self.c.set_config({"ai": {"local_model": name}})
+        except Exception as e:
+            self.toast(str(e))
+            return
+        if resp.get("rejected") or resp.get("errors"):
+            self.toast(
+                "Rejected: "
+                + ", ".join((resp.get("rejected") or []) + (resp.get("errors") or []))
+            )
+            return
+        self.toast(f"Local polish will use {name}")
+        self._load()  # resync cfg + rows (chat + disk + AI status)
+
     def _active_parakeet(self) -> str | None:
         m = self.cfg.get("model", {})
         if str(m.get("backend", "")) != "parakeet":
@@ -545,7 +671,9 @@ class ModelsPageMixin:
         GLib.timeout_add_seconds(1, self._poll_model)
 
     def _section_catalogs(self, page: Adw.PreferencesPage) -> None:
-        """The three model catalogs (faster-whisper, whisper.cpp GGUF, Parakeet) — rows are filled by _refresh_models."""
+        """The four model catalogs (faster-whisper, whisper.cpp GGUF,
+        local-polish chat GGUF, Parakeet) — rows are filled by
+        _refresh_models."""
         self.models_group = Adw.PreferencesGroup(
             title="Speech models",
             description="faster-whisper models (downloaded on first use)",
@@ -557,6 +685,14 @@ class ModelsPageMixin:
             description="Direct ggml models for the whisper.cpp backend",
         )
         page.add(self.gguf_group)
+
+        self.chat_group = Adw.PreferencesGroup(
+            title="AI polish model (GGUF)",
+            description="Local-polish chat model for the bundled "
+            "llama.cpp server — qwen3-4b-class, works offline. "
+            "Enable it in Settings → AI → Local polish",
+        )
+        page.add(self.chat_group)
 
         self.parakeet_group = Adw.PreferencesGroup(
             title="Parakeet (ONNX)",

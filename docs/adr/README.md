@@ -11,6 +11,7 @@ one gets a new ADR that marks the old one Superseded.
 | [ADR-0004](ADR-0004-ubuntu-deb-contract.md) | The deb is an Ubuntu 24.04 / x86_64 / Python 3.12 contract | Accepted |
 | [ADR-0005](ADR-0005-commercial-sku.md) | The commercial SKU is a convenience-and-support bundle sold through Paddle | Proposed |
 | [ADR-0006](ADR-0006-flatpak-input.md) | Flatpak input: GlobalShortcuts portal hotkey, RemoteDesktop/EIS insertion, Vulkan GPU | Proposed |
+| [ADR-0007](ADR-0007-managed-llama-server.md) | Local polish uses a managed loopback llama.cpp child, not a daemon listener | Accepted |
 
 Context: what shipped is [STATUS.md](../STATUS.md); what is next is
 [ROADMAP.md](../ROADMAP.md); vocabulary is the
