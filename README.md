@@ -47,7 +47,11 @@
 
 ## What's new
 
-**Unreleased** — tray-icon hardening: a tray host that flaps its
+**Unreleased** — **UI translations**: the whole interface (Settings,
+History, tray, notifications, onboarding) now speaks **Srpski
+(latinica)**, **Српски (ћирилица)** and **Bosanski** through gettext —
+system-locale by default, switchable live in Settings with no restart.
+Also: tray-icon hardening: a tray host that flaps its
 StatusNotifierWatcher name (seen in the wild: an ubuntu-appindicators
 reload loop) now gets at most one re-registration every 2 s and one log
 line per minute, instead of a registration per flap (a 57-minute flap
@@ -156,6 +160,33 @@ With the daemon stopped, History still works and Settings writes the
 config directly. Settings talk to the daemon over the user-owned unix
 control socket — no network listener exists; API keys are never exposed
 through the UI (use the env var).
+
+### Speaks your language
+
+<p>
+<img src="docs/screenshots/language-sr.png" width="560" alt="SayItErmano's History window and language selector rendered in Serbian Latin: status line, search, entry cards with tags, and the Language row set to Srpski (latinica)">
+</p>
+
+Dictation was always multilingual (99 Whisper languages) — now the UI is
+too. Every user-facing string (Settings, History, tray menu,
+notifications, onboarding) goes through gettext, and the interface ships
+with **Srpski (latinica)**, **Српски (ћирилица)** and **Bosanski**
+catalogs; English is the source language. The UI follows your system
+locale by default, or pick a language in **Settings → General →
+Language** — it applies immediately, no restart, everywhere including
+the tray menu and desktop notifications.
+
+```toml
+[general]
+ui_language = "system"   # or: en, sr-Latn, sr, bs
+```
+
+Adding a language is plain gettext work: wrap strings with `_()`, run
+`python scripts/extract_translations.py`, translate the new
+`po/<lang>.po`, then `python scripts/build_translations.py` (no gettext
+tools needed — the compiler is part of the repo). `just translations`
+gates the catalogs: zero untranslated strings, zero orphans, compiled
+`.mo` in sync.
 
 ### Enable AI polish (optional)
 
