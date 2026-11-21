@@ -102,10 +102,12 @@ python scripts/license_lookup.py txn_01hwqz...   --log issued.jsonl
 ```
 
 Email matches are substring + case-insensitive; transaction/event ids
-match exactly. Re-send the printed key; it never expires and never
+match exactly. Re-send the printed key — the copy for that email is
+[store-emails.md](store-emails.md). The key never expires and never
 needs the server again. Refunds do not revoke keys (the app keeps
 working; see the GPL note in the user guide) — they end the support
-entitlement.
+entitlement; the seller-side refund flow is
+[paddle-refunds.md](paddle-refunds.md).
 
 ## If the store becomes Polar instead
 
