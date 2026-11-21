@@ -1,0 +1,31 @@
+name: Feature request
+description: A behavior you want that does not exist yet.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: The situation you are in, not the solution you imagine.
+      placeholder: I dictate Serbian and English in one sentence and …
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What should it do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What did you try or consider instead?
+    validations:
+      required: false
+  - type: checkboxes
+    id: willing
+    attributes:
+      label: Willing to test an early build?
+      options:
+        - label: Yes — ping me when there is something to try
+          required: false
