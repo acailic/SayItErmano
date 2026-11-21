@@ -2,6 +2,22 @@ Bundled local AI polish: one-click llama.cpp server + GGUF chat model (#21)
 
 STATUS: SHIPPED
 
+<!-- shipped in 9c9fb71 (core: local_llm manager + catalog/download +
+     config + daemon/pipeline/control wiring + UI + tests) 528dd50
+     (docs, doctor, ADR-0007 links, budgets doc, integration live test,
+     deb Recommends); brief follow-up: budgets datapoint + shipped refs. Live-verified twice on CPU-only runners with a real
+     llama.cpp llama-server + the real pinned qwen3-4b GGUF (2026-11-21):
+     download_chat_model sha256 pin, 2.5-2.8 s cold spawn with a warm
+     page cache, 'um lets meet on um tuesday around like three no wait
+     four pm ok' -> "Let's meet on Tuesday at 4 PM." with the cloud
+     switch off and loopback-only traffic, guardrail fallback intact,
+     idle stop at the exact threshold, toggle-off = child gone at once,
+     and polish-compare rendering a real verdict (exit 1 on a
+     demonstrably degraded variant; the smoke report renders per-variant
+     means + gate block). Open: none for this brief — the eval-gate
+     CLOUD baseline needs a real cloud key and is a release-time manual
+     run per docs/eval/README.md. -->
+
 One-click local AI polish: a bundled-managed llama.cpp server + a small
 GGUF chat model (qwen3-4b-class), so polished output works with zero setup
 and zero cloud key — closing the "no bundled local LLM yet" parity gap

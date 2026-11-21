@@ -12,7 +12,7 @@ bump.
 |---|---|---|---|---|
 | toggle off | 0 | model file only (if downloaded) | 0 | 0 |
 | toggle on, idle (post-timeout) | 0 | ~2.5 GB model | 0 | 0 |
-| toggle on, polishing | ~2.6–3.5 GB RSS (q4 4B + 4k ctx, CPU) | ~2.5 GB model | 1 child + 1 watcher thread | 1 loopback, ephemeral |
+| toggle on, polishing | ~2.6–3.5 GB RSS (q4 4B + 4k ctx, CPU, few-core box); up to ~4.8 GB on many-core machines (see below) | ~2.5 GB model | 1 child + 1 watcher thread | 1 loopback, ephemeral |
 
 - **Disk**: the pinned `qwen3-4b-instruct-2507-q4_k_m.gguf` is
   2,497,281,120 bytes (sha256-pinned in `CHAT_GGUF_CATALOG`;
@@ -20,12 +20,16 @@ bump.
   model, prunable in Settings → Models → Disk usage).
 - **RAM while polishing**: Q4_K_M 4B weights (~2.5 GB) + KV/context
   overhead; measured 2.6–3.5 GB RSS for llama-server CPU builds on the
-  2026-11 reference machine. GPU builds move the weights to VRAM
-  automatically (no flags of ours involved).
+  2026-11 reference machine, and **4.8 GB VmRSS right after spawn on a
+  16-core runner** (llama.cpp b12608, `-c 4096`): llama-server sizes
+  per-thread compute buffers by the detected core count, so RSS scales
+  with cores. Plan ~5 GB free RAM on many-core machines. GPU builds
+  move the weights to VRAM automatically (no flags of ours involved).
 - **Cold start**: paid ONCE per idle window — spawn + model load +
   `/health` readiness. Budget: 5–20 s on CPU (the manager's startup
   poll allows `DEFAULT_STARTUP_TIMEOUT_S = 90` for slow disks before
-  failing the take honestly with the raw transcript). While the server
+  failing the take honestly with the raw transcript); measured 2.5–2.8
+  s on a warm page cache (same 16-core runner). While the server
   is warm, per-take polish latency is the request round-trip only.
 - **Idle shutdown**: `ai.local_idle_s` (default 300 s, range
   30..86400, 0 = keep until daemon exit). The idle watcher thread
