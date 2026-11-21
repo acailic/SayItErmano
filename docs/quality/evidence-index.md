@@ -23,7 +23,7 @@ claim without support.
 | Dictation transcribes locally, offline | unit: `test_daemon.py`, `test_privacy_contracts.py` (local mode stays local; network guard) | real-model e2e: `tests/integration/test_e2e_transcribe.py` (needs_model) |
 | Nothing outlives a test / the app exits promptly | unit: conftest leak gate + `test_leak_gate_meta.py` (exit-status proven via subprocess runs) | — |
 | History survives crashes, full disks | unit: `test_history_durability.py` (SIGKILL child, ENOSPC, fsync failures) | — |
-| Hotkeys pause on screen lock | unit: `test_lifecycle_sequences.py` (lock gate + regression for the missing `_locked` flip), `test_lock_suppression.py` | live lock/resume matrix: **pending** ([wayland-matrix brief](../../requests/wayland-matrix-execution.md), OPEN) |
+| Hotkeys pause on screen lock | unit: `test_lifecycle_sequences.py` (lock gate + regression for the missing `_locked` flip), `test_lock_suppression.py` | live lock/resume matrix: **pending** ([wayland-matrix brief](../../requests/wayland-matrix-execution.md), OPEN; run it via `python3 scripts/wayland_smoke.py`, rows D6–D8) |
 | Commands never run unconfirmed | unit: `test_command.py` (single/double press, Escape, timeout), `test_command_coord.py` | — |
 | Secrets never appear in user-visible surfaces | unit: `test_privacy_contracts.py` (status/get_config/doctor subprocess), `test_config_registry.py`, `test_remote_stt.py` | — |
 | Deb installs exactly the reviewed dependency set | unit: `test_deb_lock.py` (hash-locked round trip, pip `--require-hashes` consumer) | hashed-lock deb build 2026-09-12 (Q3 acceptance, 66M artifact, every wheel verified) |
@@ -43,7 +43,7 @@ claim without support.
 |---|---|---|
 | GTK UI works (settings/history/onboarding) | display tier: `test_gtkui*.py`, `test_onboarding_window.py`, `test_settings_profiles.py` (CI gtk-x11 lane: skips fail) | live desktop: runs on this machine's GNOME X11; **Wayland/sway matrices pending** (brief OPEN) |
 | Daemon/socket/CLI behave as real processes | process lane: `tests/integration/test_daemon_socket.py`, `test_cli.py` (model-free; headless + Xvfb) | — |
-| Insertion into real apps (editor/terminal/browser/Electron) | — (needs live session) | **pending** desktop matrix execution (brief OPEN) |
+| Insertion into real apps (editor/terminal/browser/Electron) | — (needs live session) | **pending** desktop matrix execution (brief OPEN; one-command harness: `python3 scripts/wayland_smoke.py`, evidence under [quality/wayland/](wayland/README.md)) |
 | Package installs/upgrades/rollbacks cleanly | deb build contract: `build-deb.sh` + locklib gates | **NOT ESTABLISHED** for the current release line: install/upgrade/rollback matrix is Q9 work |
 
 ## Operations / maintenance

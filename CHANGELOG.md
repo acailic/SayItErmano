@@ -13,6 +13,23 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **One-command Wayland smoke-matrix harness (#13)** — `python3
+  scripts/wayland_smoke.py` now runs the live session matrix
+  ([docs/dev/wayland-smoke-matrix.md](docs/dev/wayland-smoke-matrix.md))
+  end to end: it detects the logged-in session (XDG_SESSION_TYPE /
+  WAYLAND_DISPLAY / DISPLAY), selects the applicable rows of matrices
+  A–D (GNOME Wayland, sway, X11 control, and the new hotkey ×
+  insertion × lifecycle axes), executes the automated rows (doctor,
+  daemon status, history privacy sweep), prompts for the manual
+  dictation rows (or takes `--answers`), and records dated evidence
+  under `docs/quality/wayland/<date>-<session>/` (JSON + markdown,
+  never overwritten) with exit code 1 on any red row. `--dry-run`
+  prints the plan headlessly (CI-friendly); Matrix D adds the pinned
+  axes rows — GlobalShortcuts/compositor-bind hotkey paths, wtype vs
+  ydotool insertion, sleep/wake, lock/unlock, autostart, non-US layout
+  — with compositor version minimums captured automatically. The live
+  rows remain gated on a real Wayland login; the owner runs the
+  harness once per session and commits the evidence.
 - **Update channel for non-Flatpak installs (#22)** — installing the
   official .deb now configures a **signed apt repository** (served from
   this repo's GitHub Pages, published by `release-publish` via reprepro;
