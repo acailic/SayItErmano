@@ -140,6 +140,7 @@ class Daemon:
         self._session = session_mod.probe()  # session type + capabilities
         self._evdev_ptt: Any = None  # optional evdev push-to-talk (wayland)
         self._portal_hotkey: Any = None  # GlobalShortcuts portal (wayland)
+        self._shutting_down = threading.Event()  # bg starters unwind on it
 
     # -- engine state (owned by SpeechEngineManager; daemon-visible) -------
 
@@ -207,7 +208,11 @@ class Daemon:
             self._start_hotkey()
         self._start_mouse_ptt()
         self._start_evdev_ptt()
-        self._start_eis_insertion()
+        # The EIS portal start is user-paced on older portals (consent
+        # dialog at Start) - it must never delay the control socket or
+        # the tray, so it warms up in the background and logs when ready.
+        threading.Thread(target=self._start_eis_insertion,
+                         name="fluidvoice-eis-startup", daemon=True).start()
 
         self._start_tray()
         self._start_micmon()
@@ -625,6 +630,7 @@ class Daemon:
 
     def shutdown(self) -> None:
         log("shutting down")
+        self._shutting_down.set()  # background starters check + unwind
         self._engines.stop_idle_watch()
         # under the lock: the take-state mutations race the hotkey thread's
         # toggle (N1). The race was benign - callbacks re-validate recorder
@@ -957,6 +963,10 @@ class Daemon:
         from . import eis_insertion
         try:
             if eis_insertion.ensure_shared(self.cfg, log=log):
+                if self._shutting_down.is_set():
+                    # shutdown raced the background start: undo now
+                    eis_insertion.stop_shared()
+                    return None
                 for line in eis_insertion.shared_keyboard().summary:
                     log(line)
                 return None

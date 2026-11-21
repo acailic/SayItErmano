@@ -1107,6 +1107,51 @@ class TestWaylandRegistryProbe:
                             lambda timeout_s=2.0, path=None: None)
         assert wayland_probe.probe_virtual_keyboard() is False
 
+    def test_live_roundtrip_against_a_fake_compositor(self, tmp_path):
+        """The request BYTES are pinned here (object id + opcode + size
+        that counts the whole message): a compositor would garble
+        anything else. A fake server replays registry globals + the
+        sync callback over a real AF_UNIX socket."""
+        import socket as _socket
+
+        def wls(s):
+            raw = s.encode() + b"\0"
+            return struct.pack("<I", len(raw)) + raw + b"\0" * (-len(raw) % 4)
+
+        def gl(name, iface, ver):
+            args = struct.pack("<I", name) + wls(iface) \
+                + struct.pack("<I", ver)
+            return struct.pack("<IHH", 2, 0, 8 + len(args)) + args
+
+        def serve():
+            conn, _ = ls.accept()
+            with conn:
+                req = b""
+                while len(req) < 24:
+                    chunk = conn.recv(64)
+                    if not chunk:
+                        return
+                    req += chunk
+                assert req[:12] == struct.pack("<IHH", 1, 1, 12) \
+                    + struct.pack("<I", 2)  # get_registry(new_id=2)
+                assert req[12:24] == struct.pack("<IHH", 1, 0, 12) \
+                    + struct.pack("<I", 3)  # sync(new_id=3)
+                conn.sendall(
+                    gl(1, "wl_compositor", 6)
+                    + gl(2, "zwp_virtual_keyboard_manager_v1", 1)
+                    + struct.pack("<IHH", 3, 0, 12)
+                    + struct.pack("<I", 0))  # callback.done(3, 0)
+
+        import threading
+        ls = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+        sock_path = tmp_path / "wayland-0"
+        ls.bind(str(sock_path))
+        ls.listen(1)
+        threading.Thread(target=serve, daemon=True).start()
+        globals_ = wayland_probe.list_globals(path=str(sock_path))
+        assert globals_ == {"wl_compositor": 6,
+                            "zwp_virtual_keyboard_manager_v1": 1}
+
     def test_socket_path_resolution(self, monkeypatch, tmp_path):
         sock = tmp_path / "wayland-1"
         sock.write_bytes(b"")

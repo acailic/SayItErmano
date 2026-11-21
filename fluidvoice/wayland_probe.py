@@ -57,13 +57,17 @@ def _socket_path(env: dict | None = None) -> str | None:
     return path if os.path.exists(path) else None
 
 
+WL_DISPLAY_OBJ = 1  # the one well-known object id (wayland.xml)
+
+
 def _encode_request(opcode: int, new_id: int) -> bytes:
-    """One wayland request with a single new_id arg (get_registry/sync).
-    The size field counts the WHOLE message: 8-byte header (object id +
-    opcode + size) plus args."""
+    """One wayland request with a single new_id arg (get_registry/sync),
+    addressed to the wl_display object. The size field counts the WHOLE
+    message: 8-byte header (object id + opcode + size) plus args."""
     args = struct.pack("<I", new_id)
     size = 8 + len(args)
-    return _header.pack(opcode, size) + args
+    return (struct.pack("<I", WL_DISPLAY_OBJ)
+            + _header.pack(opcode, size) + args)
 
 
 def _parse_string(args: bytes, off: int) -> tuple[str, int]:

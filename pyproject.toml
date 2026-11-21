@@ -38,6 +38,11 @@ parakeet = ["onnxruntime>=1.17"]
 # python-evdev — a privileged path (input group). Insertion itself needs
 # the system tools wtype/ydotool/wl-clipboard, not this extra.
 wayland = ["evdev>=1.6"]
+# GlobalShortcuts-portal hotkey + RemoteDesktop/EIS insertion (ADR-0006;
+# the Flatpak build vendors these as wheels under packaging/wheels/).
+# Everything degrades loudly without them — this extra just installs the
+# sanctioned portal bindings on host installs.
+portal = ["global-shortcut-portal>=0.2"]
 dev = [
     "pytest>=8",
     "pytest-xdist>=3.5",  # parallel suite: just test-parallel (auto workers)

@@ -295,9 +295,23 @@ class PortalHotkeyListener:
         )
         portal = Portal()
         await asyncio.wait_for(portal.connect(), CONNECT_TIMEOUT_S)
-        session = GlobalShortcutsSession(
-            portal, app_id=self.app_id or None, callback=_Callbacks(self))
-        await asyncio.wait_for(session.connect(), CONNECT_TIMEOUT_S)
+        self._portal = portal  # torn down with the session (see _run)
+        try:
+            session = GlobalShortcutsSession(
+                portal, app_id=self.app_id or None, callback=_Callbacks(self))
+            await asyncio.wait_for(session.connect(), CONNECT_TIMEOUT_S)
+        except Exception:
+            if not self.app_id:
+                raise
+            # older portals have no host-portal Registry to Register()
+            # with: bind without an explicit app id (the portal then
+            # attributes the shortcut to our D-Bus sender) instead of
+            # failing the whole hotkey
+            self.log("portal Registry unavailable - binding without "
+                     "an app id")
+            session = GlobalShortcutsSession(
+                portal, app_id=None, callback=_Callbacks(self))
+            await asyncio.wait_for(session.connect(), CONNECT_TIMEOUT_S)
         return session
 
     async def _bind(self, session) -> list:
@@ -355,7 +369,14 @@ class PortalHotkeyListener:
                 await asyncio.wait_for(session.close(), timeout=3.0)
             except Exception:  # noqa: S110 — teardown/cleanup must not raise
                 pass
-            self._session = None
+            portal, self._portal = self._portal, None
+            if portal is not None:
+                try:
+                    await asyncio.wait_for(portal.close(), timeout=3.0)
+                except Exception:  # noqa: S110 — teardown/cleanup must not raise
+                    pass  # the bus dies with the connection anyway
+        self._session = None
+        self._portal = None  # the real path's Portal (bus connection)
 
     # -- event seam (also the test seam) ---------------------------------
 
