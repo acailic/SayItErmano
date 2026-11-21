@@ -9,6 +9,8 @@ one gets a new ADR that marks the old one Superseded.
 | [ADR-0002](ADR-0002-locked-jsonl-history.md) | History stays JSONL, made transactional with a sidecar flock | Accepted |
 | [ADR-0003](ADR-0003-runtime-task-ownership.md) | Runtime tasks are owned, tracked and cancellable | Accepted |
 | [ADR-0004](ADR-0004-ubuntu-deb-contract.md) | The deb is an Ubuntu 24.04 / x86_64 / Python 3.12 contract | Accepted |
+| [ADR-0005](ADR-0005-commercial-sku.md) | The commercial SKU is a convenience-and-support bundle sold through Paddle | Proposed |
+| [ADR-0006](ADR-0006-flatpak-input.md) | Flatpak input: GlobalShortcuts portal hotkey, RemoteDesktop/EIS insertion, Vulkan GPU | Proposed |
 
 Context: what shipped is [STATUS.md](../STATUS.md); what is next is
 [ROADMAP.md](../ROADMAP.md); vocabulary is the
