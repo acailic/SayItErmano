@@ -10,7 +10,12 @@ owner runbooks, not by the suite):
 - the legal pages exist and are linked from every page footer;
 - the buy CTA exists, keeps a real no-JS fallback href, and carries
   the utm data tags from the funnel decision rule
-  (docs/pricing-funnel-decision-rule.md);
+  (docs/pricing-funnel-decision-rule.md) — on its href as query
+  params too, the convention for every landing-site store link (#19);
+- the Flathub badge asset exists and is shown, unlinked while the
+  listing is pending (#12) — no dead flathub.org/apps URL may ship;
+- the closing support links (#20): SUPPORT.md route, the license-keys
+  guide, and the refund policy are reachable from the landing page;
 - the store config defines the sandbox/live flip constants;
 - the privacy section stays above the pricing section on the landing
   page (the store must not bury the local-audio promise).
@@ -21,6 +26,7 @@ from __future__ import annotations
 import re
 from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 SITE = Path(__file__).resolve().parents[1] / "site"
 
@@ -32,6 +38,12 @@ LANDING_UTM = {"data-utm-source": "landing",
                "data-utm-campaign": "store"}
 STORE_CONFIG_KEYS = ("mode", "clientToken", "priceId", "productId",
                      "fallbackUrl")
+# the closing links (#19 scope, #20 support routes)
+SUPPORT_ROUTE = ("https://github.com/acailic/SayItErmano"
+                 "/blob/linux/SUPPORT.md")
+LICENSE_GUIDE = ("https://github.com/acailic/SayItErmano"
+                 "/blob/linux/docs/guides/license.md")
+FLATHUB_BADGE_SRC = "assets/img/flathub-badge.svg"
 
 
 class _Collector(HTMLParser):
@@ -114,13 +126,19 @@ def _buy_cta() -> tuple[dict[str, str], str]:
     class CTA(HTMLParser):
         attrs: dict[str, str] = {}
         text_inside = ""
+        _inside = False
 
         def handle_starttag(self, tag, attrs):
             if any(k == "id" and v == "buy-cta" for k, v in attrs):
                 self.attrs = {k: v or "" for k, v in attrs}
+                self._inside = tag
+
+        def handle_endtag(self, tag):
+            if self._inside and tag == self._inside:
+                self._inside = False
 
         def handle_data(self, data):
-            if self.attrs:
+            if self._inside:
                 self.text_inside += data.strip()
 
     cta = CTA()
@@ -139,6 +157,54 @@ def test_buy_cta_present_with_fallback_and_utm_tags() -> None:
             f"buy CTA {key} must be {value!r} (funnel decision rule), "
             f"got {attrs.get(key)!r}")
     assert label, "buy CTA label text is empty"
+
+
+def test_buy_cta_label_shows_price() -> None:
+    _, label = _buy_cta()
+    assert re.search(r"\$\d+", label), (
+        "buy CTA label must show the price (#19: price visible)")
+
+
+def test_buy_cta_fallback_href_is_utm_tagged() -> None:
+    """The funnel rule tags EVERY landing-site store link — the
+    no-JS/reserve fallback included, so the go-live href swap keeps
+    attribution for free (docs/pricing-funnel-decision-rule.md)."""
+    attrs, _ = _buy_cta()
+    qs = parse_qs(urlparse(attrs.get("href", "")).query)
+    assert qs.get("utm_source") == ["landing"], attrs.get("href")
+    assert qs.get("utm_medium") == ["cta"], attrs.get("href")
+    assert qs.get("utm_campaign") == ["store"], attrs.get("href")
+
+
+# ---------------------------------------------------------------------------
+# closing links: flathub badge + support routes (#19)
+# ---------------------------------------------------------------------------
+
+def _index() -> str:
+    return (SITE / "index.html").read_text(encoding="utf-8")
+
+
+def test_flathub_badge_shipped_and_referenced() -> None:
+    badge = SITE / "assets" / "img" / "flathub-badge.svg"
+    assert badge.is_file(), "official Flathub badge asset missing"
+    text = _index()
+    assert f'src="{FLATHUB_BADGE_SRC}"' in text, (
+        "index.html must show the Flathub badge (secondary install CTA)")
+    # the listing is pending (#12) — a dead app URL must not ship
+    assert "flathub.org/apps/" not in text, (
+        "flathub.org/apps link before the listing exists (#12) is a "
+        "dead link; wire it at go-live (site/README.md checklist)")
+
+
+def test_support_closing_links_present() -> None:
+    text = _index()
+    for url in (SUPPORT_ROUTE, LICENSE_GUIDE):
+        assert f'href="{url}"' in text, f"missing closing link: {url}"
+    assert 'href="refund.html"' in text, "refund policy link missing"
+    # #20: SUPPORT.md must be linked from the site (footer community)
+    footer = text[text.find("site-footer"):]
+    assert f'href="{SUPPORT_ROUTE}"' in footer, (
+        "footer must carry the SUPPORT.md route")
 
 
 def test_store_config_defines_flip_constants() -> None:

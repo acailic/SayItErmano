@@ -13,6 +13,16 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **Landing closing links (#19)** — the buy CTA's no-JS fallback
+  (and the noscript reserve link) now carry the funnel UTM tags from
+  the pricing decision rule, so the go-live href swap keeps checkout
+  attribution; the free pricing card shows the official Flathub badge
+  (CC0, bundled) unlinked with a "listing in progress" note until the
+  Flathub submission ships — the page never links a page that does not
+  exist; a pre-sale support row under the pricing grid links the
+  SUPPORT.md route, the license-keys guide and the refund policy, and
+  the footer gains a Support link (#20). Static gates extended in
+  `tests/test_site_links.py`.
 - **Portal input on Wayland/Flatpak (#10, ADR-0006)** — the dictation
   hotkey now binds through the **GlobalShortcuts portal** (GNOME 48+,
   Plasma 5.27+, Hyprland) with native hold-PTT from the

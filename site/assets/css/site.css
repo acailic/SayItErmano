@@ -1554,6 +1554,42 @@ figure.shot {
 .plan-cta.ghost { background: transparent; color: var(--fg); }
 .plan-note { font-size: 0.85rem; opacity: 0.7; margin-top: 0.5rem; }
 
+/* ============ closing links (#19): flathub badge + support row ============ */
+.flathub-pending {
+  margin-top: 0.9rem;
+  display: grid;
+  gap: 0.45rem;
+  justify-items: start;
+}
+.flathub-pending img {
+  display: block;
+  width: 168px;
+  height: auto;
+}
+.flathub-pending p {
+  font-size: 0.8rem;
+  opacity: 0.65;
+}
+.support-row {
+  margin-top: 2.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 2rem;
+  align-items: baseline;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--ink-3);
+}
+.support-row a {
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--line);
+  text-decoration: none;
+}
+.support-row a:hover {
+  color: var(--accent-deep);
+  border-color: var(--accent-deep);
+}
+
 /* ============ store comparison table (#17) ============ */
 .sr-only {
   position: absolute;

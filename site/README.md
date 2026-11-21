@@ -31,6 +31,14 @@ verbatim — there is no build step).
   `fluidvoice/assets/icon.png`, and the typographic `og-image.png`.
   If a screenshot changes upstream, regenerate with the same
   Pillow recipe (resize + `optimize=True`, GIF ≤ 800 px wide).
+- `assets/img/flathub-badge.svg` — the official Flathub badge
+  (CC0, Jakub Steiner), fetched from
+  `https://flathub.org/api/badge?svg&locale=en`. It ships as the
+  secondary install CTA in the free pricing card, shown UNLINKED
+  while the Flathub submission (#12) is pending — the site never
+  links a page that does not exist. The closing support row under
+  the pricing grid (SUPPORT.md route, license-keys guide, refund
+  policy) plus the footer Support link close #19/#20.
 
 Because the site is served under the repo subpath `/SayItErmano/`,
 **all asset URLs must stay relative** — no leading-slash paths.
@@ -60,5 +68,11 @@ buy-CTA tags, store config sanity).
    product id.
 3. When the intro cohort closes: update the price card copy in
    `index.html` ($39 intro → $49) and the Paddle price; the
-   comparison table and every other number stay sourced from
+   comparison table and every other number stays sourced from
    `docs/PRICING.md`.
+4. When the Flathub listing is accepted (#12): wrap the badge in
+   `index.html` (free pricing card) in a link to
+   `https://flathub.org/apps/io.github.acailic.SayItErmano` —
+   the app id is fixed by `packaging/io.github.acailic.SayItErmano.yml`
+   — and drop the "listing in progress" note; the dead-link gate in
+   `tests/test_site_links.py` flips with it.
