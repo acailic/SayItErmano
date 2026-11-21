@@ -80,7 +80,11 @@ def _normalize(raw: str) -> str | None:
 
     Accepts the usual spellings: sr, sr_RS, sr-Latn, sr-Latn-RS,
     sr@latin, bs_BA.UTF-8 …"""
-    token = raw.strip().split(".", 1)[0].split("@", 1)[0]
+    token = raw.strip().split(".", 1)[0]
+    modifier = ""
+    if "@" in token:
+        token, modifier = token.split("@", 1)
+        modifier = modifier.lower()
     parts = [p for p in token.replace("-", "_").lower().split("_") if p]
     if not parts:
         return None
@@ -92,7 +96,9 @@ def _normalize(raw: str) -> str | None:
         return "bs"
     if base == "sr":
         # plain "sr" (GNU/ISO default) is Cyrillic; Latin must be named
-        return "sr-Latn" if "latn" in rest or "latin" in rest else "sr"
+        latin = "latn" in rest or "latin" in rest or modifier in ("latn",
+                                                                 "latin")
+        return "sr-Latn" if latin else "sr"
     return None
 
 

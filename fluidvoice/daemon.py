@@ -1034,10 +1034,12 @@ class Daemon:
         if "general.ui_language" in changed:
             # live UI language switch: tray menu/tooltip (rebuilt on the
             # next refresh) and notifications (translated at send time)
-            from . import i18n
-            i18n.set_language(
-                self.cfg.get("general", {}).get("ui_language", "system"))
-            self._refresh_tray()
+            def _set_ui_language() -> None:
+                from . import i18n
+                i18n.set_language(
+                    self.cfg.get("general", {}).get("ui_language", "system"))
+                self._refresh_tray()
+            _try("ui language", _set_ui_language)
         if "general.pause_when_locked" in changed:
             _try("lock pause", self._apply_lock_setting)
         if "model.idle_unload_s" in changed:
