@@ -12,6 +12,8 @@ the app itself.
   one-pager (served from [`site/`](../site/) via GitHub Pages).
 - [guides/install.md](guides/install.md) — every install route (one-shot
   installer, Ubuntu .deb, pipx, AUR, source) and updates.
+- [guides/license.md](guides/license.md) — license keys: import, status,
+  what they do and do not restrict ([PRICING](PRICING.md)).
 - [guides/configuration.md](guides/configuration.md) — the complete
   `config.toml` reference, generated from the settings registry.
 - [guides/wayland.md](guides/wayland.md) — Wayland capability matrix and
