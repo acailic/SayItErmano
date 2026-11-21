@@ -1,0 +1,38 @@
+# SPIKE manifest (issue #10/#11, ADR-0006) — proves the sandbox story on X11.
+# Not the shipping manifest: no metainfo/desktop/icons yet, and permissions
+# are the spike set (fallback-x11 for the XGrabKey+xdotool path).
+# GPU/model download not exercised by the spike (doctor runs model-free).
+id: io.github.acailic.SayItErmano
+runtime: org.gnome.Platform
+runtime-version: "48"
+sdk: org.gnome.Sdk
+command: sayit-ermano
+
+finish-args:
+  - --socket=fallback-x11      # X11 row of the ADR-0006 matrix (XGrabKey + xdotool)
+  - --share=ipc                # X11 needs the ipc socket
+  - --socket=pulseaudio        # PipeWire/Pulse capture (doctor mic probe)
+  - --device=dri               # GPU device nodes (Vulkan path, later slices)
+  - --share=network            # first-run model download (ADR-0006 baseline)
+  - --env=SAYITERMANO_FLATPAK=1
+
+modules:
+  - name: sayitermano
+    buildsystem: simple
+    build-commands:
+      # flatpak-builder's build sandbox has no network: install from the
+      # local git checkout with the SDK's own setuptools (no isolation).
+      - pip3 install --no-build-isolation --no-deps --prefix=/app .
+    sources:
+      - type: git
+        url: file:///home/nistrator/Documents/github/FluidVoiceLinux-agent
+        branch: linux
+  - name: deps
+    buildsystem: simple
+    build-commands:
+      - pip3 install --prefix=/app python_xlib-0.33-py2.py3-none-any.whl pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+    sources:
+      - type: file
+        path: wheels/python_xlib-0.33-py2.py3-none-any.whl
+      - type: file
+        path: wheels/pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
