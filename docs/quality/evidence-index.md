@@ -23,11 +23,12 @@ claim without support.
 | Dictation transcribes locally, offline | unit: `test_daemon.py`, `test_privacy_contracts.py` (local mode stays local; network guard) | real-model e2e: `tests/integration/test_e2e_transcribe.py` (needs_model) |
 | Nothing outlives a test / the app exits promptly | unit: conftest leak gate + `test_leak_gate_meta.py` (exit-status proven via subprocess runs) | — |
 | History survives crashes, full disks | unit: `test_history_durability.py` (SIGKILL child, ENOSPC, fsync failures) | — |
-| Hotkeys pause on screen lock | unit: `test_lifecycle_sequences.py` (lock gate + regression for the missing `_locked` flip), `test_lock_suppression.py` | live lock/resume matrix: **pending** ([wayland-matrix brief](../../requests/wayland-matrix-execution.md), OPEN) |
+| Hotkeys pause on screen lock | unit: `test_lifecycle_sequences.py` (lock gate + regression for the missing `_locked` flip), `test_lock_suppression.py` | live lock/unlock rows: **pending** owner runs via `scripts/wayland_smoke.py` (harness + offline tests committed 2026-11-21; [wayland-matrix brief](../../requests/wayland-matrix-execution.md), OPEN) |
 | Commands never run unconfirmed | unit: `test_command.py` (single/double press, Escape, timeout), `test_command_coord.py` | — |
 | Secrets never appear in user-visible surfaces | unit: `test_privacy_contracts.py` (status/get_config/doctor subprocess), `test_config_registry.py`, `test_remote_stt.py` | — |
 | Deb installs exactly the reviewed dependency set | unit: `test_deb_lock.py` (hash-locked round trip, pip `--require-hashes` consumer) | hashed-lock deb build 2026-09-12 (Q3 acceptance, 66M artifact, every wheel verified) |
 | A release contains what CI tested | unit: `test_release_verify.py` (manifest→bytes→source→lock→evidence chain, all rejection cases) | per-release: prepare manifest + summary sha256; publish verifies and records `evidence` input |
+| Every install route works on a fresh VM (paid-launch gate) | unit: `test_qa_matrix.py` (route probes, skip reasons, evidence files, generated summary) | [install matrix](install-matrix/README.md) — cells PENDING the owner's fresh-VM runs (issue #14) |
 
 ## Speech quality
 
@@ -41,10 +42,10 @@ claim without support.
 
 | Requirement | Automated proof | Dated evidence |
 |---|---|---|
-| GTK UI works (settings/history/onboarding) | display tier: `test_gtkui*.py`, `test_onboarding_window.py`, `test_settings_profiles.py` (CI gtk-x11 lane: skips fail) | live desktop: runs on this machine's GNOME X11; **Wayland/sway matrices pending** (brief OPEN) |
+| GTK UI works (settings/history/onboarding) | display tier: `test_gtkui*.py`, `test_onboarding_window.py`, `test_settings_profiles.py` (CI gtk-x11 lane: skips fail) | live desktop: runs on this machine's GNOME X11; **Wayland/sway matrices pending** — harness `scripts/wayland_smoke.py` committed 2026-11-21 ([row tables](../dev/wayland-smoke-matrix.md)), owner live runs open ([brief](../../requests/wayland-matrix-execution.md)) |
 | Daemon/socket/CLI behave as real processes | process lane: `tests/integration/test_daemon_socket.py`, `test_cli.py` (model-free; headless + Xvfb) | — |
-| Insertion into real apps (editor/terminal/browser/Electron) | — (needs live session) | **pending** desktop matrix execution (brief OPEN) |
-| Package installs/upgrades/rollbacks cleanly | deb build contract: `build-deb.sh` + locklib gates | **NOT ESTABLISHED** for the current release line: install/upgrade/rollback matrix is Q9 work |
+| Insertion into real apps (editor/terminal/browser/Electron) | — (needs live session) | **pending** desktop matrix execution — per-session rows carried by `scripts/wayland_smoke.py` ([brief](../../requests/wayland-matrix-execution.md), OPEN) |
+| Package installs/upgrades/rollbacks cleanly | deb build contract: `build-deb.sh` + locklib gates; matrix harness: `scripts/qa_matrix.py` (unit: `test_qa_matrix.py` — skip logic, evidence files, summary/gate) | [install matrix](install-matrix/README.md) (#14): harness + checklist committed 2026-11-21; **owner fresh-VM runs pending** (Ubuntu 24.04 / Fedora / Arch, GPU + CPU) |
 
 ## Operations / maintenance
 
@@ -55,6 +56,7 @@ claim without support.
 | Flaky tests never get unlimited reruns | unit: `test_dev_gates.py` (registry shape: owner + expiry; no open row past expiry) | registry + policy in [testing.md](../dev/testing.md); all four historical flakes closed same-day (2026-09-12/14, `95978c3`/`586cb8c`) |
 | Quality is re-reviewed after each release | unit: the same dev-gates guard keeps the practice's paper honest | [post-release review 2026-10-14](../research/2026-10-14-post-release-review-v0.8.2.md) — v0.8.2 + Unreleased delta: uncovered-branch owners, incident recap, slowest tests, compatibility gaps |
 | Long-running stability (memory, FDs, recovery) | soak tooling: `scripts/soak.py`, `evalharness soak` | **pending**: 2h pre-release + 24h lifecycle soaks (Q9) |
+| Funnel measured server-side, no client telemetry (#18) | unit: `test_flathub_stats.py` (API parsing, append-only data, report rendering, NOT-LIVE stubs) | weekly report: [quality/funnel/weekly.md](funnel/weekly.md) once cron lands (owner action); decision rule fixed up front: [pricing-funnel-decision-rule.md](../pricing-funnel-decision-rule.md) |
 
 ## Release-to-evidence binding
 

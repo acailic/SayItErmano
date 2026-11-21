@@ -49,6 +49,9 @@ the app itself.
   does, with file:line evidence, and where this port differs.
 - [dev/release-gates.md](dev/release-gates.md) — the local gates and
   the release path (nothing ships without them).
+- [dev/license-ops.md](dev/license-ops.md) — owner runbook for offline
+  license keys: keygen custody, the Paddle webhook, the issued-keys
+  lookup log.
 - [dev/testing.md](dev/testing.md) — the test tier model and every
   recipe, in one canonical place.
 - [dev/quality-queue.md](dev/quality-queue.md) — historical Q1–Q12
@@ -62,6 +65,13 @@ the app itself.
 
 - [quality/evidence-index.md](quality/evidence-index.md) — every
   verified claim and its run record.
+- [quality/funnel/](quality/funnel/) — the no-telemetry conversion
+  funnel: Flathub installs + Paddle checkout stages, weekly report,
+  cron line ([decision rule](pricing-funnel-decision-rule.md)).
+- [quality/install-matrix/README.md](quality/install-matrix/README.md) —
+  the fresh-VM install-route QA gate (issue #14): one evidence file
+  per route per distro, the owner checklist and the harness
+  (`scripts/qa_matrix.py`).
 - [../requests/](../requests/) — the brief ledger; a request's STATUS
   header is the authority on whether it shipped.
 - [plans/](plans/) — active plans, each with a Status header:

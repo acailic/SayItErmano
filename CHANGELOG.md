@@ -30,6 +30,30 @@ not reproduced here.
   (local-vs-cloud WER/omission/hotword-recall comparison +
   regression gate; [docs/eval/README.md](docs/eval/README.md)).
 
+- **Offline license keys, end to end (#16)** — the purchase-to-key
+  pipeline for the ADR-0005 SKU: a Paddle `transaction.completed`
+  webhook receiver (`scripts/license_webhook.py`) verifies the signed
+  payload (forgery/replay rejected), issues an Ed25519 key with the
+  owner-side keygen (`scripts/license_keygen.py` — private seed lives
+  on offline media, never in the repo), and appends to an append-only
+  JSONL issue log that support searches by email
+  (`scripts/license_lookup.py`). The shipped app stays
+  verify-only and fully offline: `sayit-ermano license <KEY>` imports,
+  Settings → About shows the state, and no key ever gates dictation.
+  Owner runbook: `docs/dev/license-ops.md` (incl. the sandbox
+  acceptance test and the Polar runner-up wiring).
+- **Fresh-VM install QA gate (#14)** — `scripts/qa_matrix.py`: a
+  harness that walks every install route (one-shot user-space, one-shot
+  `--system`, .deb, AUR, pipx, Flatpak) down the paying-user funnel
+  (install → onboarding → dictation → update) wherever the current
+  machine offers the route, and records every skip with its reason
+  (wrong distro, no root, headless, tool missing). It writes one
+  evidence file per route per distro under
+  `docs/quality/install-matrix/` plus a generated summary table; the
+  owner runs `check --execute` on the fresh Ubuntu 24.04 / Fedora /
+  Arch VMs (GPU and CPU) to fill it. The install guide's route order
+  is now explicitly best-converting first (user-space one-shot → .deb
+  + apt repo → `--system` → pipx → AUR → source), owned by this gate.
 - **Update channel for non-Flatpak installs (#22)** — installing the
   official .deb now configures a **signed apt repository** (served from
   this repo's GitHub Pages, published by `release-publish` via reprepro;
