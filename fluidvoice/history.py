@@ -503,6 +503,48 @@ class HistoryStore:
             self._clean_stale_tmp(self._hpath(), paths.audio_dir())
             return self._prune_orphan_audio_unlocked()
 
+    def enforce_audio_retention(self, days: int,
+                                now: float | None = None) -> int:
+        """Delete retained audio older than `days`; rows and text stay.
+
+        Issue #24: backs the on-audio retention claim. Rows lose their
+        `audio` reference (the replay affordance goes) and the file is
+        unlinked; the entry text and timestamps are untouched. One
+        LOCK_EX transaction: the re-read, the atomic rewrite, and the
+        deletions cannot interleave with a concurrent append. Returns
+        the number of audio files removed. `days <= 0` is a no-op (the
+        default keeps audio until the budget cap trims it).
+        """
+        if days <= 0:
+            return 0
+        cutoff = (time.time() if now is None else now) - days * 86400.0
+        hpath = self._hpath()
+        removed = 0
+        with self._locked(exclusive=True):
+            entries = self._read_all_unlocked()
+            changed = False
+            for entry in entries:
+                audio = entry.get("audio")
+                if not audio:
+                    continue
+                if entry.get("ts", 0) > cutoff:
+                    continue
+                path = Path(audio)
+                with contextlib.suppress(OSError):
+                    path.unlink()
+                    removed += 1
+                entry.pop("audio", None)
+                changed = True
+            if changed:
+                _atomic_write(hpath, [json.dumps(e, ensure_ascii=False)
+                                      for e in entries])
+                # a deleted file a crashed append left dangling is now
+                # unreferenced too — sweep it in the same transaction
+                self._prune_orphan_audio_unlocked()
+        if removed:
+            _log(f"audio retention ({days}d) removed {removed} file(s)")
+        return removed
+
     def export_zip(self, path: Path,
                    on_note: Callable[[str], None] | None = None) -> int:
         """Zip history + retained audio. Returns the number of entries
@@ -610,6 +652,10 @@ def tail(n: int = 20) -> list[dict]:
 
 def read_all() -> list[dict]:
     return _store.read_all()
+
+
+def enforce_audio_retention(days: int, now: float | None = None) -> int:
+    return _store.enforce_audio_retention(days, now=now)
 
 
 def search(query: str = "", limit: int = 100) -> list[dict]:

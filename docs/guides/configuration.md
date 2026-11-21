@@ -195,6 +195,7 @@ drift: `python scripts/gen_config_reference.py` regenerates it.
 | `save` | `true` |  | Save transcriptions to history |
 | `save_audio` | `false` |  | Store the recording with each entry |
 | `audio_budget_gb` | `4.0` |  | Retained-audio budget in GB |
+| `audio_retention_days` | `0` |  | Auto-delete retained audio older than this many days (rows and text stay; the replay affordance goes). 0 = keep until the budget cap trims it |
 
 ### `[command]`
 
