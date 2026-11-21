@@ -13,10 +13,14 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
+import scripts.license_keygen as keygen
 from fluidvoice import license as lic
+
+REPO = Path(__file__).resolve().parents[1]
 
 # ---------------------------------------------------------------------------
 # Reference signer (tests only)
@@ -61,10 +65,11 @@ _TEST_SK = "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 
 
 # ---------------------------------------------------------------------------
-# RFC 8032 official vectors — the correctness anchor
+# RFC 8032 official vectors — the correctness anchor (both directions:
+# the verifier ships, the signer lives in scripts/license_keygen.py)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("sk_hex,pk_hex,msg_hex,sig_hex", [
+_RFC_VECTORS = [
     # RFC 8032 §7.1 TEST 1 (empty message)
     ("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
      "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
@@ -83,10 +88,21 @@ _TEST_SK = "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
      "af82",
      "6291d657deec24024827e69c3abe01a30ce548a284743a445e3680d7db5ac3ac"
      "18ff9b538d16f290ae67f760984dc6594a7c15e9716ed28dc027beceea1ec40a"),
-])
+]
+
+
+@pytest.mark.parametrize("sk_hex,pk_hex,msg_hex,sig_hex", _RFC_VECTORS)
 def test_rfc8032_vectors_verify(sk_hex, pk_hex, msg_hex, sig_hex):
     assert lic._ed25519_verify(bytes.fromhex(pk_hex), bytes.fromhex(msg_hex),
                                bytes.fromhex(sig_hex))
+
+
+@pytest.mark.parametrize("sk_hex,pk_hex,msg_hex,sig_hex", _RFC_VECTORS)
+def test_rfc8032_vectors_sign(sk_hex, pk_hex, msg_hex, sig_hex):
+    # The owner-side signer must produce the official bytes bit-for-bit.
+    sig, pk = keygen.sign(bytes.fromhex(sk_hex), bytes.fromhex(msg_hex))
+    assert sig == bytes.fromhex(sig_hex)
+    assert pk == bytes.fromhex(pk_hex)
 
 
 @pytest.mark.parametrize("which", [0, 1, 32, 63])
@@ -231,3 +247,70 @@ def test_cli_license_rejects_bad_key(one_key, capsys):
     assert main(["license", "garbage.key"]) == 1
     err = capsys.readouterr().err
     assert "error" in err.lower()
+
+
+# ---------------------------------------------------------------------------
+# The owner-side keygen script (scripts/license_keygen.py): whatever it
+# prints, the shipped verifier must accept — through the REAL script,
+# not the reference signer above.
+# ---------------------------------------------------------------------------
+
+def test_keygen_issue_roundtrip_through_shipped_verifier(tmp_path):
+    seed = bytes.fromhex(_TEST_SK)
+    pk = keygen.public_key(seed)
+    key = keygen.issue_key(
+        seed, keygen.build_payload("buyer@example.com",
+                                   dt.date(2026, 11, 21), "1", "Jane"))
+    info = lic.parse_and_verify(key, keys=(pk,), now=dt.date(2026, 11, 21))
+    assert info.email == "buyer@example.com"
+    assert info.max_version == "1"
+    # the optional name rides along in the payload (ignored by verify)
+    import base64
+    raw = base64.urlsafe_b64decode(
+        key.split(".")[0] + "=" * (-len(key.split(".")[0]) % 4))
+    payload = json.loads(raw)
+    assert payload["name"] == "Jane"
+    assert payload["product"] == lic.PRODUCT_ID
+
+
+def test_keygen_cli_generate_issue_verify(tmp_path, capsys, monkeypatch):
+    seed_path = tmp_path / "offline.seed"
+    assert keygen.main(["generate", "--private-key", str(seed_path)]) == 0
+    out = capsys.readouterr()
+    assert "public key (hex):" in out.out  # pubkey on stdout, hints stderr
+    assert len(out.out.strip().split()[-1]) == 64  # the hex pubkey
+    assert "offline media" in out.err or "PUBLIC_KEYS" in out.err
+    assert oct(seed_path.stat().st_mode & 0o777) == "0o600"
+    seed = bytes.fromhex(seed_path.read_text().strip())
+
+    monkeypatch.setattr(lic, "PUBLIC_KEYS", (keygen.public_key(seed),))
+    assert keygen.main(["issue", "--private-key", str(seed_path),
+                        "--email", "cli@x.com", "--v", "forever"]) == 0
+    key = capsys.readouterr().out.strip()
+    assert "\n" not in key  # exactly one pipeable line
+
+    assert keygen.main(["verify", key]) == 0
+    assert "cli@x.com" in capsys.readouterr().out
+
+
+def test_keygen_generate_refuses_repo_and_existing(tmp_path):
+    inside = REPO / "leaked.seed"
+    with pytest.raises(SystemExit, match="inside this repository"):
+        keygen.main(["generate", "--private-key", str(inside)])
+    assert not inside.exists()
+    existing = tmp_path / "seed"
+    existing.write_text("00" * 32 + "\n")
+    with pytest.raises(SystemExit, match="already exists"):
+        keygen.main(["generate", "--private-key", str(existing)])
+
+
+def test_keygen_rejects_bad_version_and_seed(tmp_path):
+    seed_path = tmp_path / "seed"
+    seed_path.write_text(_TEST_SK + "\n")
+    with pytest.raises(SystemExit, match="--v"):
+        keygen.main(["issue", "--private-key", str(seed_path),
+                     "--email", "x@y.z", "--v", "1.2.3"])
+    seed_path.write_text("abcd")  # not a 32-byte seed
+    with pytest.raises(SystemExit, match="64 hex"):
+        keygen.main(["issue", "--private-key", str(seed_path),
+                     "--email", "x@y.z", "--v", "1"])
