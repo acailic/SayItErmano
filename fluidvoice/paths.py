@@ -76,6 +76,14 @@ def portal_state_file() -> Path:
     return config_dir() / "portal-state.json"
 
 
+def autostart_state_file() -> Path:
+    """Last Background-portal autostart intent (ADR-0006: XDG autostart
+    replaces the systemd unit inside the Flatpak sandbox). The portal
+    exposes no query API, so the Settings switch persists what we last
+    requested here; machine-local, like update-state."""
+    return config_dir() / "autostart-state.json"
+
+
 def prompt_profiles_file() -> Path:
     """Named presets of the AI base prompt ({name: prompt})."""
     return config_dir() / "prompt-profiles.json"

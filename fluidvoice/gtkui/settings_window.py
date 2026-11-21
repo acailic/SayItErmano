@@ -414,6 +414,7 @@ class SettingsWindow(
         self._refresh_models()
         self._refresh_local_polish()
         self._refresh_wayland_rows()
+        self._refresh_autostart_row()
         # re-sync language-row selections from cfg (Discard semantics);
         # still under the _loading guard so no _touch fires
         self._refresh_model_language_rows(reset=True)

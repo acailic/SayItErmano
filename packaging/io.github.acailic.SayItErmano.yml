@@ -1,9 +1,24 @@
-# SPIKE manifest (issue #10/#11, ADR-0006) — proves the sandbox input story.
-# Not the shipping manifest: no metainfo/desktop/icons yet. Permissions are
-# the spike set: fallback-x11 for the XGrabKey+xdotool row, plus the D-Bus
-# session socket (portals) — flatpak always exposes the session bus, the
-# explicit --socket=dbus is documentation here.
-# GPU/model download not exercised by the spike (doctor runs model-free).
+# SayItErmano Flatpak manifest — the SHIPPING manifest (issue #11,
+# ADR-0006). The spike (PR #33) proved the sandbox with a reduced
+# permission set and a local git source; this file is what goes to
+# Flathub. Structural invariants are pinned by
+# tests/test_flatpak_manifest.py (finish-args baseline, data modules,
+# wheel pinning) — keep that file green when editing here.
+#
+# Permissions (ADR-0006 decision 4): exactly the reviewed baseline,
+# each justified for the submission PR in
+# docs/packaging/flatpak-permissions.md:
+#   --socket=wayland    UI + portal input (GlobalShortcuts hotkey,
+#                       RemoteDesktop/EIS insertion)
+#   --socket=pulseaudio microphone capture (PipeWire/PulseAudio)
+#   --device=dri        GPU device nodes — whisper.cpp Vulkan via the
+#                       org.freedesktop.Platform.GL.nvidia-* extension
+#                       (Blender-manifest pattern); CUDA is host-build-only
+#   --share=network     first-run model download + release update check
+# NOT in the default manifest (documented opt-in overrides instead, see
+# the permissions doc): --device=all (uinput/ydotool), --socket=fallback-x11
+# + --share=ipc (X11 sessions), --talk-name=org.kde.StatusNotifierWatcher
+# (tray icon).
 id: io.github.acailic.SayItErmano
 runtime: org.gnome.Platform
 runtime-version: "48"
@@ -11,39 +26,79 @@ sdk: org.gnome.Sdk
 command: sayit-ermano
 
 finish-args:
-  - --socket=fallback-x11      # X11 row of the ADR-0006 matrix (XGrabKey + xdotool)
-  - --share=ipc                # X11 needs the ipc socket
-  - --socket=pulseaudio        # PipeWire/Pulse capture (doctor mic probe)
-  - --device=dri               # GPU device nodes (Vulkan path, later slices)
-  - --share=network            # first-run model download (ADR-0006 baseline)
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+  - --share=network
+  # not a permission: flags the sandbox so the GTK app process owns the
+  # daemon + control socket (no systemd user units inside; ADR-0006)
   - --env=SAYITERMANO_FLATPAK=1
 
 modules:
+  # Desktop integration as reviewable data sources: desktop file
+  # (app-id name so flatpak exports it), appstream metainfo
+  # (GPL-3.0-or-later, keywords, OARS), hicolor icons. The start/stop
+  # sounds are NOT installed here: they ship as Python package data
+  # (fluidvoice/assets/sfx, [tool.setuptools.package-data] in
+  # pyproject.toml) through the sayitermano module's pip install.
+  - name: sayitermano-data
+    buildsystem: simple
+    build-commands:
+      - install -Dm644 -t /app/share/applications io.github.acailic.SayItErmano.desktop
+      - install -Dm644 -t /app/share/metainfo io.github.acailic.SayItErmano.metainfo.xml
+      - install -Dm644 icons/hicolor/16x16/apps/sayit-ermano.png /app/share/icons/hicolor/16x16/apps/sayit-ermano.png
+      - install -Dm644 icons/hicolor/32x32/apps/sayit-ermano.png /app/share/icons/hicolor/32x32/apps/sayit-ermano.png
+      - install -Dm644 icons/hicolor/48x48/apps/sayit-ermano.png /app/share/icons/hicolor/48x48/apps/sayit-ermano.png
+      - install -Dm644 icons/hicolor/64x64/apps/sayit-ermano.png /app/share/icons/hicolor/64x64/apps/sayit-ermano.png
+      - install -Dm644 icons/hicolor/128x128/apps/sayit-ermano.png /app/share/icons/hicolor/128x128/apps/sayit-ermano.png
+      - install -Dm644 icons/hicolor/256x256/apps/sayit-ermano.png /app/share/icons/hicolor/256x256/apps/sayit-ermano.png
+      - install -Dm644 icons/hicolor/512x512/apps/sayit-ermano.png /app/share/icons/hicolor/512x512/apps/sayit-ermano.png
+    sources:
+      - type: file
+        path: flatpak/io.github.acailic.SayItErmano.desktop
+        sha256: 30e224529c0eef1c630137bb2d2c68bdab69005a2fccf438288363d4dc3de40c
+      - type: file
+        path: flatpak/io.github.acailic.SayItErmano.metainfo.xml
+        sha256: 9138ce2359458eeafcc206b1b6b215a2c695f55dfba5aa13b289c584aafc892b
+      - type: dir
+        path: icons
+        dest: icons
+
+  # The app itself: pure-Python wheel built from the git checkout with
+  # the SDK's own setuptools (the build sandbox has no network, hence
+  # --no-build-isolation; --no-deps because the dependency closure is
+  # the vendored `deps` module below).
   - name: sayitermano
     buildsystem: simple
     build-commands:
-      # flatpak-builder's build sandbox has no network: install from the
-      # local git checkout with the SDK's own setuptools (no isolation).
       - pip3 install --no-build-isolation --no-deps --prefix=/app .
     sources:
+      # TODO(submission, #12): pin to the release tag (v<version>) once
+      # it exists — Flathub builds must come from stable refs; branch
+      # keeps CI bundle builds working until then.
       - type: git
-        url: file:///home/nistrator/Documents/github/FluidVoiceLinux-agent
+        url: https://github.com/acailic/SayItErmano.git
         branch: linux
+
+  # Pure-Python runtime dependencies as vendored wheels (the build
+  # sandbox has no network). Licenses: python-xlib GPL-2.0+, Pillow
+  # HPND, dbus-next MIT, global-shortcut-portal AGPL-3.0-only — the
+  # GPL-3.0-or-later combination is covered in the deb packaging notes
+  # and docs/packaging/flatpak-permissions.md. The speech engines
+  # (faster-whisper chain / whisper.cpp Vulkan) are deliberately NOT
+  # vendored in this slice — see the permissions doc's engine-scope
+  # section.
   - name: deps
     buildsystem: simple
     build-commands:
-      # python-xlib/pillow: core deps. dbus-next (MIT) +
-      # global-shortcut-portal (AGPL-3.0-only — combined with this
-      # GPL-3.0-or-later program per the FSF one-way GPLv3/AGPLv3
-      # compatibility guidance; section 13 is inert for a desktop app):
-      # the GlobalShortcuts portal hotkey + RemoteDesktop/EIS insertion
-      # (ADR-0006; vendored wheels — the build sandbox has no network).
       - pip3 install --prefix=/app python_xlib-0.33-py2.py3-none-any.whl pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl dbus_next-0.2.3-py3-none-any.whl global_shortcut_portal-0.1.0-py3-none-any.whl
     sources:
       - type: file
         path: wheels/python_xlib-0.33-py2.py3-none-any.whl
+        sha256: c3534038d42e0df2f1392a1b30a15a4ff5fdc2b86cfa94f072bf11b10a164398
       - type: file
         path: wheels/pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+        sha256: 42d63be3af4f9b951b199b0a9d23365d37ab14687e6d77b74940432c8515c4ca
       - type: file
         path: wheels/dbus_next-0.2.3-py3-none-any.whl
         sha256: 58948f9aff9db08316734c0be2a120f6dc502124d9642f55e90ac82ffb16a18b

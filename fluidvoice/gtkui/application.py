@@ -64,12 +64,27 @@ def run(argv: list[str] | None = None) -> int:
             from gi.repository import Gtk  # versions pinned in run()
             register_icons()  # earliest possible; windows re-guarantee it
             Gtk.Window.set_default_icon_name(APP_ICON_NAME)
+            self._ensure_sandbox_daemon()
             if self._onboard:
                 self.show_onboarding()
             elif self._open == "settings":
                 self.show_settings()
             else:
                 self.show_history()
+
+        # -- sandbox daemon lifecycle (ADR-0006/#11) --------------------------
+
+        def _ensure_sandbox_daemon(self) -> None:
+            """Inside the Flatpak sandbox no systemd user unit exists:
+            this process owns the daemon. Ensure it on every activate
+            (login autostart usually started it already; the flock
+            singleton makes the overlap harmless)."""
+            from ..daemon_owner import ensure_daemon
+            state = ensure_daemon(
+                log=lambda m: print(f"[sayit-ermano] {m}", flush=True))
+            if state.startswith("spawn-failed"):
+                print(f"WARN daemon owner: {state}", file=sys.stderr,
+                      flush=True)
 
         # -- window registry (raise instead of re-create) ----------------------
 
