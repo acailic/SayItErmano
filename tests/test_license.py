@@ -1,51 +1,31 @@
 """Offline license keys: RFC 8032 vectors + round-trip + storage (issue #16).
 
-The runtime module ships VERIFY only. These tests carry a reference
-Ed25519 signer (RFC 8032 §5.1.6, same public-domain reference family)
-solely to produce signatures — it never ships in fluidvoice/.
+The runtime module ships VERIFY only; the signing half used here is
+scripts/license_sign.py — owner-side tooling (keygen + webhook) that the
+installed wheel/deb never includes.
 
 Correctness of both directions is pinned by the official RFC 8032 test
-vectors 1-3: if the inline implementation regresses, those fail before
-any round-trip could mask it.
+vectors 1-3: if either inline implementation regresses, those fail
+before any round-trip could mask it.
 """
 from __future__ import annotations
 
+import base64
 import datetime as dt
-import hashlib
-import json
 
 import pytest
 
+import scripts.license_sign as license_sign
 from fluidvoice import license as lic
 
 # ---------------------------------------------------------------------------
-# Reference signer (tests only)
+# Key production (owner-side signer, shared with the keygen/webhook tools)
 # ---------------------------------------------------------------------------
 
-def _secret_expand(sk: bytes) -> tuple[int, bytes]:
-    h = hashlib.sha512(sk).digest()
-    a = int.from_bytes(h[:32], "little")
-    a &= (1 << 254) - 8
-    a |= (1 << 254)
-    return a, h[32:]
-
-
-def _ref_sign(sk: bytes, msg: bytes) -> tuple[bytes, bytes]:
-    """Returns (signature, public_key)."""
-    a, prefix = _secret_expand(sk)
-    A = lic._point_compress(lic._scalar_mult(a, lic._B))
-    r = int.from_bytes(hashlib.sha512(prefix + msg).digest(), "little") % lic._l
-    R = lic._point_compress(lic._scalar_mult(r, lic._B))
-    h = int.from_bytes(hashlib.sha512(R + A + msg).digest(), "little") % lic._l
-    s = (r + h * a) % lic._l
-    return R + s.to_bytes(32, "little"), A
-
-
 def _make_key(sk_hex: str, payload: dict) -> tuple[str, bytes]:
-    import base64
     sk = bytes.fromhex(sk_hex)
-    payload_bytes = json.dumps(payload, separators=(",", ":")).encode()
-    sig, pk = _ref_sign(sk, payload_bytes)
+    payload_bytes = license_sign.payload_bytes(payload)
+    sig, pk = license_sign.sign(sk, payload_bytes)
     b = lambda raw: base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
     return f"{b(payload_bytes)}.{b(sig)}", pk
 
@@ -61,10 +41,10 @@ _TEST_SK = "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 
 
 # ---------------------------------------------------------------------------
-# RFC 8032 official vectors — the correctness anchor
+# RFC 8032 official vectors — the correctness anchor for BOTH directions
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("sk_hex,pk_hex,msg_hex,sig_hex", [
+_RFC_VECTORS = [
     # RFC 8032 §7.1 TEST 1 (empty message)
     ("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
      "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
@@ -83,10 +63,23 @@ _TEST_SK = "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
      "af82",
      "6291d657deec24024827e69c3abe01a30ce548a284743a445e3680d7db5ac3ac"
      "18ff9b538d16f290ae67f760984dc6594a7c15e9716ed28dc027beceea1ec40a"),
-])
+]
+
+
+@pytest.mark.parametrize("sk_hex,pk_hex,msg_hex,sig_hex", _RFC_VECTORS)
 def test_rfc8032_vectors_verify(sk_hex, pk_hex, msg_hex, sig_hex):
     assert lic._ed25519_verify(bytes.fromhex(pk_hex), bytes.fromhex(msg_hex),
                                bytes.fromhex(sig_hex))
+
+
+@pytest.mark.parametrize("sk_hex,pk_hex,msg_hex,sig_hex", _RFC_VECTORS)
+def test_rfc8032_vectors_sign(sk_hex, pk_hex, msg_hex, sig_hex):
+    # pins the owner-side signer (scripts/license_sign.py) to the same
+    # official vectors: determinism, exact public key, exact signature
+    sig, pk = license_sign.sign(bytes.fromhex(sk_hex),
+                                bytes.fromhex(msg_hex))
+    assert pk == bytes.fromhex(pk_hex)
+    assert sig == bytes.fromhex(sig_hex)
 
 
 @pytest.mark.parametrize("which", [0, 1, 32, 63])
