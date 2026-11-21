@@ -26,6 +26,12 @@ verbatim — there is no build step).
   passed as Paddle `customData`. The product id must also be a key in
   the webhook's product map ([docs/dev/license-ops.md](../docs/dev/license-ops.md)).
   Static gate for all of this: `tests/test_site_links.py`.
+- `assets/img/flathub-badge-en.svg` — the official Flathub install
+  badge (source: `dl.flathub.org/assets/badges/flathub-badge-en.svg`),
+  kept as a local copy like every other asset — the page loads
+  nothing from third-party CDNs. Until the Flathub submission (#12)
+  merges, the badge links the tracking issue in an explicit pending
+  state (dimmed + caption) instead of pretending the listing exists.
 - `assets/img/` — web-optimized copies of `docs/screenshots/`
   (compressed/resized for the page), the favicon set generated from
   `fluidvoice/assets/icon.png`, and the typographic `og-image.png`.
@@ -62,3 +68,8 @@ buy-CTA tags, store config sanity).
    `index.html` ($39 intro → $49) and the Paddle price; the
    comparison table and every other number stay sourced from
    `docs/PRICING.md`.
+4. When the Flathub submission (#12) merges: point the `#flathub-cta`
+   badge in `index.html` at the live listing URL, drop the
+   `is-pending` class and its caption, and remove the Flathub
+   sentence from the install section's pending note. The badge asset
+   stays the local copy — never the CDN URL.

@@ -43,6 +43,18 @@ not reproduced here.
   automatic receipt with VAT invoice + the project's key/download
   email). Static gate: `tests/test_site_links.py` (dead local links,
   buy-CTA tags, store-config sanity).
+- **Landing closing links (#19)** — the buy CTA gets its secondary
+  pair and the support loop gets linked where questions happen. The
+  official **Flathub install badge** (local asset under
+  `site/assets/img/`, no CDN) sits under the buy button in an honest
+  pending state — it links the submission ticket (#12) with a visible
+  caption until the listing merges, then flips per the go-live
+  checklist in `site/README.md`; no invented listing URL. Support
+  routes: a "Where do I get help?" FAQ entry and a footer Support
+  link (both `SUPPORT.md`), plus a visible license-keys guide link in
+  the pricing note. The static gate grew with it: Flathub CTA +
+  badge-asset checks, support/license link checks, and
+  well-formedness for every external href on every page.
 - **UI translations (#23)** — the whole interface (Settings, History,
   tray menu, notifications, onboarding) is now gettext-localized and
   ships complete **Serbian Latin (sr-Latn)**, **Serbian Cyrillic (sr)**

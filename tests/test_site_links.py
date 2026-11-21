@@ -13,7 +13,17 @@ owner runbooks, not by the suite):
   (docs/pricing-funnel-decision-rule.md);
 - the store config defines the sandbox/live flip constants;
 - the privacy section stays above the pricing section on the landing
-  page (the store must not bury the local-audio promise).
+  page (the store must not bury the local-audio promise);
+- the Flathub install badge (#19) uses the local official asset and
+  links either the live listing or its tracking issue (#12) — never
+  an invented URL — with the pending state kept consistent. No utm
+  tags on it: the decision rule scopes store-link utm ids to links
+  INTO the Paddle checkout, and the page measures nothing
+  client-side;
+- the support routes (#19): SUPPORT.md linked from the FAQ and the
+  footer, license-keys guide linked visibly (not only from the
+  hidden post-purchase note);
+- every external href is a well-formed absolute URL.
 """
 
 from __future__ import annotations
@@ -21,6 +31,7 @@ from __future__ import annotations
 import re
 from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import urlsplit
 
 SITE = Path(__file__).resolve().parents[1] / "site"
 
@@ -32,6 +43,10 @@ LANDING_UTM = {"data-utm-source": "landing",
                "data-utm-campaign": "store"}
 STORE_CONFIG_KEYS = ("mode", "clientToken", "priceId", "productId",
                      "fallbackUrl")
+FLATHUB_BADGE_SRC = "assets/img/flathub-badge-en.svg"
+SUPPORT_URL = "https://github.com/acailic/SayItErmano/blob/linux/SUPPORT.md"
+LICENSE_URL = ("https://github.com/acailic/SayItErmano/blob/linux/"
+               "docs/guides/license.md")
 
 
 class _Collector(HTMLParser):
@@ -171,3 +186,83 @@ def test_store_js_only_loads_paddle_when_armed() -> None:
     armed_pos = js.find("if (!armed) return")
     load_pos = js.find("createElement")
     assert 0 < armed_pos < load_pos
+
+
+# ---------------------------------------------------------------------------
+# secondary CTA + support routes (#19)
+# ---------------------------------------------------------------------------
+
+def _anchor_with_img(
+    anchor_id: str,
+) -> tuple[dict[str, str], dict[str, str] | None, str]:
+    """Attrs, first <img> attrs and inner text of a given anchor id."""
+    text = (SITE / "index.html").read_text(encoding="utf-8")
+
+    class Anchor(HTMLParser):
+        attrs: dict[str, str] = {}
+        img: dict[str, str] | None = None
+        text_inside = ""
+        _inside = False
+
+        def handle_starttag(self, tag, attrs):
+            if tag == "a" and any(k == "id" and v == anchor_id for k, v in attrs):
+                self._inside = True
+                self.attrs = {k: v or "" for k, v in attrs}
+            elif self._inside and tag == "img" and self.img is None:
+                self.img = {k: v or "" for k, v in attrs}
+
+        def handle_data(self, data):
+            if self._inside:
+                self.text_inside += data.strip()
+
+    anchor = Anchor()
+    anchor.feed(text)
+    return anchor.attrs, anchor.img, anchor.text_inside
+
+
+def test_flathub_cta_with_local_badge_asset() -> None:
+    attrs, img, _label = _anchor_with_img("flathub-cta")
+    assert attrs, "index.html has no element id=flathub-cta"
+    href = attrs.get("href", "")
+    parts = urlsplit(href)
+    assert parts.scheme == "https" and parts.netloc, f"bad href {href!r}"
+    # exactly two legal states: the live listing, or (until #12
+    # merges) the submission tracking issue — never an invented URL
+    assert parts.netloc in ("flathub.org", "github.com"), (
+        f"flathub CTA must point at the listing or its tracking issue, got {href}")
+    pending = "is-pending" in attrs.get("class", "")
+    if parts.netloc == "github.com":
+        assert pending, "badge linking the tracking issue must keep the pending state"
+    else:
+        assert not pending, "live listing must drop the is-pending state"
+    assert img is not None, "flathub CTA must contain the badge image"
+    assert img.get("src") == FLATHUB_BADGE_SRC, (
+        f"badge must use the local asset, got {img.get('src')!r}")
+    assert (SITE / FLATHUB_BADGE_SRC).is_file(), (
+        f"official badge asset missing: {FLATHUB_BADGE_SRC}")
+    assert img.get("alt", "").strip(), "badge img needs alt text"
+    assert img.get("width") and img.get("height"), (
+        "badge img needs width/height (no layout shift)")
+
+
+def test_support_and_license_links_present() -> None:
+    text = (SITE / "index.html").read_text(encoding="utf-8")
+    assert text.count(SUPPORT_URL) >= 2, (
+        "SUPPORT.md must be linked from the FAQ and the footer")
+    # one of these is the hidden post-purchase note; the >= 2 keeps
+    # a visible one (pricing note, FAQ) from quietly disappearing
+    assert text.count(LICENSE_URL) >= 2, (
+        "license-keys guide must stay linked visibly, not only from "
+        "the hidden post-purchase note")
+
+
+def test_external_hrefs_are_wellformed() -> None:
+    problems: list[str] = []
+    for page in _html_files():
+        for url in _parse(page).urls:
+            if not url.startswith(("http://", "https://")):
+                continue
+            parts = urlsplit(url)
+            if not parts.netloc or any(ch.isspace() for ch in url):
+                problems.append(f"{page.name}: {url}")
+    assert not problems, "malformed external hrefs:\n" + "\n".join(problems)

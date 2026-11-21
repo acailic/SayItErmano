@@ -1554,6 +1554,23 @@ figure.shot {
 .plan-cta.ghost { background: transparent; color: var(--fg); }
 .plan-note { font-size: 0.85rem; opacity: 0.7; margin-top: 0.5rem; }
 
+/* secondary CTA (#19): Flathub install badge under the buy button.
+   While the Flathub listing is in submission (#12) the badge links
+   the tracking issue and shows its pending state (dimmed + caption);
+   the go-live flip is documented in site/README.md. */
+.cta-secondary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+}
+.cta-secondary .plan-note { text-align: center; margin-top: 0; }
+.flathub-badge { display: inline-block; line-height: 0; border-radius: 8px; }
+.flathub-badge img { width: 162px; height: 54px; border-radius: 8px; }
+.flathub-badge.is-pending img { opacity: 0.55; }
+.flathub-badge:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; border-radius: 10px; }
+
 /* ============ store comparison table (#17) ============ */
 .sr-only {
   position: absolute;

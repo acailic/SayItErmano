@@ -446,7 +446,7 @@
           <a href="https://github.com/acailic/SayItErmano/blob/linux/docs/guides/configuration.md">configuration reference ↗</a>
         </div>
         <p class="hero-note" style="margin-top:1.25rem" data-reveal>
-          Arch users: a native AUR recipe (<span class="inline-code">sayit-ermano</span>) lives in-tree — its first push is pending, so until it lands use pipx or source. The install guide keeps the current state.
+          Arch users: a native AUR recipe (<span class="inline-code">sayit-ermano</span>) lives in-tree — its first push is pending, so until it lands use pipx or source. A Flatpak/Flathub route is pending as well (<a href="https://github.com/acailic/SayItErmano/issues/12" rel="noopener">issue #12</a>). The install guide keeps the current state.
         </p>
       </div>
     </section>
@@ -533,6 +533,10 @@
             <summary>What does it cost?</summary>
             <p>Nothing — GPLv3, free as in freedom and in beer. If you enable cloud AI polish, you pay your provider for those tokens; with a local model (Ollama, LM Studio, llama.cpp) even that is free.</p>
           </details>
+          <details>
+            <summary>Where do I get help?</summary>
+            <p>Start with <span class="inline-code">sayit-ermano doctor</span> — it diagnoses audio, hotkey, insertion, model and update problems, and prints the fix when it knows one. Bugs and questions go to <a href="https://github.com/acailic/SayItErmano/issues" rel="noopener">GitHub issues</a> (the bug template asks for the doctor output — that is what makes reports triageable). License questions are covered by the <a href="https://github.com/acailic/SayItErmano/blob/linux/docs/guides/license.md">license-keys guide</a>; purchase and refund matters go to the support address on your purchase email (Paddle is the seller of record), and security reports follow <a href="https://github.com/acailic/SayItErmano/blob/linux/SECURITY.md">SECURITY.md</a>. The full routes, with response targets, live in <a href="https://github.com/acailic/SayItErmano/blob/linux/SUPPORT.md">SUPPORT.md ↗</a>.</p>
+          </details>
         </div>
       </div>
     </section>
@@ -613,6 +617,18 @@
                href="https://github.com/acailic/SayItErmano/discussions/35"
                data-utm-source="landing" data-utm-medium="cta" data-utm-campaign="store"
                rel="noopener">Buy the supporter license — $39</a>
+            <div class="cta-secondary">
+              <a id="flathub-cta" class="flathub-badge is-pending"
+                 href="https://github.com/acailic/SayItErmano/issues/12" rel="noopener"
+                 title="Flathub listing in submission — tracking issue #12">
+                <img src="assets/img/flathub-badge-en.svg" width="162" height="54"
+                     alt="Install on Flathub" loading="lazy" decoding="async">
+              </a>
+              <p class="plan-note">The Flathub listing is
+              <a href="https://github.com/acailic/SayItErmano/issues/12" rel="noopener">in submission</a> —
+              until it merges, every route in <a href="#install">Install</a> works and the
+              app itself stays $0.</p>
+            </div>
             <noscript>
               <p class="plan-note">Checkout needs JavaScript. Without it (or if checkout fails to
               load), reserve the intro price in
@@ -622,8 +638,11 @@
             <p class="plan-note" id="pricing-note">Payment is processed by
             <a href="https://paddle.com" rel="noopener">Paddle.com</a>, merchant of record:
             checkout, VAT invoice, and the <a href="refund.html">14-day refund</a> all run
-            through Paddle. Your license key and download link arrive by email after payment.
-            Buying is support + convenience — the app is GPL, every feature works without a
+            through Paddle. Your license key and download link arrive by email after
+            payment — the
+            <a href="https://github.com/acailic/SayItErmano/blob/linux/docs/guides/license.md">license-keys guide ↗</a>
+            explains what a key does and never does. Buying is support + convenience —
+            the app is GPL, every feature works without a
             license, and your <a href="#privacy">audio never leaves your machine</a>.</p>
             <p class="plan-note" id="purchase-next" hidden>Thanks for supporting SayItErmano! Two
             emails are on their way: the Paddle receipt with your VAT invoice, and your license
@@ -750,6 +769,7 @@
             <li><a href="https://github.com/acailic/SayItErmano">GitHub</a></li>
             <li><a href="https://github.com/acailic/SayItErmano/issues">Issues</a></li>
             <li><a href="https://github.com/acailic/SayItErmano/discussions">Discussions</a></li>
+            <li><a href="https://github.com/acailic/SayItErmano/blob/linux/SUPPORT.md">Support ↗</a></li>
             <li><a href="https://youtu.be/HWyjH-VCBAw" rel="noopener">Demo video</a></li>
             <li><a href="https://github.com/altic-dev/FluidVoice" rel="noopener">FluidVoice (macOS) ↗</a></li>
           </ul>
