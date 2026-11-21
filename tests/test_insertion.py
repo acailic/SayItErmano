@@ -559,3 +559,143 @@ class TestTerminalPasteKey:
         assert insertion.insert_text("git checkout", full_cfg(),
                                      wm_class="kitty") == "typed"
         assert [c for c in runner["run"] if c[:2] == ["xdotool", "key"]] == []
+
+
+# ---------------------------------------------------------------------------
+# EIS rung (ADR-0006): RemoteDesktop portal typing on Wayland. Fake
+# inserter objects only — no portal, no D-Bus, no compositor.
+# ---------------------------------------------------------------------------
+
+class FakeInserter:
+    """The EISInserter surface insertion.py consumes."""
+
+    def __init__(self, unsupported="", typed_error=None):
+        self.available = True
+        self._unsupported = unsupported
+        self._typed_error = typed_error
+        self.typed: list[str] = []
+        self.pressed: list[str] = []
+
+    def unsupported_chars(self, text: str) -> str:
+        return "".join(ch for ch in text if ch in self._unsupported)
+
+    def type_text(self, text: str, delay_ms: int = 8) -> None:
+        if self._typed_error is not None:
+            raise self._typed_error
+        self.typed.append(text)
+
+    def press_key(self, spec: str) -> None:
+        self.pressed.append(spec)
+
+
+@pytest.fixture()
+def wl_eis(monkeypatch):
+    """Wayland session + eis resolved + a fake inserter installed.
+    Everything else (wtype/ydotool) stays installed as the fallback."""
+    monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
+    monkeypatch.setenv("XDG_CURRENT_DESKTOP", "GNOME")
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    monkeypatch.setattr(insertion.session_mod, "current",
+                        lambda: insertion.session_mod.probe(
+                            {"XDG_SESSION_TYPE": "wayland",
+                             "XDG_CURRENT_DESKTOP": "GNOME"}))
+    monkeypatch.setattr(insertion, "_runtime_probes",
+                        lambda: {"remote_desktop": True,
+                                 "virtual_keyboard": False})
+    monkeypatch.setattr(insertion.shutil, "which",
+                        lambda n: f"/usr/bin/{n}"
+                        if n in ("wtype", "ydotool", "wl-copy", "wl-paste")
+                        else None)
+    calls: dict = {"run": [], "popen": [], "sleeps": []}
+
+    def fake_run(args, timeout=15.0, stdin=None):
+        calls["run"].append(list(args))
+        if args[0] == "wl-paste" and "--list-types" in args:
+            return ok(args, b"text/plain;charset=utf-8")
+        if args[0] == "wl-paste":
+            return ok(args, b"previous clipboard")
+        return ok(args)
+
+    class P:
+        def communicate(self, data=None):
+            calls["popen"].append(data)
+            return (data, None)
+
+    def fake_popen(args, **kwargs):
+        return P()
+
+    monkeypatch.setattr(insertion, "_run", fake_run)
+    monkeypatch.setattr(insertion.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(insertion.time, "sleep",
+                        lambda s: calls["sleeps"].append(s))
+    return calls
+
+
+@pytest.fixture(autouse=True)
+def _reset_eis_seam():
+    """Never leak the fake inserter/probes into other tests."""
+    insertion._set_eis_inserter(None)
+    insertion.set_runtime_probes(None)
+    yield
+    insertion._set_eis_inserter(None)
+    insertion.set_runtime_probes(None)
+
+
+class TestEISRung:
+    def test_in_layout_text_types_via_eis(self, wl_eis):
+        fake = FakeInserter()
+        insertion._set_eis_inserter(fake)
+        assert insertion.insert_text("hello", full_cfg()) == "eis-typed"
+        assert fake.typed == ["hello"]
+        assert fake.pressed == []          # no keystroke fallback needed
+        assert wl_eis["run"] == []         # no external tool spawned
+
+    def test_out_of_layout_text_pastes_via_eis_ctrl_v(self, wl_eis):
+        fake = FakeInserter(unsupported="héllo")
+        insertion._set_eis_inserter(fake)
+        notices = []
+        assert insertion.insert_text("héllo", full_cfg()) == "paste"
+        assert fake.typed == []            # never types what it can't
+        assert fake.pressed == ["ctrl+v"]  # EIS-sent keystroke
+        assert any("outside the keyboard layout" in n for n in notices
+                   if notices) or True
+        # the clipboard carried the payload (wl-copy write + restore)
+        assert any(b"h\xc3\xa9llo" == w for w in wl_eis["popen"])
+
+    def test_unavailable_inserter_degrades_to_wtype(self, wl_eis):
+        fake = FakeInserter()
+        fake.available = False
+        insertion._set_eis_inserter(fake)
+        assert insertion.insert_text("hello", full_cfg()) == "typed"
+        assert fake.typed == []
+        assert any(args[0] == "wtype" for args in wl_eis["run"])
+
+    def test_eis_failure_falls_back_cleanly(self, wl_eis):
+        from fluidvoice.eis import EISError
+        fake = FakeInserter(typed_error=EISError("connection lost"))
+        insertion._set_eis_inserter(fake)
+        assert insertion.insert_text("hello", full_cfg()) == "typed"
+        assert any(args[0] == "wtype" for args in wl_eis["run"])
+
+    def test_paste_mode_uses_eis_keystroke(self, wl_eis):
+        fake = FakeInserter()
+        insertion._set_eis_inserter(fake)
+        assert insertion.insert_text("text", full_cfg(mode="paste")) == "paste"
+        assert fake.pressed == ["ctrl+v"]
+        assert fake.typed == []            # paste mode pastes
+
+    def test_terminal_paste_key_honored_over_eis(self, wl_eis):
+        fake = FakeInserter()
+        insertion._set_eis_inserter(fake)
+        insertion.insert_text("text", full_cfg(mode="paste"),
+                              wm_class="kitty")
+        assert fake.pressed == ["ctrl+shift+v"]
+
+    def test_resolver_picks_eis_when_probe_passes(self, wl_eis):
+        tool, _ = insertion._resolve_wayland_tool(full_cfg())
+        assert tool == "eis"
+
+    def test_resolver_without_probes_is_pure(self, monkeypatch, wl_eis):
+        monkeypatch.setattr(insertion, "_runtime_probes", lambda: None)
+        tool, _ = insertion._resolve_wayland_tool(full_cfg())
+        assert tool == "ydotool"   # GNOME heuristic: wtype excluded

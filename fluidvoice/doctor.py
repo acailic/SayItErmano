@@ -786,7 +786,8 @@ def run() -> int:
         ("parecord", "PulseAudio recording (fallback)"),
         ("xdotool", "typing text into apps (X11)"),
         ("xclip", "clipboard paste mode + restore (X11)"),
-        ("wtype", "typing text into apps (Wayland; wlroots/KDE - not GNOME)"),
+        ("wtype", "typing on Wayland (needs the zwp virtual-keyboard "
+                  "protocol - wlroots/Hyprland, not GNOME/KDE)"),
         ("ydotool", "typing on any compositor via uinput (Wayland; needs "
                   "ydotoold running + /dev/uinput access)"),
         ("wl-copy", "clipboard on Wayland (wl-clipboard)"),

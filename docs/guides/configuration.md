@@ -56,6 +56,7 @@ drift: `python scripts/gen_config_reference.py` regenerates it.
 | `paste_key` | `""` |  | Optional keysym: re-type the last transcription |
 | `language_key` | `""` |  | Optional keysym that cycles the runtime language override through general.language_cycle (the cycle state itself is never persisted) |
 | `extra_shortcuts` | `[]` |  | Up to 2 EXTRA dictation shortcuts (3 total with the primary), each optionally bound to a named prompt profile (ai/profiles), e.g. extra_shortcuts = [{key = "F8", profile = "Terse notes"}] |
+| `wayland_portal` | `true` |  | Wayland: use the GlobalShortcuts portal (GNOME 48+, Plasma 5.27+, Hyprland) for the dictation hotkey - Activated/Deactivated give native hold-PTT. On = try the portal first, fall back to a DE custom shortcut running `sayit-ermano toggle` when no portal backend exists (sway, COSMIC). Off = DE shortcut only. |
 | `wayland_evdev` | `false` |  | Wayland (no global grabs): optional physical push-to-talk read straight from /dev/input (PRIVILEGED: needs the input group and python-evdev). Off by default; the DE-shortcut assist is the primary wayland hotkey. |
 | `wayland_evdev_device` | `""` |  | Device-name substring matching /dev/input devices, e.g. "Keyboard" |
 | `wayland_evdev_key` | `"KEY_RIGHTCTRL"` |  | ecodes KEY_* name held for evdev push-to-talk |
@@ -156,7 +157,7 @@ drift: `python scripts/gen_config_reference.py` regenerates it.
 | `terminal_autocomplete_space` | `true` |  | One trailing space after typed insertions in terminal apps (general.terminal_apps) so the shell's autocomplete commits the last token |
 | `verify_paste` | `true` |  | Verify the paste landed (selection read by the target) before restoring the clipboard; false = legacy fixed-delay restore |
 | `terminal_paste_key` | `"ctrl+shift+v"` |  | Keystroke used to paste in terminal apps (general.terminal_apps); X11 terminals pass ctrl+v through to the app, they need ctrl+shift+v |
-| `wayland_tool` | `"auto"` |  | Wayland typing tool: auto \| wtype \| ydotool (wtype needs wlroots/KDE; ydotool works everywhere but needs ydotoold + /dev/uinput access). Ignored on X11 sessions. |
+| `wayland_tool` | `"auto"` |  | Wayland typing backend: auto \| eis \| wtype \| ydotool. auto picks by runtime probe - eis (RemoteDesktop portal, GNOME 46+/Plasma; consent dialog on first use), then wtype (needs the zwp virtual-keyboard protocol - wlroots/Hyprland, not GNOME/KDE), then ydotool (needs ydotoold + /dev/uinput). Out-of-layout Unicode always falls back to clipboard + Ctrl+V. Ignored on X11 sessions. |
 
 ### `[context]`
 

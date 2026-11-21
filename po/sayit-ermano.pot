@@ -18,15 +18,15 @@ msgstr ""
 msgid " ({n} inputs)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:253
+#: fluidvoice/gtkui/settings_window.py:255
 msgid " — daemon offline, saving to file"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:498
+#: fluidvoice/gtkui/settings_window.py:501
 msgid " — restart daemon for: {keys}"
 msgstr ""
 
-#: fluidvoice/daemon.py:586
+#: fluidvoice/daemon.py:597
 msgid " — {key} or click to dictate"
 msgstr ""
 
@@ -39,7 +39,7 @@ msgstr ""
 msgid "(none)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:506
+#: fluidvoice/gtkui/settings_pages/ai.py:607
 msgid "(pick a model)"
 msgstr ""
 
@@ -51,7 +51,7 @@ msgstr ""
 msgid "(silence — nothing transcribed)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:615
+#: fluidvoice/gtkui/settings_pages/models.py:751
 msgid "0 = keep the model loaded (fastest first word); higher frees RAM/VRAM after inactivity — the next dictation pays the model load time"
 msgstr ""
 
@@ -85,19 +85,19 @@ msgstr ""
 msgid "AI polished"
 msgstr ""
 
-#: fluidvoice/daemon.py:334
+#: fluidvoice/daemon.py:345
 msgid "AI profile"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:434
+#: fluidvoice/gtkui/settings_pages/ai.py:535
 msgid "AI profile: {name}"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:687
+#: fluidvoice/gtkui/settings_pages/models.py:823
 msgid "API key"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:466
+#: fluidvoice/gtkui/settings_pages/ai.py:567
 msgid "API key env var"
 msgstr ""
 
@@ -114,13 +114,13 @@ msgstr ""
 msgid "About SayItErmano"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:662
+#: fluidvoice/gtkui/settings_pages/ai.py:763
 msgid "Accept"
 msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/models.py:57
-#: fluidvoice/gtkui/settings_pages/models.py:363
-#: fluidvoice/gtkui/settings_pages/models.py:483
+#: fluidvoice/gtkui/settings_pages/models.py:365
+#: fluidvoice/gtkui/settings_pages/models.py:609
 msgid "Active"
 msgstr ""
 
@@ -128,11 +128,11 @@ msgstr ""
 msgid "Activity"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:472
+#: fluidvoice/gtkui/settings_pages/ai.py:573
 msgid "Add"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:497
+#: fluidvoice/gtkui/settings_pages/ai.py:598
 msgid "Add from template"
 msgstr ""
 
@@ -140,7 +140,7 @@ msgstr ""
 msgid "Add language"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:104
+#: fluidvoice/gtkui/settings_pages/ai.py:140
 msgid "Add one to save preset prompts"
 msgstr ""
 
@@ -149,11 +149,11 @@ msgid "Add pattern"
 msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/ai.py:29
-#: fluidvoice/gtkui/settings_pages/ai.py:107
+#: fluidvoice/gtkui/settings_pages/ai.py:143
 msgid "Add profile"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:155
+#: fluidvoice/gtkui/settings_pages/ai.py:191
 msgid "Add rule"
 msgstr ""
 
@@ -161,24 +161,24 @@ msgstr ""
 msgid "Add word"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:489
+#: fluidvoice/gtkui/settings_pages/ai.py:590
 msgid "Added profile “{name}”"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:518
+#: fluidvoice/gtkui/settings_pages/ai.py:619
 msgid "Added profile “{name}” from template"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:689
+#: fluidvoice/gtkui/settings_pages/ai.py:790
 msgid "Added to dictionary"
 msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/ai.py:32
-#: fluidvoice/gtkui/settings_pages/ai.py:108
+#: fluidvoice/gtkui/settings_pages/ai.py:144
 msgid "Add…"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:252
+#: fluidvoice/gtkui/settings_window.py:254
 msgid "All changes saved"
 msgstr ""
 
@@ -194,7 +194,7 @@ msgstr ""
 msgid "App hints"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:588
+#: fluidvoice/gtkui/settings_pages/ai.py:689
 msgid "App patterns (comma-separated)"
 msgstr ""
 
@@ -202,7 +202,7 @@ msgstr ""
 msgid "Audio budget (GB)"
 msgstr ""
 
-#: fluidvoice/daemon.py:286
+#: fluidvoice/daemon.py:297
 #: fluidvoice/gtkui/settings_pages/dictation.py:36
 msgid "Auto (system default)"
 msgstr ""
@@ -216,11 +216,11 @@ msgid "Avg per dictation"
 msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/about.py:24
-#: fluidvoice/gtkui/settings_pages/models.py:636
+#: fluidvoice/gtkui/settings_pages/models.py:772
 msgid "Backend"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:464
+#: fluidvoice/gtkui/settings_pages/ai.py:565
 msgid "Base URL"
 msgstr ""
 
@@ -228,13 +228,17 @@ msgstr ""
 msgid "Base URL — http://localhost:11434/v1"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:119
-#: fluidvoice/gtkui/settings_pages/ai.py:127
+#: fluidvoice/gtkui/settings_pages/ai.py:155
+#: fluidvoice/gtkui/settings_pages/ai.py:163
 msgid "Base prompt"
 msgstr ""
 
 #: fluidvoice/gtkui/main_window.py:516
 msgid "Best streak (days)"
+msgstr ""
+
+#: fluidvoice/gtkui/settings_pages/wayland.py:92
+msgid "Bind the dictation hotkey through the portal (GNOME 48+, Plasma 5.27+, Hyprland); off = DE custom shortcut only"
 msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/wayland.py:45
@@ -249,28 +253,28 @@ msgstr ""
 msgid "Browse history"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:129
+#: fluidvoice/gtkui/settings_pages/ai.py:165
 msgid "Built-in template"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:743
+#: fluidvoice/gtkui/settings_pages/models.py:879
 msgid "Cached models under ~/.cache/sayit-ermano/models (deletion needs the daemon)"
 msgstr ""
 
 #: fluidvoice/gtkui/main_window.py:836
 #: fluidvoice/gtkui/main_window.py:853
 #: fluidvoice/gtkui/main_window.py:227
-#: fluidvoice/gtkui/settings_pages/ai.py:288
-#: fluidvoice/gtkui/settings_pages/ai.py:351
-#: fluidvoice/gtkui/settings_pages/ai.py:471
-#: fluidvoice/gtkui/settings_pages/ai.py:558
+#: fluidvoice/gtkui/settings_pages/ai.py:389
+#: fluidvoice/gtkui/settings_pages/ai.py:452
+#: fluidvoice/gtkui/settings_pages/ai.py:572
+#: fluidvoice/gtkui/settings_pages/ai.py:659
 #: fluidvoice/gtkui/settings_pages/history.py:73
-#: fluidvoice/gtkui/settings_pages/models.py:290
-#: fluidvoice/gtkui/settings_window.py:524
+#: fluidvoice/gtkui/settings_pages/models.py:292
+#: fluidvoice/gtkui/settings_window.py:527
 msgid "Cancel"
 msgstr ""
 
-#: fluidvoice/daemon.py:316
+#: fluidvoice/daemon.py:327
 msgid "Cancel Dictation (Esc)"
 msgstr ""
 
@@ -278,11 +282,11 @@ msgstr ""
 msgid "Cancel key — discards a take"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:522
+#: fluidvoice/gtkui/settings_window.py:525
 msgid "Changes that were not saved will be lost."
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:630
+#: fluidvoice/gtkui/settings_pages/models.py:766
 msgid "Changing these reloads the model"
 msgstr ""
 
@@ -321,7 +325,7 @@ msgstr ""
 msgid "Clipboard"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:523
+#: fluidvoice/gtkui/settings_pages/ai.py:624
 msgid "Close"
 msgstr ""
 
@@ -337,7 +341,7 @@ msgstr ""
 msgid "Command key (optional, needs AI)"
 msgstr ""
 
-#: fluidvoice/daemon.py:1119
+#: fluidvoice/daemon.py:1225
 msgid "Command mode unavailable: {reason}"
 msgstr ""
 
@@ -354,7 +358,7 @@ msgstr ""
 msgid "Commands"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:650
+#: fluidvoice/gtkui/settings_pages/models.py:786
 msgid "Compute"
 msgstr ""
 
@@ -378,11 +382,11 @@ msgstr ""
 msgid "Copied"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:498
+#: fluidvoice/gtkui/settings_pages/ai.py:599
 msgid "Copied into your profiles - edit freely afterwards."
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:156
+#: fluidvoice/gtkui/settings_pages/wayland.py:165
 msgid "Copied the command to bind"
 msgstr ""
 
@@ -390,7 +394,7 @@ msgstr ""
 msgid "Copy"
 msgstr ""
 
-#: fluidvoice/daemon.py:318
+#: fluidvoice/daemon.py:329
 msgid "Copy Last Transcript"
 msgstr ""
 
@@ -410,15 +414,15 @@ msgstr ""
 msgid "Corrections noticed in your history edits — accept to teach the dictionary"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:683
+#: fluidvoice/gtkui/settings_pages/ai.py:784
 msgid "Could not add the word (save failed)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:686
+#: fluidvoice/gtkui/settings_pages/ai.py:787
 msgid "Could not add the word (save rejected)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:170
+#: fluidvoice/gtkui/settings_pages/wayland.py:179
 msgid "Could not open: {error}"
 msgstr ""
 
@@ -427,16 +431,16 @@ msgid "Could not toggle (daemon needed): {error}"
 msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/models.py:54
-#: fluidvoice/gtkui/settings_pages/models.py:360
-#: fluidvoice/gtkui/settings_pages/models.py:480
+#: fluidvoice/gtkui/settings_pages/models.py:362
+#: fluidvoice/gtkui/settings_pages/models.py:606
 msgid "Current default model"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:435
+#: fluidvoice/gtkui/settings_pages/ai.py:536
 msgid "Custom"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:387
+#: fluidvoice/gtkui/settings_pages/ai.py:488
 msgid "Custom (hand-set endpoint)"
 msgstr ""
 
@@ -452,17 +456,17 @@ msgstr ""
 msgid "Daemon not running — history works, dictation does not"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:355
+#: fluidvoice/gtkui/settings_window.py:357
 msgid "Daemon offline — file-only mode; changes apply on next daemon start"
 msgstr ""
 
 #: fluidvoice/gtkui/main_window.py:837
+#: fluidvoice/gtkui/settings_pages/ai.py:453
+#: fluidvoice/gtkui/settings_pages/ai.py:660
 #: fluidvoice/gtkui/settings_pages/ai.py:352
-#: fluidvoice/gtkui/settings_pages/ai.py:559
-#: fluidvoice/gtkui/settings_pages/ai.py:251
-#: fluidvoice/gtkui/settings_pages/ai.py:401
-#: fluidvoice/gtkui/settings_pages/models.py:291
-#: fluidvoice/gtkui/settings_pages/models.py:270
+#: fluidvoice/gtkui/settings_pages/ai.py:502
+#: fluidvoice/gtkui/settings_pages/models.py:293
+#: fluidvoice/gtkui/settings_pages/models.py:272
 msgid "Delete"
 msgstr ""
 
@@ -474,8 +478,8 @@ msgstr ""
 msgid "Delete every entry and retained audio"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:347
-#: fluidvoice/gtkui/settings_pages/ai.py:554
+#: fluidvoice/gtkui/settings_pages/ai.py:448
+#: fluidvoice/gtkui/settings_pages/ai.py:655
 msgid "Delete profile “{name}”?"
 msgstr ""
 
@@ -483,24 +487,24 @@ msgstr ""
 msgid "Delete this entry?"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:286
+#: fluidvoice/gtkui/settings_pages/models.py:288
 msgid "Delete {name}?"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:362
-#: fluidvoice/gtkui/settings_pages/ai.py:576
+#: fluidvoice/gtkui/settings_pages/ai.py:463
+#: fluidvoice/gtkui/settings_pages/ai.py:677
 msgid "Deleted profile “{name}”"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:318
+#: fluidvoice/gtkui/settings_pages/models.py:320
 msgid "Deleted {name} (freed {size})"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:643
+#: fluidvoice/gtkui/settings_pages/models.py:779
 msgid "Device"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:100
+#: fluidvoice/gtkui/settings_pages/wayland.py:109
 msgid "Device name pattern — e.g. AT Translated"
 msgstr ""
 
@@ -508,7 +512,7 @@ msgstr ""
 msgid "Dictation"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:678
+#: fluidvoice/gtkui/settings_pages/models.py:814
 msgid "Dictation POSTs the recorded WAV to <url>/v1/audio/transcriptions — e.g. http://lan-box:8000 (vLLM / whisper.cpp server / NIM / DGX Spark). Empty URL = local models only; audio leaves this machine only toward this URL"
 msgstr ""
 
@@ -529,12 +533,12 @@ msgstr ""
 msgid "Dictations"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:578
+#: fluidvoice/gtkui/settings_pages/models.py:706
 msgid "Direct ggml models for the whisper.cpp backend"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:525
-#: fluidvoice/gtkui/settings_window.py:237
+#: fluidvoice/gtkui/settings_window.py:528
+#: fluidvoice/gtkui/settings_window.py:239
 msgid "Discard"
 msgstr ""
 
@@ -542,21 +546,21 @@ msgstr ""
 msgid "Discard obviously-silent recordings ≤ 4 s"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:521
+#: fluidvoice/gtkui/settings_window.py:524
 msgid "Discard unsaved changes?"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:742
+#: fluidvoice/gtkui/settings_pages/models.py:878
 msgid "Disk usage"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:665
+#: fluidvoice/gtkui/settings_pages/ai.py:766
 msgid "Dismiss"
 msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/models.py:62
-#: fluidvoice/gtkui/settings_pages/models.py:379
-#: fluidvoice/gtkui/settings_pages/models.py:499
+#: fluidvoice/gtkui/settings_pages/models.py:381
+#: fluidvoice/gtkui/settings_pages/models.py:625
 msgid "Download & use"
 msgstr ""
 
@@ -571,16 +575,16 @@ msgstr ""
 msgid "Enabled"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:629
+#: fluidvoice/gtkui/settings_pages/models.py:765
 msgid "Engine options"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:303
-#: fluidvoice/gtkui/settings_pages/ai.py:480
+#: fluidvoice/gtkui/settings_pages/ai.py:404
+#: fluidvoice/gtkui/settings_pages/ai.py:581
 msgid "Enter a profile name first"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:91
+#: fluidvoice/gtkui/settings_pages/wayland.py:100
 msgid "Evdev push-to-talk"
 msgstr ""
 
@@ -634,7 +638,7 @@ msgstr ""
 msgid "Extra phrases that trigger formatting actions (on top of the built-ins; still needs the prefix)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:152
+#: fluidvoice/gtkui/settings_pages/ai.py:188
 msgid "Extra polish instructions when dictating into a matching app (first match wins, * = everywhere)"
 msgstr ""
 
@@ -646,11 +650,11 @@ msgstr ""
 msgid "First partial after (s)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:606
+#: fluidvoice/gtkui/settings_pages/models.py:742
 msgid "Free RAM/VRAM between dictations (applies live)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:287
+#: fluidvoice/gtkui/settings_pages/models.py:289
 msgid "Frees {size} from the models cache."
 msgstr ""
 
@@ -675,7 +679,11 @@ msgstr ""
 msgid "General"
 msgstr ""
 
-#: fluidvoice/daemon.py:323
+#: fluidvoice/gtkui/settings_pages/wayland.py:91
+msgid "GlobalShortcuts portal hotkey"
+msgstr ""
+
+#: fluidvoice/daemon.py:334
 #: fluidvoice/gtkui/settings_pages/about.py:58
 #: fluidvoice/gtkui/settings_pages/history.py:14
 #: fluidvoice/gtkui/settings_pages/history.py:16
@@ -690,11 +698,11 @@ msgstr ""
 msgid "History saving resumed"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:92
+#: fluidvoice/gtkui/settings_pages/wayland.py:101
 msgid "Hold a physical key read from /dev/input - privileged path (input group + python-evdev)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:107
+#: fluidvoice/gtkui/settings_pages/wayland.py:116
 msgid "Hold key — ecodes name (KEY_RIGHTCTRL)"
 msgstr ""
 
@@ -702,11 +710,11 @@ msgstr ""
 msgid "Hotkey"
 msgstr ""
 
-#: fluidvoice/daemon.py:822
+#: fluidvoice/daemon.py:924
 msgid "Hotkey grab refused — another app holds the key; retrying automatically"
 msgstr ""
 
-#: fluidvoice/daemon.py:724
+#: fluidvoice/daemon.py:752
 msgid "Hotkey unavailable: {error}\n"
 "Bind a DE shortcut to `sayit-ermano toggle` instead."
 msgstr ""
@@ -716,7 +724,7 @@ msgstr ""
 msgid "Hotkeys"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:715
+#: fluidvoice/gtkui/settings_pages/models.py:851
 msgid "Hotwords (comma-separated)"
 msgstr ""
 
@@ -740,7 +748,7 @@ msgstr ""
 msgid "Incomplete dictionary word skipped (needs triggers and a replacement)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:634
+#: fluidvoice/gtkui/settings_pages/ai.py:735
 msgid "Incomplete per-app rule skipped (needs apps and instructions)"
 msgstr ""
 
@@ -748,7 +756,7 @@ msgstr ""
 msgid "Insert at cursor"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:132
+#: fluidvoice/gtkui/settings_pages/ai.py:168
 msgid "Insert built-in"
 msgstr ""
 
@@ -769,7 +777,7 @@ msgstr ""
 msgid "Insertion and push-to-talk"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:598
+#: fluidvoice/gtkui/settings_pages/ai.py:699
 #: fluidvoice/gtkui/settings_pages/common.py:157
 msgid "Instructions"
 msgstr ""
@@ -823,7 +831,7 @@ msgstr ""
 msgid "Live preview"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:664
+#: fluidvoice/gtkui/settings_pages/models.py:800
 msgid "Load at startup"
 msgstr ""
 
@@ -847,7 +855,7 @@ msgstr ""
 msgid "Max retries"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:605
+#: fluidvoice/gtkui/settings_pages/models.py:741
 msgid "Memory"
 msgstr ""
 
@@ -855,7 +863,7 @@ msgstr ""
 msgid "Menu"
 msgstr ""
 
-#: fluidvoice/daemon.py:313
+#: fluidvoice/daemon.py:324
 #: fluidvoice/gtkui/onboarding.py:128
 #: fluidvoice/gtkui/settings_pages/dictation.py:388
 msgid "Microphone"
@@ -869,7 +877,7 @@ msgstr ""
 msgid "Microphone priority"
 msgstr ""
 
-#: fluidvoice/daemon.py:550
+#: fluidvoice/daemon.py:561
 msgid "Microphone switched to {name}"
 msgstr ""
 
@@ -884,12 +892,12 @@ msgstr ""
 msgid "Mode"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:465
-#: fluidvoice/gtkui/settings_pages/models.py:593
+#: fluidvoice/gtkui/settings_pages/ai.py:566
+#: fluidvoice/gtkui/settings_pages/models.py:729
 msgid "Model"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:685
+#: fluidvoice/gtkui/settings_pages/models.py:821
 msgid "Model name"
 msgstr ""
 
@@ -901,19 +909,19 @@ msgstr ""
 msgid "Models"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:168
+#: fluidvoice/gtkui/settings_window.py:170
 msgid "More"
 msgstr ""
 
-#: fluidvoice/daemon.py:919
+#: fluidvoice/daemon.py:1021
 msgid "Mouse button grab refused — another app holds it; retrying automatically"
 msgstr ""
 
-#: fluidvoice/daemon.py:900
+#: fluidvoice/daemon.py:1002
 msgid "Mouse push-to-talk unavailable: {error}"
 msgstr ""
 
-#: fluidvoice/daemon.py:870
+#: fluidvoice/daemon.py:972
 msgid "Mouse push-to-talk unavailable: {error}\n"
 "Fix recording.push_to_talk_button in the config."
 msgstr ""
@@ -928,11 +936,11 @@ msgstr ""
 msgid "Move up"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:584
+#: fluidvoice/gtkui/settings_pages/models.py:720
 msgid "NVIDIA Parakeet TDT via ONNX Runtime — explicit backend"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:463
+#: fluidvoice/gtkui/settings_pages/ai.py:564
 msgid "Name (e.g. GLM)"
 msgstr ""
 
@@ -940,7 +948,7 @@ msgstr ""
 msgid "Named endpoint presets — selecting one switches the AI polish provider instantly"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:96
+#: fluidvoice/gtkui/settings_pages/ai.py:132
 msgid "Named presets of the base prompt — selecting one loads its text into the editor"
 msgstr ""
 
@@ -952,16 +960,16 @@ msgstr ""
 msgid "New paragraph"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:310
+#: fluidvoice/gtkui/settings_pages/ai.py:411
 msgid "New profile name"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:457
+#: fluidvoice/gtkui/settings_pages/ai.py:558
 msgid "New provider profile"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:587
-#: fluidvoice/gtkui/settings_pages/ai.py:607
+#: fluidvoice/gtkui/settings_pages/ai.py:688
+#: fluidvoice/gtkui/settings_pages/ai.py:708
 msgid "New rule"
 msgstr ""
 
@@ -970,11 +978,11 @@ msgstr ""
 msgid "New word"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:502
+#: fluidvoice/gtkui/settings_window.py:505
 msgid "No changes"
 msgstr ""
 
-#: fluidvoice/daemon.py:354
+#: fluidvoice/daemon.py:365
 msgid "No clipboard tool found (install xclip)"
 msgstr ""
 
@@ -990,7 +998,7 @@ msgstr ""
 msgid "No global key grabs exist on Wayland: bind a custom command shortcut in your desktop environment"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:103
+#: fluidvoice/gtkui/settings_pages/ai.py:139
 msgid "No profiles yet"
 msgstr ""
 
@@ -998,11 +1006,11 @@ msgstr ""
 msgid "No-audio timeout (s)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:492
+#: fluidvoice/gtkui/settings_window.py:495
 msgid "Not fully applied: {detail}"
 msgstr ""
 
-#: fluidvoice/daemon.py:345
+#: fluidvoice/daemon.py:356
 msgid "Nothing to copy"
 msgstr ""
 
@@ -1011,7 +1019,7 @@ msgstr ""
 msgid "Notifications"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:289
+#: fluidvoice/gtkui/settings_pages/ai.py:390
 msgid "OK"
 msgstr ""
 
@@ -1043,7 +1051,7 @@ msgstr ""
 msgid "Open your desktop environment's panel"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:168
+#: fluidvoice/gtkui/settings_pages/wayland.py:177
 msgid "Opening shortcut settings"
 msgstr ""
 
@@ -1059,7 +1067,7 @@ msgstr ""
 msgid "Output"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:733
+#: fluidvoice/gtkui/settings_pages/models.py:869
 msgid "Overrides general.language per model - empty = inherit, auto = always detect"
 msgstr ""
 
@@ -1067,11 +1075,11 @@ msgstr ""
 msgid "Panel icon while the daemon runs (toggle applies live)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:583
+#: fluidvoice/gtkui/settings_pages/models.py:719
 msgid "Parakeet (ONNX)"
 msgstr ""
 
-#: fluidvoice/daemon.py:1309
+#: fluidvoice/daemon.py:1415
 msgid "Paste last: {detail}"
 msgstr ""
 
@@ -1100,11 +1108,11 @@ msgstr ""
 msgid "Pause saving"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:151
+#: fluidvoice/gtkui/settings_pages/ai.py:187
 msgid "Per-app prompts"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:732
+#: fluidvoice/gtkui/settings_pages/models.py:868
 msgid "Per-model language"
 msgstr ""
 
@@ -1117,11 +1125,11 @@ msgid "Phrases replaced on insert — \"miro board\" → \"Miro board\""
 msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/dictation.py:334
-#: fluidvoice/gtkui/settings_window.py:289
+#: fluidvoice/gtkui/settings_window.py:291
 msgid "Press a key…"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:541
+#: fluidvoice/gtkui/settings_window.py:544
 msgid "Press the key to use (Esc cancels)"
 msgstr ""
 
@@ -1129,21 +1137,21 @@ msgstr ""
 msgid "Press your hotkey and speak — transcripts land here."
 msgstr ""
 
-#: fluidvoice/daemon.py:276
-#: fluidvoice/daemon.py:580
+#: fluidvoice/daemon.py:287
+#: fluidvoice/daemon.py:591
 msgid "Processing…"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:255
-#: fluidvoice/gtkui/settings_pages/ai.py:405
+#: fluidvoice/gtkui/settings_pages/ai.py:356
+#: fluidvoice/gtkui/settings_pages/ai.py:506
 msgid "Profile actions"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:437
+#: fluidvoice/gtkui/settings_pages/ai.py:538
 msgid "Profile switch failed: {error}"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:95
+#: fluidvoice/gtkui/settings_pages/ai.py:131
 msgid "Prompt profiles"
 msgstr ""
 
@@ -1159,7 +1167,7 @@ msgstr ""
 msgid "Quiet countdown (s)"
 msgstr ""
 
-#: fluidvoice/daemon.py:327
+#: fluidvoice/daemon.py:338
 msgid "Quit SayItErmano"
 msgstr ""
 
@@ -1175,11 +1183,11 @@ msgstr ""
 msgid "Re-run proposed — confirm with the command hotkey"
 msgstr ""
 
-#: fluidvoice/daemon.py:582
+#: fluidvoice/daemon.py:593
 msgid "Ready"
 msgstr ""
 
-#: fluidvoice/daemon.py:276
+#: fluidvoice/daemon.py:287
 msgid "Ready to Record"
 msgstr ""
 
@@ -1191,11 +1199,11 @@ msgstr ""
 msgid "Recorder"
 msgstr ""
 
-#: fluidvoice/daemon.py:275
+#: fluidvoice/daemon.py:286
 msgid "Recording…"
 msgstr ""
 
-#: fluidvoice/daemon.py:578
+#: fluidvoice/daemon.py:589
 msgid "Recording… click to stop"
 msgstr ""
 
@@ -1207,16 +1215,16 @@ msgstr ""
 msgid "Refusal guard"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:489
+#: fluidvoice/gtkui/settings_window.py:492
 msgid "Rejected (bad values): {keys}"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:437
-#: fluidvoice/gtkui/settings_pages/models.py:559
+#: fluidvoice/gtkui/settings_pages/models.py:439
+#: fluidvoice/gtkui/settings_pages/models.py:685
 msgid "Rejected: {keys}"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:677
+#: fluidvoice/gtkui/settings_pages/models.py:813
 msgid "Remote (OpenAI-compatible)"
 msgstr ""
 
@@ -1240,7 +1248,7 @@ msgstr ""
 msgid "Remove trailing period"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:555
+#: fluidvoice/gtkui/settings_pages/ai.py:656
 msgid "Removed from the profile store. Settings and the tray menu update immediately."
 msgstr ""
 
@@ -1249,18 +1257,18 @@ msgstr ""
 msgid "Removed {n} entry"
 msgid_plural "Removed {n} entries"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:337
-#: fluidvoice/gtkui/settings_pages/ai.py:537
+#: fluidvoice/gtkui/settings_pages/ai.py:438
+#: fluidvoice/gtkui/settings_pages/ai.py:638
 msgid "Rename “{name}” to"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:546
-#: fluidvoice/gtkui/settings_pages/ai.py:334
+#: fluidvoice/gtkui/settings_pages/ai.py:647
+#: fluidvoice/gtkui/settings_pages/ai.py:435
 msgid "Renamed to “{name}”"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:250
-#: fluidvoice/gtkui/settings_pages/ai.py:400
+#: fluidvoice/gtkui/settings_pages/ai.py:351
+#: fluidvoice/gtkui/settings_pages/ai.py:501
 msgid "Rename…"
 msgstr ""
 
@@ -1281,8 +1289,8 @@ msgid "Rewrite key (optional, needs AI)"
 msgstr ""
 
 #: fluidvoice/gtkui/main_window.py:228
-#: fluidvoice/gtkui/settings_pages/ai.py:142
-#: fluidvoice/gtkui/settings_window.py:240
+#: fluidvoice/gtkui/settings_pages/ai.py:178
+#: fluidvoice/gtkui/settings_window.py:242
 msgid "Save"
 msgstr ""
 
@@ -1290,7 +1298,7 @@ msgstr ""
 msgid "Save failed"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:139
+#: fluidvoice/gtkui/settings_pages/ai.py:175
 msgid "Save to profile"
 msgstr ""
 
@@ -1302,12 +1310,12 @@ msgstr ""
 msgid "Saved"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:320
-#: fluidvoice/gtkui/settings_pages/ai.py:308
+#: fluidvoice/gtkui/settings_pages/ai.py:421
+#: fluidvoice/gtkui/settings_pages/ai.py:409
 msgid "Saved profile “{name}”"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:496
+#: fluidvoice/gtkui/settings_window.py:499
 msgid "Saved {n} change"
 msgid_plural "Saved {n} changes"
 
@@ -1323,11 +1331,11 @@ msgstr ""
 msgid "Segment window (s)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:315
+#: fluidvoice/gtkui/settings_pages/ai.py:416
 msgid "Select a profile first"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:684
+#: fluidvoice/gtkui/settings_pages/models.py:820
 msgid "Server URL"
 msgstr ""
 
@@ -1341,15 +1349,15 @@ msgstr ""
 
 #: fluidvoice/gtkui/main_window.py:419
 #: fluidvoice/gtkui/settings_window.py:58
-#: fluidvoice/gtkui/settings_window.py:145
 #: fluidvoice/gtkui/settings_window.py:147
-#: fluidvoice/gtkui/settings_window.py:139
-#: fluidvoice/gtkui/settings_window.py:168
-#: fluidvoice/gtkui/settings_window.py:215
+#: fluidvoice/gtkui/settings_window.py:149
+#: fluidvoice/gtkui/settings_window.py:141
+#: fluidvoice/gtkui/settings_window.py:170
+#: fluidvoice/gtkui/settings_window.py:217
 msgid "Settings"
 msgstr ""
 
-#: fluidvoice/daemon.py:321
+#: fluidvoice/daemon.py:332
 msgid "Settings…"
 msgstr ""
 
@@ -1382,7 +1390,7 @@ msgstr ""
 msgid "Speech engine"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:571
+#: fluidvoice/gtkui/settings_pages/models.py:699
 msgid "Speech models"
 msgstr ""
 
@@ -1406,11 +1414,11 @@ msgstr ""
 msgid "Start dictating"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:130
+#: fluidvoice/gtkui/settings_pages/ai.py:166
 msgid "Start editing from the shipped dictation prompt"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:592
+#: fluidvoice/gtkui/settings_pages/models.py:728
 msgid "State"
 msgstr ""
 
@@ -1430,7 +1438,7 @@ msgstr ""
 msgid "Store the recording with each entry"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:458
+#: fluidvoice/gtkui/settings_pages/ai.py:559
 msgid "Stored beside the config; only the env-var NAME is kept - never the key itself."
 msgstr ""
 
@@ -1442,15 +1450,15 @@ msgstr ""
 msgid "Suggested words"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:564
+#: fluidvoice/gtkui/settings_pages/models.py:690
 msgid "Switching to parakeet ({name})…"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:442
+#: fluidvoice/gtkui/settings_pages/models.py:444
 msgid "Switching to whisper.cpp ({name})…"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:152
+#: fluidvoice/gtkui/settings_pages/models.py:153
 msgid "Switching to {name}…"
 msgstr ""
 
@@ -1494,11 +1502,11 @@ msgstr ""
 msgid "The pill overlay with partial text while recording"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:348
+#: fluidvoice/gtkui/settings_pages/ai.py:449
 msgid "The preset is removed from disk. The prompt saved in your config is not touched."
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:120
+#: fluidvoice/gtkui/settings_pages/ai.py:156
 msgid "The system prompt AI polish starts from (empty = the built-in dictation prompt)"
 msgstr ""
 
@@ -1506,7 +1514,7 @@ msgstr ""
 msgid "The transcription"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:275
+#: fluidvoice/gtkui/settings_pages/models.py:277
 msgid "This is the active model"
 msgstr ""
 
@@ -1518,7 +1526,7 @@ msgstr ""
 msgid "Timeout (s)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:704
+#: fluidvoice/gtkui/settings_pages/models.py:840
 msgid "Timeout (seconds)"
 msgstr ""
 
@@ -1531,11 +1539,11 @@ msgstr ""
 msgid "Toggle dictation"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:746
+#: fluidvoice/gtkui/settings_pages/models.py:882
 msgid "Total"
 msgstr ""
 
-#: fluidvoice/daemon.py:1360
+#: fluidvoice/daemon.py:1466
 msgid "Transcription failed: {error}"
 msgstr ""
 
@@ -1551,19 +1559,19 @@ msgstr ""
 msgid "Triggers (comma-separated)"
 msgstr ""
 
+#: fluidvoice/gtkui/settings_pages/wayland.py:81
+msgid "Typing backend"
+msgstr ""
+
 #: fluidvoice/gtkui/settings_pages/dictation.py:695
 msgid "Typing delay (ms)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:81
-msgid "Typing tool"
-msgstr ""
-
-#: fluidvoice/gtkui/settings_pages/models.py:614
+#: fluidvoice/gtkui/settings_pages/models.py:750
 msgid "Unload model after idle (minutes)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:252
+#: fluidvoice/gtkui/settings_window.py:254
 msgid "Unsaved changes"
 msgstr ""
 
@@ -1580,8 +1588,8 @@ msgid "Updates"
 msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/models.py:62
-#: fluidvoice/gtkui/settings_pages/models.py:373
-#: fluidvoice/gtkui/settings_pages/models.py:493
+#: fluidvoice/gtkui/settings_pages/models.py:375
+#: fluidvoice/gtkui/settings_pages/models.py:619
 msgid "Use"
 msgstr ""
 
@@ -1589,7 +1597,7 @@ msgstr ""
 msgid "Version"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:719
+#: fluidvoice/gtkui/settings_pages/models.py:855
 msgid "Vocabulary boosting"
 msgstr ""
 
@@ -1605,7 +1613,7 @@ msgstr ""
 msgid "Volume"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:665
+#: fluidvoice/gtkui/settings_pages/models.py:801
 msgid "Warm the model when the daemon starts (needs a daemon restart)"
 msgstr ""
 
@@ -1647,7 +1655,7 @@ msgstr ""
 msgid "Words"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:720
+#: fluidvoice/gtkui/settings_pages/models.py:856
 msgid "Words the decoder is biased toward (ADD, not replace) — fed as faster-whisper hotwords / whisper initial-prompt; changing them reloads the engine"
 msgstr ""
 
@@ -1655,7 +1663,7 @@ msgstr ""
 msgid "Working directory (empty = home)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:140
+#: fluidvoice/gtkui/settings_pages/ai.py:176
 msgid "Write the editor contents into the selected profile"
 msgstr ""
 
@@ -1685,11 +1693,11 @@ msgstr ""
 msgid "active — fine-tune in Settings"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:96
+#: fluidvoice/gtkui/settings_pages/models.py:97
 msgid "active: remote ({model} @ {host})"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:100
+#: fluidvoice/gtkui/settings_pages/models.py:101
 msgid "active: {model}"
 msgstr ""
 
@@ -1697,12 +1705,12 @@ msgstr ""
 msgid "and its audio"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:182
+#: fluidvoice/gtkui/settings_pages/models.py:183
 msgid "auto (detect)"
 msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/wayland.py:82
-msgid "auto: wtype (wlroots/KDE) then ydotool (anywhere); GNOME has no virtual-keyboard protocol for wtype"
+msgid "auto probes at runtime: eis (RemoteDesktop portal, GNOME/Plasma) → wtype (virtual-keyboard protocol, wlroots/Hyprland) → ydotool (uinput)"
 msgstr ""
 
 #: fluidvoice/gtkui/main_window.py:1025
@@ -1718,11 +1726,11 @@ msgid "check failed — {error}"
 msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/about.py:81
-#: fluidvoice/gtkui/settings_pages/models.py:140
+#: fluidvoice/gtkui/settings_pages/models.py:141
 msgid "checking…"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:136
+#: fluidvoice/gtkui/settings_pages/models.py:137
 msgid "checks disabled"
 msgstr ""
 
@@ -1738,7 +1746,7 @@ msgstr ""
 msgid "constant-cost windows instead of whole-take re-decode; all backends"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:307
+#: fluidvoice/gtkui/settings_pages/models.py:309
 msgid "daemon not running - start it to delete models"
 msgstr ""
 
@@ -1750,7 +1758,7 @@ msgstr ""
 msgid "daemon unreachable"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:321
+#: fluidvoice/gtkui/settings_pages/models.py:323
 msgid "delete failed"
 msgstr ""
 
@@ -1766,22 +1774,22 @@ msgstr ""
 msgid "dictations per day"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:417
-#: fluidvoice/gtkui/settings_pages/models.py:541
+#: fluidvoice/gtkui/settings_pages/models.py:419
+#: fluidvoice/gtkui/settings_pages/models.py:667
 msgid "download failed: {error}"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:339
-#: fluidvoice/gtkui/settings_pages/models.py:461
+#: fluidvoice/gtkui/settings_pages/models.py:341
+#: fluidvoice/gtkui/settings_pages/models.py:587
 msgid "downloading… {done}"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:338
-#: fluidvoice/gtkui/settings_pages/models.py:460
+#: fluidvoice/gtkui/settings_pages/models.py:340
+#: fluidvoice/gtkui/settings_pages/models.py:586
 msgid "downloading… {done} / {total}"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:261
+#: fluidvoice/gtkui/settings_pages/models.py:262
 msgid "empty"
 msgstr ""
 
@@ -1793,7 +1801,7 @@ msgstr ""
 msgid "entry"
 msgid_plural "entries"
 
-#: fluidvoice/gtkui/settings_pages/models.py:82
+#: fluidvoice/gtkui/settings_pages/models.py:83
 msgid "error: {error}"
 msgstr ""
 
@@ -1806,8 +1814,8 @@ msgstr ""
 msgid "export failed: {error}"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:204
-#: fluidvoice/gtkui/settings_pages/models.py:150
+#: fluidvoice/gtkui/settings_pages/ai.py:305
+#: fluidvoice/gtkui/settings_pages/models.py:151
 msgid "failed"
 msgstr ""
 
@@ -1815,7 +1823,7 @@ msgstr ""
 msgid "failed: {error}"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:572
+#: fluidvoice/gtkui/settings_pages/models.py:700
 msgid "faster-whisper models (downloaded on first use)"
 msgstr ""
 
@@ -1847,7 +1855,7 @@ msgstr ""
 msgid "idle"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:182
+#: fluidvoice/gtkui/settings_pages/models.py:183
 msgid "inherit (general)"
 msgstr ""
 
@@ -1875,12 +1883,12 @@ msgstr ""
 msgid "lang: {lang}"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:132
+#: fluidvoice/gtkui/settings_pages/models.py:133
 msgid "latest unknown (offline or GitHub unreachable)"
 msgstr ""
 
 #: fluidvoice/gtkui/main_window.py:1036
-#: fluidvoice/gtkui/settings_pages/models.py:79
+#: fluidvoice/gtkui/settings_pages/models.py:80
 msgid "loading {model}…"
 msgstr ""
 
@@ -1901,7 +1909,7 @@ msgid "mixed"
 msgstr ""
 
 #: fluidvoice/gtkui/main_window.py:1042
-#: fluidvoice/gtkui/settings_pages/models.py:162
+#: fluidvoice/gtkui/settings_pages/models.py:163
 msgid "model error: {error}"
 msgstr ""
 
@@ -1909,7 +1917,7 @@ msgstr ""
 msgid "model {name}"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:108
+#: fluidvoice/gtkui/settings_pages/models.py:109
 msgid "no"
 msgstr ""
 
@@ -1929,12 +1937,12 @@ msgstr ""
 msgid "nova vrstica, naslednja vrstica — then say “literal nova vrstica” to start a new line"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:202
+#: fluidvoice/gtkui/settings_pages/ai.py:303
 msgid "ok: {reply}"
 msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/common.py:146
-#: fluidvoice/gtkui/settings_pages/models.py:688
+#: fluidvoice/gtkui/settings_pages/models.py:824
 msgid "optional bearer token (never shown)"
 msgstr ""
 
@@ -1942,7 +1950,7 @@ msgstr ""
 msgid "optional — add an OpenAI-compatible endpoint in Settings"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:707
+#: fluidvoice/gtkui/settings_pages/models.py:843
 msgid "per-request; retry once on transient network errors"
 msgstr ""
 
@@ -1966,8 +1974,8 @@ msgstr ""
 msgid "processing…"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:371
-#: fluidvoice/gtkui/settings_pages/ai.py:451
+#: fluidvoice/gtkui/settings_pages/ai.py:472
+#: fluidvoice/gtkui/settings_pages/ai.py:552
 msgid "profile operation failed"
 msgstr ""
 
@@ -1987,7 +1995,7 @@ msgstr ""
 msgid "run 'sayit-ermano update' for the upgrade command"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:658
+#: fluidvoice/gtkui/settings_pages/ai.py:759
 msgid "seen {n}×"
 msgstr ""
 
@@ -1995,7 +2003,7 @@ msgstr ""
 msgid "tap to start/stop · hold = push-to-talk · both: quick tap toggles, holding talks · modifier-only keys need toggle"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:191
+#: fluidvoice/gtkui/settings_pages/ai.py:292
 msgid "testing…"
 msgstr ""
 
@@ -2039,11 +2047,11 @@ msgstr ""
 msgid "unknown"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:103
+#: fluidvoice/gtkui/settings_pages/models.py:104
 msgid "unloaded (idle — reloads on the next dictation)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:138
+#: fluidvoice/gtkui/settings_pages/models.py:139
 msgid "up to date"
 msgstr ""
 
@@ -2059,15 +2067,15 @@ msgstr ""
 msgid "update check failed ({error})"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:124
+#: fluidvoice/gtkui/settings_pages/models.py:125
 msgid "v{version} available — run 'sayit-ermano update'"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:577
+#: fluidvoice/gtkui/settings_pages/models.py:705
 msgid "whisper.cpp GGUF"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:657
+#: fluidvoice/gtkui/settings_pages/models.py:793
 msgid "whisper.cpp model — name like ggml-base.bin, or a path"
 msgstr ""
 
@@ -2075,7 +2083,7 @@ msgstr ""
 msgid "will be removed."
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:107
+#: fluidvoice/gtkui/settings_pages/models.py:108
 msgid "yes"
 msgstr ""
 
@@ -2083,13 +2091,13 @@ msgstr ""
 msgid "{action} — extra trigger phrases"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:420
-#: fluidvoice/gtkui/settings_pages/models.py:544
+#: fluidvoice/gtkui/settings_pages/models.py:422
+#: fluidvoice/gtkui/settings_pages/models.py:670
 msgid "{name} downloaded — click Use to switch"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/models.py:426
-#: fluidvoice/gtkui/settings_pages/models.py:550
+#: fluidvoice/gtkui/settings_pages/models.py:428
+#: fluidvoice/gtkui/settings_pages/models.py:676
 msgid "{name} is not downloaded yet"
 msgstr ""
 
@@ -2109,7 +2117,7 @@ msgid_plural "{n} audio files skipped"
 msgid "{n} day"
 msgid_plural "{n} days"
 
-#: fluidvoice/gtkui/settings_pages/models.py:258
+#: fluidvoice/gtkui/settings_pages/models.py:259
 msgid "{n} model"
 msgid_plural "{n} models"
 

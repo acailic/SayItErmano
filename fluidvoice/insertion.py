@@ -292,8 +292,11 @@ def check_insertion_capability(cfg: dict | None = None, *,
                                                         "auto"))
     if info.is_wayland:
         typing_tool, _reason = session_mod.resolve_wayland_tool(
-            pref, info.desktop_all, which)
-        wanted = list(session_mod.WAYLAND_TYPE_TOOLS) + ["wl-copy", "wl-paste"]
+            pref, info.desktop_all, which, probes=_runtime_probes())
+        # eis is in-process (no binary to install): the pre-flight only
+        # audits the external tools
+        wanted = [t for t in session_mod.WAYLAND_TYPE_TOOLS if t != "eis"] \
+            + ["wl-copy", "wl-paste"]
         fallback_tool = "wl-copy"
     else:
         typing_tool = "xdotool" if which("xdotool") else None
@@ -318,13 +321,15 @@ _capability_cache: dict[tuple, CapabilityReport] = {}
 def capability_status(cfg: dict | None = None, *,
                       refresh: bool = False) -> CapabilityReport:
     """Insertion-time pre-flight, cached per (session type, desktop, tool
-    preference): the first insert_text call warms it, failures are
-    enriched from it (missing tools + install command). refresh=True
-    recomputes (startup, doctor, after an install)."""
+    preference, probe results): the first insert_text call warms it,
+    failures are enriched from it (missing tools + install command).
+    refresh=True recomputes (startup, doctor, after an install)."""
     info = session_mod.current()
     pref = str(((cfg or {}).get("insertion") or {}).get("wayland_tool",
                                                         "auto"))
-    key = (info.type, info.desktop_all, pref)
+    probes = _runtime_probes()
+    key = (info.type, info.desktop_all, pref,
+           tuple(sorted((k, repr(v)) for k, v in (probes or {}).items())))
     if refresh:
         _capability_cache.pop(key, None)
     report = _capability_cache.get(key)
@@ -545,14 +550,69 @@ def _clipboard_write(data: bytes) -> None:
 # ---------------------------------------------------------------------------
 
 def _resolve_wayland_tool(cfg: dict,
-                          which: Callable[[str], str | None] | None = None
+                          which: Callable[[str], str | None] | None = None,
+                          probes: dict | None = None,
+                          preference: str | None = None,
                           ) -> tuple[str | None, str]:
-    """insertion.wayland_tool (auto|wtype|ydotool) -> (tool, reason), via
-    the shared resolver (GNOME excludes wtype in auto; missing tools fall
-    through). The reason feeds doctor, not a user notification."""
+    """insertion.wayland_tool (auto|eis|wtype|ydotool) -> (tool, reason),
+    via the shared resolver and the daemon's runtime protocol probes
+    (set_runtime_probes; None keeps the pure legacy resolution so unit
+    tests stay environment-independent). `preference` overrides the
+    config value - the eis rung uses it to re-resolve the fallback
+    tools after an EIS failure. The reason feeds doctor, not a user
+    notification."""
     info = session_mod.current()
-    pref = str((cfg.get("insertion", {}) or {}).get("wayland_tool", "auto"))
-    return session_mod.resolve_wayland_tool(pref, info.desktop_all, which)
+    pref = preference if preference is not None else str(
+        (cfg.get("insertion", {}) or {}).get("wayland_tool", "auto"))
+    if probes is None:
+        probes = _runtime_probes()
+    return session_mod.resolve_wayland_tool(pref, info.desktop_all, which,
+                                            probes=probes)
+
+
+# Daemon-set seam for the runtime protocol probes (input_probes). None
+# (tests, one-shot CLI paths) keeps tool resolution pure; the daemon
+# installs the cached real probes at startup so insertion picks eis/wtype
+# by PROTOCOL, never by desktop name (ADR-0006).
+_runtime_probes_fn: Callable[[], dict | None] | None = None
+
+
+def set_runtime_probes(fn: Callable[[], dict | None] | None) -> None:
+    global _runtime_probes_fn
+    _runtime_probes_fn = fn
+
+
+def _runtime_probes() -> dict | None:
+    if _runtime_probes_fn is None:
+        return None
+    try:
+        return _runtime_probes_fn()
+    except Exception:  # noqa: S110 — probes never break insertion
+        return None
+
+
+# The single EIS inserter per process (portal session + EIS connection
+# kept warm; consent happens once, via ensure()).
+_eis_inserter = None
+
+
+def eis_inserter():
+    """The process-wide EISInserter (lazy; None-safe when dbus-next is
+    missing - callers treat that as 'backend absent')."""
+    global _eis_inserter
+    if _eis_inserter is None:
+        try:
+            from .portal_eis import EISInserter
+            _eis_inserter = EISInserter()
+        except Exception:  # noqa: BLE001 - absence is a probe result
+            return None
+    return _eis_inserter
+
+
+def _set_eis_inserter(inserter) -> None:
+    """Test seam: inject a fake inserter (or None to reset)."""
+    global _eis_inserter
+    _eis_inserter = inserter
 
 
 def _wtype_type_cmd(text: str, delay_ms: int) -> list[str]:
@@ -657,9 +717,12 @@ def _wl_restore_clipboard(previous: bytes | None, mime: str | None,
 
 def _insert_paste_wayland(text: str, *, key: str = "ctrl+v",
                           tool: str | None = None,
-                          on_notice: Callable[[str], None] | None = None) -> None:
-    """Wayland clipboard paste: wl-copy the text, keystroke via the typing
-    tool, fixed settle, wl-copy restore.
+                          on_notice: Callable[[str], None] | None = None,
+                          keystroke: Callable[[str], None] | None = None
+                          ) -> None:
+    """Wayland clipboard paste: wl-copy the text, keystroke via the
+    typing tool (or an injected `keystroke` - the EIS path presses
+    ctrl+v over the portal), fixed settle, wl-copy restore.
 
     Two deliberate divergences from the X11 verified-paste design (see
     docs/STATUS.md): the paste CANNOT be verified by observing the target
@@ -672,11 +735,19 @@ def _insert_paste_wayland(text: str, *, key: str = "ctrl+v",
                                "wayland (install wl-clipboard)",
                                kind=FailureKind.TOOL_MISSING,
                                missing_tools=("wl-copy", "wl-paste"))
-    if tool is None:
-        raise InsertionFailure("no wayland typing tool for the paste keystroke "
-                               "(install wtype or ydotool)",
-                               kind=FailureKind.TOOL_MISSING,
-                               missing_tools=("wtype", "ydotool"))
+    if keystroke is None:
+        if tool is None:
+            raise InsertionFailure("no wayland typing tool for the paste "
+                                   "keystroke (install wtype or ydotool)",
+                                   kind=FailureKind.TOOL_MISSING,
+                                   missing_tools=("wtype", "ydotool"))
+
+        def keystroke(spec: str) -> None:
+            proc = _run(_key_cmd(tool, spec), timeout=10)
+            if proc.returncode != 0:
+                stderr = proc.stderr.decode(errors="replace")[:200]
+                raise InsertionFailure(f"paste keystroke failed: {stderr}",
+                                       kind=_tool_failure_kind(stderr))
     data = text.encode()
     previous, mime = _wl_clipboard_snapshot()
     try:
@@ -686,11 +757,7 @@ def _insert_paste_wayland(text: str, *, key: str = "ctrl+v",
             # the auto-mode ladder can fall through to typed insertion
             raise InsertionFailure(f"wl-copy failed: {e}",
                                    kind=FailureKind.TOOL_FAILED) from e
-        proc = _run(_key_cmd(tool, key), timeout=10)
-        if proc.returncode != 0:
-            stderr = proc.stderr.decode(errors="replace")[:200]
-            raise InsertionFailure(f"paste keystroke failed: {stderr}",
-                                   kind=_tool_failure_kind(stderr))
+        keystroke(key)
         time.sleep(WAYLAND_PASTE_SETTLE_S)  # verification impossible: settle
     finally:
         _wl_restore_clipboard(previous, mime, on_notice)
@@ -1008,23 +1075,80 @@ def _insert_text_x11(text: str, cfg: dict,
     return "typed"
 
 
+def _eis_keystroke(inserter) -> Callable[[str], None]:
+    """One ctrl+v-style combo through the EIS connection."""
+    def _press(spec: str) -> None:
+        try:
+            inserter.press_key(spec)
+        except Exception as e:  # noqa: BLE001 - becomes InsertionFailure
+            raise InsertionFailure(f"EIS keystroke failed: {e}",
+                                   kind=FailureKind.TOOL_FAILED) from e
+    return _press
+
+
+def _try_insert_eis(text: str, cfg: dict, *, terminal: bool, delay: int,
+                    on_notice: Callable[[str], None] | None,
+                    force_paste: bool = False,
+                    ) -> str | None:
+    """The eis rung: RemoteDesktop portal + EIS typing.
+
+    Returns "eis-typed" / "paste" on success, None when the rung is
+    unavailable or failed (the caller degrades to wtype/ydotool).
+    force_paste (insertion.mode = paste) goes straight to the
+    clipboard path. Out-of-layout Unicode never types garbage: text
+    the EIS keymap cannot reach goes through clipboard + an EIS-sent
+    Ctrl+V (the documented fallback - EIS cannot upload keymaps)."""
+    inserter = eis_inserter()
+    if inserter is None or not inserter.available:
+        return None
+    from .eis import EISUnsupportedChar
+    if cfg["insertion"].get("terminal_autocomplete_space", True) and terminal:
+        text = terminal_trailing_space(text)
+    try:
+        if not force_paste and not inserter.unsupported_chars(text):
+            inserter.type_text(text, delay_ms=delay)
+            return "eis-typed"
+        if force_paste or inserter.unsupported_chars(text):
+            if not force_paste and on_notice is not None:
+                on_notice("Text outside the keyboard layout - pasting via "
+                          "clipboard instead")
+            key = (cfg["insertion"].get("terminal_paste_key", "ctrl+shift+v")
+                   if terminal else "ctrl+v")
+            _insert_paste_wayland(text, key=key,
+                                  keystroke=_eis_keystroke(inserter),
+                                  on_notice=on_notice)
+            return "paste"
+        return None
+    except EISUnsupportedChar:
+        # raced/unexpected: fall to the generic ladder
+        return None
+    except InsertError:
+        if on_notice is not None:
+            on_notice("EIS insertion failed - trying the other backends")
+        return None
+    except Exception:  # noqa: BLE001 - the ladder degrades, never dies
+        return None
+
+
 def _insert_text_wayland(text: str, cfg: dict,
-                        wm_class: str | None = None,
-                        on_notice: Callable[[str], None] | None = None,
-                        on_result: Callable[[InsertResult], None] | None = None
-                        ) -> str:
+                         wm_class: str | None = None,
+                         on_notice: Callable[[str], None] | None = None,
+                         on_result: Callable[[InsertResult], None] | None = None
+                         ) -> str:
     """Wayland insert: the same mode/threshold/leading-dash routing as the
-    X11 body, over the wtype/ydotool + wl-clipboard backends.
+    X11 body, over the eis (RemoteDesktop portal) / wtype / ydotool +
+    wl-clipboard backends.
 
     Degradation ladder (each step only when the previous is impossible):
-      tool+typed -> tool+wl-clipboard paste -> wl-copy + "paste manually"
-      notice ("clipboard-fallback") -> honest structured InsertionFailure
-      (the pipeline notifies; history still records the take). Terminal
-    quirks apply ONLY when an app identity was supplied (P2: the context
-    seam passes the AT-SPI identity at insertion time); wm_class None
-    keeps today's behavior - without an identity ctrl+shift+v and the
-    autocomplete space stay off (a wrong plain ctrl+v in a terminal is
-    recoverable, a mistyped terminal-paste is not)."""
+      eis-typed -> eis/wtype/ydotool paste -> typed -> wl-copy + "paste
+      manually" notice ("clipboard-fallback") -> honest structured
+      InsertionFailure (the pipeline notifies; history still records the
+      take). Terminal quirks apply ONLY when an app identity was
+      supplied (P2: the context seam passes the AT-SPI identity at
+      insertion time); wm_class None keeps today's behavior - without
+      an identity ctrl+shift+v and the autocomplete space stay off (a
+      wrong plain ctrl+v in a terminal is recoverable, a mistyped
+      terminal-paste is not)."""
     report = capability_status(cfg)  # pre-flight (cached): enrich failures
     wm = wm_class
     terminal = bool(wm and is_terminal_app(wm, cfg))
@@ -1034,6 +1158,14 @@ def _insert_text_wayland(text: str, cfg: dict,
     tool, _reason = _resolve_wayland_tool(cfg)
     use_paste = (mode == "paste" or len(text) > threshold or text.startswith("-"))
     if use_paste:
+        if tool == "eis":
+            result = _try_insert_eis(text, cfg, terminal=terminal,
+                                     delay=delay, on_notice=on_notice,
+                                     force_paste=True)
+            if result is not None:
+                _ok_result(result, report, on_result)
+                return result
+            tool = _fallback_tool(cfg)  # degrade to the binary tools
         key = (cfg["insertion"].get("terminal_paste_key", "ctrl+shift+v")
                if terminal else "ctrl+v")
         try:
@@ -1047,6 +1179,13 @@ def _insert_text_wayland(text: str, cfg: dict,
                              on_notice=on_notice, on_result=on_result)
             if on_notice is not None:
                 on_notice("Paste did not land - trying to type instead")
+    if tool == "eis":
+        result = _try_insert_eis(text, cfg, terminal=terminal, delay=delay,
+                                 on_notice=on_notice)
+        if result is not None:
+            _ok_result(result, report, on_result)
+            return result
+        tool = _fallback_tool(cfg)
     if tool is not None:
         try:
             if cfg["insertion"].get("terminal_autocomplete_space", True) \
@@ -1081,6 +1220,15 @@ def _insert_text_wayland(text: str, cfg: dict,
         on_result=on_result, clipboard=clip, preserve=False)
 
 
+def _fallback_tool(cfg: dict) -> str | None:
+    """The next NON-eis tool on the ladder (wtype/ydotool), probe-aware."""
+    for pref in ("wtype", "ydotool"):
+        tool, _ = _resolve_wayland_tool(cfg, preference=pref)
+        if tool is not None and tool != "eis":
+            return tool
+    return None
+
+
 def clipboard_fallback(text: str) -> ClipboardResult:
     """Last resort when neither typing nor pasting worked: leave text on
     the clipboard and return the honest outcome (F-18) - callers that
@@ -1093,12 +1241,22 @@ def press_key(spec: str, *, tool: str | None = None) -> None:
     tool=None keeps today's xdotool path on X11/unknown sessions and
     auto-resolves the wayland tool on a wayland session (no cfg at this
     call depth -> the "auto" preference; spoken-send, paste-last and
-    command-mode reruns get wayland for free)."""
+    command-mode reruns get wayland for free). "eis" routes through the
+    warm EIS connection when there is one."""
     if tool is None and session_mod.current().is_wayland:
         tool, _reason = _resolve_wayland_tool({})
         if tool is None:
             raise InsertError("no wayland typing tool for the keystroke "
                               "(install wtype or ydotool)")
+    if tool == "eis":
+        inserter = eis_inserter()
+        if inserter is None or not inserter.available:
+            raise InsertError("EIS insertion is not connected")
+        try:
+            inserter.press_key(spec)
+        except Exception as e:  # noqa: BLE001 - surfaced as InsertError
+            raise InsertError(f"EIS key press failed: {e}") from e
+        return
     if tool is None:
         cmd = ["xdotool", "key", "--clearmodifiers", spec]
         name = "xdotool"
