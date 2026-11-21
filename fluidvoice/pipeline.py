@@ -497,6 +497,10 @@ class DictationPipeline:
                                audio_src=wav if hcfg.get("save_audio") else None,
                                keep_audio=hcfg.get("save_audio", False),
                                budget_gb=hcfg.get("audio_budget_gb", 4.0))
+            # #24: retention runs right after the append that could have
+            # crossed the cutoff; a no-op when audio_retention_days is 0
+            history_mod.enforce_audio_retention(
+                int(hcfg.get("audio_retention_days", 0) or 0))
 
     # -- orchestration ------------------------------------------------------
 

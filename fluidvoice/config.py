@@ -982,6 +982,10 @@ _spec("history", "save_audio", False, _bool(),
       description="Store the recording with each entry")
 _spec("history", "audio_budget_gb", 4.0, _num("float", 0.0, 1024.0),
       description="Retained-audio budget in GB")
+_spec("history", "audio_retention_days", 0, _num("int", 0, 3650),
+      description="Auto-delete retained audio older than this many days\n"
+                  "(rows and text stay; the replay affordance goes).\n"
+                  "0 = keep until the budget cap trims it")
 
 # -- [command] ---------------------------------------------------------------
 

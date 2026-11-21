@@ -14,6 +14,9 @@ the app itself.
   installer, Ubuntu .deb, pipx, AUR, source) and updates.
 - [guides/license.md](guides/license.md) — license keys: import, status,
   what they do and do not restrict ([PRICING](PRICING.md)).
+- [research/2026-11-21-network-egress-audit.md](research/2026-11-21-network-egress-audit.md) —
+  every network connection the app can make, with a 2-minute
+  re-verification method (privacy claim evidence).
 - [guides/configuration.md](guides/configuration.md) — the complete
   `config.toml` reference, generated from the settings registry.
 - [guides/wayland.md](guides/wayland.md) — Wayland capability matrix and
