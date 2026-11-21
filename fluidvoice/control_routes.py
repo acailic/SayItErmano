@@ -108,6 +108,9 @@ def _status(d: Any, req: dict) -> dict:
             # idle-unload policy + live state (doctor/tray read
             # this; additive key - JSON consumers unaffected)
             "model_state": model_state,
+            # local polish (managed llama.cpp child, #21): readiness +
+            # live child state; additive key (doctor/UI read this)
+            "local_polish": d._local_polish.status(),
             # language cycle + guard state (doctor/CLI/GTK read
             # this; additive key - JSON consumers unaffected)
             "language": d._engines.language_status()}
@@ -156,6 +159,13 @@ def _model_delete(d: Any, req: dict) -> dict:
                                    str(req.get("name", "")))
 
 
+def _local_polish_stop(d: Any, req: dict) -> dict:
+    """Stop the managed llama.cpp child now (memory hygiene / tests).
+    It re-spawns on the next polish call; the toggle is untouched."""
+    d._local_polish.stop("control route")
+    return {"ok": True, "local_polish": d._local_polish.status()}
+
+
 def _mics(d: Any, req: dict) -> dict:
     from .tray import list_microphones
     return {"ok": True, "mics": list_microphones()}
@@ -188,6 +198,7 @@ ROUTES: dict[str, Route] = {
     "set-config": _set_config,
     "select-model": _select_model,
     "model-delete": _model_delete,
+    "local-polish-stop": _local_polish_stop,
     "mics": _mics,
     "transcribe": _transcribe,
     "history": _history,

@@ -40,8 +40,11 @@ license" and can be replaced by importing again.
 
 ## Lost keys, refunds, redistribution
 
-- **Lost key:** support re-issues from the purchase record (Paddle
-  order lookup) — the email in the payload is the identity.
+- **Lost key:** reply to your purchase email (or open a support
+  request) — every issued key is recorded in the seller's issue log
+  and looked up by the purchase email; support re-sends it. The
+  owner-side procedure is
+  [dev/license-ops.md](../dev/license-ops.md).
 - **Refunds:** 14 days, handled by Paddle as merchant of record.
 - **Redistribution:** the software is GPL-3.0. If someone shares your
   key or their build with others, that is permitted by the license;

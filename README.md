@@ -88,7 +88,7 @@ Older releases (v0.8.0 and back) live in the
 1. **Global hotkey** (default: Right Ctrl, toggle mode) starts recording — 16 kHz mono via PipeWire.
 2. **Local transcription** — faster-whisper on CUDA GPU when available, CPU int8 otherwise (whisper.cpp, torch, and NVIDIA Parakeet TDT via ONNX Runtime backends also supported).
 3. **Post-processing chain** — filler-word removal → custom dictionary → **spoken punctuation commands** (`literal comma`, `literal new line`, `example literal dot com`, …) — the full FluidVoice rule table.
-4. **Optional AI polish** — the *verbatim* FluidVoice dictation prompt sent to any OpenAI-compatible endpoint (OpenAI, Groq, Ollama, LM Studio, llama.cpp server). Turns *"um lets meet on tuesday around 3 no wait 4 p.m."* into *"Let's meet on Tuesday at 4 p.m."*
+4. **Optional AI polish** — the *verbatim* FluidVoice dictation prompt sent to any OpenAI-compatible endpoint (OpenAI, Groq, Ollama, LM Studio, llama.cpp server). Turns *"um lets meet on tuesday around 3 no wait 4 p.m."* into *"Let's meet on Tuesday at 4 p.m."* — or fully offline with **Local polish** (`ai.local_polish`): the daemon spawns a bundled-managed llama.cpp server with a qwen3-4b-class GGUF on demand, idles it down after use, and never sends anything off the machine ([ADR-0007](docs/adr/ADR-0007-managed-llama-server.md)).
 5. **Text insertion** — `xdotool type` keystrokes (clipboard-free), or verified clipboard paste with automatic restore for long texts. Plus history, start/stop sounds (the original GPLv3 FluidVoice SFX), and desktop notifications.
 
 ```
@@ -112,9 +112,11 @@ curl -fsSL https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/i
 
 Press **Right Ctrl**, speak, press **Right Ctrl** again. Done.
 
-All routes — the one-shot installer (user or `--system`), the official
-Ubuntu 24.04 .deb, pipx/pip on any distro, the AUR package, building
-from source, and how updates work — are documented in
+All routes — ordered best-converting first: the one-shot installer
+(user-space, no sudo), the official Ubuntu 24.04 .deb with its **signed
+apt repository**, one-shot `--system`, pipx/pip on any distro, the AUR
+package, and building from source; plus how updates work on each — are
+documented in
 [docs/guides/install.md](docs/guides/install.md). Updates are one command
 on every route: the .deb configures a **signed apt repository**
 (`sudo apt update && sudo apt upgrade sayit-ermano`), the installer has
@@ -205,6 +207,27 @@ A **refusal guardrail** (`ai.refusal_guard`, default on) never types model
 refusals into your document — the raw transcript is used instead; see
 [configuration.md](docs/guides/configuration.md).
 
+### Local polish — works offline, no key
+
+```toml
+[ai]
+local_polish = true   # Settings → AI → "Local polish (works offline)"
+```
+
+One toggle: the daemon spawns an `llama-server` (llama.cpp) child on
+127.0.0.1 the first time a dictation needs polishing, loads the chat
+model downloaded through **Settings → Models → AI polish model**
+(qwen3-4b-instruct-2507 Q4_K_M GGUF, ~2.5 GB, sha256-pinned), and stops
+it after `ai.local_idle_s` idle (default 300 s; toggle off = zero
+footprint — no process, no port). Your cloud `[ai]` endpoint stays
+configured and is used again the moment the toggle is off. Needs an
+`llama-server` binary (any llama.cpp package, or set
+`ai.local_server_binary`); quality is held to the cloud baseline by the
+eval-harness regression gate (`python -m fluidvoice.evalharness
+polish-compare`, [docs/eval/README.md](docs/eval/README.md)). Memory
+and cold-start budgets: [docs/dev/local-polish-budgets.md](docs/dev/local-polish-budgets.md)
+(toggle off = zero footprint).
+
 ## Features vs. upstream FluidVoice
 
 | Feature | macOS (upstream) | Linux port (SayItErmano) |
@@ -216,7 +239,7 @@ refusals into your document — the raw transcript is used instead; see
 | Hotkeys pause while the screen is locked | ✅ | ✅ `general.pause_when_locked` (logind watch, resolves the session under the systemd user unit too; active dictation cancels, tray notes `paused (locked)`) |
 | Filler-word removal + custom dictionary | ✅ | ✅ (same defaults) |
 | Spoken punctuation ("literal comma") | ✅ full rule table | ✅ ported (dot/slash/at-sign contexts included) |
-| AI polish with the original prompt | ✅ (local Fluid Intelligence or cloud) | ✅ (any OpenAI-compatible endpoint + switchable provider profiles; no bundled local LLM yet) |
+| AI polish with the original prompt | ✅ (local Fluid Intelligence or cloud) | ✅ (any OpenAI-compatible endpoint + switchable provider profiles; bundled local polish via a managed llama.cpp server + qwen3-4b-class GGUF — works offline, `ai.local_polish`) |
 | Start/stop sounds | ✅ | ✅ (same GPLv3 SFX) |
 | Live streaming preview overlay | ✅ | ✅ Mac-style pill (live waveform, mode accent colors, state labels, send indicator) |
 | Write/Rewrite selected text | ✅ (⌥R) | ✅ dedicated rewrite hotkey |

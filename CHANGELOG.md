@@ -26,6 +26,48 @@ not reproduced here.
   (dependency-free msgfmt, plural forms included) and
   `just translations` / `just gate` enforcement.
 
+||||||| 43a0013
+- **Bundled local AI polish (#21)** — polished output with zero setup
+  and zero cloud key, closing the "no bundled local LLM yet" parity
+  gap end to end. One toggle: **Settings → AI → "Local polish (works
+  offline)"** (`ai.local_polish`). The model manager gains a small
+  GGUF chat model (qwen3-4b-instruct-2507 Q4_K_M, ~2.5 GB,
+  sha256-pinned, Settings → Models → AI polish model) downloaded
+  alongside the existing whisper GGUF flow. The daemon spawns a
+  bundled-managed `llama-server` on 127.0.0.1 on demand
+  (ephemeral port, `/health` readiness), auto-points polish at it
+  without rewriting your cloud profile, and idles it down after
+  `ai.local_idle_s` (default 300 s) — toggle off = zero footprint
+  (no process, no port; [ADR-0007](docs/adr/ADR-0007-managed-llama-server.md),
+  budgets in [docs/dev/local-polish-budgets.md](docs/dev/local-polish-budgets.md)).
+  Quality is gated: the eval harness gained `polish-compare`
+  (local-vs-cloud WER/omission/hotword-recall comparison +
+  regression gate; [docs/eval/README.md](docs/eval/README.md)).
+
+- **Offline license keys, end to end (#16)** — the purchase-to-key
+  pipeline for the ADR-0005 SKU: a Paddle `transaction.completed`
+  webhook receiver (`scripts/license_webhook.py`) verifies the signed
+  payload (forgery/replay rejected), issues an Ed25519 key with the
+  owner-side keygen (`scripts/license_keygen.py` — private seed lives
+  on offline media, never in the repo), and appends to an append-only
+  JSONL issue log that support searches by email
+  (`scripts/license_lookup.py`). The shipped app stays
+  verify-only and fully offline: `sayit-ermano license <KEY>` imports,
+  Settings → About shows the state, and no key ever gates dictation.
+  Owner runbook: `docs/dev/license-ops.md` (incl. the sandbox
+  acceptance test and the Polar runner-up wiring).
+- **Fresh-VM install QA gate (#14)** — `scripts/qa_matrix.py`: a
+  harness that walks every install route (one-shot user-space, one-shot
+  `--system`, .deb, AUR, pipx, Flatpak) down the paying-user funnel
+  (install → onboarding → dictation → update) wherever the current
+  machine offers the route, and records every skip with its reason
+  (wrong distro, no root, headless, tool missing). It writes one
+  evidence file per route per distro under
+  `docs/quality/install-matrix/` plus a generated summary table; the
+  owner runs `check --execute` on the fresh Ubuntu 24.04 / Fedora /
+  Arch VMs (GPU and CPU) to fill it. The install guide's route order
+  is now explicitly best-converting first (user-space one-shot → .deb
+  + apt repo → `--system` → pipx → AUR → source), owned by this gate.
 - **Update channel for non-Flatpak installs (#22)** — installing the
   official .deb now configures a **signed apt repository** (served from
   this repo's GitHub Pages, published by `release-publish` via reprepro;

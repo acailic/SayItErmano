@@ -89,6 +89,42 @@ class AIPageMixin:
         grp.add(test_row)
         page.add(grp)
 
+        # Local polish (#21): one toggle, works offline. The daemon spawns
+        # a managed llama.cpp server on demand and auto-points polish at
+        # it while this is on; off = zero footprint (no process, no port).
+        local = Adw.PreferencesGroup(
+            title="Local polish",
+            description="Works offline — a bundled llama.cpp server is "
+            "spawned only while polishing, your text never leaves this "
+            "machine",
+        )
+        local_switch = self._switch(
+            "ai",
+            "local_polish",
+            "Local polish (works offline)",
+            subtitle="no cloud key or endpoint needed — needs the chat "
+            "model (Settings → Models → AI polish model) and an "
+            "llama-server binary",
+        )
+        local_switch.connect("notify::active", self._on_local_polish_toggled)
+        local.add(local_switch)
+        self._local_polish_status_row = Adw.ActionRow(
+            title="Status", subtitle="—", activatable=False, selectable=False
+        )
+        local.add(self._local_polish_status_row)
+        stop_row = Adw.ActionRow(
+            title="Stop server now",
+            subtitle="Frees the RAM the polish model uses; it starts "
+            "again on the next dictation",
+        )
+        self._local_polish_stop_btn = Gtk.Button(label="Stop")
+        self._local_polish_stop_btn.set_valign(Gtk.Align.CENTER)
+        self._local_polish_stop_btn.connect("clicked",
+                                            self._on_local_polish_stop)
+        stop_row.add_suffix(self._local_polish_stop_btn)
+        local.add(stop_row)
+        page.add(local)
+
         # prompt profiles (macOS parity): radio rows + per-row ⋯ menu +
         # Add; "Save" next to the editor below writes to the selection
         self.prof_grp = Adw.PreferencesGroup(
@@ -186,6 +222,71 @@ class AIPageMixin:
             except Exception:  # noqa: S110 — best-effort path; caller must proceed
                 pass
         self.provider_img.set_visible(False)
+
+    # -- local polish (bundled llama.cpp server, #21) -------------------------
+
+    def _on_local_polish_toggled(self, switch: Adw.SwitchRow, _pspec) -> None:
+        """One-click contract: enabling local polish also flips the AI
+        polish master switch on (it implies polish; disabling local does
+        not disable the cloud path)."""
+        if not self._loading and switch.get_active():
+            master = self._rows.get(("ai", "enabled"))
+            if master is not None and isinstance(master, Adw.SwitchRow) \
+                    and not master.get_active():
+                master.set_active(True)  # fires its own _touch
+        self._refresh_local_polish()
+
+    def _on_local_polish_stop(self, _btn) -> None:
+        """Stop the managed llama.cpp child now (memory hygiene)."""
+        try:
+            resp = self.c.local_polish_stop()
+        except Exception as e:  # noqa: BLE001 - surfaced as a toast
+            self.toast(f"stop failed: {e}")
+            return
+        state = (resp.get("local_polish") or {}) if resp.get("ok") else {}
+        if resp.get("ok") is False:
+            self.toast(str(resp.get("error") or "stop failed"))
+            return
+        self.toast("stopped" if not state.get("running")
+                   else "still running?")
+        self._refresh_local_polish()
+
+    def _refresh_local_polish(self) -> None:
+        """Honest one-line state for the Local polish group: readiness
+        probes are local (cheap); the running/port state comes from the
+        daemon status block when it is up."""
+        from ... import local_llm, model_catalog
+        row = getattr(self, "_local_polish_status_row", None)
+        if row is None:
+            return
+        ai = self.cfg.get("ai", {}) or {}
+        name = str(ai.get("local_model")
+                   or model_catalog.CHAT_MODEL_DEFAULT)
+        if not ai.get("local_polish"):
+            row.set_subtitle("off (zero footprint — no server, no port)")
+            return
+        if not model_catalog.chat_model_downloaded(name):
+            row.set_subtitle(
+                f"model {name} not downloaded — Settings → Models → "
+                "AI polish model")
+            return
+        if not local_llm.find_llama_server(self.cfg):
+            row.set_subtitle(
+                "llama-server binary not found — install an llama.cpp "
+                "package or set ai.local_server_binary")
+            return
+        running, port = False, None
+        try:
+            st = (self.c.status() or {}).get("local_polish") or {}
+            running, port = bool(st.get("running")), st.get("port")
+        except Exception:  # noqa: S110,BLE001 - daemon down: readiness line is enough
+            pass  # a status read failure degrades to "ready", never a crash
+        if running:
+            row.set_subtitle(f"running (127.0.0.1:{port}) — stops after "
+                             f"{ai.get('local_idle_s', 300)} s idle")
+        else:
+            row.set_subtitle("ready — the server spawns on the next "
+                             "dictation")
 
     def _test_ai(self, _btn) -> None:
         self.test_out.set_text(_("testing…"))

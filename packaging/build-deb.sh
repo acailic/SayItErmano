@@ -190,7 +190,7 @@ Section: sound
 Priority: optional
 Architecture: $ARCH
 Depends: python3 (>= 3.12), python3 (<< 3.13), pipewire-audio-utils | pulseaudio-utils, xdotool, xclip, libnotify-bin, python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1
-Recommends: pulseaudio-utils
+Recommends: pulseaudio-utils, llama.cpp
 Conflicts: fluidvoice-linux
 Replaces: fluidvoice-linux
 Provides: fluidvoice-linux

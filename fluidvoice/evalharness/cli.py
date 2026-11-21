@@ -9,6 +9,8 @@ Subcommands:
 - ``check``     validate manifest(s) (and audio presence) only
 - ``fixtures``  materialize the synthetic wavs a manifest describes
 - ``soak``      summarize a scripts/soak.py CSV
+- ``polish-compare``  score AI-polish variants (local vs cloud) against
+                the corpus references + regression gate (#21)
 
 ``run`` needs no model for a smoke pass (a built-in stub transcriber
 prints a loud warning); real evaluation plugs a backend adapter with
@@ -30,6 +32,7 @@ from .manifest import (
     load_manifests,
     resolve_manifest_path,
 )
+from .polish_gate import Polisher, PolishGate, run_polish_eval
 from .runner import Transcriber, run_eval
 from .soak import read_soak_csv, summarize_soak
 from .synth import ensure_case_audio
@@ -54,23 +57,33 @@ def _load_corpus(args: argparse.Namespace) -> tuple[list[Case], list[Path]]:
     return load_manifests(paths), paths
 
 
-def _load_transcriber(spec: str) -> Transcriber:
-    """Resolve ``module:factory`` to a transcriber (factory() -> callable)."""
+def _load_component(spec: str, what: str) -> Callable:
+    """Resolve ``module:factory`` to a factory()'d callable."""
     try:
         mod_name, _, attr = spec.partition(":")
         if not mod_name or not attr:
             raise ValueError("expected 'module:factory'")
-        factory: Callable[[], Transcriber] = getattr(
+        factory: Callable[[], Any] = getattr(
             importlib.import_module(mod_name), attr)
-        transcriber = factory()
-        if not callable(transcriber):
-            raise ValueError(f"{spec} produced a non-callable transcriber")
-        return transcriber
+        obj = factory()
+        if not callable(obj):
+            raise ValueError(f"{spec} produced a non-callable {what}")
+        return obj
     except (ImportError, AttributeError, ValueError) as e:
         raise SystemExit(
-            f"error: cannot load --transcriber {spec!r}: {e}\n"
+            f"error: cannot load {what} {spec!r}: {e}\n"
             "(format: 'module:factory' where factory() returns the "
-            "transcriber callable — see docs/eval/README.md)") from e
+            f"{what} — see docs/eval/README.md)") from e
+
+
+def _load_transcriber(spec: str) -> Transcriber:
+    """Resolve ``module:factory`` to a transcriber (factory() -> callable)."""
+    return _load_component(spec, "transcriber")
+
+
+def _load_polisher(spec: str) -> Polisher:
+    """Resolve ``module:factory`` to a polish variant callable."""
+    return _load_component(spec, "polisher")
 
 
 def _stub_transcriber(audio_path: Path, case: Case) -> dict:
@@ -168,6 +181,51 @@ def _cmd_soak(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_polish_compare(args: argparse.Namespace) -> int:
+    try:
+        cases, paths = _load_corpus(args)
+    except (ManifestError, OSError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    transcriber = None
+    if args.transcriber:
+        transcriber = _load_transcriber(args.transcriber)
+    else:
+        print("warning: no --transcriber given — running in SMOKE mode "
+              "(reference passthrough). This only proves the plumbing; "
+              "it is NOT an evaluation. See docs/eval/README.md.",
+              file=sys.stderr)
+    variants: dict[str, Polisher] = {}
+    if args.local:
+        variants["local"] = _load_polisher(args.local)
+    if args.cloud:
+        variants["cloud"] = _load_polisher(args.cloud)
+    gate = PolishGate(max_wer_degradation=args.max_wer_degradation,
+                      max_recall_loss=args.max_recall_loss)
+    report = run_polish_eval(cases, variants, transcriber=transcriber,
+                             out_dir=args.out, manifests=paths, gate=gate,
+                             allow_synth=not args.no_synth)
+    s = report["summary"]
+    for name, v in s.items():
+        print(f"  {name}: WER mean {_fmt(v['wer_mean'])} · "
+              f"omission {_fmt(v['omission_mean'])} · "
+              f"hotword recall {_fmt(v['hotword_recall_mean'])} · "
+              f"{v['errors']} errored")
+    g = report["gate"]
+    print(f"  gate: {g['status']}"
+          + (f" ({g['reason']})" if "reason" in g else ""))
+    failed_checks = [c["check"] for c in g.get("checks", ())
+                     if not c["passed"]]
+    if failed_checks:
+        print("  failed checks: " + ", ".join(failed_checks), file=sys.stderr)
+    print(f"-> {args.out / 'polish-report.json'} + "
+          f"{args.out / 'polish-report.md'}")
+    if g["status"] == "failed":
+        return 1
+    errored = sum(v["errors"] for v in s.values())
+    return 1 if errored else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m fluidvoice.evalharness",
@@ -211,6 +269,37 @@ def main(argv: list[str] | None = None) -> int:
     soak_p.add_argument("csv", type=Path, help="CSV written by "
                         "scripts/soak.py")
     soak_p.set_defaults(func=_cmd_soak)
+
+    pc_p = sub.add_parser(
+        "polish-compare",
+        help="compare AI polish variants (local vs cloud) + regression "
+             "gate (docs/eval/README.md)")
+    _add_corpus_args(pc_p)
+    pc_p.add_argument("--out", type=Path, default=Path("eval-polish"),
+                      metavar="DIR", help="output directory "
+                      "(default: ./eval-polish)")
+    pc_p.add_argument("--transcriber", metavar="MODULE:FACTORY",
+                      help="transcriber factory producing the RAW "
+                      "transcripts (default: none — smoke mode, reference "
+                      "passthrough)")
+    pc_p.add_argument("--local", metavar="MODULE:FACTORY",
+                      help="local polish variant factory (the managed "
+                      "llama.cpp path — see docs/eval/README.md)")
+    pc_p.add_argument("--cloud", metavar="MODULE:FACTORY",
+                      help="cloud polish variant factory (the baseline)")
+    pc_p.add_argument("--max-wer-degradation", type=float, default=0.02,
+                      metavar="DELTA",
+                      help="gate: wer_mean(local) may exceed "
+                      "wer_mean(cloud) by at most this much "
+                      "(default: %(default)s)")
+    pc_p.add_argument("--max-recall-loss", type=float, default=0.0,
+                      metavar="DELTA",
+                      help="gate: hotword recall may drop vs cloud by at "
+                      "most this much (default: %(default)s)")
+    pc_p.add_argument("--no-synth", action="store_true",
+                      help="never generate synthetic fixtures (missing "
+                      "audio becomes a case error)")
+    pc_p.set_defaults(func=_cmd_polish_compare)
 
     args = parser.parse_args(argv)
     return args.func(args)
