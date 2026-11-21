@@ -13,6 +13,18 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **Offline license keys, end to end (#16)** — the purchase-to-key
+  pipeline for the ADR-0005 SKU: a Paddle `transaction.completed`
+  webhook receiver (`scripts/license_webhook.py`) verifies the signed
+  payload (forgery/replay rejected), issues an Ed25519 key with the
+  owner-side keygen (`scripts/license_keygen.py` — private seed lives
+  on offline media, never in the repo), and appends to an append-only
+  JSONL issue log that support searches by email
+  (`scripts/license_lookup.py`). The shipped app stays
+  verify-only and fully offline: `sayit-ermano license <KEY>` imports,
+  Settings → About shows the state, and no key ever gates dictation.
+  Owner runbook: `docs/dev/license-ops.md` (incl. the sandbox
+  acceptance test and the Polar runner-up wiring).
 - **Update channel for non-Flatpak installs (#22)** — installing the
   official .deb now configures a **signed apt repository** (served from
   this repo's GitHub Pages, published by `release-publish` via reprepro;

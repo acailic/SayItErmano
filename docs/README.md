@@ -49,6 +49,9 @@ the app itself.
   does, with file:line evidence, and where this port differs.
 - [dev/release-gates.md](dev/release-gates.md) — the local gates and
   the release path (nothing ships without them).
+- [dev/license-ops.md](dev/license-ops.md) — owner runbook for offline
+  license keys: keygen custody, the Paddle webhook, the issued-keys
+  lookup log.
 - [dev/testing.md](dev/testing.md) — the test tier model and every
   recipe, in one canonical place.
 - [dev/quality-queue.md](dev/quality-queue.md) — historical Q1–Q12
