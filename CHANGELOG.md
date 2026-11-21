@@ -13,6 +13,30 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **Flatpak shipping manifest (#11)** — the #10 spike manifest becomes
+  the shipping manifest: finish-args are exactly the ADR-0006 baseline
+  (`--socket=wayland`, `--socket=pulseaudio`, `--device=dri`,
+  `--share=network`; no `--device=all`, ever), all vendored wheels are
+  sha256-pinned, and the app-id desktop file + GPL-3.0 metainfo
+  (keywords, OARS, screenshots) + hicolor icon set install as a proper
+  `desktop-integration` module. GPU scope is enforced in the manifest
+  and pinned by tests: **whisper.cpp Vulkan** on the runtime
+  `org.freedesktop.Platform.GL` extension (Blender pattern, mounted at
+  `/app/lib/GL`) — CUDA stays a host-build-only path. Sandbox
+  lifecycle: the GTK app process now spawns and owns the daemon +
+  control socket (`fluidvoice/gtkui/daemon_owner.py`, new
+  `sayit-ermano app --background`); login autostart is requested once
+  through the **Background portal** (`fluidvoice/portal_autostart.py`),
+  which writes the host-side `~/.config/autostart` entry — no systemd
+  user unit, no packaged `/app/etc/xdg/autostart` file (nothing
+  outside the sandbox reads it). Models live under
+  `~/.var/app/io.github.acailic.SayItErmano` via the redirected XDG
+  dirs. `sayit-ermano update` detects the flatpak route
+  (`$FLATPAK_ID`) and prints `flatpak update …` with the Flathub-lag
+  note. Submission-time drafts: per-permission justification table in
+  `docs/packaging/flatpak-permissions.md`; the `.flatpakbundle` CI job
+  is an owner patch at `packaging/flatpak/ci-flatpak-bundle.md`.
+  Structural tests: `tests/test_flatpak_manifest.py`.
 - **Portal input on Wayland/Flatpak (#10, ADR-0006)** — the dictation
   hotkey now binds through the **GlobalShortcuts portal** (GNOME 48+,
   Plasma 5.27+, Hyprland) with native hold-PTT from the

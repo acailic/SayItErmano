@@ -29,6 +29,7 @@ from . import __version__, paths
 
 GITHUB_LATEST_URL = "https://api.github.com/repos/acailic/SayItErmano/releases/latest"
 RELEASES_URL = "https://github.com/acailic/SayItErmano/releases"
+FLATPAK_APP_ID = "io.github.acailic.SayItErmano"
 ONE_SHOT_INSTALLER = \
     "https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/install-one-shot.sh"
 ROUTE_GUIDE_URL = ("https://github.com/acailic/SayItErmano/blob/linux/"
@@ -160,11 +161,14 @@ def deb_checksum(release: dict | None) -> str | None:
 
 def detect_install_method(exe: Path | None = None,
                           home: Path | None = None,
-                          apt_sources_file: Path | None = None) -> dict:
+                          apt_sources_file: Path | None = None,
+                          flatpak_id: str | None = None) -> dict:
     """How was the running binary installed? Resolution order (first marker
     wins - this is the truth of *the binary that ran*, exactly what you
     want to upgrade):
 
+      flatpak    $FLATPAK_ID set - every binary inside the sandbox is
+                 the flatpak install; upgrades flow through flatpak
       apt        deb layout (below) AND the signed apt repo configured
                  (sources.list.d entry shipped by the deb) - upgrades flow
                  through plain `apt update && apt upgrade`
@@ -176,8 +180,8 @@ def detect_install_method(exe: Path | None = None,
       source     a venv whose parent has both .git and pyproject.toml
       unknown    anything else
 
-    exe/home/apt_sources_file are injectable so tests build the marker
-    trees under tmp_path instead of monkeypatching internals.
+    exe/home/apt_sources_file/flatpak_id are injectable so tests build
+    the marker trees under tmp_path instead of monkeypatching internals.
     """
     # abspath, NOT resolve(): venv `bin/python` entries are symlinks to the
     # system interpreter on Linux - following them would collapse every
@@ -187,6 +191,10 @@ def detect_install_method(exe: Path | None = None,
     home = Path(home) if home is not None else Path.home()
     apt_sources_file = (apt_sources_file if apt_sources_file is not None
                         else APT_SOURCES_FILE)
+    if flatpak_id is None:
+        flatpak_id = os.environ.get("FLATPAK_ID") or ""
+    if flatpak_id:
+        return {"method": "flatpak", "marker": flatpak_id}
     s = str(exe)
 
     deb_root = Path("/opt/sayit-ermano")
@@ -229,6 +237,12 @@ def upgrade_command(method: str, release: dict | None) -> str:
     """The exact copy-paste block for one install method (pure; golden-
     tested). The deb block falls back to the user-venv block when the
     release has no amd64 asset."""
+    if method == "flatpak":
+        # Flathub builds lag the GitHub release (submission + review
+        # queue) - say so plainly instead of promising a fresh version
+        return (f"flatpak update {FLATPAK_APP_ID}\n"
+                "# (the Flathub build appears a few days after the "
+                "release notes)")
     if method == "apt":
         # the signed repo the deb configured (packaging/apt): updates are
         # ordinary apt traffic - config (~/.config) and history

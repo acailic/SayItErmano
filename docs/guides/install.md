@@ -5,8 +5,11 @@ ordered **best-converting first** — the zero-sudo one-shot install,
 then the .deb with its signed apt update channel, then `--system`,
 pipx, the AUR, source — a ranking the fresh-VM
 [install matrix](../quality/install-matrix/README.md) keeps honest
-(issue #14). A Flatpak/Flathub route is pending (issue #12). The page
-closes with updates and the update-check switches.
+(issue #14). A Flatpak/Flathub route is pending (issue #12; the
+shipping manifest and its permission baseline live in
+[`packaging/io.github.acailic.SayItErmano.yml`](https://github.com/acailic/SayItErmano/blob/linux/packaging/io.github.acailic.SayItErmano.yml)
+and [`docs/packaging/flatpak-permissions.md`](../packaging/flatpak-permissions.md)).
+The page closes with updates and the update-check switches.
 
 ### Quick start — one-shot installer (user-space)
 

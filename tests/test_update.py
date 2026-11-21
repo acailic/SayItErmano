@@ -230,6 +230,31 @@ class TestDetectInstallMethod:
         assert info["method"] == "source"
         assert info["marker"] == str(root / "repo")
 
+    def test_flatpak_marker_wins_over_every_layout(self, tmp_path,
+                                                   monkeypatch):
+        """Inside the sandbox $FLATPAK_ID is set and every binary there
+        IS the flatpak install - even one that looks like a user venv
+        (paths collide after the /app prefix strip)."""
+        monkeypatch.setenv("FLATPAK_ID", "io.github.acailic.SayItErmano")
+        exe = self._mk(tmp_path, ".local", "share", "sayit-ermano",
+                       "venv", "bin", "python")
+        info = update.detect_install_method(exe=exe, home=tmp_path)
+        assert info == {"method": "flatpak",
+                        "marker": "io.github.acailic.SayItErmano"}
+
+    def test_flatpak_id_injectable_env_absent(self, tmp_path,
+                                              monkeypatch):
+        monkeypatch.delenv("FLATPAK_ID", raising=False)
+        exe = self._mk(tmp_path, "app", "bin", "python")
+        info = update.detect_install_method(exe=exe, home=tmp_path,
+                                            flatpak_id="io.github.acailic"
+                                                       ".SayItErmano")
+        assert info["method"] == "flatpak"
+        # and without the marker, an /app path is NOT misdetected
+        plain = update.detect_install_method(exe=exe, home=tmp_path,
+                                             flatpak_id="")
+        assert plain["method"] != "flatpak"
+
     def test_unknown_layout(self, tmp_path):
         root = tmp_path.resolve()
         exe = self._mk(root, "bare", "venv", "bin", "python")
@@ -286,6 +311,16 @@ class TestUpgradeCommand:
 
     def test_pipx_golden(self):
         assert update.upgrade_command("pipx", None) == "pipx upgrade sayit-ermano"
+
+    def test_flatpak_golden(self):
+        """The Flatpak route (#11): upgrades are flatpak's business, and
+        the Flathub lag vs the GitHub release is stated, not hidden."""
+        cmd = update.upgrade_command("flatpak", self.REL)
+        assert cmd.splitlines()[0] == (
+            f"flatpak update {update.FLATPAK_APP_ID}")
+        assert "Flathub" in cmd
+        # nothing host-side may be suggested inside the sandbox
+        assert "install-one-shot" not in cmd and "pip install" not in cmd
 
     def test_source_golden(self):
         assert update.upgrade_command("source", None) == \

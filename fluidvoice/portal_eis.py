@@ -392,10 +392,16 @@ class EISInserter:
             return ""
 
     def _save_restore_token(self, token: str) -> None:
+        # read-modify-write: portal-state.json also carries the
+        # Background-autostart ask-once key (portal_autostart.py)
+        try:
+            data = json.loads(self._state_file.read_text())
+        except Exception:  # noqa: BLE001 - state is best-effort
+            data = {}
         try:
             self._state_file.parent.mkdir(parents=True, exist_ok=True)
             self._state_file.write_text(json.dumps(
-                {"remotedesktop_restore_token": token}))
+                {**data, "remotedesktop_restore_token": token}))
         except Exception as e:  # noqa: BLE001 - state is best-effort
             self.log(f"WARN could not save the portal restore token: {e}")
 

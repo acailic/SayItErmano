@@ -52,6 +52,8 @@ dev = [
     "hypothesis>=6",      # property tests at pure boundaries (Q5)
     "mypy>=1.10",         # focused typing at the seam modules (Q12)
     "ruff>=0.4",           # lint gate: just lint / ruff check .
+    "pyyaml>=6",           # tests/test_flatpak_manifest.py parses the flatpak manifest
+    "dbus-next>=0.2.3",   # tests/test_portal_autostart.py (same pin the flatpak vendors)
 ]
 
 [project.scripts]

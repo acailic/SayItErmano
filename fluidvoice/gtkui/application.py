@@ -33,10 +33,12 @@ def run(argv: list[str] | None = None) -> int:
         def __init__(self) -> None:
             super().__init__(application_id=APP_ID,
                              flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE)
-            self._open: str = "history"
+            self._open: str | None = None
             self._onboard: bool = False
+            self._background: bool = False
             self._windows: dict[str, Adw.ApplicationWindow] = {}
             self._factories: dict[str, callable] = {}
+            self._daemon_owner = None
             # UI language before the first window builds its strings; a
             # later ui_language settings save rebuilds every open window
             from .. import i18n
@@ -49,6 +51,35 @@ def run(argv: list[str] | None = None) -> int:
             self.add_main_option(
                 "onboard", 0, GLib.OptionFlags.NONE, GLib.OptionArg.NONE,
                 "run the first-run onboarding flow", None)
+            self.add_main_option(
+                "background", 0, GLib.OptionFlags.NONE, GLib.OptionArg.NONE,
+                "start without a window (flatpak autostart: the app "
+                "process owns the daemon)", None)
+
+        def do_startup(self) -> None:  # noqa: N802
+            Adw.Application.do_startup(self)
+            # flatpak lifecycle (ADR-0006): no systemd unit inside the
+            # sandbox — the app process spawns, holds and supervises the
+            # daemon child; on the host this is a no-op and the
+            # unit/autostart daemon keeps its role.
+            from .daemon_owner import DaemonOwner
+            self._daemon_owner = DaemonOwner(
+                hold=self.hold, release=self.release,
+                child_watch=lambda pid, on_exit: GLib.child_watch_add(
+                    GLib.PRIORITY_DEFAULT, pid,
+                    lambda *_: on_exit()))
+            if self._daemon_owner.ensure():
+                import threading
+
+                from ..portal_autostart import ask_autostart_once
+                # consent can pop a dialog: never block startup on it
+                threading.Thread(target=ask_autostart_once, daemon=True,
+                                 name="fluidvoice-autostart-ask").start()
+
+        def do_shutdown(self) -> None:  # noqa: N802
+            if self._daemon_owner is not None:
+                self._daemon_owner.shutdown()
+            Adw.Application.do_shutdown(self)
 
         def do_command_line(self, cmdline):  # noqa: N802
             opts = cmdline.get_options_dict()
@@ -56,7 +87,10 @@ def run(argv: list[str] | None = None) -> int:
             if open_target is not None:
                 target = open_target.get_string()
                 self._open = target if target in ("history", "settings") else "history"
+            else:
+                self._open = None
             self._onboard = opts.lookup_value("onboard", None) is not None
+            self._background = opts.lookup_value("background", None) is not None
             self.activate()
             return 0
 
@@ -68,6 +102,8 @@ def run(argv: list[str] | None = None) -> int:
                 self.show_onboarding()
             elif self._open == "settings":
                 self.show_settings()
+            elif self._open is None and self._background:
+                pass  # autostart owner: hold without a window (daemon_owner)
             else:
                 self.show_history()
 
