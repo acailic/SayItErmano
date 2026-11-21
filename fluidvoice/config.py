@@ -889,6 +889,63 @@ _spec("ai", "profile", "", _str(64, allow_empty=True),
       "submenu writes the profile's endpoint values into [ai] and points\n"
       "here; editing the endpoint by hand clears it back to \"\".")
 
+# -- local polish (bundled llama.cpp server, #21 / ADR-0007) ------------------
+
+
+def _coerce_local_model(value: Any) -> tuple[bool, Any]:
+    """ai.local_model: a CHAT_GGUF_CATALOG key (catalogs checked at call
+    time — importing model_catalog at module import would be circular)."""
+    from . import model_catalog
+    if not isinstance(value, str):  # unhashable garbage must not raise
+        return (False, value)
+    return (value in model_catalog.CHAT_GGUF_CATALOG, value)
+
+
+def _coerce_local_idle(value: Any) -> tuple[bool, Any]:
+    """ai.local_idle_s: 0 (keep the server until the daemon exits) or
+    30..86400 s of polish idleness before the llama.cpp server is
+    stopped; bool is an int subclass - reject."""
+    ok = isinstance(value, int) and not isinstance(value, bool) \
+        and (value == 0 or 30 <= value <= 86400)
+    return (ok, value)
+_coerce_local_idle.bounds = (0, 86400)  # type: ignore[attr-defined]
+
+
+def _coerce_local_binary(value: Any) -> tuple[bool, Any]:
+    """ai.local_server_binary: "" (auto-discover llama-server) or an
+    absolute path to an llama-server executable."""
+    if not isinstance(value, str):
+        return (False, value)
+    path = value.strip()
+    if path == "":
+        return (True, "")
+    if len(path) > 4096 or not path.startswith("/"):
+        return (False, value)
+    return (True, path)
+
+
+_spec("ai", "local_polish", False, _bool(),
+      description="Local polish (works offline): route AI polish through\n"
+      "a daemon-managed llama.cpp server spawned on demand — no cloud\n"
+      "key, nothing leaves the machine. Needs the chat model downloaded\n"
+      "(Settings -> Models -> AI polish model) and an llama-server\n"
+      "binary (llama.cpp package or ai.local_server_binary). Off = zero\n"
+      "footprint: no process, no listener. Your cloud [ai] endpoint\n"
+      "stays configured but is only used while this is off.")
+_spec("ai", "local_model", "qwen3-4b-instruct-2507-q4_k_m.gguf",
+      _coerce_local_model,
+      description="GGUF chat model for local polish (the\n"
+      "CHAT_GGUF_CATALOG key; qwen3-4b-class, ~2.5 GB on disk)")
+_spec("ai", "local_idle_s", 300, _coerce_local_idle,
+      description="Stop the local-polish llama.cpp server after this\n"
+      "many idle seconds (0 = keep it until the daemon exits; range\n"
+      "30..86400 when set). The next polish call pays the model load\n"
+      "again.")
+_spec("ai", "local_server_binary", "", _coerce_local_binary,
+      empty_meaningful=True,
+      description='Explicit path to an llama-server binary ("" =\n'
+                  'auto-discover: llama-server on PATH)')
+
 # -- [insertion] -------------------------------------------------------------
 
 _spec("insertion", "mode", "typed", _enum("auto", "typed", "paste"),

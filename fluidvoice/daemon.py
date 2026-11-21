@@ -41,6 +41,7 @@ from .capture import CaptureCoordinator
 from .command_coord import CommandCoordinator
 from .config import load_config
 from .engine_manager import SpeechEngineManager
+from .local_llm import LocalPolishManager
 from .micmon import match_priority as micmon_match_priority
 from .pipeline import DictationPipeline, confidence_band, log  # noqa: F401
 from .processing import post_process
@@ -88,6 +89,14 @@ class Daemon:
             on_unload=self._refresh_tray,
             on_language_change=lambda lang: (self._capture.announce_language(lang),
                                              self._refresh_tray()))
+        # LocalPolishManager: the managed llama.cpp child for offline AI
+        # polish (#21, ADR-0007). Zero footprint until local polish is
+        # enabled AND a dictation actually needs polishing — construction
+        # spawns nothing, and apply/shutdown stop the child.
+        self._local_polish = LocalPolishManager(
+            self.cfg, self._tasks, log=log,
+            notify=lambda title, body: ui.notify(
+                title, body, enabled=self.cfg["notifications"]["enabled"]))
         # CommandCoordinator: the command-conversation state machine
         # (proposal/confirmation/timeout/panel/history, P1.2). Daemon
         # routes control actions and hotkey presses to it.
@@ -615,6 +624,9 @@ class Daemon:
     def shutdown(self) -> None:
         log("shutting down")
         self._engines.stop_idle_watch()
+        # managed llama.cpp child first: terminate + bounded wait, before
+        # the tasks join sweep below (which also reaps the idle watcher)
+        self._local_polish.shutdown()
         # under the lock: the take-state mutations race the hotkey thread's
         # toggle (N1). The race was benign - callbacks re-validate recorder
         # identity - but serializing costs nothing and matches
@@ -1023,6 +1035,10 @@ class Daemon:
             _try("lock pause", self._apply_lock_setting)
         if "model.idle_unload_s" in changed:
             _try("idle unload", self._engines.apply_idle_unload_setting)
+        if any(k.startswith("ai.local_") for k in changed):
+            # toggle off stops the child at once (zero footprint); other
+            # ai.local_* flips only affect the NEXT spawn
+            _try("local polish", self._local_polish.apply_setting_change)
         return {"applied": applied, "errors": errors}
 
     # -- control protocol ----------------------------------------------------
@@ -1338,6 +1354,11 @@ class Daemon:
                 return
             pipeline = self._pipeline_factory(self.cfg, backend)
             pipeline._profile_override = self._capture.profile_override
+            # local polish: inject the managed-server client factory only
+            # when the toggle is on, so the stock daemon.AIClient path
+            # (and its test patches) stays untouched otherwise
+            if self._local_polish.enabled():
+                pipeline._ai_factory = self._local_polish.polish_client
             # sticky runtime cycle override (unlike the profile override,
             # deliberately NOT cleared in the finally below: cycle state
             # persists until cycled away or the daemon restarts)

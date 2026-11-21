@@ -41,6 +41,10 @@ TEMPLATES: dict[str, dict] = {
                "api_key_env": ""},
     "LM Studio": {"base_url": "http://localhost:1234/v1", "model": "",
                   "api_key_env": ""},
+    # a hand-run llama-server (fixed port). The MANAGED, spawn-on-demand
+    # path is the ai.local_polish toggle — not this template.
+    "llama.cpp (own server)": {"base_url": "http://127.0.0.1:8080/v1",
+                               "model": "local-polish", "api_key_env": ""},
 }
 
 

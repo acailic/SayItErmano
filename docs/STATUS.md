@@ -73,10 +73,17 @@ All five upstream prompts; `${transcript}` placeholder; faithful request
 params (reasoning models, Responses API, think-tag stripping); works
 with any OpenAI-compatible endpoint (live-tested against Ollama);
 provider profiles — named endpoint presets (base URL / model / key env
-var) for GLM, OpenAI, Groq, OpenRouter, Ollama and LM Studio, switchable
+var) for GLM, OpenAI, Groq, OpenRouter, Ollama, LM Studio and a
+hand-run llama.cpp server, switchable
 from Settings or the tray's "AI profile" submenu without a restart; AI
 failure falls back to the raw transcript; custom base prompt + named
-presets; per-app prompt rules.
+presets; per-app prompt rules. **Local polish (#21)**: `ai.local_polish`
+routes polish through a daemon-managed llama.cpp server (loopback,
+ephemeral port, spawned on demand, idled down after use — ADR-0007)
+with the bundled qwen3-4b-class GGUF chat model from the model
+manager; works offline with no cloud key; toggle off = zero footprint.
+Quality gate: eval-harness `polish-compare`
+(docs/dev/local-polish-budgets.md has the resource budgets).
 
 ### Native GTK app (`sayit-ermano app` / `settings`)
 GTK 4 + libadwaita, macOS-parity sidebar; Settings covers every

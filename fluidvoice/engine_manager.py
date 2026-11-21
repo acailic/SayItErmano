@@ -245,6 +245,13 @@ class SpeechEngineManager:
         if t == root or not t.is_relative_to(root):
             return {"ok": False,
                     "error": "refusing to delete outside the models cache"}
+        ai = self.cfg.get("ai", {}) or {}
+        if kind == "chat" and ai.get("local_polish") and name == str(
+                ai.get("local_model")
+                or model_catalog.CHAT_MODEL_DEFAULT):
+            return {"ok": False,
+                    "error": f"{name} is in use by local polish "
+                             "(turn local polish off first)"}
         active = backends.backend_model_key(self.backend) \
             or backends.config_model_key(self.cfg)
         if name == active:

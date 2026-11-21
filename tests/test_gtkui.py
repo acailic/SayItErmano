@@ -54,7 +54,12 @@ class StubClient(Client):
     def status(self):
         return {"ok": True, "recording": False, "busy": False,
                 "backend": "faster-whisper", "cuda": True,
-                "warmup": {"running": False, "error": None, "model": None}}
+                "warmup": {"running": False, "error": None, "model": None},
+                "local_polish": {"enabled": False, "running": False,
+                                 "port": None, "model": None,
+                                 "model_downloaded": False,
+                                 "binary": None, "policy_s": 300,
+                                 "idle_s": None, "last_error": None}}
 
     def mics(self):
         # hermetic override: the inherited Client.mics() would query the

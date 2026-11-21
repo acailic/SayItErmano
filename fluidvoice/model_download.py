@@ -136,6 +136,32 @@ def download_gguf(name: str, progress: Progress | None = None,
                          kind="whisper.cpp")
 
 
+def download_chat_model(name: str, progress: Progress | None = None,
+                        cancel: threading.Event | None = None) -> Path:
+    """Fetch a CHAT_GGUF_CATALOG model into models_dir()/chat/ (the
+    local-polish GGUF, #21). Same .part discipline as every other fetch,
+    plus a sha256 verify against the pinned catalog digest: a mismatch
+    deletes the file and raises — retrying never half-writes."""
+    if name not in model_catalog.CHAT_GGUF_CATALOG:
+        raise ValueError(
+            f"unknown chat model '{name}' "
+            f"(choose from {sorted(model_catalog.CHAT_GGUF_CATALOG)})")
+    dest = model_catalog.chat_model_path(name)
+    if dest.exists():
+        return dest
+    info = model_catalog.CHAT_GGUF_CATALOG[name]
+    download_file(info["url"], dest, progress=progress, cancel=cancel,
+                  label=name, kind="chat")
+    try:
+        if info.get("sha256") and sha256_file(dest) != info["sha256"]:
+            raise OSError(f"checksum mismatch: {name} "
+                          "— deleted, retry the download")
+    except BaseException:
+        dest.unlink(missing_ok=True)
+        raise
+    return dest
+
+
 def download_file(url: str, dest: Path, progress: Progress | None = None,
                   cancel: threading.Event | None = None,
                   label: str | None = None,
@@ -377,10 +403,12 @@ def observe_downloads() -> list[DownloadProgress]:
             elapsed_s=elapsed)
     root = paths.models_dir()
     gguf_names = set(model_catalog.GGUF_CATALOG)
+    chat_names = set(model_catalog.CHAT_GGUF_CATALOG)
     parakeet_names = set(model_catalog.PARAKEET_CATALOG)
     fw_dir = root / "faster-whisper"
     scans: list[tuple[str, Path]] = [
         ("whisper.cpp", root / model_catalog.GGUF_DIR_NAME),
+        ("chat", root / model_catalog.CHAT_GGUF_DIR_NAME),
         ("parakeet", root / model_catalog.PARAKEET_DIR_NAME),
         ("faster-whisper", fw_dir),
     ]
@@ -397,6 +425,9 @@ def observe_downloads() -> list[DownloadProgress]:
             if kind == "whisper.cpp" and label in gguf_names:
                 total = _approx_bytes(
                     model_catalog.GGUF_CATALOG[label]["size"])
+            elif kind == "chat" and label in chat_names:
+                total = _approx_bytes(
+                    model_catalog.CHAT_GGUF_CATALOG[label]["size"])
             elif kind == "parakeet":
                 label = label.lstrip(".").removesuffix(".tar.bz2")
                 if label in parakeet_names:

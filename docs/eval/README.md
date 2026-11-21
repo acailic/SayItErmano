@@ -30,6 +30,10 @@ python -m fluidvoice.evalharness run --out /tmp/eval-smoke
 
 # summarize a soak CSV (scripts/soak.py) on its own
 python -m fluidvoice.evalharness soak /tmp/sayit-ermano-soak.csv
+
+# smoke-run the AI-polish comparison + regression gate (no adapters:
+# reference passthrough — proves the plumbing; NOT an evaluation)
+python -m fluidvoice.evalharness polish-compare --out /tmp/polish-smoke
 ```
 
 Every subcommand takes `--manifest PATH` (repeatable; a file or a
@@ -169,3 +173,68 @@ the harness summarizes it (`soak` subcommand) and embeds it in reports
 Soak verdicts stay human: the summary reports RSS start/end/drift/max
 and CPU-seconds-per-hour; whether +40 MB over 24 h is a leak is a
 judgment call the numbers inform, not one the script makes.
+
+## Polish quality gate (local vs cloud, #21)
+
+`polish-compare` scores what happens AFTER transcription: how each
+AI-polish variant transforms the raw transcript, against the same
+corpus references, with the same metric math as `run` (WER / CER /
+omission / hotword recall — no second definitions). It exists so the
+bundled local polish (`ai.local_polish`, the managed llama.cpp server)
+can be held to the cloud baseline before a release: **local polish
+must not degrade output vs the cloud corpus** — the regression gate
+fails (exit 1) when any polish call errors, when
+`wer_mean(local) - wer_mean(cloud) > --max-wer-degradation`
+(default 0.02), or when hotword recall drops by more than
+`--max-recall-loss` (default 0).
+
+Flow per case: obtain the RAW transcript through `--transcriber` (no
+flag = reference passthrough SMOKE mode, loudly noted — like the stub
+transcriber in `run`), then run every polish variant plus the built-in
+`raw` identity baseline. Output: `polish-report.json` +
+`polish-report.md` in `--out` (default `./eval-polish`) with
+per-variant means, deltas vs raw, per-case rows, and the gate verdict.
+
+Adapters are `module:factory` callables `(raw_text, case) -> {"text":
+str, ...}` — a ~10-line module covers each side:
+
+```python
+# polish_adapters.py — run from a checkout with the model + binaries
+from fluidvoice.config import load_config
+from fluidvoice.local_llm import LocalPolishManager
+from fluidvoice.runtime_tasks import RuntimeTasks
+
+def make_local():
+    cfg = load_config()
+    cfg["ai"]["local_polish"] = True
+    mgr = LocalPolishManager(cfg, RuntimeTasks())
+    def polish(text, case):
+        return {"text": mgr.polish_text(text)}
+    return polish
+
+def make_cloud():
+    from fluidvoice.ai.client import AIClient
+    cfg = load_config()  # your cloud [ai] endpoint + key env
+    client = AIClient(cfg)
+    def polish(text, case):
+        return {"text": client.polish(text)}
+    return polish
+```
+
+```bash
+python -m fluidvoice.evalharness polish-compare \
+    --external eval-private/manifest.toml \
+    --transcriber my_adapter:make_transcriber \
+    --local polish_adapters:make_local \
+    --cloud polish_adapters:make_cloud \
+    --out eval-polish-$(date +%F)
+```
+
+Release policy: **before any change to the local-polish defaults**
+(model choice, server flags, prompts routed through the local path),
+run the comparison over a corpus with real speech for your languages
+and keep `polish-report.*` next to the release notes — same discipline
+as the STT gate above. Offline E2E note: with the network disconnected,
+the `local` variant must still score (that is the feature's promise);
+the `cloud` variant's numbers can come from an earlier online run of
+the same corpus/adapter pair.
