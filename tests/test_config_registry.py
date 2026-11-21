@@ -94,6 +94,7 @@ _EMPTY_DEFAULT_NOT_SOCKET_VALID = {
     ("hotkey", "paste_key"), ("hotkey", "language_key"),
     ("hotkey", "wayland_evdev_device"), ("model", "whispercpp_model"),
     ("ai", "model"), ("command", "working_dir"),
+    ("hotkey", "wayland_portal_trigger"),
 }
 
 

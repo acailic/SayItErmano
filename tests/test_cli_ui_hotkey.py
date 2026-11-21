@@ -165,6 +165,21 @@ class TestCliToggleNoDaemon:
         assert cli.main(["toggle"]) == 1
         assert "daemon not running" in capsys.readouterr().err
 
+    def test_flag_forms_map_to_the_control_round_trip(self, monkeypatch,
+                                                      capsys):
+        """ADR-0006 cross-DE fallback: `sayit-ermano --toggle/--cancel/
+        --status` are the bindable forms (same control-socket round-trip
+        as the subcommands)."""
+        monkeypatch.setattr(paths, "socket_path",
+                            lambda: Path("/nonexistent/fluidvoice.sock"))
+        for flag in ("--toggle", "--cancel", "--status"):
+            assert cli.main([flag]) == 1
+            assert "daemon not running" in capsys.readouterr().err
+
+    def test_no_flag_no_subcommand_is_help(self, capsys):
+        assert cli.main([]) == 0
+        assert "usage" in capsys.readouterr().out.lower()
+
 
 class TestHotkeyListenerConstruction:
     def test_cancel_key_wiring(self):

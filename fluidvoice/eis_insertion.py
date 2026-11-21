@@ -118,11 +118,19 @@ async def _probe_once() -> EisProbe:
     except Exception as e:  # noqa: BLE001 - probe verdict, not a crash
         return EisProbe(False, detail=f"session bus unreachable: {e}")
     try:
+        # one bus, two questions: the interface version, then whether
+        # ConnectToEIS is on the LIVE interface (introspection - the
+        # honest runtime probe; no version tables to drift)
         version_reply = await _call(bus, Message(
             destination=PORTAL_BUS_NAME, path=PORTAL_OBJECT_PATH,
             interface="org.freedesktop.DBus.Properties", member="Get",
             signature="ss", body=[REMOTE_DESKTOP_IFACE, "version"]))
         version = int(version_reply.body[0].value)
+        intro = await _call(bus, Message(
+            destination=PORTAL_BUS_NAME, path=PORTAL_OBJECT_PATH,
+            interface="org.freedesktop.DBus.Introspectable",
+            member="Introspect"))
+        has = "ConnectToEIS" in (intro.body[0] if intro.body else "")
     except EisUnavailable as e:
         return EisProbe(False, detail=f"portal not answering: {e}")
     finally:
@@ -130,29 +138,6 @@ async def _probe_once() -> EisProbe:
             await bus.disconnect()
         except Exception:  # noqa: S110 — best-effort path; caller must proceed
             pass  # probe bus: nothing rides on a clean goodbye
-    # ConnectToEIS presence from live introspection - the honest runtime
-    # protocol probe (no version tables to drift): the member either is
-    # or is not on the interface this portal exports right now.
-    try:
-        bus2 = await asyncio.wait_for(
-            MessageBus().connect(), PROBE_TIMEOUT_S)
-    except Exception as e:  # noqa: BLE001 - probe verdict, not a crash
-        return EisProbe(False, version=version, has_connect_to_eis=None,
-                        detail=f"session bus unreachable for introspect: {e}")
-    try:
-        intro = await _call(bus2, Message(
-            destination=PORTAL_BUS_NAME, path=PORTAL_OBJECT_PATH,
-            interface="org.freedesktop.DBus.Introspectable",
-            member="Introspect"))
-        has = "ConnectToEIS" in (intro.body[0] if intro.body else "")
-    except EisUnavailable as e:
-        return EisProbe(False, version=version, has_connect_to_eis=None,
-                        detail=f"introspection failed: {e}")
-    finally:
-        try:
-            await bus2.disconnect()
-        except Exception:  # noqa: S110 — best-effort path; caller must proceed
-            pass
     if not has:
         return EisProbe(False, version=version, has_connect_to_eis=False,
                         detail="portal has no ConnectToEIS (wlroots "

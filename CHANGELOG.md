@@ -13,6 +13,22 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **Portal input stack for the Flatpak sandbox (ADR-0006, #10)** — the
+  two mechanisms the sandbox was assumed to break now have sanctioned
+  implementations. **Hotkey**: the GlobalShortcuts portal (GNOME 48+,
+  Plasma 5.27+, Hyprland) via the pure-Python `global-shortcut-portal`
+  bindings; Activated/Deactivated edges drive native hold push-to-talk,
+  BindShortcuts is re-sent on every portal session (the KDE-restart
+  workaround), and the configured trigger is a preference the desktop
+  may override (`hotkey.wayland_portal` = auto/on/off). **Insertion**:
+  a RemoteDesktop portal + libei/EIS keyboard (CreateSession →
+  ConnectToEIS → SelectDevices → Start) with a runtime ConnectToEIS
+  probe; out-of-layout Unicode falls back to clipboard + EIS-sent
+  Ctrl+V. wtype selection is now gated on a live
+  zwp_virtual_keyboard_manager_v1 registry probe instead of desktop
+  name sniffing, and `sayit-ermano --toggle/--cancel/--status` flags
+  give every DE a bindable cross-desktop fallback. dbus-next and
+  global-shortcut-portal ship as vendored wheels in the Flatpak build.
 - **Update channel for non-Flatpak installs (#22)** — installing the
   official .deb now configures a **signed apt repository** (served from
   this repo's GitHub Pages, published by `release-publish` via reprepro;

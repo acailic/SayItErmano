@@ -123,13 +123,15 @@ def resolve_wayland_tool(preference: str = "auto", desktop: str = "",
     unprobed_gnome = virtual_keyboard is None and is_gnome_desktop(desktop)
     notes: list[str] = []
     for tool in candidates:
-        if tool == "wtype":
+        if tool == "wtype" and pref != "wtype":
+            # an EXPLICIT wtype choice always overrides (the user may
+            # know better than the probe); auto is probe-gated
             if virtual_keyboard is False:
                 notes.append("wtype skipped: compositor does not "
                              "advertise zwp_virtual_keyboard_manager_v1 "
                              "(runtime probe)")
                 continue
-            if unprobed_gnome and pref != "wtype":
+            if unprobed_gnome:
                 # no probe ran (pure call): keep the documented guess
                 notes.append("wtype skipped: GNOME has no virtual-keyboard "
                              "protocol")

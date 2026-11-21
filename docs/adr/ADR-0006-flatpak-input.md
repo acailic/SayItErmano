@@ -1,7 +1,10 @@
 # ADR-0006: Flatpak input architecture — GlobalShortcuts portal for the hotkey, RemoteDesktop/EIS for insertion
 
 Date: 2026-11-21
-Status: Proposed (spike evidence pending; see #10)
+Status: Accepted — the implementation landed on 2026-11-21 (#10:
+GlobalShortcuts portal hotkey, RemoteDesktop/EIS insertion, zwp runtime
+probe, `--toggle/--cancel` flags); live-session verification per
+compositor is tracked in the matrix ticket (#13)
 
 ## Context
 

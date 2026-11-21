@@ -56,6 +56,8 @@ drift: `python scripts/gen_config_reference.py` regenerates it.
 | `language_key` | `""` |  | Optional keysym that cycles the runtime language override through general.language_cycle (the cycle state itself is never persisted) |
 | `extra_shortcuts` | `[]` |  | Up to 2 EXTRA dictation shortcuts (3 total with the primary), each optionally bound to a named prompt profile (ai/profiles), e.g. extra_shortcuts = [{key = "F8", profile = "Terse notes"}] |
 | `wayland_evdev` | `false` |  | Wayland (no global grabs): optional physical push-to-talk read straight from /dev/input (PRIVILEGED: needs the input group and python-evdev). Off by default; the DE-shortcut assist is the primary wayland hotkey. |
+| `wayland_portal` | `"auto"` |  | GlobalShortcuts portal hotkey (ADR-0006): the sanctioned Wayland trigger on GNOME 48+/Plasma 5.27+/Hyprland. auto = try the portal, fall back to a DE custom shortcut (bind `sayit-ermano --toggle`); on = portal only (its failure WARNs); off = DE-shortcut/evdev paths only. sway and COSMIC have no portal backend - auto lands on the fallback there. |
+| `wayland_portal_trigger` | `""` |  | Preferred trigger SENT to the portal at bind time, e.g. "ctrl+alt+space" (XDG shortcuts-spec token format). Never required: the desktop decides and remembers the actual key per app id; empty = no preference. |
 | `wayland_evdev_device` | `""` |  | Device-name substring matching /dev/input devices, e.g. "Keyboard" |
 | `wayland_evdev_key` | `"KEY_RIGHTCTRL"` |  | ecodes KEY_* name held for evdev push-to-talk |
 
@@ -151,7 +153,7 @@ drift: `python scripts/gen_config_reference.py` regenerates it.
 | `terminal_autocomplete_space` | `true` |  | One trailing space after typed insertions in terminal apps (general.terminal_apps) so the shell's autocomplete commits the last token |
 | `verify_paste` | `true` |  | Verify the paste landed (selection read by the target) before restoring the clipboard; false = legacy fixed-delay restore |
 | `terminal_paste_key` | `"ctrl+shift+v"` |  | Keystroke used to paste in terminal apps (general.terminal_apps); X11 terminals pass ctrl+v through to the app, they need ctrl+shift+v |
-| `wayland_tool` | `"auto"` |  | Wayland typing tool: auto \| wtype \| ydotool (wtype needs wlroots/KDE; ydotool works everywhere but needs ydotoold + /dev/uinput access). Ignored on X11 sessions. |
+| `wayland_tool` | `"auto"` |  | Wayland typing backend: auto (RemoteDesktop/EIS portal first where the runtime probe passes, then wtype where the compositor advertises zwp_virtual_keyboard_manager_v1 - runtime probes decide, never the desktop name -, then ydotool) \| eis \| wtype (wlroots/KDE) \| ydotool (needs ydotoold + /dev/uinput access). Ignored on X11 sessions. |
 
 ### `[context]`
 

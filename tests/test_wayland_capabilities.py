@@ -187,6 +187,73 @@ class TestResolveWaylandTool:
         assert "wtype not found" in reason and "ydotool not found" in reason
 
 
+class TestProbeGatedToolResolution:
+    """ADR-0006: the zwp registry probe decides wtype eligibility, never
+    the desktop name (a probe True on GNOME un-skips wtype; a probe
+    False on sway skips it)."""
+
+    def test_probe_true_on_gnome_allows_wtype(self):
+        tool, reason = session_mod.resolve_wayland_tool(
+            "auto", "gnome", which=which_from({"wtype", "ydotool"}),
+            virtual_keyboard=True)
+        assert tool == "wtype" and reason == ""  # the name guess lost
+
+    def test_probe_false_on_sway_skips_wtype(self):
+        tool, reason = session_mod.resolve_wayland_tool(
+            "auto", "sway", which=which_from({"wtype", "ydotool"}),
+            virtual_keyboard=False)
+        assert tool == "ydotool"
+        assert "runtime probe" in reason
+
+    def test_probe_false_without_ydotool_is_none(self):
+        tool, reason = session_mod.resolve_wayland_tool(
+            "auto", "sway", which=which_from({"wtype"}),
+            virtual_keyboard=False)
+        assert tool is None
+        assert "runtime probe" in reason
+
+    def test_explicit_wtype_with_failed_probe_warns(self):
+        tool, reason = session_mod.resolve_wayland_tool(
+            "wtype", "sway", which=which_from({"wtype", "ydotool"}),
+            virtual_keyboard=False)
+        assert tool == "wtype"  # explicit override still honored
+        assert "does NOT work here" in reason
+
+
+class TestCapabilitiesPortalRows:
+    def test_eis_and_portal_rows(self):
+        info = session_mod.probe(dict(WL_ENV, XDG_CURRENT_DESKTOP="GNOME"))
+        caps = session_mod.capabilities(
+            info, which=which_from(set()), cfg={},
+            eis_available=True, portal_hotkey=True)
+        assert caps["insertion"] == "eis"       # no external tool needed
+        assert caps["hotkey"] == "portal-shortcut"
+
+    def test_eis_loses_to_explicit_external_preference(self):
+        info = session_mod.probe(WL_ENV)
+        caps = session_mod.capabilities(
+            info, which=which_from({"wtype"}), cfg={
+                "insertion": {"wayland_tool": "wtype"}},
+            eis_available=True, virtual_keyboard=True)
+        assert caps["insertion"] == "wtype"
+
+    def test_probe_false_keeps_external_ladder(self):
+        info = session_mod.probe(WL_ENV)
+        caps = session_mod.capabilities(
+            info, which=which_from({"wtype", "wl-copy", "wl-paste"}),
+            cfg={}, eis_available=False, virtual_keyboard=True)
+        assert caps["insertion"] == "wtype"
+        assert caps["hotkey"] == "de-shortcut"  # no portal verdict
+
+    def test_unprobed_defaults_are_the_old_matrix(self):
+        # back-compat: callers that pass no verdicts keep the old truth
+        info = session_mod.probe(dict(WL_ENV, XDG_CURRENT_DESKTOP="sway"))
+        caps = session_mod.capabilities(
+            info, which=which_from({"wtype", "wl-copy", "wl-paste"}))
+        assert caps["insertion"] == "wtype"
+        assert caps["hotkey"] == "de-shortcut"
+
+
 # ---------------------------------------------------------------------------
 # Phase 1 — the bindable toggle script
 # ---------------------------------------------------------------------------
@@ -369,6 +436,23 @@ class TestDoctorMatrix:
         joined = "\n".join(doctor._session_matrix_lines({}))
         assert "insertion: xdotool" in joined
         assert "overlay: x11-pill" in joined
+
+    def test_wayland_matrix_carries_the_portal_probes(self, monkeypatch):
+        from fluidvoice import doctor
+        from fluidvoice.eis_insertion import EisProbe
+        set_session(monkeypatch, WL_ENV)
+        monkeypatch.setattr(doctor.session_mod.shutil, "which",
+                            which_from({"ydotool", "wl-copy", "wl-paste"}))
+        monkeypatch.setattr(
+            "fluidvoice.eis_insertion.probe",
+            lambda refresh=False: EisProbe(
+                False, detail="no session bus configured"))
+        monkeypatch.setattr("fluidvoice.wayland_probe.probe_virtual_keyboard",
+                            lambda *a, **k: False)
+        joined = "\n".join(doctor._session_matrix_lines({}))
+        assert "remote desktop/EIS: unavailable" in joined
+        assert "zwp virtual keyboard: not advertised" in joined
+        assert "runtime probe" in joined
 
     def test_run_exit_code_honesty(self, monkeypatch, capsys):
         # insertion unavailable on wayland -> non-zero; resolving it -> 0
@@ -1178,6 +1262,8 @@ class TestWaylandConfigRoundtrip:
         assert DEFAULTS["hotkey"]["wayland_evdev_device"] == ""
         assert DEFAULTS["hotkey"]["wayland_evdev_key"] == "KEY_RIGHTCTRL"
         assert DEFAULTS["insertion"]["wayland_tool"] == "auto"
+        assert DEFAULTS["hotkey"]["wayland_portal"] == "auto"
+        assert DEFAULTS["hotkey"]["wayland_portal_trigger"] == ""
 
     def test_apply_and_save(self, tmp_path, monkeypatch):
         import copy
@@ -1190,15 +1276,19 @@ class TestWaylandConfigRoundtrip:
         changed, rejected = apply_settings(
             cfg, {"hotkey": {"wayland_evdev": True,
                              "wayland_evdev_device": "AT Translated",
-                             "wayland_evdev_key": "KEY_F9"},
-                  "insertion": {"wayland_tool": "ydotool"}})
-        assert rejected == [] and len(changed) == 4
+                             "wayland_evdev_key": "KEY_F9",
+                             "wayland_portal": "on",
+                             "wayland_portal_trigger": "ctrl+alt+d"},
+                  "insertion": {"wayland_tool": "eis"}})
+        assert rejected == [] and len(changed) == 6
         save_config(cfg)
         on_disk = load_config(target)
         assert on_disk["hotkey"]["wayland_evdev_device"] == "AT Translated"
         assert on_disk["hotkey"]["wayland_evdev_key"] == "KEY_F9"
         assert on_disk["hotkey"]["wayland_evdev"] is True
-        assert on_disk["insertion"]["wayland_tool"] == "ydotool"
+        assert on_disk["hotkey"]["wayland_portal"] == "on"
+        assert on_disk["hotkey"]["wayland_portal_trigger"] == "ctrl+alt+d"
+        assert on_disk["insertion"]["wayland_tool"] == "eis"
 
     def test_bad_values_rejected(self):
         import copy
@@ -1207,16 +1297,21 @@ class TestWaylandConfigRoundtrip:
         cfg = copy.deepcopy(DEFAULTS)
         _, rejected = apply_settings(
             cfg, {"hotkey": {"wayland_evdev": "yes",
-                             "wayland_evdev_key": "x" * 100},
+                             "wayland_evdev_key": "x" * 100,
+                             "wayland_portal": "maybe",
+                             "wayland_portal_trigger": "x" * 100},
                   "insertion": {"wayland_tool": "xdotool"}})
         assert set(rejected) == {"hotkey.wayland_evdev",
                                  "hotkey.wayland_evdev_key",
+                                 "hotkey.wayland_portal",
+                                 "hotkey.wayland_portal_trigger",
                                  "insertion.wayland_tool"}
 
     def test_template_documents_the_keys(self):
         from fluidvoice.config import TEMPLATE
         for key in ("wayland_evdev", "wayland_evdev_device",
-                    "wayland_evdev_key", "wayland_tool"):
+                    "wayland_evdev_key", "wayland_tool",
+                    "wayland_portal", "wayland_portal_trigger"):
             assert key in TEMPLATE
 
 

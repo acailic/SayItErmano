@@ -8,9 +8,7 @@ import time
 import pytest
 
 from fluidvoice import eis as eis_mod
-from fluidvoice import eis_insertion
-from fluidvoice import insertion
-from fluidvoice import wayland_probe
+from fluidvoice import eis_insertion, insertion, wayland_probe
 from fluidvoice.config import DEFAULTS
 
 # captured at import (test fixtures shrink the live-loop deadline)
@@ -861,8 +859,9 @@ class TestEisConnection:
     def test_close_sends_polite_disconnect(self):
         server, conn = self._connect()
         conn.close()
-        msgs = server.client_messages()
-        assert any(o == server.CONN and op == 1 for o, op, a in msgs)
+        _wait_for(lambda: any(
+            o == server.CONN and op == 1 for o, op, a
+            in server.client_messages()))
 
 
 class FakeTransport:
