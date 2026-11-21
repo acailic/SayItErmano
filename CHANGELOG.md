@@ -13,6 +13,27 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **Paddle checkout live on the landing page (#17)** — the reserve
+  funnel converts to buy: the pricing CTA opens the Paddle.js overlay
+  checkout (merchant of record — payment, VAT invoice, 14-day refund),
+  with every store link tagged per the measurement plan
+  (`utm_source=landing&utm_medium=cta&utm_campaign=store`, #18). All
+  Paddle constants live in one file,
+  [site/assets/js/paddle-config.js](site/assets/js/paddle-config.js):
+  shipped in sandbox mode — the go-live flip is that file alone
+  (client token, price id, hosted payment link, `mode: "live"`).
+  Paddle.js loads only after a buy click, so the site's "no tracking,
+  no cookies" stays true; until constants are filled, the button
+  degrades to the reserve link. The pricing section gains the verified
+  comparison table (Voicy / MacWhisper / Vibe Typer / Wispr Flow,
+  numbers as verified 2026-11-21 in
+  [docs/PRICING.md](docs/PRICING.md)). New runbooks:
+  [docs/dev/paddle-refunds.md](docs/dev/paddle-refunds.md) (refund
+  path via the Paddle dashboard, linked from the site refund page) and
+  [docs/dev/purchase-email.md](docs/dev/purchase-email.md) (the
+  first-purchase email copy). Static link gate for the site:
+  `tests/test_site_links.py`.
+
 - **Bundled local AI polish (#21)** — polished output with zero setup
   and zero cloud key, closing the "no bundled local LLM yet" parity
   gap end to end. One toggle: **Settings → AI → "Local polish (works

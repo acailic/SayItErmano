@@ -30,6 +30,13 @@ claim without support.
 | A release contains what CI tested | unit: `test_release_verify.py` (manifest→bytes→source→lock→evidence chain, all rejection cases) | per-release: prepare manifest + summary sha256; publish verifies and records `evidence` input |
 | Every install route works on a fresh VM (paid-launch gate) | unit: `test_qa_matrix.py` (route probes, skip reasons, evidence files, generated summary) | [install matrix](install-matrix/README.md) — cells PENDING the owner's fresh-VM runs (issue #14) |
 
+## Monetization
+
+| Requirement | Automated proof | Dated evidence |
+|---|---|---|
+| Purchase → offline key, forged/replayed webhooks rejected (#16) | unit: `test_license.py` (RFC 8032 vectors both directions), `test_license_webhook.py` (signature, tolerance, idempotent issuance, round trip) | custody + support runbook: [dev/license-ops.md](../dev/license-ops.md) |
+| Landing site sells: buy CTA wired, store links tagged, no dead links (#17) | unit: `test_site_links.py` (CTA + price + UTM rule, legal/local/blob link gate, subpath rule, css urls) | sandbox→live test purchase, one refund via Paddle and Payoneer payout setup: **owner actions pending** — runbooks: [dev/paddle-refunds.md](../dev/paddle-refunds.md), [dev/purchase-email.md](../dev/purchase-email.md) |
+
 ## Speech quality
 
 | Requirement | Automated proof | Dated evidence |
