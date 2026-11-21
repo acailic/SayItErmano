@@ -24,6 +24,13 @@ class AboutPageMixin:
         # same daemon status poll as the backend/GPU rows
         self.about_update_row = Adw.ActionRow(title="Update", subtitle="—")
         grp.add(self.about_update_row)
+        # offline license entitlement (ADR-0005): display-only, never gates
+        # anything; refreshed by the same status poll so a CLI import while
+        # the app is open shows up without a restart
+        from ... import license as license_mod
+        self.about_license_row = Adw.ActionRow(
+            title="License", subtitle=license_mod.status_text(license_mod.status()))
+        grp.add(self.about_license_row)
         for title, value in (
             ("Config file", str(paths.config_file())),
             ("Control socket", str(paths.socket_path())),
@@ -37,6 +44,12 @@ class AboutPageMixin:
         grp.add(about_btn_row)
         page.add(grp)
         self._add_page(page, section="more")
+
+    def refresh_license_row(self) -> None:
+        """Re-read the stored key into the About → License subtitle."""
+        from ... import license as license_mod
+        self.about_license_row.set_subtitle(
+            license_mod.status_text(license_mod.status()))
 
     def _show_about_dialog(self, *_args) -> None:
         dlg = Adw.AboutDialog(
