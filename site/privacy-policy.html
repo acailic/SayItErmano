@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy policy — SayItErmano</title>
+  <meta name="robots" content="noindex">
+  <link rel="stylesheet" href="assets/css/site.css">
+  <link rel="icon" href="assets/img/favicon-32.png">
+</head>
+<body>
+  <main class="section" style="max-width:760px;margin:0 auto;padding:4rem 1.25rem;">
+    <p class="eyebrow">legal</p>
+    <h1 style="font-size:2rem;margin-bottom:0.5rem;">Privacy policy</h1>
+    <p style="opacity:0.7;margin-bottom:2.5rem;">Last updated: 2026-11-21 · Seller: acailic (individual), Serbia</p>
+
+    <h2>The short version</h2>
+    <p>SayItErmano is a local application. Your recordings and transcripts never leave your
+    computer. We do not collect, transmit, or sell your speech data, because no channel
+    for it exists in the software.</p>
+
+    <h2>What the application does</h2>
+    <p>Speech-to-text runs entirely on your machine (Whisper models on your GPU or CPU).
+    Transcripts and optional audio recordings are stored in
+    <code>~/.local/state/sayit-ermano/</code> (audio retention is configurable, including
+    automatic deletion after N days). Every network connection the application can make is
+    documented and independently verifiable in the
+    <a href="https://github.com/acailic/SayItErmano/blob/linux/docs/research/2026-11-21-network-egress-audit.md">network
+    egress audit</a>:</p>
+    <ul>
+      <li>Model download from Hugging Face — only until the model is cached locally</li>
+      <li>Update check against GitHub releases — can be disabled
+      (<code>[updates] check = false</code>)</li>
+      <li>AI text polish — <strong>only</strong> if you explicitly configure an endpoint</li>
+      <li>Optional remote speech-to-text — only if you explicitly configure a server</li>
+    </ul>
+    <p>No telemetry, analytics, crash reporting, or account system exists in the
+    application.</p>
+
+    <h2>What the website and store collect</h2>
+    <p>This landing page is static and sets no cookies or trackers. Purchases are processed
+    by <a href="https://paddle.com" rel="noopener">Paddle.com</a> as merchant of record —
+    payment details, VAT handling, and receipts are governed by the
+    <a href="https://www.paddle.com/legal/privacy" rel="noopener">Paddle privacy policy</a>.
+    We receive from Paddle only what is needed to deliver the product and support:
+    your email address, purchase date, and country.</p>
+
+    <h2>License keys</h2>
+    <p>A supporter license key contains your email address and the purchase date, signed
+    with Ed25519. It is verified offline, entirely on your machine. We keep a private
+    record of issued keys (email + purchase date) for support and refund purposes, and
+    delete it on request.</p>
+
+    <h2>Contact</h2>
+    <p>Privacy questions: open an issue at
+    <a href="https://github.com/acailic/SayItErmano/issues">github.com/acailic/SayItErmano/issues</a>.</p>
+  </main>
+</body>
+</html>
