@@ -75,6 +75,14 @@ inside the per-app home and survive restarts. `flatpak uninstall
 - Vendored as sha256-pinned wheels (build sandbox has no network):
   `python-xlib`, `pillow` (runtime), `dbus-next`,
   `global-shortcut-portal` (portal input, ADR-0006).
+  Licensing of the vendored set: python-xlib GPL-2.0+, Pillow
+  HPND-CMU-MIT-style, dbus-next MIT,
+  `global-shortcut-portal` **AGPL-3.0-only** — combined with this
+  GPL-3.0-or-later program per the FSF's one-way GPLv3↔AGPLv3
+  compatibility guidance (section 13 is inert for a desktop app: no
+  network users). The Flathub submission must declare GPL-3.0-or-later
+  (metainfo matches pyproject), which the one-way compatibility
+  permits.
 - **Not vendored in this slice** — the speech engines: the
   `faster-whisper` wheel chain (ctranslate2/onnxruntime/av binaries)
   and a `whisper.cpp` Vulkan build. The GPU decision (ADR-0006) is

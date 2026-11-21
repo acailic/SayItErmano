@@ -81,13 +81,11 @@ modules:
         branch: linux
 
   # Pure-Python runtime dependencies as vendored wheels (the build
-  # sandbox has no network). Licenses: python-xlib GPL-2.0+, Pillow
-  # HPND, dbus-next MIT, global-shortcut-portal AGPL-3.0-only — the
-  # GPL-3.0-or-later combination is covered in the deb packaging notes
-  # and docs/packaging/flatpak-permissions.md. The speech engines
-  # (faster-whisper chain / whisper.cpp Vulkan) are deliberately NOT
-  # vendored in this slice — see the permissions doc's engine-scope
-  # section.
+  # sandbox has no network). Licenses incl. the AGPL-3.0-only
+  # global-shortcut-portal combination note: see the engine-scope
+  # section of docs/packaging/flatpak-permissions.md. The speech
+  # engines (faster-whisper chain / whisper.cpp Vulkan) are
+  # deliberately NOT vendored in this slice — same section.
   - name: deps
     buildsystem: simple
     build-commands:
