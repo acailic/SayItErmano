@@ -25,6 +25,18 @@ not reproduced here.
   Settings → About shows the state, and no key ever gates dictation.
   Owner runbook: `docs/dev/license-ops.md` (incl. the sandbox
   acceptance test and the Polar runner-up wiring).
+- **Fresh-VM install QA gate (#14)** — `scripts/qa_matrix.py`: a
+  harness that walks every install route (one-shot user-space, one-shot
+  `--system`, .deb, AUR, pipx, Flatpak) down the paying-user funnel
+  (install → onboarding → dictation → update) wherever the current
+  machine offers the route, and records every skip with its reason
+  (wrong distro, no root, headless, tool missing). It writes one
+  evidence file per route per distro under
+  `docs/quality/install-matrix/` plus a generated summary table; the
+  owner runs `check --execute` on the fresh Ubuntu 24.04 / Fedora /
+  Arch VMs (GPU and CPU) to fill it. The install guide's route order
+  is now explicitly best-converting first (user-space one-shot → .deb
+  + apt repo → `--system` → pipx → AUR → source), owned by this gate.
 - **Update channel for non-Flatpak installs (#22)** — installing the
   official .deb now configures a **signed apt repository** (served from
   this repo's GitHub Pages, published by `release-publish` via reprepro;
