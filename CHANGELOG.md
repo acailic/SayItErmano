@@ -13,6 +13,19 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **Live Wayland smoke harness (#13)** — `scripts/wayland_smoke.py`
+  makes the REQUIRED-BEFORE-PARITY Wayland/X11 smoke matrix a one-
+  command run per session: it detects the session from the environment
+  (same probe the daemon uses), runs every row of the runbook a
+  machine can check alone (tool presence, `doctor`'s session matrix,
+  the GlobalShortcuts portal version, GNOME 48 / Plasma 6.7.4
+  minimums), prints the voice/compositor rows as a dated manual
+  checklist, and writes JSON + markdown evidence under
+  `docs/quality/wayland/<date>-<session>/` (committed by the owner;
+  exit code 1 on any red row, same-day reruns merge). The runbook
+  gained the pinned session × hotkey × insertion axes table with the
+  exact invoke line per row; offline proof is
+  `tests/test_wayland_smoke.py` (fake sessions, no display needed).
 - **Fresh-VM install QA gate (#14)** — `scripts/qa_matrix.py`: a
   harness that walks every install route (one-shot user-space, one-shot
   `--system`, .deb, AUR, pipx, Flatpak) down the paying-user funnel
