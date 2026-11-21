@@ -25,5 +25,5 @@ window.SAYIT_STORE = {
   clientToken: "", // sandbox client-side token goes in first
   priceId: "", // sandbox price id goes in first
   productId: "", // sandbox product id goes in first
-  fallbackUrl: "https://github.com/acailic/SayItErmano/discussions/35",
+  fallbackUrl: "https://github.com/acailic/SayItErmano/discussions/35?utm_source=landing&utm_medium=cta&utm_campaign=store",
 };

@@ -59,6 +59,14 @@ buy-CTA tags, store config sanity).
    URL (keep the utm tags). The webhook's product map gains the live
    product id.
 3. When the intro cohort closes: update the price card copy in
-   `index.html` ($39 intro → $49) and the Paddle price; the
-   comparison table and every other number stay sourced from
-   `docs/PRICING.md`.
+    `index.html` ($39 intro → $49) and the Paddle price; the
+    comparison table and every other number stay sourced from
+    `docs/PRICING.md`.
+4. When the Flathub listing goes live (#12): wrap the badge `<img>` in
+   the free price card in a link to
+   `https://flathub.org/apps/io.github.acailic.SayItErmano` (the app id
+   is fixed by `packaging/io.github.acailic.SayItErmano.yml`), drop the
+   "in review" note, and flip the pinned test in
+   `tests/test_site_links.py` (`test_flathub_badge`). Until then the
+   badge ships unlinked on purpose — this page never links to a page
+   that does not exist.
