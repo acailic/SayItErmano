@@ -857,9 +857,8 @@ class Daemon:
         stays persisted for the next start)."""
         try:
             from . import insertion
-            inserter = insertion.eis_inserter()
-            if inserter is not None:
-                inserter.stop()
+            if insertion._eis_inserter is not None:
+                insertion._eis_inserter.stop()
         except Exception as e:  # noqa: BLE001 - teardown must not raise
             log(f"WARN stopping EIS insertion failed: {e}")
 
