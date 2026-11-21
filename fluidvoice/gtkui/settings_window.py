@@ -80,6 +80,8 @@ class SettingsWindow(
         self._gguf_dl: dict[str, dict] = {}  # name -> {bytes, total, done, error}
         self._parakeet_rows: list[Adw.ActionRow] = []
         self._parakeet_dl: dict[str, dict] = {}
+        self._chat_rows: list[Adw.ActionRow] = []
+        self._chat_dl: dict[str, dict] = {}
         self._mod_toggles: dict[str, Gtk.ToggleButton] = {}
         self._profiles: dict[str, str] = {}  # prompt profiles (sidecar file)
         self._model_lang_rows: dict[str, Adw.ComboRow] = {}  # name -> row
@@ -391,6 +393,12 @@ class SettingsWindow(
         self._idle_unload_row.set_value(
             0 if idle_s <= 0 else max(1, round(idle_s / 60))
         )
+        # local polish idle stop: same seconds -> minutes conversion
+        li_s = int(self.cfg.get("ai", {}).get("local_idle_stop_s", 180) or 0)
+        self._local_idle_row.set_value(
+            0 if li_s <= 0 else max(1, round(li_s / 60))
+        )
+        self._local_ai_update_status_row()
         for mod, tb in self._mod_toggles.items():
             tb.set_active(mod in (self.cfg.get("hotkey", {}).get("modifiers") or []))
         self._load_rules(self.cfg.get("ai", {}).get("per_app_prompts") or [])
@@ -468,6 +476,10 @@ class SettingsWindow(
         # idle unload: UI whole minutes -> config seconds (0 = off)
         body.setdefault("model", {})["idle_unload_s"] = (
             int(self._idle_unload_row.get_value()) * 60
+        )
+        # local polish idle stop: same minutes -> seconds conversion
+        body.setdefault("ai", {})["local_idle_stop_s"] = (
+            int(self._local_idle_row.get_value()) * 60
         )
         return body
 

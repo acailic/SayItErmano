@@ -48,6 +48,87 @@ GGUF_CATALOG: dict[str, dict[str, str]] = {
 GGUF_DIR_NAME = "whisper.cpp"
 
 
+# Local AI polish (works offline): a small GGUF chat model run by a
+# bundled llama.cpp server. One entry today — the qwen3-4b-class default
+# (issue #21) — keyed by catalog id, stored under models_dir()/llama.cpp/.
+# sha256 comes from the HuggingFace LFS oid (unsloth mirror: the official
+# Qwen GGUF repo is gated).
+CHAT_DIR_NAME = "llama.cpp"
+CHAT_CATALOG: dict[str, dict] = {
+    "qwen3-4b-instruct-2507-q4_k_m": {
+        "size": "~2.5 GB",
+        "note": "Qwen3 4B Instruct 2507 Q4_K_M — local polish, CPU-friendly",
+        "url": "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF"
+               "/resolve/main/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+        "sha256": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c"
+                  "6533bc4c67e597",
+        "file": "qwen3-4b-instruct-2507-q4_k_m.gguf",
+        "ctx": 8192,
+    },
+}
+CHAT_DEFAULT_MODEL = "qwen3-4b-instruct-2507-q4_k_m"
+
+# The llama.cpp runtime (llama-server + its bundled libs), pinned to one
+# release and verified against the official GitHub asset digests. CPU
+# builds (ubuntu) — a GPU llama-server is point-to-point replaceable via
+# ai.base_url; the bundle stays small and deterministic.
+LLAMA_CPP_RELEASE_BASE = (
+    "https://github.com/ggml-org/llama.cpp/releases/download")
+LLAMA_CPP_TAG = "b12606"
+LLAMA_CPP_RUNTIME: dict[str, dict] = {
+    "x86_64": {"asset": f"llama-{LLAMA_CPP_TAG}-bin-ubuntu-x64.tar.gz",
+               "size": "~23 MB",
+               "sha256": "23ad17d2052e35a7c0a16a7d84a46b3f44c0f90d8"
+                         "ef438e27712c1c158321024"},
+    "aarch64": {"asset": f"llama-{LLAMA_CPP_TAG}-bin-ubuntu-arm64.tar.gz",
+                "size": "~19 MB",
+                "sha256": "7c229402b93cfd532c0d68b64c8874a2c58df57cfa"
+                          "708196a4cc1b194a64953f"},
+}
+
+
+def chat_dir() -> Path:
+    return paths.models_dir() / CHAT_DIR_NAME
+
+
+def chat_model_path(name: str) -> Path:
+    return chat_dir() / CHAT_CATALOG[name]["file"]
+
+
+def chat_model_downloaded(name: str) -> bool:
+    """True when the catalog chat model's GGUF exists in the cache."""
+    return name in CHAT_CATALOG and chat_model_path(name).is_file()
+
+
+def llama_runtime_dir() -> Path:
+    """Where the pinned llama.cpp build is extracted (llama-server + libs)."""
+    return chat_dir() / "runtime" / LLAMA_CPP_TAG
+
+
+def llama_server_path() -> Path:
+    """The bundled llama-server binary (inside the extracted build dir)."""
+    return llama_runtime_dir() / f"llama-{LLAMA_CPP_TAG}" / "llama-server"
+
+
+def llama_runtime_downloaded() -> bool:
+    return llama_server_path().is_file()
+
+
+def llama_runtime_spec() -> dict:
+    """The catalog entry for this machine's architecture (ValueError on
+    unsupported platforms — a PATH-installed llama-server still works)."""
+    import platform
+    machine = platform.machine().lower()
+    key = "x86_64" if machine in ("x86_64", "amd64") else \
+          "aarch64" if machine in ("aarch64", "arm64") else None
+    if key is None:
+        raise ValueError(f"no bundled llama.cpp build for {machine!r} "
+                         "- install llama-server on PATH instead")
+    spec = dict(LLAMA_CPP_RUNTIME[key])
+    spec["url"] = f"{LLAMA_CPP_RELEASE_BASE}/{LLAMA_CPP_TAG}/{spec['asset']}"
+    return spec
+
+
 # NVIDIA Parakeet TDT via the sherpa-onnx community exports (k2-fsa GitHub
 # release, asr-models tag) — one tarball per model; `files` is the
 # post-extract integrity + presence manifest (per-file sha256).
@@ -191,6 +272,17 @@ def cached_models() -> list[dict]:
                 # dot-prefixed = staging/tarball leftovers, never a model
                 out.append({"kind": "parakeet", "name": d.name,
                             "path": d, "bytes": _dir_size(d)})
+    if chat_dir().is_dir():
+        for f in sorted(chat_dir().iterdir()):
+            if (f.is_file() and f.suffix == ".gguf"
+                    and not f.name.endswith(".part")):
+                out.append({"kind": "llama.cpp", "name": f.name,
+                            "path": f, "bytes": f.stat().st_size})
+        runtime = llama_runtime_dir()
+        if llama_runtime_downloaded():
+            out.append({"kind": "llama.cpp-runtime",
+                        "name": f"llama-server ({LLAMA_CPP_TAG})",
+                        "path": runtime, "bytes": _dir_size(runtime)})
     return out
 
 
@@ -202,8 +294,14 @@ def cache_entry_path(kind: str, name: str) -> Path:
         return gguf_dir() / name
     if kind == "parakeet":
         return parakeet_dir() / name
+    if kind == "llama.cpp":
+        return chat_dir() / name
+    if kind == "llama.cpp-runtime":
+        if name != f"llama-server ({LLAMA_CPP_TAG})":
+            raise ValueError(f"unknown llama.cpp runtime {name!r}")
+        return llama_runtime_dir()
     if kind == "faster-whisper":
         repo = backends.FW_MODEL_REPOS.get(name, name)
         return _fw_repo_dir(repo)
     raise ValueError(f"unknown model kind {kind!r} "
-                     f"(faster-whisper, whisper.cpp or parakeet)")
+                     f"(faster-whisper, whisper.cpp, parakeet or llama.cpp)")

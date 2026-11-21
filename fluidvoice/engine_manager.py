@@ -250,6 +250,18 @@ class SpeechEngineManager:
         if name == active:
             return {"ok": False,
                     "error": f"{name} is the active model (switch models first)"}
+        if kind in ("llama.cpp", "llama.cpp-runtime"):
+            # the local-polish stack: refuse the active chat model while
+            # the toggle is on (deleting the runtime is always allowed -
+            # the running server holds it open only until the next stop)
+            ai = self.cfg.get("ai", {}) or {}
+            if kind == "llama.cpp" and ai.get("local_polish"):
+                cat = model_catalog.CHAT_CATALOG.get(
+                    str(ai.get("local_model")), {})
+                if cat.get("file") == name or ai.get("local_model") == name:
+                    return {"ok": False,
+                            "error": f"{name} is the active local polish "
+                                     "model (turn Local polish off first)"}
         if self.warmup.get("running"):
             return {"ok": False,
                     "error": "a model load is in progress - try again once "

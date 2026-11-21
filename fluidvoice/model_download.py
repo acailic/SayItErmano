@@ -1,5 +1,5 @@
-"""Streaming model downloads for whisper.cpp GGUF + Parakeet ONNX
-(stdlib only).
+"""Streaming model downloads for whisper.cpp GGUF, Parakeet ONNX and the
+local-AI-polish stack (chat GGUF + pinned llama.cpp runtime) — stdlib only.
 
 Progress surfaces (first-use funnel F-02): downloads are observable
 while they run - `observe_downloads()` scans the shared models cache so
@@ -185,6 +185,138 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: fh.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def download_chat_model(name: str, progress: Progress | None = None,
+                        cancel: threading.Event | None = None) -> Path:
+    """Fetch a CHAT_CATALOG GGUF into models_dir()/llama.cpp/<file>.
+    Checksummed (LFS oid pin); a mismatch deletes the file and raises -
+    retrying starts clean. No-op when the model already exists."""
+    if name not in model_catalog.CHAT_CATALOG:
+        raise ValueError(
+            f"unknown chat model '{name}' "
+            f"(choose from {sorted(model_catalog.CHAT_CATALOG)})")
+    info = model_catalog.CHAT_CATALOG[name]
+    dest = model_catalog.chat_model_path(name)
+    if dest.exists():
+        return dest
+    try:
+        download_file(info["url"], dest, progress=progress, cancel=cancel,
+                      label=name, kind="llama.cpp")
+        if sha256_file(dest) != info["sha256"]:
+            raise OSError(f"checksum mismatch: {name} GGUF "
+                          "— deleted, retry the download")
+    except BaseException:
+        dest.unlink(missing_ok=True)
+        raise
+    return dest
+
+
+def download_llama_runtime(progress: Progress | None = None,
+                           cancel: threading.Event | None = None) -> Path:
+    """Fetch + extract the pinned llama.cpp build (llama-server and its
+    bundled libs) into models_dir()/llama.cpp/runtime/<tag>/. The tarball
+    is verified against the official GitHub digest before extraction;
+    members are extracted one by one (never extractall) from a staging
+    dir renamed into place atomically - a failure leaves no runtime."""
+    spec = model_catalog.llama_runtime_spec()
+    final = model_catalog.llama_runtime_dir()
+    if model_catalog.llama_runtime_downloaded():
+        return final
+    parent = final.parent
+    parent.mkdir(parents=True, exist_ok=True)
+    _clean_stages(parent, f".{final.name}")
+    stage = parent / f".{final.name}.tmp-{os.getpid()}"
+    tarball = parent / f".{spec['asset']}"
+    try:
+        download_file(spec["url"], tarball, progress=progress, cancel=cancel,
+                      label="llama-server runtime", kind="llama.cpp")
+        if sha256_file(tarball) != spec["sha256"]:
+            raise OSError("checksum mismatch: llama.cpp tarball "
+                          "— deleted, retry the download")
+        stage.mkdir()
+        with tarfile.open(tarball, "r:gz") as tf:
+            for member in tf:
+                # one top-level dir (llama-<tag>/...); refuse anything that
+                # tries to escape it (abs paths, .., links)
+                parts = member.name.split("/")
+                if (not parts or parts[0] in ("", ".", "..")
+                        or any(p == ".." for p in parts)
+                        or not (member.isfile() or member.isdir())):
+                    continue
+                target = stage.joinpath(*parts)
+                if member.isdir():
+                    target.mkdir(parents=True, exist_ok=True)
+                    continue
+                target.parent.mkdir(parents=True, exist_ok=True)
+                src = tf.extractfile(member)
+                if src is None:
+                    continue
+                with open(target, "wb") as out:
+                    shutil.copyfileobj(src, out)
+                mode = 0o755 if member.mode & 0o111 else 0o644
+                os.chmod(target, mode)
+        server = stage / f"llama-{model_catalog.LLAMA_CPP_TAG}" / "llama-server"
+        if not server.is_file():
+            raise OSError("llama.cpp tarball has no llama-server "
+                          "— deleted, retry the download")
+        try:
+            os.rename(stage, final)
+        except OSError as e:  # a concurrent fetch won the rename
+            if e.errno not in (errno.EEXIST, errno.ENOTEMPTY):
+                raise
+            shutil.rmtree(stage, ignore_errors=True)
+            return final
+    except BaseException:
+        shutil.rmtree(stage, ignore_errors=True)
+        tarball.unlink(missing_ok=True)
+        raise
+    finally:
+        tarball.unlink(missing_ok=True)
+    return final
+
+
+def download_chat_stack(name: str, progress: Progress | None = None,
+                        cancel: threading.Event | None = None) -> Path:
+    """One click = the whole local-polish stack: chat GGUF + llama.cpp
+    runtime. Aggregate progress spans both (the model is ~99% of the
+    bytes; already-present pieces are skipped)."""
+    model_size = _approx_bytes(
+        model_catalog.CHAT_CATALOG[name].get("size")) \
+        if name in model_catalog.CHAT_CATALOG else None
+    try:
+        runtime_size = _approx_bytes(
+            model_catalog.llama_runtime_spec()["size"])
+    except ValueError:
+        runtime_size = None
+    need_model = not model_catalog.chat_model_downloaded(name)
+    need_runtime = not model_catalog.llama_runtime_downloaded()
+    spans: list[int] = []
+    if need_model and model_size:
+        spans.append(model_size)
+    if need_runtime and runtime_size:
+        spans.append(runtime_size)
+    total: int | None = sum(spans) if len(spans) == (
+            int(need_model) + int(need_runtime)) and spans else None
+
+    def _run(fn, base: int) -> None:
+        if progress is None:
+            fn(progress=None, cancel=cancel)
+            return
+
+        def agg(b: int, _t: "int | None", _base: int = base) -> None:
+            progress(_base + b, total)
+
+        fn(progress=agg, cancel=cancel)
+
+    if need_model:
+        _run(lambda progress, cancel: download_chat_model(
+            name, progress=progress, cancel=cancel), 0)
+    if need_runtime:
+        _run(lambda progress, cancel: download_llama_runtime(
+            progress=progress, cancel=cancel),
+            model_size if need_model and model_size else 0)
+    return model_catalog.chat_model_path(name)
 
 
 def _clean_stages(parent: Path, prefix: str) -> None:
@@ -378,11 +510,14 @@ def observe_downloads() -> list[DownloadProgress]:
     root = paths.models_dir()
     gguf_names = set(model_catalog.GGUF_CATALOG)
     parakeet_names = set(model_catalog.PARAKEET_CATALOG)
+    chat_files = {info["file"]: (cid, info) for cid, info
+                  in model_catalog.CHAT_CATALOG.items()}
     fw_dir = root / "faster-whisper"
     scans: list[tuple[str, Path]] = [
         ("whisper.cpp", root / model_catalog.GGUF_DIR_NAME),
         ("parakeet", root / model_catalog.PARAKEET_DIR_NAME),
         ("faster-whisper", fw_dir),
+        ("llama.cpp", root / model_catalog.CHAT_DIR_NAME),
     ]
     for kind, base in scans:
         try:
@@ -402,6 +537,17 @@ def observe_downloads() -> list[DownloadProgress]:
                 if label in parakeet_names:
                     total = _approx_bytes(
                         model_catalog.PARAKEET_CATALOG[label]["size"])
+            elif kind == "llama.cpp":
+                if label in chat_files:
+                    cid, info = chat_files[label]
+                    label, total = cid, _approx_bytes(info["size"])
+                else:
+                    label = "llama-server runtime"
+                    try:
+                        total = _approx_bytes(
+                            model_catalog.llama_runtime_spec()["size"])
+                    except ValueError:
+                        total = None
             try:
                 done = p.stat().st_size
             except OSError:

@@ -89,6 +89,15 @@ class Client:
         ClientError when the daemon is down."""
         return self._request("model-delete", kind=kind, name=name)
 
+    def local_ai_start(self) -> dict:
+        """Spawn + health-wait the bundled llama.cpp server (Settings →
+        AI test/status). Raises ClientError when the daemon is down."""
+        return self._request("local-ai-start")
+
+    def local_ai_stop(self) -> dict:
+        """Stop the local polish server now (idle-down immediately)."""
+        return self._request("local-ai-stop")
+
     def mics(self) -> list[dict]:
         """Microphone list (socket action; direct tray query if down)."""
         try:

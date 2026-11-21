@@ -104,6 +104,13 @@ def _use_responses_api(base_url: str, model: str) -> bool:
 class AIClient:
     def __init__(self, cfg: dict):
         ai = cfg["ai"]
+        # Local polish (works offline): while the toggle is on, the
+        # bundled llama.cpp server replaces the cloud endpoint — one
+        # seam here covers dictation polish, rewrite, command mode and
+        # the test button (spawn/health stays the daemon's job).
+        if ai.get("local_polish"):
+            from .local import local_ai_overrides
+            ai = {**ai, **local_ai_overrides(cfg)}
         self.base_url = ai["base_url"].rstrip("/")
         self.model = ai.get("model", "")
         self.temperature = float(ai.get("temperature", 0.2))

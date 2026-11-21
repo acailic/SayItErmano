@@ -35,6 +35,7 @@ from . import history as history_mod
 from . import session as session_mod
 from . import update as update_mod
 from .ai.client import AIClient, AIError  # noqa: F401 (tests patch dm.AIClient)
+from .ai.local import LocalServer, local_polish_on
 from .audio_utils import duration_seconds, is_silent
 from .backends.base import Transcript
 from .capture import CaptureCoordinator
@@ -127,6 +128,11 @@ class Daemon:
         self._language_hotkey = None
         self._extra_hotkeys: list = []
         self._tray: Any = None
+        # Local AI polish (issue #21): the supervised llama.cpp server.
+        # Never spawned unless ai.enabled + ai.local_polish are both on;
+        # the idle watcher only runs while the server does.
+        self._local_ai = LocalServer(self.cfg, log=log,
+                                     on_stop=self._refresh_tray)
         self._micmon: Any = None  # input-device watcher (micmon.MicMonitor)
         self._mic_missing_logged = False  # warn-once latch for reselects
         self._hotkey = None
@@ -615,6 +621,7 @@ class Daemon:
     def shutdown(self) -> None:
         log("shutting down")
         self._engines.stop_idle_watch()
+        self._local_ai.stop("daemon shutdown")
         # under the lock: the take-state mutations race the hotkey thread's
         # toggle (N1). The race was benign - callbacks re-validate recorder
         # identity - but serializing costs nothing and matches
@@ -1023,6 +1030,11 @@ class Daemon:
             _try("lock pause", self._apply_lock_setting)
         if "model.idle_unload_s" in changed:
             _try("idle unload", self._engines.apply_idle_unload_setting)
+        if any(k.startswith("ai.local_") for k in changed) \
+                or "ai.enabled" in changed:
+            # toggle/model/port edits: stop now when off (zero footprint),
+            # respawn lazily on the next dictation when settings changed
+            _try("local AI polish", self._local_ai.apply_settings)
         return {"applied": applied, "errors": errors}
 
     # -- control protocol ----------------------------------------------------
@@ -1323,11 +1335,28 @@ class Daemon:
 
     # -- pipeline ------------------------------------------------------------
 
+    def _ensure_local_ai(self, mode: str) -> None:
+        """Spawn the bundled llama.cpp server before a take that may use
+        AI polish (dictate/rewrite/command turn 0). Failures degrade to
+        the pipeline's existing fallback: raw transcript typed, one log
+        line + notification (never a dropped dictation)."""
+        if mode not in ("dictate", "rewrite", "command"):
+            return
+        if not local_polish_on(self.cfg):
+            return
+        try:
+            self._local_ai.ensure_ready()
+        except Exception as e:  # noqa: BLE001 - polish is best-effort
+            log(f"local polish server not available: {e}")
+            ui.notify("SayItErmano", f"Local polish unavailable: {e}",
+                      enabled=self.cfg["notifications"]["enabled"])
+
     def _process(self, wav: Path, app_hint: str | None,
                  mode: str = "dictate", rewrite_context: str | None = None) -> None:
         self.busy = True
         out: dict = {}
         try:
+            self._ensure_local_ai(mode)
             try:
                 backend = self._engines.ensure_backend()
             except Exception as e:

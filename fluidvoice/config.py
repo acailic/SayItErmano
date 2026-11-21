@@ -182,6 +182,23 @@ def _coerce_max_retries(value: Any) -> tuple[bool, Any]:
 _coerce_max_retries.bounds = (0, 10)  # type: ignore[attr-defined]
 
 
+def _coerce_local_idle_stop(value: Any) -> tuple[bool, Any]:
+    """ai.local_idle_stop_s: 0 (keep the server running) or 30..86400 s;
+    bool is an int subclass - reject."""
+    ok = isinstance(value, int) and not isinstance(value, bool) \
+        and (value == 0 or 30 <= value <= 86400)
+    return (ok, value)
+_coerce_local_idle_stop.bounds = (0, 86400)  # type: ignore[attr-defined]
+
+
+def _coerce_chat_model(value: Any) -> tuple[bool, Any]:
+    """ai.local_model: a CHAT_CATALOG key (catalogs checked at call time
+    - importing model_catalog at module import would be circular)."""
+    from . import model_catalog
+    ok = isinstance(value, str) and value in model_catalog.CHAT_CATALOG
+    return (ok, value)
+
+
 def _coerce_idle_unload(value: Any) -> tuple[bool, Any]:
     """model.idle_unload_s: 0 (never unload) or 30..86400 s; bool is an
     int subclass - reject."""
@@ -851,6 +868,25 @@ _spec("ai", "enabled", False, _bool(),
       description="Optional AI polish of the raw transcript (FluidVoice's\n"
       "headline feature). Any OpenAI-compatible /v1/chat/completions\n"
       "endpoint works: OpenAI, Groq, Ollama, LM Studio, ...")
+_spec("ai", "local_polish", False, _bool(),
+      description="Local polish (works offline): run AI polish on a bundled\n"
+      "llama.cpp server + a small GGUF chat model (downloaded once in\n"
+      "Settings -> Models, 'Local AI polish'). While on, it overrides\n"
+      "base_url/model - no cloud key needed, nothing leaves the machine.\n"
+      "The server spawns on demand and stops after local_idle_stop_s\n"
+      "idle; off = zero footprint (no process, no memory).")
+_spec("ai", "local_model", "qwen3-4b-instruct-2507-q4_k_m", _coerce_chat_model,
+      description="The GGUF chat model local polish runs (model_catalog\n"
+      "CHAT_CATALOG key; qwen3-4b-class default).")
+_spec("ai", "local_port", 8931, _num("int", 1024, 65535),
+      description="Loopback port of the bundled llama.cpp server\n"
+      "(127.0.0.1 only, no API key sent). Change it if something else\n"
+      "owns the port.")
+_spec("ai", "local_idle_stop_s", 180, _coerce_local_idle_stop,
+      description="Stop the local polish server after this many idle\n"
+      "seconds (0 = keep it running until the daemon stops; range\n"
+      "30..86400 when set). The next dictation pays the model load time\n"
+      "again (~5-15 s on CPU).")
 _spec("ai", "base_url", "http://localhost:11434/v1", _str(2048),
       description="OpenAI-compatible chat endpoint, e.g.\n"
       "http://localhost:11434/v1 (Ollama) or http://localhost:1234/v1\n"

@@ -6,6 +6,7 @@ import threading
 
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
+from ...config import ui_range
 from .common import _InstructionRow, _TextProxy
 
 
@@ -40,12 +41,57 @@ class AIPageMixin:
         self._prov_group.add(add_prov_row)
         page.add(self._prov_group)
 
+        # local polish (works offline): bundled llama.cpp server + GGUF
+        # chat model — spawned by the daemon on demand, stopped on idle
+        self._local_group = Adw.PreferencesGroup(
+            title="Local polish (works offline)",
+            description="A bundled llama.cpp server with a small GGUF chat "
+            "model (download it in Settings → Models) — no cloud key, "
+            "nothing leaves the machine. Overrides the endpoint above "
+            "while on",
+        )
+        self._local_group.add(
+            self._switch("ai", "local_polish", "Enabled",
+                         subtitle="works offline; the server starts on the "
+                         "next dictation and stops after idle"))
+        from ...model_catalog import CHAT_CATALOG
+        labels = {cid: f"{info['note']} · {info['size']}"
+                  for cid, info in CHAT_CATALOG.items()}
+        self._local_group.add(
+            self._combo("ai", "local_model", "Chat model", values=[
+                (cid, cid) for cid in CHAT_CATALOG], labels=labels))
+        idle_b = ui_range("ai", "local_idle_stop_s") or (0, 86400)
+        adj = Gtk.Adjustment(value=0, lower=0, upper=idle_b[1] // 60,
+                             step_increment=1)
+        self._local_idle_row = Adw.SpinRow(
+            title="Stop server after idle (minutes)",
+            subtitle="0 = keep it running; the next dictation pays the "
+            "model load (~5-15 s on CPU) again",
+            adjustment=adj, digits=0)
+        self._local_idle_row.connect("notify::value", lambda *_: self._touch())
+        self._local_group.add(self._local_idle_row)
+        self._local_status_row = Adw.ActionRow(title="Server", subtitle="—")
+        start_btn = Gtk.Button(label="Start & test",
+                               css_classes=["suggested-action"])
+        start_btn.set_valign(Gtk.Align.CENTER)
+        start_btn.connect("clicked", self._local_ai_start)
+        stop_btn = Gtk.Button(label="Stop now", css_classes=["flat"])
+        stop_btn.set_valign(Gtk.Align.CENTER)
+        stop_btn.connect("clicked", self._local_ai_stop)
+        self._local_status_row.add_suffix(stop_btn)
+        self._local_status_row.add_suffix(start_btn)
+        self._local_group.add(self._local_status_row)
+        page.add(self._local_group)
+        GLib.timeout_add_seconds(10, self._poll_local_ai_status)
+
         grp = Adw.PreferencesGroup(
             title="AI polish",
             description="Any OpenAI-compatible endpoint — Ollama, LM Studio, "
             "OpenAI, Groq…",
         )
-        grp.add(self._switch("ai", "enabled", "Enabled"))
+        grp.add(self._switch("ai", "enabled", "Enabled",
+                             subtitle="the master switch — off types the raw "
+                             "transcript (both cloud and local polish)"))
         url_row = self._entry("ai", "base_url", "Base URL — http://localhost:11434/v1")
         self.provider_img = Gtk.Image(pixel_size=18)
         self.provider_img.set_valign(Gtk.Align.CENTER)
@@ -184,10 +230,21 @@ class AIPageMixin:
         self.test_out.set_text("testing…")
         url = self._get_text("ai", "base_url")
         model = self._get_text("ai", "model")
+        # local polish on = test the bundled server end to end (start it
+        # through the daemon first; the cloud fields are inert while on)
+        row = self._rows.get(("ai", "local_polish"))
+        use_local = isinstance(row, Adw.SwitchRow) and row.get_active()
 
         def work():
+            turl, tmodel = url, model
             try:
-                resp = self.c.test_ai(url, model)
+                if use_local:
+                    local = self.c.local_ai_start()  # may wait out a spawn
+                    if not local.get("ok"):
+                        raise RuntimeError(str(local.get("error")
+                                               or "local server failed"))
+                    turl, tmodel = local["base_url"], local["model"]
+                resp = self.c.test_ai(turl, tmodel)
             except Exception as e:  # surfaced inline
                 resp = {"ok": False, "error": str(e)}
             GLib.idle_add(
@@ -196,6 +253,72 @@ class AIPageMixin:
                 if resp.get("ok")
                 else str(resp.get("error") or "failed"),
             )
+            if use_local:
+                GLib.idle_add(self._local_ai_update_status_row)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    # -- local polish (bundled llama.cpp server) -------------------------------
+
+    def _local_ai_status(self) -> dict:
+        """Live server state: the daemon status when reachable, the
+        static config view otherwise (this never spawns anything)."""
+        from ...ai.local import status_for_config
+        st = self.c.status() or {}
+        return st.get("local_ai") or status_for_config(self.cfg)
+
+    def _local_ai_update_status_row(self) -> None:
+        st = self._local_ai_status()
+        if not st.get("toggle"):
+            sub = "off — zero footprint (no process, no memory)"
+        elif st.get("running"):
+            rss = st.get("rss_kb")
+            sub = f"running · 127.0.0.1:{st.get('port')}"
+            if rss:
+                sub += f" · {rss / 1_048_576:.1f} GB RAM"
+            pol = st.get("policy_s")
+            if pol:
+                sub += f" · stops after {pol} s idle"
+        elif st.get("starting"):
+            sub = "starting… (loading the model)"
+        elif not st.get("model_downloaded") or not st.get("runtime_downloaded"):
+            sub = "not downloaded — Settings → Models → Local AI polish"
+        else:
+            sub = "stopped — starts on the next dictation"
+        if st.get("error"):
+            sub += f" · {st['error']}"
+        self._local_status_row.set_subtitle(sub)
+
+    def _poll_local_ai_status(self) -> bool:
+        self._local_ai_update_status_row()
+        return True  # cheap subtitle refresh while the window lives
+
+    def _local_ai_start(self, _btn) -> None:
+        self._local_status_row.set_subtitle("starting…")
+
+        def work():
+            try:
+                resp = self.c.local_ai_start()
+            except Exception as e:  # noqa: BLE001 - surfaced as a toast
+                resp = {"ok": False, "error": str(e)}
+            GLib.idle_add(self._after_local_ai_start, resp)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _after_local_ai_start(self, resp: dict) -> None:
+        if resp.get("ok"):
+            self.toast("Local polish server running")
+        else:
+            self.toast(f"Local polish: {resp.get('error') or 'failed'}")
+        self._local_ai_update_status_row()
+
+    def _local_ai_stop(self, _btn) -> None:
+        def work():
+            try:
+                self.c.local_ai_stop()
+            except Exception as e:  # noqa: BLE001 - surfaced as a toast
+                GLib.idle_add(self.toast, f"stop failed: {e}")
+            GLib.idle_add(self._local_ai_update_status_row)
 
         threading.Thread(target=work, daemon=True).start()
 

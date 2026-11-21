@@ -129,6 +129,10 @@ drift: `python scripts/gen_config_reference.py` regenerates it.
 | Key | Default | Notes | Effect |
 | --- | --- | --- | --- |
 | `enabled` | `false` |  | Optional AI polish of the raw transcript (FluidVoice's headline feature). Any OpenAI-compatible /v1/chat/completions endpoint works: OpenAI, Groq, Ollama, LM Studio, ... |
+| `local_polish` | `false` |  | Local polish (works offline): run AI polish on a bundled llama.cpp server + a small GGUF chat model (downloaded once in Settings -> Models, 'Local AI polish'). While on, it overrides base_url/model - no cloud key needed, nothing leaves the machine. The server spawns on demand and stops after local_idle_stop_s idle; off = zero footprint (no process, no memory). |
+| `local_model` | `"qwen3-4b-instruct-2507-q4_k_m"` |  | The GGUF chat model local polish runs (model_catalog CHAT_CATALOG key; qwen3-4b-class default). |
+| `local_port` | `8931` |  | Loopback port of the bundled llama.cpp server (127.0.0.1 only, no API key sent). Change it if something else owns the port. |
+| `local_idle_stop_s` | `180` |  | Stop the local polish server after this many idle seconds (0 = keep it running until the daemon stops; range 30..86400 when set). The next dictation pays the model load time again (~5-15 s on CPU). |
 | `base_url` | `"http://localhost:11434/v1"` |  | OpenAI-compatible chat endpoint, e.g. http://localhost:11434/v1 (Ollama) or http://localhost:1234/v1 (LM Studio) |
 | `model` | `""` |  | Chat model name, e.g. qwen3:8b |
 | `api_key` | `""` | secret | API key (preferred: leave empty and export the env var below). Socket-settable it is NOT: edit the file or use the env var - a save carries the stored key over. |

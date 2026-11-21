@@ -110,7 +110,10 @@ def _status(d: Any, req: dict) -> dict:
             "model_state": model_state,
             # language cycle + guard state (doctor/CLI/GTK read
             # this; additive key - JSON consumers unaffected)
-            "language": d._engines.language_status()}
+            "language": d._engines.language_status(),
+            # bundled local-AI-polish server (llama.cpp): toggle/live
+            # state (additive key - JSON consumers unaffected)
+            "local_ai": d._local_ai.status()}
 
 
 def _update_check(d: Any, req: dict) -> dict:
@@ -152,8 +155,32 @@ def _select_model(d: Any, req: dict) -> dict:
 
 
 def _model_delete(d: Any, req: dict) -> dict:
-    return d._engines.delete_model(str(req.get("kind", "")),
-                                   str(req.get("name", "")))
+    kind, name = str(req.get("kind", "")), str(req.get("name", ""))
+    if kind == "llama.cpp-runtime" and d._local_ai.status().get("running"):
+        return {"ok": False,
+                "error": "the local polish server is running on this "
+                         "runtime — stop it first (Settings → AI)"}
+    return d._engines.delete_model(kind, name)
+
+
+def _local_ai_start(d: Any, req: dict) -> dict:
+    """User-initiated start (Settings → AI test / status row): spawn +
+    health-wait the bundled llama.cpp server on demand."""
+    try:
+        overrides = d._local_ai.ensure_ready()
+        return {"ok": True, "base_url": overrides["base_url"],
+                "model": overrides["model"],
+                "status": d._local_ai.status()}
+    except Exception as e:  # noqa: BLE001 - surfaced in the UI
+        return {"ok": False, "error": str(e),
+                "status": d._local_ai.status()}
+
+
+def _local_ai_stop(d: Any, req: dict) -> dict:
+    """Idle down right now (the server also stops by itself after
+    ai.local_idle_stop_s without a dictation)."""
+    d._local_ai.stop("user stop")
+    return {"ok": True, "status": d._local_ai.status()}
 
 
 def _mics(d: Any, req: dict) -> dict:
@@ -188,6 +215,8 @@ ROUTES: dict[str, Route] = {
     "set-config": _set_config,
     "select-model": _select_model,
     "model-delete": _model_delete,
+    "local-ai-start": _local_ai_start,
+    "local-ai-stop": _local_ai_stop,
     "mics": _mics,
     "transcribe": _transcribe,
     "history": _history,
