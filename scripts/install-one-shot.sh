@@ -14,6 +14,9 @@
 # Options:
 #   bash install-one-shot.sh ./local.deb    install a specific .deb (user layout)
 #   bash install-one-shot.sh --system       old system-wide path (sudo apt)
+#   bash install-one-shot.sh --update       update the EXISTING installation in
+#                                           place (user venv / pipx / apt repo /
+#                                           latest .deb - detected, see below)
 #   bash install-one-shot.sh --uninstall    remove the user installation
 #   DRY_RUN=1 ...                           download+verify only
 set -euo pipefail
@@ -22,12 +25,45 @@ REPO="acailic/SayItErmano"
 BIN="$HOME/.local/bin"
 APP_DIR="$HOME/.local/share/sayit-ermano"
 MODE="user"
+UPDATE=0
 
 say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
-[ "${1:-}" = "--system" ] && { MODE="system"; shift; }
+# test seam (same SAYITERMANO_* override convention as the app): where the
+# signed apt repo's sources entry lives when this deb installed it
+APT_LIST="${SAYITERMANO_APT_LIST:-/etc/apt/sources.list.d/sayit-ermano.list}"
+ROUTE_GUIDE="https://github.com/acailic/SayItErmano/blob/linux/docs/guides/install.md#updates"
+
+fetch_latest_deb() {
+    say "Looking up the latest release..."
+    RELEASE_JSON="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
+        || curl -fsSL "https://api.github.com/repos/${REPO}/releases?per_page=1" \
+        | sed -n 's/^.\{0,1\}\[/[/p')"
+    URL="$(printf '%s' "$RELEASE_JSON" \
+        | grep -o '"browser_download_url": *"[^"]*_amd64\.deb"' \
+        | head -1 | sed 's/.*"\(https[^"]*\)"/\1/')" \
+        || URL=""
+    [ -n "$URL" ] || die "no amd64 .deb found in the latest release"
+    say "Downloading $URL"
+    TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+    DEB="$TMP/$(basename "$URL")"
+    curl -fL --progress-bar -o "$DEB" "$URL"
+    chmod 755 "$TMP"; chmod 644 "$DEB"   # let apt's sandbox read it too
+    SIZE="$(stat -c%s "$DEB")"
+    [ "$SIZE" -gt 10000000 ] || die "downloaded file looks wrong (${SIZE} bytes) - not installing it"
+    say "Downloaded $(du -h "$DEB" | cut -f1)"
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --system) MODE="system"; shift ;;
+        --update) UPDATE=1; shift ;;
+        *) break ;;
+    esac
+done
+
 if [ "${1:-}" = "--uninstall" ]; then
     say "Removing the user installation..."
     systemctl --user disable --now sayit-ermano.service 2>/dev/null || true
@@ -50,32 +86,101 @@ if [ "${1:-}" = "--uninstall" ]; then
     exit 0
 fi
 
-command -v curl >/dev/null || die "curl is required"
-[ "$(dpkg --print-architecture 2>/dev/null)" = "amd64" ] \
-    || die "only amd64 packages are published for now (you: $(dpkg --print-architecture 2>/dev/null || echo '?'))"
+require_deb_tools() {
+    command -v curl >/dev/null || die "curl is required"
+    [ "$(dpkg --print-architecture 2>/dev/null)" = "amd64" ] \
+        || die "only amd64 packages are published for now (you: $(dpkg --print-architecture 2>/dev/null || echo '?'))"
+}
+
+# --- --update: refresh the EXISTING installation in place --------------------
+# Detection mirrors fluidvoice/update.py's install-method logic so the
+# same command the app prints (`sayit-ermano update` shows this script)
+# does the right thing per route:
+#   system deb + apt repo   sudo apt update && apt install --only-upgrade
+#   system deb, no repo     download latest .deb, sudo apt install over it
+#   pipx                    pipx upgrade sayit-ermano (any distro - no dpkg)
+#   user venv (default)     fall through: the normal flow below reinstalls
+#                           the venv in place; ~/.config and history under
+#                           ~/.local/share/sayit-ermano are never touched
+system_deb_installed() { dpkg -s sayit-ermano >/dev/null 2>&1; }
+
+pipx_venv() {
+    local d
+    for d in "${PIPX_HOME:-$HOME/.local/pipx}" \
+             "$HOME/.local/pipx" "$HOME/.local/share/pipx"; do
+        [ -d "$d/venvs/sayit-ermano" ] && { printf '%s\n' "$d/venvs/sayit-ermano"; return 0; }
+    done
+    return 1
+}
+
+update_system_deb() {
+    if [ -f "$APT_LIST" ]; then
+        say "Updating via the signed apt repo ($APT_LIST)..."
+        if [ "${DRY_RUN:-0}" = "1" ]; then
+            say "DRY_RUN=1: would run: sudo apt update && sudo apt install --only-upgrade sayit-ermano"
+        else
+            sudo apt update
+            sudo apt install -y --only-upgrade sayit-ermano
+        fi
+        say "Done. The package postinst restarts the daemon; config"
+        say "(~/.config/sayit-ermano) and history are untouched."
+    else
+        require_deb_tools
+        say "No apt repo configured - updating from the latest release .deb..."
+        fetch_latest_deb
+        if [ "${DRY_RUN:-0}" = "1" ]; then
+            say "DRY_RUN=1: package ready, skipping install ($DEB)"
+            return
+        fi
+        sudo apt install -y "$DEB"
+        say "Done. Want unattended upgrades from now on? Add the signed repo:"
+        say "  $ROUTE_GUIDE"
+    fi
+    exit 0
+}
+
+if [ "$UPDATE" = "1" ]; then
+    say "Looking for an existing SayItErmano installation..."
+    if [ "$MODE" = "system" ]; then
+        system_deb_installed || die "no system package (sayit-ermano) installed - run without --update to install"
+        update_system_deb
+    fi
+    if [ -d "$APP_DIR/venv" ]; then
+        say "User installation found ($APP_DIR) - updating it in place."
+        if system_deb_installed; then
+            warn "a system-wide .deb (sayit-ermano) is ALSO installed; this"
+            warn "update refreshes the user install (the one that runs)."
+            warn "Update or remove the system one with:  sudo apt remove sayit-ermano"
+        fi
+        # fall through to the normal flow: it stops the daemon, replaces
+        # the venv and restarts - exactly an in-place update
+    elif PIPX_VENV="$(pipx_venv)"; then
+        say "pipx installation found ($PIPX_VENV)..."
+        if [ "${DRY_RUN:-0}" = "1" ]; then
+            say "DRY_RUN=1: would run: pipx upgrade sayit-ermano"
+            exit 0
+        fi
+        command -v pipx >/dev/null 2>&1 \
+            || die "pipx not on PATH - upgrade manually: pipx upgrade sayit-ermano"
+        pipx upgrade sayit-ermano || die "pipx upgrade failed - for git installs: pipx install --force git+https://github.com/${REPO}.git@linux"
+        say "Done. If the daemon runs from pipx, restart it:"
+        say "  systemctl --user restart sayit-ermano 2>/dev/null || $HOME/.local/bin/sayit-ermano daemon &"
+        exit 0
+    elif system_deb_installed; then
+        update_system_deb
+    else
+        die "no existing installation found - run without --update to install"
+    fi
+fi
+
+require_deb_tools
 
 # --- locate the .deb --------------------------------------------------------
 if [ -n "${1:-}" ] && [ -f "$1" ]; then
     DEB="$1"
     say "Using local package: $DEB"
 else
-    say "Looking up the latest release..."
-    RELEASE_JSON="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-        || curl -fsSL "https://api.github.com/repos/${REPO}/releases?per_page=1" \
-        | sed -n 's/^.\{0,1\}\[/[/p')"
-    URL="$(printf '%s' "$RELEASE_JSON" \
-        | grep -o '"browser_download_url": *"[^"]*_amd64\.deb"' \
-        | head -1 | sed 's/.*"\(https[^"]*\)"/\1/')" \
-        || URL=""
-    [ -n "$URL" ] || die "no amd64 .deb found in the latest release"
-    say "Downloading $URL"
-    TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-    DEB="$TMP/$(basename "$URL")"
-    curl -fL --progress-bar -o "$DEB" "$URL"
-    chmod 755 "$TMP"; chmod 644 "$DEB"   # let apt's sandbox read it too
-    SIZE="$(stat -c%s "$DEB")"
-    [ "$SIZE" -gt 10000000 ] || die "downloaded file looks wrong (${SIZE} bytes) - not installing it"
-    say "Downloaded $(du -h "$DEB" | cut -f1)"
+    fetch_latest_deb
 fi
 
 # --- optional sudo step: system dependencies --------------------------------

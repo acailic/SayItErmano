@@ -5,7 +5,7 @@ fluidvoice.gtkui.client has no GTK imports by design.
 """
 from __future__ import annotations
 
-from fluidvoice.gtkui.client import Client
+from fluidvoice.gtkui.client import Client, ClientError
 
 
 class TestClientFileOnlyMode:
@@ -37,6 +37,49 @@ class TestClientFileOnlyMode:
         c = self._dead_client()
         cfg, from_daemon = c.get_config()
         assert from_daemon is False and cfg["hotkey"]["key"]
+
+
+class TestClientUpdateCheck:
+    """The manual update-check surface (Settings → About, #22): the
+    client sends the `update-check` control action and passes the
+    response through unchanged (the daemon owns the probe)."""
+
+    def test_sends_update_check_action(self):
+        c = Client()
+        seen = {}
+
+        def fake_request(action, **kwargs):
+            seen["action"] = action
+            seen["kwargs"] = kwargs
+            return {"ok": True, "update_available": "0.6.0",
+                    "update_url": "u",
+                    "update": {"checked": True, "update_available": "0.6.0",
+                               "error": None,
+                               "route_guide": "https://example/guide"}}
+
+        c._request = fake_request
+        resp = c.update_check()
+        assert seen["action"] == "update-check"
+        assert seen["kwargs"] == {}
+        assert resp["update_available"] == "0.6.0"
+        assert resp["update"]["route_guide"] == "https://example/guide"
+
+    def test_daemon_down_raises_client_error(self):
+        c = Client()
+        c._request = self._dead_request()
+        try:
+            c.update_check()
+            raised = False
+        except ClientError:
+            raised = True
+        assert raised
+
+    @staticmethod
+    def _dead_request():
+        def boom(action, **kwargs):
+            raise ClientError(f"daemon down ({action})")
+
+        return boom
 
 
 class TestClientDictionarySuggestions:

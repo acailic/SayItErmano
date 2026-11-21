@@ -352,6 +352,7 @@ def _cmd_update(args) -> int:
                "latest": latest, "update_available": latest if available else None,
                "url": (release or {}).get("url") if available else None,
                "upgrade_command": command, "sha256": checksum,
+               "route_guide": update_mod.ROUTE_GUIDE_URL,
                "skipped": skipped, "error": error}
     if args.json:
         print(json.dumps(payload))
@@ -374,6 +375,7 @@ def _cmd_update(args) -> int:
         print(f"sha256: {checksum.removeprefix('sha256:')}"
               "   (published digest - verify after download)")
     if available:
+        print(f"(all update routes: {update_mod.ROUTE_GUIDE_URL})")
         print("(--dismiss stops the notification for this release)")
     return 0
 

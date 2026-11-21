@@ -111,7 +111,11 @@ Press **Right Ctrl**, speak, press **Right Ctrl** again. Done.
 All routes — the one-shot installer (user or `--system`), the official
 Ubuntu 24.04 .deb, pipx/pip on any distro, the AUR package, building
 from source, and how updates work — are documented in
-[docs/guides/install.md](docs/guides/install.md). Requirements in brief:
+[docs/guides/install.md](docs/guides/install.md). Updates are one command
+on every route: the .deb configures a **signed apt repository**
+(`sudo apt update && sudo apt upgrade sayit-ermano`), the installer has
+`--update` for in-place refreshes (works for pipx/Fedora too), and
+Settings → About has a manual "Check for updates". Requirements in brief:
 Python 3.11+, `pipewire`/`xdotool`/`xclip`/`libnotify-bin`, a whisper
 model on first use (default `small` ≈ 484 MB), GPU optional. On Wayland
 you need `wtype`/`ydotool` and a DE shortcut:

@@ -151,6 +151,36 @@ RestartSec=3
 WantedBy=graphical-session.target
 UNIT
 
+# 4b. Signed apt repo channel (#22): the deb points at the repo it upgrades
+# from - /etc/apt keyring + sources list, both conffiles (kept on remove,
+# cleaned on purge). After `sudo apt install ./sayit-ermano_x.deb`, plain
+# `apt update && apt upgrade` carries every later release. The repo itself
+# (reprepro, served by GitHub Pages) is published by release-publish via
+# packaging/apt/update-repo.sh; see packaging/apt/README.md.
+APT_KEY="$REPO/packaging/apt/sayit-ermano.asc"
+APT_REPO_URL="https://acailic.github.io/SayItErmano/apt"
+if [ -f "$APT_KEY" ]; then
+    command -v gpg >/dev/null 2>&1 \
+        || { echo "ERROR: gpg is required to dearmor $APT_KEY" >&2; exit 1; }
+    mkdir -p "$STAGE/etc/apt/keyrings" "$STAGE/etc/apt/sources.list.d"
+    gpg --batch --yes --dearmor --output \
+        "$STAGE/etc/apt/keyrings/sayit-ermano.gpg" "$APT_KEY"
+    printf 'deb [signed-by=/etc/apt/keyrings/sayit-ermano.gpg] %s stable main\n' \
+        "$APT_REPO_URL" > "$STAGE/etc/apt/sources.list.d/sayit-ermano.list"
+    cat > "$STAGE/DEBIAN/conffiles" <<CONF
+/etc/apt/keyrings/sayit-ermano.gpg
+/etc/apt/sources.list.d/sayit-ermano.list
+CONF
+elif [ "${DEB_ALLOW_NO_APT_REPO:-0}" = "1" ]; then
+    echo ">> DEV MODE (DEB_ALLOW_NO_APT_REPO=1): apt repo channel NOT" >&2
+    echo ">> configured - this deb will not receive apt upgrades." >&2
+else
+    echo "ERROR: $APT_KEY is missing - the deb must point at the signed apt repo." >&2
+    echo "       Provision the signing key first (packaging/apt/README.md)." >&2
+    echo "       Local dev builds may opt out explicitly: DEB_ALLOW_NO_APT_REPO=1 $0" >&2
+    exit 1
+fi
+
 # 5. Debian control ---------------------------------------------------------
 mkdir -p "$STAGE/DEBIAN"
 cat > "$STAGE/DEBIAN/control" <<CONTROL

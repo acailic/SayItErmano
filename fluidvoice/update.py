@@ -31,6 +31,10 @@ GITHUB_LATEST_URL = "https://api.github.com/repos/acailic/SayItErmano/releases/l
 RELEASES_URL = "https://github.com/acailic/SayItErmano/releases"
 ONE_SHOT_INSTALLER = \
     "https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/install-one-shot.sh"
+ROUTE_GUIDE_URL = ("https://github.com/acailic/SayItErmano/blob/linux/"
+                   "docs/guides/install.md#updates")
+APT_SOURCES_FILE = Path("/etc/apt/sources.list.d/sayit-ermano.list")
+APT_REPO_URL = "https://acailic.github.io/SayItErmano/apt"
 CHECK_TIMEOUT_S = 10          # per the request spec
 RECHECK_INTERVAL_S = 24 * 3600  # daily
 SKIP_ENV = "SAYITERMANO_SKIP_UPDATE_CHECK"
@@ -155,11 +159,15 @@ def deb_checksum(release: dict | None) -> str | None:
 # ---------------------------------------------------------------------------
 
 def detect_install_method(exe: Path | None = None,
-                          home: Path | None = None) -> dict:
+                          home: Path | None = None,
+                          apt_sources_file: Path | None = None) -> dict:
     """How was the running binary installed? Resolution order (first marker
     wins - this is the truth of *the binary that ran*, exactly what you
     want to upgrade):
 
+      apt        deb layout (below) AND the signed apt repo configured
+                 (sources.list.d entry shipped by the deb) - upgrades flow
+                 through plain `apt update && apt upgrade`
       deb        sys.executable under /opt/sayit-ermano/ (bundled venv
                  from packaging/build-deb.sh)
       user-venv  under ~/.local/share/sayit-ermano/ (one-shot installer
@@ -168,8 +176,8 @@ def detect_install_method(exe: Path | None = None,
       source     a venv whose parent has both .git and pyproject.toml
       unknown    anything else
 
-    exe/home are injectable so tests build the five marker trees under
-    tmp_path instead of monkeypatching internals.
+    exe/home/apt_sources_file are injectable so tests build the marker
+    trees under tmp_path instead of monkeypatching internals.
     """
     # abspath, NOT resolve(): venv `bin/python` entries are symlinks to the
     # system interpreter on Linux - following them would collapse every
@@ -177,10 +185,14 @@ def detect_install_method(exe: Path | None = None,
     # the truth of the binary that ran).
     exe = Path(os.path.abspath(exe or sys.executable))
     home = Path(home) if home is not None else Path.home()
+    apt_sources_file = (apt_sources_file if apt_sources_file is not None
+                        else APT_SOURCES_FILE)
     s = str(exe)
 
     deb_root = Path("/opt/sayit-ermano")
     if s.startswith(str(deb_root) + os.sep):
+        if apt_sources_file.exists():
+            return {"method": "apt", "marker": str(apt_sources_file)}
         return {"method": "deb", "marker": str(deb_root / "venv")}
 
     user_root = home / ".local" / "share" / "sayit-ermano"
@@ -217,6 +229,11 @@ def upgrade_command(method: str, release: dict | None) -> str:
     """The exact copy-paste block for one install method (pure; golden-
     tested). The deb block falls back to the user-venv block when the
     release has no amd64 asset."""
+    if method == "apt":
+        # the signed repo the deb configured (packaging/apt): updates are
+        # ordinary apt traffic - config (~/.config) and history
+        # (~/.local/share) are never touched by an upgrade
+        return "sudo apt update && sudo apt upgrade -y sayit-ermano"
     if method == "deb":
         asset = find_deb_asset(release)
         if asset is not None:
@@ -275,6 +292,47 @@ def dismiss_update(version: str | None = None,
 
 
 # ---------------------------------------------------------------------------
+# Manual, user-initiated check (no-telemetry ADR posture)
+# ---------------------------------------------------------------------------
+
+def manual_check(method_info: dict | None = None,
+                 fetch: Callable[[], tuple[dict | None, str | None]]
+                 | None = None) -> dict:
+    """One check because the USER asked for it (Settings → About →
+    "Check for updates", control route `update-check`). This is the
+    no-telemetry-compliant surface: it runs regardless of updates.check
+    (that switch governs the *background* checker only), honors the env
+    kill-switch, never notifies, never writes state, never raises.
+    Returns the same shape as UpdateChecker.status() plus route_guide."""
+    if method_info is None:
+        method_info = detect_install_method()
+    st: dict = {"enabled": True, "checked": False, "latest": None,
+                "update_available": None, "url": None, "error": None,
+                "checked_at": None, "method": method_info["method"],
+                "upgrade_command": "", "route_guide": ROUTE_GUIDE_URL}
+    if update_skipped():
+        st["error"] = f"skipped ({SKIP_ENV}=1)"
+        return st
+    fetch = fetch or fetch_latest_result
+    try:
+        release, error = fetch()
+    except Exception as e:  # noqa: BLE001 - offline is a normal state
+        release, error = None, f"{type(e).__name__}: {e}"[:200]
+    st["checked"] = True
+    st["checked_at"] = time.time()
+    if release is None:
+        st["error"] = error or "offline or GitHub API error"
+        return st
+    latest = release.get("version") or release.get("tag") or ""
+    st["latest"] = latest
+    if is_newer(latest, __version__):
+        st["update_available"] = latest
+        st["url"] = release.get("url")
+        st["upgrade_command"] = upgrade_command(st["method"], release)
+    return st
+
+
+# ---------------------------------------------------------------------------
 # Daemon-side checker (thread manager, micmon/lockmon pattern)
 # ---------------------------------------------------------------------------
 
@@ -302,7 +360,8 @@ class UpdateChecker:
                               "latest": None, "update_available": None,
                               "url": None, "error": None, "checked_at": None,
                               "method": self._method["method"],
-                              "upgrade_command": ""}
+                              "upgrade_command": "",
+                              "route_guide": ROUTE_GUIDE_URL}
         self._enabled = bool(cfg.get("updates", {}).get("check", True))
 
     # -- lifecycle ------------------------------------------------------------

@@ -15,7 +15,7 @@ conftest's network guard).
 | Path | Destination | When it fires | Off by default? | How to disable |
 |---|---|---|---|---|
 | `fluidvoice/model_download.py` | HuggingFace (model files) | First use of a model, or a model switch, when the file is not already in the local cache | **No** — but only until the model is cached; never during dictation | Pre-place models in the cache; downloads never repeat for a cached file |
-| `fluidvoice/update.py` | GitHub releases API | Periodic update check | **No** — `updates.check` defaults to true | `[updates] check = false` |
+| `fluidvoice/update.py` | GitHub releases API | Periodic update check, plus the user-initiated "Check for updates" (Settings → About / `update-check` route — same endpoint, run only when asked) | **No** — `updates.check` defaults to true | `[updates] check = false` (the manual check still works; it only runs when the user clicks) |
 | `fluidvoice/ai/client.py` | The AI-polish endpoint YOU configured | Only per dictation when `ai.enabled = true` | **Yes** | `[ai] enabled = false` (default) |
 | `fluidvoice/backends/remote_stt.py` | The STT server YOU configured | Only when `model.remote_url` is set | **Yes** | Leave `model.remote_url` empty (default) |
 

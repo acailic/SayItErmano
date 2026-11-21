@@ -26,7 +26,7 @@ if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
 from fluidvoice.config import DEFAULTS  # noqa: E402
-from fluidvoice.gtkui.client import Client  # noqa: E402
+from fluidvoice.gtkui.client import Client, ClientError  # noqa: E402
 
 Adw.init()
 
@@ -48,6 +48,8 @@ class StubClient(Client):
         self.profile_calls: list[tuple] = []
         self.deleted_models: list[tuple] = []
         self.reruns: list[tuple] = []
+        self.update_checks = 0
+        self.update_check_result: object = None  # dict | Exception | None
 
     def status(self):
         return {"ok": True, "recording": False, "busy": False,
@@ -62,6 +64,21 @@ class StubClient(Client):
 
     def daemon_alive(self):
         return True
+
+    def update_check(self):
+        """Scriptable manual update check (Settings → About button)."""
+        self.update_checks += 1
+        if isinstance(self.update_check_result, Exception):
+            raise self.update_check_result
+        if self.update_check_result is not None:
+            return self.update_check_result
+        return {"ok": True,
+                "update": {"enabled": True, "checked": True,
+                           "latest": "0.5.0", "update_available": None,
+                           "url": None, "error": None, "checked_at": 1.0,
+                           "method": "user-venv", "upgrade_command": "",
+                           "route_guide": "https://example/guide"},
+                "update_available": None, "update_url": None}
 
     def get_config(self):
         cfg = copy.deepcopy(DEFAULTS)
@@ -1503,9 +1520,77 @@ class TestUpdateSurfacing:
                                 "method": "deb"}})
         assert w.about_update_row.get_subtitle() == \
             "v0.6.0 available — run 'sayit-ermano update'"
+        assert w.about_update_guide_btn.get_visible() is True
         w._apply_about_update({"update_available": None, "update":
                                {"enabled": True, "checked": False}})
         assert w.about_update_row.get_subtitle() == "checking…"
+        assert w.about_update_guide_btn.get_visible() is False
+        # a FAILED check (offline) never claims "up to date"
+        w._apply_about_update({"update_available": None, "update":
+                               {"enabled": True, "checked": True,
+                                "error": "URLError: net down"}})
+        assert w.about_update_row.get_subtitle() == \
+            "latest unknown (offline or GitHub unreachable)"
+
+    def test_about_check_button_available(self, settings_win, loop):
+        """Manual 'Check for updates' (#22): user-initiated probe surfaces
+        the release and the route-guide deep-link."""
+        w = settings_win
+        c = reset_settings(w, loop)
+        c.update_check_result = {
+            "ok": True,
+            "update": {"enabled": True, "checked": True, "latest": "0.6.0",
+                       "update_available": "0.6.0",
+                       "url": "https://github.com/x", "error": None,
+                       "checked_at": 1.0, "method": "apt",
+                       "upgrade_command": "sudo apt update",
+                       "route_guide": "https://example/guide"},
+            "update_available": "0.6.0", "update_url": "https://github.com/x"}
+        w._on_check_updates()
+        assert pump_until(loop, lambda:
+                          w.about_update_row.get_subtitle() ==
+                          "v0.6.0 available — run 'sayit-ermano update'")
+        assert c.update_checks == 1
+        assert w.about_update_guide_btn.get_visible() is True
+
+    def test_about_check_button_no_network(self, settings_win, loop):
+        """The no-network case: the row says so, never 'up to date'."""
+        w = settings_win
+        c = reset_settings(w, loop)
+        c.update_check_result = {
+            "ok": True,
+            "update": {"enabled": True, "checked": True, "latest": None,
+                       "update_available": None, "url": None,
+                       "error": "URLError: net down", "checked_at": 1.0,
+                       "method": "apt", "upgrade_command": "",
+                       "route_guide": "https://example/guide"},
+            "update_available": None, "update_url": None}
+        w._on_check_updates()
+        assert pump_until(loop, lambda:
+                          w.about_update_row.get_subtitle() ==
+                          "latest unknown (offline or GitHub unreachable)")
+        assert w.about_update_guide_btn.get_visible() is False
+
+    def test_about_check_button_daemon_down(self, settings_win, loop):
+        w = settings_win
+        c = reset_settings(w, loop)
+        c.update_check_result = ClientError("daemon down")
+        w._on_check_updates()
+        assert pump_until(loop, lambda: w.about_update_row.get_subtitle()
+                          .startswith("check failed — daemon down"))
+
+    def test_about_guide_button_opens_route_guide(self, settings_win, loop,
+                                                  monkeypatch):
+        from fluidvoice.gtkui.settings_pages import about as about_mod
+        opened = []
+        monkeypatch.setattr(about_mod.subprocess, "Popen",
+                            lambda cmd, **kw: opened.append(cmd))
+        w = settings_win
+        reset_settings(w, loop)
+        w._open_route_guide()
+        assert opened and opened[0][0] == "xdg-open"
+        from fluidvoice import update as update_mod
+        assert opened[0][1] == update_mod.ROUTE_GUIDE_URL
 
     def test_onboarding_has_updates_sentence(self, loop):
         from fluidvoice.gtkui.onboarding import OnboardingWindow

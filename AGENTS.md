@@ -49,6 +49,11 @@ lost; uncommitted work was.
    production daemon is a two-step (stop the unit, run the repo daemon,
    then `systemctl --user start sayit-ermano` afterwards); restore any
    config keys you flip in `~/.config/sayit-ermano/config.toml`.
+7. Releases publish to the signed apt repo (`site/apt`, served by Pages)
+   after the GitHub release: that step needs the `APT_REPO_GPG_KEY`
+   secret + the committed `packaging/apt/sayit-ermano.asc` — provisioning
+   and the one-off `skip-apt-reason` waiver live in
+   `packaging/apt/README.md` and `docs/dev/release-gates.md`.
 
 ## Landing site (GitHub Pages)
 
