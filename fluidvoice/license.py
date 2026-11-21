@@ -236,6 +236,19 @@ def import_key(key: str, **kwargs) -> LicenseInfo:
     return info
 
 
+def status_text(info: LicenseInfo | None) -> str:
+    """One-line license state for the About page (pure, GUI-free).
+
+    Kept free of characters Pango would parse as markup (<, >, &) — the
+    About row renders subtitles as markup.
+    """
+    if info is None:
+        return "none — every feature works without one"
+    covered = "all releases" if info.max_version == FOREVER \
+        else f"major {info.max_version} and below"
+    return f"{info.email} · purchased {info.purchased.isoformat()} · {covered}"
+
+
 def status() -> LicenseInfo | None:
     """The imported key's status, or None when nothing is stored.
 

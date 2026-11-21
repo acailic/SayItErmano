@@ -100,6 +100,7 @@ class ModelsPageMixin:
             self.about_backend_row.set_subtitle(st.get("backend") or "—")
             self.about_gpu_row.set_subtitle("yes" if st.get("cuda") else "no")
             self._apply_about_update(st)
+            self.refresh_license_row()
 
     def _active_model(self) -> str:
         name = str(self.cfg.get("model", {}).get("name", "auto"))
