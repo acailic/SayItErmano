@@ -5,6 +5,7 @@ from __future__ import annotations
 from gi.repository import Adw, Gtk
 
 from ...config import KNOWN_LANGUAGES
+from ...i18n import _
 from .common import _ActionTriggersProxy, _ExtraShortcutsProxy, _ListProxy
 
 
@@ -13,7 +14,7 @@ class DictationPageMixin:
         page = Adw.PreferencesPage(
             name="dictation",
             icon_name="fluidvoice-dictation-symbolic",
-            title="Dictation",
+            title=_("Dictation"),
         )
 
         # sections (org plan 5.5): one builder per group; this
@@ -32,14 +33,14 @@ class DictationPageMixin:
         self._add_page(page)
 
     def _fill_mics(self) -> None:
-        values: list[tuple[str, str]] = [("Auto (system default)", "")]
+        values: list[tuple[str, str]] = [(_("Auto (system default)"), "")]
         for m in self.c.mics():
-            label = m["description"] + ("  · default" if m.get("default") else "")
+            label = m["description"] + (_("  · default") if m.get("default") else "")
             values.append((label, m["name"]))
         current = str(self.cfg.get("recording", {}).get("device", "") or "")
         value_list = [v for _l, v in values]
         if current and current not in value_list:
-            values.append((current + "  · saved", current))
+            values.append((current + _("  · saved"), current))
             value_list.append(current)
         model = Gtk.StringList()
         for label, _v in values:
@@ -61,19 +62,19 @@ class DictationPageMixin:
             self._add_mic_prio(str(pattern))
 
     def _add_mic_prio(self, value: str) -> None:
-        row = Adw.EntryRow(title="Pattern")
+        row = Adw.EntryRow(title=_("Pattern"))
         row.set_text(value)
         row.connect("changed", lambda *_: self._touch())
         up = Gtk.Button(
-            icon_name="go-up-symbolic", css_classes=["flat"], tooltip_text="Move up"
+            icon_name="go-up-symbolic", css_classes=["flat"], tooltip_text=_("Move up")
         )
         down = Gtk.Button(
-            icon_name="go-down-symbolic", css_classes=["flat"], tooltip_text="Move down"
+            icon_name="go-down-symbolic", css_classes=["flat"], tooltip_text=_("Move down")
         )
         rm = Gtk.Button(
             icon_name="user-trash-symbolic",
             css_classes=["flat", "destructive-action"],
-            tooltip_text="Remove this pattern",
+            tooltip_text=_("Remove this pattern"),
         )
         ref = {"row": row, "up": up, "down": down}
         up.connect("clicked", lambda *_: self._move_mic_prio(ref, -1))
@@ -130,15 +131,16 @@ class DictationPageMixin:
             self._add_dict_word(entry)
 
     def _add_dict_word(self, entry: dict) -> None:
-        exp = Adw.ExpanderRow(title=", ".join(entry.get("triggers", [])) or "New word")
-        trig = Adw.EntryRow(title="Triggers (comma-separated)")
+        exp = Adw.ExpanderRow(title=", ".join(entry.get("triggers", []))
+                               or _("New word"))
+        trig = Adw.EntryRow(title=_("Triggers (comma-separated)"))
         trig.set_text(", ".join(entry.get("triggers", [])))
-        repl = Adw.EntryRow(title="Replacement")
+        repl = Adw.EntryRow(title=_("Replacement"))
         repl.set_text(str(entry.get("replacement", "")))
         rm = Gtk.Button(
             icon_name="user-trash-symbolic",
             css_classes=["flat", "destructive-action"],
-            tooltip_text="Remove this word",
+            tooltip_text=_("Remove this word"),
         )
         exp.add_suffix(rm)
         exp.add_row(trig)
@@ -147,7 +149,7 @@ class DictationPageMixin:
         rm.connect("clicked", self._remove_dict_word, ref)
 
         def sync_title(*_):
-            exp.set_title(trig.get_text().strip() or "New word")
+            exp.set_title(trig.get_text().strip() or _("New word"))
             self._touch()
 
         trig.connect("changed", sync_title)
@@ -170,8 +172,8 @@ class DictationPageMixin:
                 entries.append({"triggers": triggers, "replacement": replacement})
             elif triggers or replacement:
                 self.toast(
-                    "Incomplete dictionary word skipped (needs "
-                    "triggers and a replacement)"
+                    _("Incomplete dictionary word skipped (needs "
+                      "triggers and a replacement)")
                 )
         return entries
 
@@ -185,19 +187,19 @@ class DictationPageMixin:
             self._add_cycle_lang(str(code))
 
     def _add_cycle_lang(self, value: str) -> None:
-        row = Adw.EntryRow(title="Code — e.g. auto, en, sl")
+        row = Adw.EntryRow(title=_("Code — e.g. auto, en, sl"))
         row.set_text(value)
         row.connect("changed", self._on_cycle_lang_changed)
         up = Gtk.Button(
-            icon_name="go-up-symbolic", css_classes=["flat"], tooltip_text="Move up"
+            icon_name="go-up-symbolic", css_classes=["flat"], tooltip_text=_("Move up")
         )
         down = Gtk.Button(
-            icon_name="go-down-symbolic", css_classes=["flat"], tooltip_text="Move down"
+            icon_name="go-down-symbolic", css_classes=["flat"], tooltip_text=_("Move down")
         )
         rm = Gtk.Button(
             icon_name="user-trash-symbolic",
             css_classes=["flat", "destructive-action"],
-            tooltip_text="Remove this language",
+            tooltip_text=_("Remove this language"),
         )
         ref = {"row": row, "up": up, "down": down}
         up.connect("clicked", lambda *_: self._move_cycle_lang(ref, -1))
@@ -260,32 +262,34 @@ class DictationPageMixin:
 
     def _section_hotkeys(self, page: Adw.PreferencesPage) -> None:
         """Hotkeys: keys, extra shortcuts + prompt profiles, modifiers."""
-        hk = Adw.PreferencesGroup(title="Hotkeys")
+        hk = Adw.PreferencesGroup(title=_("Hotkeys"))
         hk.add(
             self._entry(
-                "hotkey", "key", "Dictation key — e.g. Right_Control, F9", capture=True
+                "hotkey", "key",
+                _("Dictation key — e.g. Right_Control, F9"), capture=True
             )
         )
         hk.add(
             self._combo(
                 "hotkey",
                 "mode",
-                "Mode",
-                subtitle="tap to start/stop · hold = push-to-talk · "
-                "both: quick tap toggles, holding talks · "
-                "modifier-only keys need toggle",
+                _("Mode"),
+                subtitle=_("tap to start/stop · hold = push-to-talk · "
+                           "both: quick tap toggles, holding talks · "
+                           "modifier-only keys need toggle"),
             )
         )
         hk.add(
             self._entry(
-                "hotkey", "cancel_key", "Cancel key — discards a take", capture=True
+                "hotkey", "cancel_key",
+                _("Cancel key — discards a take"), capture=True
             )
         )
         hk.add(
             self._entry(
                 "hotkey",
                 "rewrite_key",
-                "Rewrite key (optional, needs AI)",
+                _("Rewrite key (optional, needs AI)"),
                 capture=True,
             )
         )
@@ -293,7 +297,7 @@ class DictationPageMixin:
             self._entry(
                 "hotkey",
                 "command_key",
-                "Command key (optional, needs AI)",
+                _("Command key (optional, needs AI)"),
                 capture=True,
             )
         )
@@ -301,7 +305,7 @@ class DictationPageMixin:
             self._entry(
                 "hotkey",
                 "paste_key",
-                "Paste-last key (optional) — re-types last text",
+                _("Paste-last key (optional) — re-types last text"),
                 capture=True,
             )
         )
@@ -309,7 +313,7 @@ class DictationPageMixin:
             self._entry(
                 "hotkey",
                 "language_key",
-                "Cycle-language key (optional) — steps language_cycle",
+                _("Cycle-language key (optional) — steps language_cycle"),
                 capture=True,
             )
         )
@@ -319,21 +323,22 @@ class DictationPageMixin:
         extra_pairs = []
         from ...ai.profiles import load_profiles
 
-        profile_names = ["(none)"] + sorted(load_profiles())
+        profile_names = [_("(none)")] + sorted(load_profiles())
         for i in (2, 3):
-            key_row = Adw.EntryRow(title=f"Extra dictation shortcut {i} (optional)")
+            key_row = Adw.EntryRow(title=_(
+                "Extra dictation shortcut {n} (optional)").format(n=i))
             key_row.connect("changed", lambda *_: self._touch())
             btn = Gtk.Button(
                 icon_name="media-record-symbolic",
                 css_classes=["flat"],
-                tooltip_text="Press a key…",
+                tooltip_text=_("Press a key…"),
             )
             btn.connect("clicked", self._start_capture, key_row)
             key_row.add_suffix(btn)
             hk.add(key_row)
             combo = Adw.ComboRow(
-                title=f"Shortcut {i} prompt profile",
-                subtitle="polishes takes started by this shortcut",
+                title=_("Shortcut {n} prompt profile").format(n=i),
+                subtitle=_("polishes takes started by this shortcut"),
             )
             combo.set_model(Gtk.StringList(strings=profile_names))
             combo.connect("notify::selected", lambda *_: self._touch())
@@ -341,7 +346,8 @@ class DictationPageMixin:
             extra_pairs.append((key_row, combo))
         self._rows[("hotkey", "extra_shortcuts")] = _ExtraShortcutsProxy(extra_pairs)
         mods = Adw.ActionRow(
-            title="Extra modifiers", subtitle="held in addition to the dictation key"
+            title=_("Extra modifiers"),
+            subtitle=_("held in addition to the dictation key")
         )
         for mod in ("ctrl", "alt", "shift", "super"):
             tb = Gtk.ToggleButton(label=mod, css_classes=["flat"])
@@ -358,16 +364,16 @@ class DictationPageMixin:
         # Languages (macOS parity: primary language lives on General; the
         # cycle + wrong-language guard live here, next to the cycle key)
         self.cycle_group = Adw.PreferencesGroup(
-            title="Languages",
-            description="The cycle-language hotkey steps this list — e.g. "
-            "auto, en, sl (runtime state; never persisted; "
-            "empty = cycle key off)",
+            title=_("Languages"),
+            description=_("The cycle-language hotkey steps this list — e.g. "
+                          "auto, en, sl (runtime state; never persisted; "
+                          "empty = cycle key off)"),
         )
-        wl = Adw.EntryRow(title="Language whitelist — e.g. sl, en")
+        wl = Adw.EntryRow(title=_("Language whitelist — e.g. sl, en"))
         wl.connect("changed", lambda *_: self._touch())
         self._rows[("general", "language_whitelist")] = _ListProxy(wl)
         self.cycle_group.add(wl)
-        self._cycle_add_row = Adw.ActionRow(title="Add language")
+        self._cycle_add_row = Adw.ActionRow(title=_("Add language"))
         add_lang_btn = Gtk.Button(icon_name="list-add-symbolic", css_classes=["flat"])
         add_lang_btn.connect("clicked", lambda *_: self._add_cycle_lang(""))
         self._cycle_add_row.add_suffix(add_lang_btn)
@@ -377,14 +383,14 @@ class DictationPageMixin:
     def _section_mic(self, page: Adw.PreferencesPage) -> None:
         """Microphone picker, recorder watchdogs, mic priority fallback."""
 
-        mic = Adw.PreferencesGroup(title="Microphone and recording")
+        mic = Adw.PreferencesGroup(title=_("Microphone and recording"))
         self.mic_row = Adw.ComboRow(
-            title="Microphone", subtitle="Auto follows the system default"
+            title=_("Microphone"), subtitle=_("Auto follows the system default")
         )
         refresh_btn = Gtk.Button(
             icon_name="view-refresh-symbolic",
             css_classes=["flat"],
-            tooltip_text="Refresh list",
+            tooltip_text=_("Refresh list"),
         )
         refresh_btn.connect("clicked", lambda *_: self._fill_mics())
         self.mic_row.add_suffix(refresh_btn)
@@ -394,45 +400,45 @@ class DictationPageMixin:
             self._combo(
                 "recording",
                 "command",
-                "Recorder",
+                _("Recorder"),
             )
         )
-        mic.add(self._spin("recording", "max_seconds", "Max duration (s)", 5))
+        mic.add(self._spin("recording", "max_seconds", _("Max duration (s)"), 5))
         mic.add(
             self._spin(
                 "recording",
                 "first_pcm_timeout",
-                "No-audio timeout (s)",
+                _("No-audio timeout (s)"),
                 0.5,
                 digits=1,
-                subtitle="0 = off; stops a muted/wrong mic fast",
+                subtitle=_("0 = off; stops a muted/wrong mic fast"),
             )
         )
         mic.add(
             self._switch(
                 "recording",
                 "skip_silent",
-                "Skip silent takes",
-                "Discard obviously-silent recordings ≤ 4 s",
+                _("Skip silent takes"),
+                _("Discard obviously-silent recordings ≤ 4 s"),
             )
         )
         mic.add(
             self._switch(
                 "recording",
                 "pause_media",
-                "Pause media",
-                "Pause MPRIS players while dictating",
+                _("Pause media"),
+                _("Pause MPRIS players while dictating"),
             )
         )
         page.add(mic)
 
         self.mic_prio_group = Adw.PreferencesGroup(
-            title="Microphone priority",
-            description="Ordered name patterns (e.g. bluez for a Bluetooth "
-            "headset). When the chosen microphone disappears, "
-            "the first available match is used.",
+            title=_("Microphone priority"),
+            description=_("Ordered name patterns (e.g. bluez for a Bluetooth "
+                          "headset). When the chosen microphone disappears, "
+                          "the first available match is used."),
         )
-        self._mic_prio_add_row = Adw.ActionRow(title="Add pattern")
+        self._mic_prio_add_row = Adw.ActionRow(title=_("Add pattern"))
         add_p_btn = Gtk.Button(icon_name="list-add-symbolic", css_classes=["flat"])
         add_p_btn.connect("clicked", lambda *_: self._add_mic_prio(""))
         self._mic_prio_add_row.add_suffix(add_p_btn)
@@ -443,36 +449,37 @@ class DictationPageMixin:
         """Live preview (pill overlay)."""
 
         preview = Adw.PreferencesGroup(
-            title="Live preview",
-            description="The pill overlay with partial text while recording",
+            title=_("Live preview"),
+            description=_("The pill overlay with partial text while recording"),
         )
-        preview.add(self._switch("recording", "preview_enabled", "Enabled"))
+        preview.add(self._switch("recording", "preview_enabled", _("Enabled")))
         preview.add(
             self._combo(
                 "recording",
                 "preview_mode",
-                "Mode",
-                labels={"notify": "notifications only"},
+                _("Mode"),
+                labels={"notify": _("notifications only")},
             )
         )
         preview.add(
             self._combo(
                 "recording",
                 "preview_overlay_size",
-                "Size",
-                subtitle="macOS size presets",
+                _("Size"),
+                subtitle=_("macOS size presets"),
             )
         )
         preview.add(
             self._spin(
-                "recording", "preview_bottom_offset", "Bottom offset (px)", 2
+                "recording", "preview_bottom_offset",
+                _("Bottom offset (px)"), 2
             )
         )
         preview.add(
             self._spin(
                 "recording",
                 "preview_interval",
-                "Update interval (s)",
+                _("Update interval (s)"),
                 0.1,
                 digits=1,
             )
@@ -481,7 +488,7 @@ class DictationPageMixin:
             self._spin(
                 "recording",
                 "preview_min_audio",
-                "First partial after (s)",
+                _("First partial after (s)"),
                 0.1,
                 digits=1,
             )
@@ -490,15 +497,16 @@ class DictationPageMixin:
             self._switch(
                 "recording",
                 "preview_segmented",
-                "Streaming (segmented)",
-                "constant-cost windows instead of whole-take re-decode; all backends",
+                _("Streaming (segmented)"),
+                _("constant-cost windows instead of whole-take re-decode; "
+                  "all backends"),
             )
         )
         preview.add(
             self._spin(
                 "recording",
                 "preview_segment_s",
-                "Segment window (s)",
+                _("Segment window (s)"),
                 0.5,
                 digits=1,
             )
@@ -507,26 +515,29 @@ class DictationPageMixin:
             self._switch(
                 "recording",
                 "preview_conf_gate",
-                "Confidence gate",
-                "hide preview words the model scored shaky (wrong-word suppression on hard audio)",
+                _("Confidence gate"),
+                _("hide preview words the model scored shaky "
+                  "(wrong-word suppression on hard audio)"),
             )
         )
         preview.add(
             self._switch(
                 "recording",
                 "overlay_chips",
-                "Hover action chips",
-                "hover the pill while recording for copy/paste/cancel buttons (X11)",
+                _("Hover action chips"),
+                _("hover the pill while recording for copy/paste/cancel "
+                  "buttons (X11)"),
             )
         )
         preview.add(
             self._spin(
                 "recording",
                 "preview_vad_silence_s",
-                "Stop after silence (s)",
+                _("Stop after silence (s)"),
                 0.5,
                 digits=1,
-                subtitle="0 keeps the old behavior (hotkey stops every take)",
+                subtitle=_("0 keeps the old behavior "
+                           "(hotkey stops every take)"),
             )
         )
         page.add(preview)
@@ -534,40 +545,41 @@ class DictationPageMixin:
     def _section_polish(self, page: Adw.PreferencesPage) -> None:
         """Text polish: fillers, spoken triggers, punctuation, GAAV, spoken send."""
 
-        polish = Adw.PreferencesGroup(title="Text polish")
+        polish = Adw.PreferencesGroup(title=_("Text polish"))
         polish.add(
             self._switch(
                 "processing",
                 "remove_filler_words",
-                "Remove filler words",
-                "um, uh, hmm… before punctuation",
+                _("Remove filler words"),
+                _("um, uh, hmm… before punctuation"),
             )
         )
-        fillers = Adw.EntryRow(title="Filler words (comma-separated)")
+        fillers = Adw.EntryRow(title=_("Filler words (comma-separated)"))
         fillers.connect("changed", lambda *_: self._touch())
         self._rows[("processing", "filler_words")] = _ListProxy(fillers)
 
         actions_g = Adw.PreferencesGroup(
-            title="Spoken formatting triggers",
-            description="Extra phrases that trigger formatting actions "
-            "(on top of the built-ins; still needs the prefix)",
+            title=_("Spoken formatting triggers"),
+            description=_("Extra phrases that trigger formatting actions "
+                          "(on top of the built-ins; still needs the prefix)"),
         )
         trig_rows = {}
         for action, title in (
-            ("new_line", "New line"),
-            ("new_paragraph", "New paragraph"),
-            ("tab", "Tab"),
-            ("space", "Space"),
+            ("new_line", _("New line")),
+            ("new_paragraph", _("New paragraph")),
+            ("tab", _("Tab")),
+            ("space", _("Space")),
         ):
-            row = Adw.EntryRow(title=f"{title} — extra trigger phrases")
+            row = Adw.EntryRow(
+                title=_("{action} — extra trigger phrases").format(action=title))
             row.connect("changed", lambda *_: self._touch())
             trig_rows[action] = row
             actions_g.add(row)
         actions_g.add(
             Adw.ActionRow(
-                title="Example",
-                subtitle="nova vrstica, naslednja vrstica — then say "
-                "“literal nova vrstica” to start a new line",
+                title=_("Example"),
+                subtitle=_("nova vrstica, naslednja vrstica — then say "
+                           "“literal nova vrstica” to start a new line"),
             )
         )
         polish.add(actions_g)
@@ -579,55 +591,61 @@ class DictationPageMixin:
             self._switch(
                 "processing",
                 "punctuation_enabled",
-                "Spoken punctuation",
-                '"literal comma" → ,',
+                _("Spoken punctuation"),
+                _('"literal comma" → ,'),
             )
         )
         polish.add(
-            self._entry("processing", "punctuation_prefix", "Spoken-command prefix")
+            self._entry("processing", "punctuation_prefix",
+                       _("Spoken-command prefix"))
         )
         gaav = Adw.ExpanderRow(
-            title="Search-field formatting (GAAV)",
-            subtitle="lowercase first letter, drop the final period",
+            title=_("Search-field formatting (GAAV)"),
+            subtitle=_("lowercase first letter, drop the final period"),
         )
-        gaav.add_row(self._plain_switch_row("processing", "gaav_enabled", "Enabled"))
+        gaav.add_row(self._plain_switch_row("processing", "gaav_enabled",
+                                            _("Enabled")))
         gaav.add_row(
             self._plain_switch_row(
-                "processing", "gaav_lowercase_first", "Lowercase first letter"
+                "processing", "gaav_lowercase_first",
+                _("Lowercase first letter")
             )
         )
         gaav.add_row(
             self._plain_switch_row(
-                "processing", "gaav_remove_trailing_period", "Remove trailing period"
+                "processing", "gaav_remove_trailing_period",
+                _("Remove trailing period")
             )
         )
         polish.add(gaav)
 
         send = Adw.ExpanderRow(
-            title="Spoken send", subtitle="a trailing phrase strips and presses Enter"
+            title=_("Spoken send"),
+            subtitle=_("a trailing phrase strips and presses Enter")
         )
         send.add_row(
-            self._plain_switch_row("recording", "spoken_send_enabled", "Enabled")
+            self._plain_switch_row("recording", "spoken_send_enabled",
+                                   _("Enabled"))
         )
-        phrase = self._entry("recording", "spoken_send_phrase", "Phrase")
+        phrase = self._entry("recording", "spoken_send_phrase", _("Phrase"))
         send.add_row(phrase)
         send.add_row(
             self._combo(
                 "recording",
                 "spoken_send_key",
-                "Key",
+                _("Key"),
             )
         )
         send.add_row(
             self._spin(
                 "recording",
                 "spoken_send_countdown_s",
-                "Quiet countdown (s)",
+                _("Quiet countdown (s)"),
                 0.1,
                 digits=1,
-                subtitle="phrase + 0.5 s quiet finishes "
-                "the take by itself (speak to "
-                "cancel); 0 = off",
+                subtitle=_("phrase + 0.5 s quiet finishes "
+                           "the take by itself (speak to "
+                           "cancel); 0 = off"),
             )
         )
         polish.add(send)
@@ -637,10 +655,11 @@ class DictationPageMixin:
         """Custom dictionary + auto-learned suggestions."""
 
         self.dict_group = Adw.PreferencesGroup(
-            title="Custom dictionary",
-            description='Phrases replaced on insert — "miro board" → "Miro board"',
+            title=_("Custom dictionary"),
+            description=_('Phrases replaced on insert — '
+                          '"miro board" → "Miro board"'),
         )
-        add_w = Adw.ActionRow(title="Add word")
+        add_w = Adw.ActionRow(title=_("Add word"))
         add_w_btn = Gtk.Button(icon_name="list-add-symbolic", css_classes=["flat"])
         add_w_btn.connect("clicked", lambda *_: self._add_dict_word({}))
         add_w.add_suffix(add_w_btn)
@@ -650,9 +669,9 @@ class DictationPageMixin:
         # auto-learned suggestions (dict_learn), below the hand-curated
         # editor; hidden entirely while nothing is pending
         self.suggest_group = Adw.PreferencesGroup(
-            title="Suggested words",
-            description="Corrections noticed in your history edits — "
-            "accept to teach the dictionary",
+            title=_("Suggested words"),
+            description=_("Corrections noticed in your history edits — "
+                          "accept to teach the dictionary"),
         )
         self.suggest_group.set_visible(False)  # until the first load
         self._suggest_rows: list[dict] = []
@@ -662,21 +681,23 @@ class DictationPageMixin:
         """Insertion."""
 
         ins = Adw.PreferencesGroup(
-            title="Insertion", description="How typed text reaches your apps"
+            title=_("Insertion"),
+            description=_("How typed text reaches your apps")
         )
         ins.add(
             self._combo(
                 "insertion",
                 "mode",
-                "Mode",
+                _("Mode"),
             )
         )
-        ins.add(self._spin("insertion", "type_delay_ms", "Typing delay (ms)", 1))
+        ins.add(self._spin("insertion", "type_delay_ms",
+                           _("Typing delay (ms)"), 1))
         ins.add(
             self._spin(
                 "insertion",
                 "paste_threshold_chars",
-                "Paste threshold (chars)",
+                _("Paste threshold (chars)"),
                 50,
             )
         )
@@ -688,18 +709,20 @@ class DictationPageMixin:
         # Command mode (moved from the AI page, macOS parity: Commands
         # belong with Dictation)
         cmd = Adw.PreferencesGroup(
-            title="Commands",
-            description="Voice → terminal agent. Every command needs confirmation.",
+            title=_("Commands"),
+            description=_("Voice → terminal agent. Every command needs "
+                          "confirmation."),
         )
-        cmd.add(self._spin("command", "max_turns", "Max agent turns", 1))
+        cmd.add(self._spin("command", "max_turns", _("Max agent turns"), 1))
         cmd.add(
-            self._entry("command", "working_dir", "Working directory (empty = home)")
+            self._entry("command", "working_dir",
+                        _("Working directory (empty = home)"))
         )
         cmd.add(
             self._spin(
                 "command",
                 "timeout_seconds",
-                "Command timeout (s)",
+                _("Command timeout (s)"),
                 5,
                 digits=1,
             )
@@ -708,7 +731,7 @@ class DictationPageMixin:
             self._spin(
                 "command",
                 "confirm_timeout_s",
-                "Confirmation timeout (s)",
+                _("Confirmation timeout (s)"),
                 5,
                 digits=1,
             )

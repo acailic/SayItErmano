@@ -57,7 +57,9 @@ include = ["fluidvoice*"]
 
 [tool.setuptools.package-data]
 "fluidvoice" = ["assets/sfx/*", "assets/icon.png",
-                "assets/icons/*", "assets/icons/symbolic/actions/*.svg", "assets/providers/*"]
+                "assets/icons/*", "assets/icons/symbolic/actions/*.svg", "assets/providers/*",
+                # compiled UI translations (po/ -> scripts/build_translations.py)
+                "locale/*/LC_MESSAGES/*.mo"]
 "fluidvoice.evalharness.corpus" = ["manifest.toml",  # synthetic eval corpus (P1.4)
                                  "tts-reference.toml"]  # TTS decode-baseline reference set (wave 3)
 

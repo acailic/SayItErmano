@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import insertion
+from .i18n import _
 from .media import MediaController
 from .recorder import RecorderError
 from .runtime_tasks import RuntimeTasks
@@ -597,12 +598,12 @@ class CaptureCoordinator:
             display = self.preview[1] if self.preview else None
             if display is not None:
                 if callable(getattr(display, "set_badge", None)):
-                    display.set_badge(f"lang: {lang}")
+                    display.set_badge(_("lang: {lang}").format(lang=lang))
                     return
                 if callable(getattr(display, "show", None)):
-                    display.show(f"Language: {lang}")
+                    display.show(_("Language: {lang}").format(lang=lang))
                     return
             from .preview import NotifyPreview
-            NotifyPreview().show(f"Language: {lang}")
+            NotifyPreview().show(_("Language: {lang}").format(lang=lang))
         except Exception as e:  # noqa: BLE001 - best-effort feedback only
             self._log(f"WARN language announce failed: {e}")

@@ -240,13 +240,21 @@ class DictationPipeline:
         """Returns (text, ai_used) - falls back to the raw text on AI errors.
         Per-app prompt rules (upstream per-app prompt sets) extend the
         dictation prompt when the target app matches."""
-        if not self.cfg["ai"].get("enabled"):
+        # local polish (ai.local_polish, #21) implies polish runs even
+        # with the cloud [ai] master switch off — the two toggles share
+        # one pipeline gate
+        if not (self.cfg["ai"].get("enabled")
+                or self.cfg["ai"].get("local_polish")):
             return text, False
         # late import (no module-level cycle): AIClient is resolved through
         # the daemon module at call time so patches of daemon.AIClient keep
-        # steering this construction, exactly as before the split
+        # steering this construction, exactly as before the split. The
+        # daemon may inject an _ai_factory (LocalPolishManager.polish_client)
+        # for the local-polish path; it degrades to the stock client when
+        # the toggle is off, so the patch surface is unchanged.
         from .daemon import AIClient
-        polisher = self.polisher or AIClient(self.cfg).polish
+        factory = getattr(self, "_ai_factory", None) or AIClient
+        polisher = self.polisher or factory(self.cfg).polish
         # P2: canonical profiles.rules first (inline instructions or a
         # named preset), then the legacy ai.per_app_prompts rules - the
         # result is identical to pre-P2 while no canonical rules exist.

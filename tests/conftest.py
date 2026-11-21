@@ -47,6 +47,11 @@ def _warm_pillow_freetype() -> None:
 
 _warm_pillow_freetype()
 
+# Pin the UI language to English for the whole suite: many tests assert
+# exact user-facing strings, and init_i18n() honors this env var above
+# the config and the host locale. i18n tests override it per-test.
+os.environ["SAYITERMANO_UI_LANGUAGE"] = "en"
+
 
 # ---------------------------------------------------------------------------
 # Session XDG isolation — the suite must NEVER write into the live data dir.

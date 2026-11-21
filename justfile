@@ -139,6 +139,8 @@ gate:
     {{python}} scripts/check_docs_links.py
     {{python}} scripts/gen_config_reference.py --check
     {{python}} scripts/validate_requests.py
+    {{python}} scripts/extract_translations.py --check
+    {{python}} scripts/build_translations.py --check
     mkdir -p build/test-results
     {{python}} scripts/test_tier.py unit -q -W error -ra --strict-markers --strict-config \
         --timeout=300 --junitxml=build/test-results/unit.xml
@@ -160,6 +162,14 @@ gate-release: gate
 # every requests/*.md brief carries exactly one valid STATUS: OPEN|SHIPPED|SUPERSEDED
 validate-requests:
     {{python}} scripts/validate_requests.py
+
+# UI translations (po/ -> fluidvoice/locale): extraction completeness +
+# freshness of the committed catalogs. What CI reports as the i18n gate
+# (issue #23): zero untranslated strings, zero orphans, .mo in sync.
+translations:
+    {{python}} scripts/extract_translations.py --check
+    {{python}} scripts/build_translations.py --check
+    echo "translations: catalogs complete, zero orphans, .mo fresh"
 
 # ── application: release dispatch (manual-only, like all CI here) ───────────
 # prepare bumps the version, runs the full gate + locked deb build, commits

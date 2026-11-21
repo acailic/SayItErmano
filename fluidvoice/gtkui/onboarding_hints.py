@@ -13,6 +13,7 @@ import shutil
 
 from .. import model_download, paths
 from .. import session as session_mod
+from ..i18n import _
 
 # doctor.run()'s tools table, insertion-relevant subset: (tool, why)
 TOOLS = (
@@ -38,55 +39,60 @@ def insertion_failure_hints(status: dict | None, cfg: dict,
     out: list[str] = []
 
     if status is None:
-        out.append("the daemon is not answering - restart it "
-                   "(systemctl --user restart sayit-ermano) and try again")
+        out.append(_("the daemon is not answering - restart it "
+                     "(systemctl --user restart sayit-ermano) and try "
+                     "again"))
 
     ready = model_download.model_readiness(cfg)
     if ready["kind"] != "remote" and not ready["downloaded"]:
         prog = ready.get("progress")
         if prog is not None:
-            out.append(f"the speech model is still downloading - {prog.describe()}; "
-                       "wait for it, then dictate again")
+            out.append(_("the speech model is still downloading - "
+                         "{progress}; wait for it, then dictate "
+                         "again").format(progress=prog.describe()))
         else:
-            out.append(f"the speech model ({ready['name']}) is not on disk yet - "
-                       "the first dictation downloads it; check the network "
-                       "and retry")
+            out.append(_("the speech model ({name}) is not on disk yet - "
+                         "the first dictation downloads it; check the "
+                         "network and retry").format(name=ready["name"]))
 
     info = session_mod.probe()
     caps = session_mod.capabilities(info, which=which, cfg=cfg)
     if info.is_wayland:
         if caps.get("insertion") == "unavailable":
-            out.append("Wayland: no typing tool and no wl-clipboard - "
-                       "install ydotool (needs ydotoold running and "
-                       "/dev/uinput access) or wl-clipboard for manual "
-                       "paste")
+            out.append(_("Wayland: no typing tool and no wl-clipboard - "
+                         "install ydotool (needs ydotoold running and "
+                         "/dev/uinput access) or wl-clipboard for manual "
+                         "paste"))
         elif caps.get("insertion") == "wl-clipboard-only":
-            out.append("Wayland: text reaches the clipboard (wl-copy) but "
-                       "nothing can press ctrl+v - install ydotool to type "
-                       "into apps, or paste manually after each dictation")
+            out.append(_("Wayland: text reaches the clipboard (wl-copy) "
+                         "but nothing can press ctrl+v - install ydotool "
+                         "to type into apps, or paste manually after each "
+                         "dictation"))
         if status is not None:
-            out.append("Wayland has no global hotkey grabs - bind the "
-                       "toggle script in your desktop settings, then press "
-                       "that key to dictate:")
+            out.append(_("Wayland has no global hotkey grabs - bind the "
+                         "toggle script in your desktop settings, then "
+                         "press that key to dictate:"))
             out.extend("  " + line for line in session_mod.de_shortcut_instructions(
                 info.desktop_all, str(paths.toggle_script())))
     else:
         if not which("xdotool"):
-            out.append("install the typing tool: sudo apt install xdotool "
-                       "(text goes to History meanwhile - copy it from "
-                       "there)")
+            out.append(_("install the typing tool: sudo apt install xdotool "
+                         "(text goes to History meanwhile - copy it from "
+                         "there)"))
         if not which("xclip"):
-            out.append("install the clipboard tool: sudo apt install xclip")
+            out.append(_("install the clipboard tool: sudo apt install "
+                         "xclip"))
         grab = (status or {}).get("hotkey_grabbed")
         if grab is False:
-            out.append("the dictate hotkey is held by another app - the "
-                       "daemon keeps retrying; change hotkey.key in "
-                       "Settings → Hotkeys")
+            out.append(_("the dictate hotkey is held by another app - the "
+                         "daemon keeps retrying; change hotkey.key in "
+                         "Settings → Hotkeys"))
 
     if not which("pw-record") and not which("parecord"):
-        out.append("no recorder found - sudo apt install pipewire-audio-utils")
+        out.append(_("no recorder found - sudo apt install "
+                     "pipewire-audio-utils"))
 
-    out.append("every dictation is saved in History - copy or re-insert "
-               "text from there any time")
-    out.append("full report: sayit-ermano doctor")
+    out.append(_("every dictation is saved in History - copy or re-insert "
+                 "text from there any time"))
+    out.append(_("full report: sayit-ermano doctor"))
     return out

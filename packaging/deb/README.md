@@ -15,6 +15,12 @@ Other distributions and Python versions are served by **pipx**
 declared `python3 (>= 3.11)` while bundling a Python 3.12 venv; the contract
 above makes the package honest instead.
 
+`Recommends: llama.cpp` (#21) pulls in an `llama-server` binary for
+[local polish](../../README.md#local-polish--works-offline-no-key) on
+stock Ubuntu; it is a recommendation, not a dependency, because the
+feature is opt-in (`ai.local_polish`) and any llama.cpp build — or
+`ai.local_server_binary` pointing at one — works.
+
 ## Why the build environment is pinned
 
 The deb's runtime is a venv bundled under `/opt/sayit-ermano/venv` whose
