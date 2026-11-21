@@ -648,6 +648,13 @@ _spec("hotkey", "extra_shortcuts", [], _coerce_extra_shortcuts,
                   "primary), each optionally bound to a named prompt profile\n"
                   '(ai/profiles), e.g. extra_shortcuts = [{key = "F8",\n'
                   'profile = "Terse notes"}]')
+_spec("hotkey", "wayland_portal", True, _bool(),
+      description="Wayland: use the GlobalShortcuts portal (GNOME 48+,\n"
+                  "Plasma 5.27+, Hyprland) for the dictation hotkey -\n"
+                  "Activated/Deactivated give native hold-PTT. On = try\n"
+                  "the portal first, fall back to a DE custom shortcut\n"
+                  "running `sayit-ermano toggle` when no portal backend\n"
+                  "exists (sway, COSMIC). Off = DE shortcut only.")
 _spec("hotkey", "wayland_evdev", False, _bool(),
       description="Wayland (no global grabs): optional physical push-to-talk\n"
                   "read straight from /dev/input (PRIVILEGED: needs the input\n"
@@ -911,10 +918,16 @@ _spec("insertion", "terminal_paste_key", "ctrl+shift+v", _str(32),
       description="Keystroke used to paste in terminal apps\n"
       "(general.terminal_apps); X11 terminals pass ctrl+v through to the\n"
       "app, they need ctrl+shift+v")
-_spec("insertion", "wayland_tool", "auto", _enum("auto", "wtype", "ydotool"),
-      description="Wayland typing tool: auto | wtype | ydotool (wtype needs\n"
-      "wlroots/KDE; ydotool works everywhere but needs ydotoold +\n"
-      "/dev/uinput access). Ignored on X11 sessions.")
+_spec("insertion", "wayland_tool", "auto",
+      _enum("auto", "eis", "wtype", "ydotool"),
+      description="Wayland typing backend: auto | eis | wtype | ydotool.\n"
+                  "auto picks by runtime probe - eis (RemoteDesktop\n"
+                  "portal, GNOME 46+/Plasma; consent dialog on first\n"
+                  "use), then wtype (needs the zwp virtual-keyboard\n"
+                  "protocol - wlroots/Hyprland, not GNOME/KDE), then\n"
+                  "ydotool (needs ydotoold + /dev/uinput). Out-of-layout\n"
+                  "Unicode always falls back to clipboard + Ctrl+V.\n"
+                  "Ignored on X11 sessions.")
 
 # -- [context] / [profiles] (P2: insertion-time context + behavior profiles)
 

@@ -28,8 +28,11 @@ from typing import Callable, Mapping
 
 # Tools each capability may resolve to (one list, no duplication between
 # capabilities() and insertion.py — resolve_wayland_tool is the shared
-# source of truth for the typing-tool order).
-WAYLAND_TYPE_TOOLS = ("wtype", "ydotool")
+# source of truth for the typing-tool order). "eis" is the
+# RemoteDesktop-portal insertion path (ADR-0006): selected only when the
+# runtime portal probe passes; wtype only when the runtime registry
+# probe sees zwp_virtual_keyboard_manager_v1 (never by desktop name).
+WAYLAND_TYPE_TOOLS = ("eis", "wtype", "ydotool")
 
 # Desktop tokens that mean GNOME Shell regardless of distro branding:
 # Ubuntu reports "ubuntu:GNOME" (first token "ubuntu"), Pop!_OS "pop:GNOME"
@@ -93,46 +96,102 @@ def current() -> SessionInfo:
 # ---------------------------------------------------------------------------
 
 def resolve_wayland_tool(preference: str = "auto", desktop: str = "",
-                         which: Callable[[str], str | None] | None = None
+                         which: Callable[[str], str | None] | None = None,
+                         *, probes: Mapping | None = None,
                          ) -> tuple[str | None, str]:
     """Pick the text-insertion tool for a Wayland session.
 
-    preference: insertion.wayland_tool ("auto" | "wtype" | "ydotool").
-    GNOME does not implement the zwp virtual-keyboard protocol wtype needs,
-    so "auto" skips wtype there; an EXPLICIT wtype choice is honored (the
-    user override wins) with a warning in the reason. A missing preferred
-    tool falls through to the other one (wtype -> ydotool -> None).
+    preference: insertion.wayland_tool ("auto" | "eis" | "wtype" |
+    "ydotool"). Selection is decided by RUNTIME PROBES (ADR-0006),
+    never by desktop name:
 
-    Returns (tool, reason); tool is None when neither is installed. The
-    reason feeds doctor and the insertion-time notice.
+    - "eis" requires the RemoteDesktop portal probe to pass
+      (probes["remote_desktop"] is True) plus an importable dbus-next;
+    - "wtype" requires the registry probe to see
+      zwp_virtual_keyboard_manager_v1
+      (probes["virtual_keyboard"] is True). When the probe is
+      INDETERMINATE (None), the documented legacy heuristic stays as
+      the tiebreak (GNOME-brand sessions lack the protocol);
+    - "ydotool" works anywhere it is installed.
+
+    probes=None is the PURE legacy resolution (no eis candidate, the
+    old GNOME-name behavior) — the default for one-shot callers and
+    the unit tests. An EXPLICIT preference is honored (the user
+    override wins, with a warning when its probe says no); a missing
+    preferred tool falls through to the other candidates.
+
+    Returns (tool, reason); tool is None when nothing is installed.
+    The reason feeds doctor and the insertion-time notice.
     """
     if which is None:
         which = shutil.which
     pref = (preference or "auto").strip().lower()
     if pref not in WAYLAND_TYPE_TOOLS:
         pref = "auto"
+    pure = probes is None
+    has_eis = False if pure else bool(probes.get("remote_desktop"))
+    vkb = None if pure else probes.get("virtual_keyboard")
     if pref == "auto":
-        candidates = list(WAYLAND_TYPE_TOOLS)  # wtype first, ydotool behind
+        candidates = list(WAYLAND_TYPE_TOOLS)
     else:
         candidates = [pref] + [t for t in WAYLAND_TYPE_TOOLS if t != pref]
-    gnome = is_gnome_desktop(desktop)
     notes: list[str] = []
+    pref_skipped_by_probe = False
     for tool in candidates:
-        if tool == "wtype" and gnome and pref != "wtype":
-            notes.append("wtype skipped: GNOME has no virtual-keyboard "
-                         "protocol")
-            continue
-        if which(tool):
-            if tool == "wtype" and gnome:
+        if tool == "eis" and pure:
+            continue  # pure legacy resolution never proposes the portal
+        if tool == "eis":
+            if not has_eis:
+                notes.append("eis skipped: RemoteDesktop portal probe "
+                             "failed (no ConnectToEIS here)")
+                if tool == pref:
+                    pref_skipped_by_probe = True
+                continue
+            if not _eis_importable():
+                notes.append("eis skipped: dbus-next not installed")
+                if tool == pref:
+                    pref_skipped_by_probe = True
+                continue
+        if tool == "wtype":
+            probe_says_no = vkb is False and pref != "wtype"
+            heuristic_says_no = (vkb is None
+                                 and is_gnome_desktop(desktop)
+                                 and pref != "wtype")
+            if probe_says_no or heuristic_says_no:
+                if probe_says_no:
+                    notes.append("wtype skipped: no zwp virtual-keyboard "
+                                 "protocol (registry probe)")
+                else:
+                    notes.append("wtype skipped: GNOME has no "
+                                 "virtual-keyboard protocol (registry "
+                                 "probe indeterminate)")
+                if tool == pref:
+                    pref_skipped_by_probe = True
+                continue
+        available = _eis_importable() if tool == "eis" else bool(which(tool))
+        if available:
+            if tool == "wtype" and vkb is None \
+                    and is_gnome_desktop(desktop):
                 notes.append("wtype does NOT work on GNOME "
                              "(no virtual-keyboard protocol) - consider "
                              "ydotool")
             if tool != pref and pref in WAYLAND_TYPE_TOOLS:
-                notes.append(f"preferred tool '{pref}' not found, "
+                kind = "not usable" if pref_skipped_by_probe else "not found"
+                notes.append(f"preferred tool '{pref}' {kind}, "
                              f"using {tool}")
             return tool, ("; ".join(notes) if notes else "")
         notes.append(f"{tool} not found")
     return None, "; ".join(notes) or "no wayland typing tool found"
+
+
+def _eis_importable() -> bool:
+    """The eis path needs dbus_next in-process (vendored in the Flatpak;
+    a pip extra on the host). Cheap import probe, cached by Python."""
+    try:
+        import dbus_next  # noqa: F401
+        return True
+    except ImportError:
+        return False
 
 
 def capabilities(info: SessionInfo,
@@ -151,9 +210,17 @@ def capabilities(info: SessionInfo,
     wl_clipboard = bool(which("wl-copy")) and bool(which("wl-paste"))
     caps: dict[str, str] = {}
     if info.is_wayland:
-        caps["hotkey"] = "de-shortcut"
+        hk_cfg = (cfg or {}).get("hotkey", {})
+        portal_client_ok = (_eis_importable()
+                            and _global_shortcuts_client_ok())
+        if hk_cfg.get("wayland_portal", True) and portal_client_ok:
+            caps["hotkey"] = "global-shortcuts-portal"
+        else:
+            caps["hotkey"] = "de-shortcut"
+        probes = _wayland_probes()
         tool, _reason = resolve_wayland_tool(
-            str(ins_cfg.get("wayland_tool", "auto")), info.desktop_all, which)
+            str(ins_cfg.get("wayland_tool", "auto")), info.desktop_all,
+            which, probes=probes)
         if tool is not None:
             caps["insertion"] = tool
         elif wl_clipboard:
@@ -176,6 +243,30 @@ def capabilities(info: SessionInfo,
     caps["preview"] = caps["overlay"]
     caps["tray"] = "sni"  # StatusNotifierItem over D-Bus: server-neutral
     return caps
+
+
+def _global_shortcuts_client_ok() -> bool:
+    """The GlobalShortcuts portal client side can load (the pure-Python
+    bindings + dbus-next). Whether a BACKEND exists is only learnable
+    by binding - the listener reports that at start()."""
+    try:
+        import global_shortcut_portal  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _wayland_probes() -> Mapping | None:
+    """Runtime protocol probes for capabilities() (cached, never raise).
+    None keeps the resolver on its documented legacy tiebreak."""
+    try:
+        from .input_probes import probe_input_backends
+        return {
+            "virtual_keyboard": probe_input_backends().virtual_keyboard,
+            "remote_desktop": probe_input_backends().remote_desktop,
+        }
+    except Exception:  # noqa: BLE001 - capabilities must never raise
+        return None
 
 
 # ---------------------------------------------------------------------------

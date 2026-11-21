@@ -35,6 +35,18 @@ def which_from(installed: set[str]):
     return which
 
 
+@pytest.fixture(autouse=True)
+def _pin_portal_clients(monkeypatch):
+    """Determinism: whether the portal client libraries happen to be
+    importable on this machine must not flip these legacy-behavior
+    assertions. Tests that exercise the portal paths opt back in."""
+    monkeypatch.setattr(session_mod, "_global_shortcuts_client_ok",
+                        lambda: False)
+    monkeypatch.setattr(session_mod, "_eis_importable", lambda: False)
+    monkeypatch.setattr(session_mod, "_wayland_probes",
+                        lambda: None)
+
+
 # ---------------------------------------------------------------------------
 # Phase 1 — probe precedence
 # ---------------------------------------------------------------------------
@@ -964,6 +976,105 @@ class TestEvdevDaemonWiring:
         assert any("DE custom shortcut" in line for line in logs)
         # and the restart hook does not raise on wayland
         d._restart_hotkey()
+
+
+class TestPortalHotkeyDaemonWiring:
+    """ADR-0006: the GlobalShortcuts portal is the primary wayland
+    hotkey when its client can load; the DE-shortcut assist is the
+    fallback when binding fails (sway/COSMIC have no backend)."""
+
+    def _daemon(self, monkeypatch, cfg_over=None):
+        import fluidvoice.daemon as dm
+
+        class StubRecorder:
+            def start(self, path):
+                pass
+
+            def stop(self):
+                return None
+
+            def cancel(self):
+                pass
+
+        cfg = wl_cfg()
+        cfg["hotkey"].update(cfg_over or {})
+        return dm.Daemon(cfg, recorder=StubRecorder())
+
+    @staticmethod
+    def _stub_listener_module(monkeypatch, started, error=None):
+        from fluidvoice import portal_hotkey
+
+        class StubListener:
+            def __init__(self, **kw):
+                self.calls = kw
+                self.summary = ["portal hotkey bound: CTRL+ALT+D"]
+                self._healthy = error is None
+
+            def start(self):
+                started.append(1)
+                if error is not None:
+                    raise portal_hotkey.PortalHotkeyError(error)
+
+            def stop(self):
+                pass
+
+            @property
+            def hotkey_grabbed(self):
+                return self._healthy
+
+            def set_recording(self, active):
+                pass
+
+        monkeypatch.setattr("fluidvoice.portal_hotkey."
+                            "PortalHotkeyListener", StubListener)
+        monkeypatch.setattr(session_mod, "_global_shortcuts_client_ok",
+                            lambda: True)
+
+    def test_portal_listener_started_when_enabled(self, monkeypatch):
+        set_session(monkeypatch, WL_ENV)
+        started: list = []
+        self._stub_listener_module(monkeypatch, started)
+        logs: list[str] = []
+        monkeypatch.setattr("fluidvoice.daemon.log", logs.append)
+        d = self._daemon(monkeypatch)
+        assert d._start_hotkey() is None
+        assert started == [1]
+        assert any("portal hotkey bound" in line for line in logs)
+        assert d._hotkey is not None and d._hotkey.hotkey_grabbed
+
+    def test_portal_failure_falls_back_to_de_shortcut(self, monkeypatch):
+        set_session(monkeypatch, WL_ENV)
+        started: list = []
+        self._stub_listener_module(
+            monkeypatch, started,
+            error="portal bound no shortcuts (no GlobalShortcuts backend)")
+        logs: list[str] = []
+        monkeypatch.setattr("fluidvoice.daemon.log", logs.append)
+        d = self._daemon(monkeypatch)
+        assert d._start_hotkey() is None
+        assert started == [1]     # it tried
+        assert d._hotkey is None  # and did not keep a dead listener
+        assert any("portal hotkey unavailable" in line for line in logs)
+        assert any("DE custom shortcut" in line for line in logs)
+
+    def test_portal_disabled_by_config(self, monkeypatch):
+        set_session(monkeypatch, WL_ENV)
+        started: list = []
+        self._stub_listener_module(monkeypatch, started)
+        logs: list[str] = []
+        monkeypatch.setattr("fluidvoice.daemon.log", logs.append)
+        d = self._daemon(monkeypatch, {"wayland_portal": False})
+        assert d._start_hotkey() is None
+        assert started == []
+        assert any("DE custom shortcut" in line for line in logs)
+
+    def test_client_missing_goes_straight_to_assist(self, monkeypatch):
+        set_session(monkeypatch, WL_ENV)
+        logs: list[str] = []
+        monkeypatch.setattr("fluidvoice.daemon.log", logs.append)
+        d = self._daemon(monkeypatch)
+        assert d._start_hotkey() is None
+        assert any("DE custom shortcut" in line for line in logs)
 
 
 class TestWaylandConfigRoundtrip:
