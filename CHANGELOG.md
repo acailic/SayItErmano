@@ -25,6 +25,21 @@ not reproduced here.
   protocol probe (Wayland registry scan for `zwp_virtual_keyboard`,
   portal interface version) — never by desktop name. New settings:
   `hotkey.wayland_portal`, `insertion.wayland_tool = "eis"`.
+- **Landing closing links (#19)** — the page that sells the story now
+  closes it: the bottom CTA section gains the tagged buy link
+  (price in the label, same `#buy-cta` contract — https fallback,
+  `utm_source=landing…` store tags, Paddle overlay via the new
+  `data-store-buy` binding in `store.js`) and the official Flathub
+  badge, kept as a local asset with its own
+  `utm_campaign=flathub` tags. The Flathub listing is still in
+  review (#12), so the badge links the tracking issue with the
+  state stated plainly — the flip to the listing URL is step 4 of
+  `site/README.md`'s go-live checklist. Support cluster: full FAQ,
+  SUPPORT.md, license-keys explainer and refund policy linked from
+  the FAQ section and footer; the "what does it cost?" answer now
+  mentions the supporter license instead of contradicting the
+  pricing card. Privacy stays above the fold; static gate extended
+  in `tests/test_site_links.py`.
 - **Paddle checkout wiring (#17)** — the landing site converts from
   reserve to buy: a Paddle.js overlay checkout (progressive
   enhancement — with the store ids unset or JS off, the CTA stays a

@@ -31,6 +31,9 @@ verbatim — there is no build step).
   `fluidvoice/assets/icon.png`, and the typographic `og-image.png`.
   If a screenshot changes upstream, regenerate with the same
   Pillow recipe (resize + `optimize=True`, GIF ≤ 800 px wide).
+  `assets/img/flathub-badge-en.svg` is the official Flathub badge
+  ([source](https://dl.flathub.org/assets/badges/flathub-badge-en.svg)),
+  kept local per the no-CDN rule (viewBox added so it scales).
 
 Because the site is served under the repo subpath `/SayItErmano/`,
 **all asset URLs must stay relative** — no leading-slash paths.
@@ -44,6 +47,28 @@ cd site && python3 -m http.server 8000   # then open http://localhost:8000
 Note: `scripts/check_docs_links.py` covers `docs/`, not this tree —
 `tests/test_site_links.py` is the site-side gate (dead local links,
 buy-CTA tags, store config sanity).
+
+## Closing CTAs and support links (#19)
+
+The bottom CTA section carries the two closing links, both tagged:
+
+- **Buy link** — same contract as the pricing `#buy-cta`: https
+  fallback href, `data-utm-*` store tags
+  (`utm_source=landing&utm_medium=cta&utm_campaign=store`), price in
+  the label, and a `data-store-buy` mark so `store.js` opens the
+  Paddle overlay for it too when armed.
+- **Flathub badge** (`#flathub-cta`) — the official badge asset,
+  served locally. Tag grammar is the decision rule's with its own
+  campaign (`utm_source=landing&utm_medium=cta&utm_campaign=flathub`)
+  so install clicks never count as store visits in Paddle's
+  attribution. The Flathub submission (#12) is still in review, so
+  until it merges the badge links the tracking issue and the note
+  says so — the listing URL would 404 today.
+
+Support cluster: the FAQ section ends with links to the full FAQ
+(`docs/dev/FAQ.md`), SUPPORT.md, the license-keys guide
+(`docs/guides/license.md`) and `refund.html`; the footer repeats
+Support and License keys. Gate: `tests/test_site_links.py`.
 
 ## Go-live checklist (#17)
 
@@ -62,3 +87,8 @@ buy-CTA tags, store config sanity).
    `index.html` ($39 intro → $49) and the Paddle price; the
    comparison table and every other number stay sourced from
    `docs/PRICING.md`.
+4. When the Flathub submission (#12) merges: point `#flathub-cta` in
+   `index.html` at
+   `https://flathub.org/apps/io.github.acailic.SayItErmano`
+   (keep the utm tags) and drop the "in review" note next to it and
+   the Flathub sentence in the install section.

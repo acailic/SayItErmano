@@ -1376,6 +1376,61 @@ figure.shot {
   border-color: var(--accent);
 }
 
+/* closing actions (#19): buy button + Flathub badge */
+.cta-actions {
+  position: relative;
+  margin-top: 2rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem 1.5rem;
+}
+
+.cta-buy {
+  display: inline-block;
+  padding: 0.78rem 1.35rem;
+  border-radius: 10px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #1c1200;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.cta-buy:hover {
+  filter: brightness(1.07);
+}
+
+.flathub-badge {
+  display: inline-block;
+  border-radius: 8.1px; /* matches the badge art's 16/300 rx at 153px */
+  overflow: hidden;
+  line-height: 0;
+  transition: transform 0.15s ease;
+}
+
+.flathub-badge img {
+  display: block;
+  width: 153px;
+  height: auto;
+}
+
+.flathub-badge:hover {
+  transform: translateY(-2px);
+}
+
+.cta-note {
+  position: relative;
+  font-size: 0.82rem;
+  max-width: 58ch;
+  margin-inline: auto;
+}
+
+.cta-note a {
+  color: var(--dark-ink-2);
+}
+
 /* ---------- footer ---------- */
 
 .site-footer {
