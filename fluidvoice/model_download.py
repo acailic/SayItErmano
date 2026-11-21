@@ -235,18 +235,25 @@ def download_llama_runtime(progress: Progress | None = None,
             raise OSError("checksum mismatch: llama.cpp tarball "
                           "— deleted, retry the download")
         stage.mkdir()
+        links: list[tuple[str, str]] = []
         with tarfile.open(tarball, "r:gz") as tf:
             for member in tf:
                 # one top-level dir (llama-<tag>/...); refuse anything that
-                # tries to escape it (abs paths, .., links)
+                # tries to escape it (abs paths, .., outside links)
                 parts = member.name.split("/")
                 if (not parts or parts[0] in ("", ".", "..")
                         or any(p == ".." for p in parts)
-                        or not (member.isfile() or member.isdir())):
+                        or not (member.isfile() or member.isdir()
+                                or member.issym() or member.islnk())):
                     continue
                 target = stage.joinpath(*parts)
                 if member.isdir():
                     target.mkdir(parents=True, exist_ok=True)
+                    continue
+                if member.issym() or member.islnk():
+                    # the build ships SONAME symlinks (lib*.so.1 -> .so.1.0.0);
+                    # defer creation, verify the link stays inside the tree
+                    links.append((str(target), member.linkname))
                     continue
                 target.parent.mkdir(parents=True, exist_ok=True)
                 src = tf.extractfile(member)
@@ -256,6 +263,19 @@ def download_llama_runtime(progress: Progress | None = None,
                     shutil.copyfileobj(src, out)
                 mode = 0o755 if member.mode & 0o111 else 0o644
                 os.chmod(target, mode)
+        root = stage.resolve()
+        for link_path, link_target in links:
+            lp = Path(link_path)
+            resolved = (lp.parent / link_target).resolve() \
+                if not Path(link_target).is_absolute() else None
+            if resolved is None or not str(resolved).startswith(
+                    str(root) + os.sep) or resolved == root:
+                continue  # absolute or escaping link: skip, never follow
+            lp.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                os.symlink(link_target, lp)
+            except OSError:
+                pass
         server = stage / f"llama-{model_catalog.LLAMA_CPP_TAG}" / "llama-server"
         if not server.is_file():
             raise OSError("llama.cpp tarball has no llama-server "

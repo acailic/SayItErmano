@@ -6,6 +6,8 @@ passes its arguments straight through to :func:`main`).
 Subcommands:
 
 - ``run``       execute cases with a transcriber, write report.json/.md
+- ``polish``    polish-quality bench: providers over the raw-transcript
+                corpus, local-vs-cloud regression gate (issue #21)
 - ``check``     validate manifest(s) (and audio presence) only
 - ``fixtures``  materialize the synthetic wavs a manifest describes
 - ``soak``      summarize a scripts/soak.py CSV
@@ -30,6 +32,7 @@ from .manifest import (
     load_manifests,
     resolve_manifest_path,
 )
+from .polish import DEFAULT_GATE_MARGIN as DEFAULT_GATE_MARGIN_CLI
 from .runner import Transcriber, run_eval
 from .soak import read_soak_csv, summarize_soak
 from .synth import ensure_case_audio
@@ -168,6 +171,74 @@ def _cmd_soak(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_polish(args: argparse.Namespace) -> int:
+    from .polish import (
+        CLOUD,
+        LOCAL,
+        NO_POLISH,
+        identity_polisher,
+        load_polish_corpus,
+        make_endpoint_polisher,
+        make_local_polisher,
+        run_polish_bench,
+    )
+    try:
+        cases = load_polish_corpus(args.manifest)
+    except (OSError, ValueError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    providers: dict = {NO_POLISH: identity_polisher}
+    gate = None
+    if args.local:
+        try:
+            providers[LOCAL] = make_local_polisher()
+        except Exception as e:  # noqa: BLE001 - actionable CLI error
+            print(f"error: local polish provider unavailable: {e}\n"
+                  "(download the model in Settings → Models, or run the "
+                  "daemon once with local polish on)",
+                  file=sys.stderr)
+            return 1
+    if args.cloud_base_url:
+        try:
+            providers[CLOUD] = make_endpoint_polisher(
+                args.cloud_base_url, args.cloud_model,
+                args.cloud_api_key_env)
+        except Exception as e:  # noqa: BLE001 - actionable CLI error
+            print(f"error: cloud polish provider unavailable: {e}",
+                  file=sys.stderr)
+            return 1
+    if LOCAL in providers and CLOUD in providers:
+        gate = (LOCAL, CLOUD)
+    elif args.require_gate:
+        print("error: the gate needs --local AND --cloud-base-url "
+              "(or drop --require-gate for a one-sided report)",
+              file=sys.stderr)
+        return 1
+    report = run_polish_bench(
+        cases, providers, out_dir=args.out, gate=gate,
+        margin=args.gate_margin,
+        provenance={"manifest": str(args.manifest),
+                    "gate_margin": args.gate_margin})
+    print(f"{len(cases)} cases -> {args.out / 'polish-report.json'} + "
+          f"{args.out / 'polish-report.md'}")
+    for r in report["providers"]:
+        s = r["summary"]
+        print(f"  {r['name']}: similarity {s['similarity_mean']:.3f} · "
+              f"content recall {s['content_recall_mean']:.3f} · "
+              f"{s['exact_matches']}/{s['cases']} exact · "
+              f"{s['hard_failures']} hard failures")
+    g = report.get("gate")
+    if g and g.get("verdict") != "SKIPPED":
+        for c in g["checks"]:
+            print(f"  gate {c['metric']}: {c['detail']}")
+        print(f"gate: {g['verdict']}")
+        return 0 if g["verdict"] == "PASS" else 1
+    if g:
+        print(f"gate: {g.get('verdict')} — {g.get('reason')}")
+    return 0 if all(r["summary"]["errors"] == 0
+                    for r in report["providers"]) else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m fluidvoice.evalharness",
@@ -211,6 +282,34 @@ def main(argv: list[str] | None = None) -> int:
     soak_p.add_argument("csv", type=Path, help="CSV written by "
                         "scripts/soak.py")
     soak_p.set_defaults(func=_cmd_soak)
+
+    pol_p = sub.add_parser(
+        "polish", help="polish-quality bench + local-vs-cloud gate")
+    pol_p.add_argument("--manifest", type=Path, default=None, metavar="TOML",
+                       help="polish corpus (default: the packaged "
+                            "polish-baseline corpus)")
+    pol_p.add_argument("--out", type=Path, default=Path("polish-report"),
+                       metavar="DIR", help="output directory "
+                       "(default: ./polish-report)")
+    pol_p.add_argument("--local", action="store_true",
+                       help="run the bundled llama.cpp local polish "
+                            "(the daemon's own stack: spawn + health + "
+                            "chat GGUF)")
+    pol_p.add_argument("--cloud-base-url", metavar="URL",
+                       help="cloud/OpenAI-compatible endpoint for the "
+                            "cloud baseline side of the gate")
+    pol_p.add_argument("--cloud-model", default="", metavar="MODEL",
+                       help="cloud model name")
+    pol_p.add_argument("--cloud-api-key-env", default="", metavar="ENV",
+                       help="env var holding the cloud API key")
+    pol_p.add_argument("--gate-margin", type=float,
+                       default=DEFAULT_GATE_MARGIN_CLI, metavar="M",
+                       help=f"local may trail cloud by this much on "
+                            f"similarity/content-recall means "
+                            f"(default {DEFAULT_GATE_MARGIN_CLI})")
+    pol_p.add_argument("--require-gate", action="store_true",
+                       help="fail unless both gate providers ran")
+    pol_p.set_defaults(func=_cmd_polish)
 
     args = parser.parse_args(argv)
     return args.func(args)

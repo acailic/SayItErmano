@@ -59,7 +59,8 @@ include = ["fluidvoice*"]
 "fluidvoice" = ["assets/sfx/*", "assets/icon.png",
                 "assets/icons/*", "assets/icons/symbolic/actions/*.svg", "assets/providers/*"]
 "fluidvoice.evalharness.corpus" = ["manifest.toml",  # synthetic eval corpus (P1.4)
-                                 "tts-reference.toml"]  # TTS decode-baseline reference set (wave 3)
+                                 "tts-reference.toml",  # TTS decode-baseline reference set (wave 3)
+                                 "polish-baseline.toml"]  # polish-quality baseline corpus (issue #21 gate)
 
 # Parallel runs: pytest-xdist is part of the dev setup - run the suite with
 # `... -m pytest -n auto tests --ignore=tests/integration` for a ~4-5x

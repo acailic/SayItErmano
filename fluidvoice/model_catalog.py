@@ -63,7 +63,7 @@ CHAT_CATALOG: dict[str, dict] = {
         "sha256": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c"
                   "6533bc4c67e597",
         "file": "qwen3-4b-instruct-2507-q4_k_m.gguf",
-        "ctx": 8192,
+        "ctx": 4096,
     },
 }
 CHAT_DEFAULT_MODEL = "qwen3-4b-instruct-2507-q4_k_m"

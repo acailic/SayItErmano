@@ -1,0 +1,106 @@
+# Polish-quality baseline corpus (issue #21 gate).
+#
+# {id, raw, expected} triplets: `raw` is a realistic disfluent dictation
+# transcript (fillers, self-corrections, hedging — what whisper hands the
+# polish step), `expected` the cloud-baseline polish, written to the
+# FluidVoice dictation-prompt behavior (fillers dropped, corrections
+# resolved, capitalization + punctuation restored, meaning untouched).
+# Both the local and the cloud provider are scored against the SAME
+# references, so wording bias cancels in the gate comparison.
+# Authored for this repo (CC0); scored by fluidvoice/evalharness/polish.py.
+
+[[case]]
+id = "schedule-correction"
+raw = "um lets meet on tuesday around 3 no wait 4 p.m."
+expected = "Let's meet on Tuesday at 4 p.m."
+tags = ["correction", "time"]
+
+[[case]]
+id = "deadline-ask"
+raw = "so i was thinking maybe we could push the deadline to like friday afternoon if thats okay with you"
+expected = "I was thinking we could push the deadline to Friday afternoon if that's okay with you."
+tags = ["hedging"]
+
+[[case]]
+id = "count-pages"
+raw = "the report came out to like three hundred and twelve pages which is um way more than we expected"
+expected = "The report came out to 312 pages, which is way more than we expected."
+tags = ["numbers"]
+
+[[case]]
+id = "ask-reviewer"
+raw = "can you ping um priya and ask her to review the pull request before um this afternoon"
+expected = "Can you ping Priya and ask her to review the pull request before this afternoon?"
+tags = ["names", "question"]
+
+[[case]]
+id = "date-correction"
+raw = "lets aim for the fourteenth of march um actually make it the fifteenth"
+expected = "Let's aim for the 15th of March."
+tags = ["correction", "dates"]
+
+[[case]]
+id = "bug-report"
+raw = "i think the bug is in the auth middleware its um skipping the token refresh when the session expires"
+expected = "I think the bug is in the auth middleware; it's skipping the token refresh when the session expires."
+tags = ["technical"]
+
+[[case]]
+id = "shopping-list"
+raw = "we need um milk eggs and also bread oh and maybe some coffee"
+expected = "We need milk, eggs, bread, and maybe some coffee."
+tags = ["list"]
+
+[[case]]
+id = "dinner-question"
+raw = "whats the um whats the plan for dinner tonight"
+expected = "What's the plan for dinner tonight?"
+tags = ["correction", "question"]
+
+[[case]]
+id = "status-update"
+raw = "im almost done with the slides i just need to um add the quarterly numbers and then ill send them over"
+expected = "I'm almost done with the slides; I just need to add the quarterly numbers, and then I'll send them over."
+tags = ["multi-sentence"]
+
+[[case]]
+id = "address"
+raw = "the new office is at um two hundred market street suite four ten"
+expected = "The new office is at 200 Market Street, Suite 410."
+tags = ["numbers", "address"]
+
+[[case]]
+id = "call-back-time"
+raw = "call me back around um quarter to five at the latest"
+expected = "Call me back around a quarter to five at the latest."
+tags = ["time"]
+
+[[case]]
+id = "cancel-standup"
+raw = "i dont know maybe we should just um cancel the morning standup since everyones traveling"
+expected = "Maybe we should cancel the morning standup since everyone's traveling."
+tags = ["hedging"]
+
+[[case]]
+id = "ops-steps"
+raw = "okay so first um backup the database then restart the api and finally check the logs for errors"
+expected = "First, back up the database. Then restart the API. Finally, check the logs for errors."
+tags = ["multi-sentence", "list"]
+
+[[case]]
+id = "short-agree"
+raw = "um yeah thats fine"
+expected = "That's fine."
+tags = ["short"]
+
+[[case]]
+id = "cc-legal"
+raw = "send the contract to um no wait cc legal on that one too"
+expected = "Send the contract and CC legal on it."
+tags = ["correction"]
+
+[[case]]
+id = "restaurant-booking"
+raw = "book a table for um six people at that italian place on elm street for seven thirty"
+expected = "Book a table for six at the Italian place on Elm Street for 7:30."
+tags = ["numbers", "time"]
