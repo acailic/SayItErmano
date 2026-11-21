@@ -29,13 +29,15 @@ FROM ${UBUNTU_IMAGE}
 
 # dpkg-deb ships in the base image (xz payload needs xz-utils); fakeroot is
 # the first choice of build-deb.sh's pack step; python3-venv provides the
-# ensurepip used to build the bundled venv.
+# ensurepip used to build the bundled venv; gnupg dearmors the committed
+# apt-repo public key into the /etc/apt keyring the deb ships (#22).
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         fakeroot \
         python3-venv \
         xz-utils \
+        gnupg \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src

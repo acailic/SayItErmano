@@ -13,6 +13,19 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **Update channel for non-Flatpak installs (#22)** — installing the
+  official .deb now configures a **signed apt repository** (served from
+  this repo's GitHub Pages, published by `release-publish` via reprepro;
+  single-version pool), so `sudo apt update && sudo apt upgrade
+  sayit-ermano` carries every later release with config and history
+  untouched. `scripts/install-one-shot.sh --update` refreshes an existing
+  install in place (user venv / pipx — works on any distro — / apt repo /
+  latest .deb, auto-detected). Settings → About gained a user-initiated
+  **Check for updates** button (no-telemetry posture: the daemon probes
+  GitHub only when asked; it works even with background checks off) plus
+  a **How to update** deep-link to the route guide, and a failed/offline
+  check now says so instead of reading "up to date".
+
 ## [v0.8.3.1] — tray flap hotfix (2026-11-12; no GitHub release)
 
 Hotfix post-release, installed directly from the `linux` branch (no

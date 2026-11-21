@@ -73,6 +73,13 @@ class Client:
         return self._request("command-rerun", command=command,
                              purpose=purpose)
 
+    def update_check(self) -> dict:
+        """User-initiated update check (Settings → About → "Check for
+        updates"): the daemon probes GitHub only because the user asked -
+        the no-telemetry ADR posture. Works even when background checks
+        are off (updates.check = false)."""
+        return self._request("update-check")
+
     def select_model(self, name: str) -> dict:
         return self._request("select-model", name=name)
 

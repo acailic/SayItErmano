@@ -22,7 +22,10 @@ Prefer the classic system-wide .deb (root-owned, `/opt` runtime)?
 curl -fsSL https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/install-one-shot.sh | bash -s -- --system
 ```
 
-### Ubuntu 24.04 — official .deb
+Updating later? Re-run either command, or add `--update` to refresh the
+existing installation in place (see [Updates](#updates)).
+
+### Ubuntu 24.04 — official .deb + signed apt repo
 
 The .deb is a **single-target package: Ubuntu 24.04 · x86_64 · Python 3.12**
 (24.04 derivatives like Pop!_OS 24.04 work too). Its bundled runtime venv
@@ -36,6 +39,30 @@ Python versions: use [pipx](#pipx--pip-any-distro-python-311) below or the
 curl -LO https://github.com/acailic/SayItErmano/releases/download/v0.8.2/sayit-ermano_0.8.2-1_amd64.deb
 sudo apt install ./sayit-ermano_0.8.2-1_amd64.deb
 ```
+
+Installing the .deb also **configures the signed apt repository**
+(`/etc/apt/keyrings/sayit-ermano.gpg` + a sources entry under
+`/etc/apt/sources.list.d/`, both shipped by the package), so from then on
+every later release arrives through plain apt — config
+(`~/.config/sayit-ermano`) and history are never touched by an upgrade:
+
+```bash
+sudo apt update && sudo apt upgrade sayit-ermano
+```
+
+Already installed from a downloaded .deb and want the channel? Add the
+repo by hand (this is exactly what a fresh .deb install does):
+
+```bash
+curl -fsSL https://acailic.github.io/SayItErmano/apt/key.asc | sudo tee /etc/apt/keyrings/sayit-ermano.asc >/dev/null
+echo "deb [signed-by=/etc/apt/keyrings/sayit-ermano.asc] https://acailic.github.io/SayItErmano/apt stable main" | sudo tee /etc/apt/sources.list.d/sayit-ermano.list
+sudo apt update
+```
+
+(The repo is built and signed with each release by the manual
+`release-publish` workflow — details in
+[packaging/apt/](../../packaging/apt/). Only the newest release is kept;
+downgrades are not served.)
 
 Grab a specific version from the [releases page](https://github.com/acailic/SayItErmano/releases).
 Building it yourself: release artifacts come out of a **pinned Ubuntu 24.04
@@ -155,17 +182,53 @@ sayit-ermano update            # check for a newer release + print the upgrade c
 
 ## Updates
 
+Every route has a one-command update path — this is the route guide the
+in-app notice links to.
+
+### deb / apt repo (Ubuntu 24.04)
+
+If the .deb installed the signed repo (see above), updates are ordinary
+apt traffic:
+
+```bash
+sudo apt update && sudo apt upgrade sayit-ermano
+```
+
+### One-shot installer (any layout, including Fedora/pipx)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/acailic/SayItErmano/linux/scripts/install-one-shot.sh | bash -s -- --update
+```
+
+`--update` detects the existing installation and refreshes it in place:
+user-space venv (stops the daemon, replaces the runtime, restarts —
+`~/.config` and history untouched), pipx install (`pipx upgrade`, works
+on any distro), or a system deb (via the apt repo when configured, else
+the latest release .deb). Without `--update` the same script performs a
+fresh install; re-running it over an existing install also updates.
+
+### pipx
+
+```bash
+pipx upgrade sayit-ermano
+```
+
+### Background check + the in-app notice
+
 SayItErmano checks GitHub **once per daemon start and once a day** for a
 newer release (10 s timeout, on a background thread — startup is never
 delayed). When a newer release is seen you get **one desktop
 notification**; `sayit-ermano status`, the History window's status row,
-Settings → About and `sayit-ermano doctor` show it too. Nothing is ever
-installed automatically — run:
+Settings → About and `sayit-ermano doctor` show it too. Settings → About
+also has a **Check for updates** button (a manual, user-initiated probe —
+it works even with background checks off) and, when an update is
+reported, a **How to update** button that opens this guide. Nothing is
+ever installed automatically — run:
 
 ```bash
 sayit-ermano update    # prints the exact copy-paste upgrade command for
-                       # YOUR install method (deb dpkg -i / one-shot
-                       # installer / pipx upgrade / git pull)
+                       # YOUR install method (apt upgrade / one-shot
+                       # --update / pipx upgrade / git pull)
 sayit-ermano update --dismiss   # stop the notification for this release
 ```
 

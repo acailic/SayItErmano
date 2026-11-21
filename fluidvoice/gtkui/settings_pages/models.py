@@ -116,12 +116,21 @@ class ModelsPageMixin:
             self.about_update_row.set_subtitle(
                 f"v{st['update_available']} available — run 'sayit-ermano update'"
             )
-        elif not u.get("enabled"):
+        elif u.get("error"):
+            # a completed check that could not reach GitHub (offline,
+            # API error, kill-switch): say so - never "up to date" on a
+            # failed probe
+            self.about_update_row.set_subtitle(
+                "latest unknown (offline or GitHub unreachable)")
+        elif not u.get("enabled") and not u.get("checked"):
+            # manual checks still run with the background checker off;
+            # only claim "disabled" before anything has checked
             self.about_update_row.set_subtitle("checks disabled")
         elif u.get("checked"):
             self.about_update_row.set_subtitle("up to date")
         else:
             self.about_update_row.set_subtitle("checking…")
+        self.about_update_guide_btn.set_visible(bool(st.get("update_available")))
 
     def _pick_model(self, btn, name: str) -> None:
         try:

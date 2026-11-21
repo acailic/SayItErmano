@@ -167,6 +167,28 @@ class TestDetectInstallMethod:
             exe=Path("/opt/sayit-ermano/venv/bin/python"))
         assert info == {"method": "deb", "marker": "/opt/sayit-ermano/venv"}
 
+    def test_apt_layout_when_repo_configured(self, tmp_path):
+        """deb layout + the sources.list.d entry the deb ships -> the apt
+        route (#22): upgrades flow through plain apt."""
+        listing = tmp_path / "sayit-ermano.list"
+        listing.write_text("deb [signed-by=…] https://x/apt stable main\n")
+        info = update.detect_install_method(
+            exe=Path("/opt/sayit-ermano/venv/bin/python"),
+            apt_sources_file=listing)
+        assert info == {"method": "apt", "marker": str(listing)}
+
+    def test_apt_requires_deb_layout(self, tmp_path):
+        """The repo being configured does NOT reroute a user-venv/pipx
+        install - detection is the truth of the running binary."""
+        root = tmp_path.resolve()
+        exe = self._mk(root, ".local", "share", "sayit-ermano",
+                       "venv", "bin", "python")
+        listing = tmp_path / "sayit-ermano.list"
+        listing.write_text("deb … stable main\n")
+        info = update.detect_install_method(exe=exe, home=root,
+                                            apt_sources_file=listing)
+        assert info["method"] == "user-venv"
+
     def test_user_venv_layout(self, tmp_path):
         root = tmp_path.resolve()
         exe = self._mk(root, ".local", "share", "sayit-ermano",
@@ -239,6 +261,14 @@ class TestDetectInstallMethod:
 class TestUpgradeCommand:
     REL = update._parse_release(REL06)
 
+    def test_apt_golden(self):
+        """The signed apt repo route (#22): plain apt traffic, no asset
+        download needed."""
+        assert update.upgrade_command("apt", self.REL) == \
+            "sudo apt update && sudo apt upgrade -y sayit-ermano"
+        assert update.upgrade_command("apt", None) == \
+            "sudo apt update && sudo apt upgrade -y sayit-ermano"
+
     def test_deb_golden(self):
         assert update.upgrade_command("deb", self.REL) == (
             "curl -LO https://github.com/acailic/SayItErmano/releases/download/"
@@ -266,6 +296,82 @@ class TestUpgradeCommand:
         assert update.RELEASES_URL in cmd
         assert "pip install -U sayit-ermano" in cmd
         assert "install-one-shot.sh" in cmd
+
+
+class TestManualCheck:
+    """The user-initiated check (Settings → About → "Check for updates",
+    control route update-check): no notifications, no state writes, runs
+    even with updates.check=false, never raises - including offline."""
+
+    def _rel(self, ver: str) -> dict:
+        return {"tag": f"v{ver}", "version": ver, "url": "u", "assets": []}
+
+    def test_newer_release_reported(self):
+        st = update.manual_check(
+            method_info={"method": "apt", "marker": "/etc/apt/sources.list.d/sayit-ermano.list"},
+            fetch=lambda: (self._rel("0.6.0"), None))
+        assert st["checked"] is True
+        assert st["update_available"] == "0.6.0"
+        assert st["latest"] == "0.6.0"
+        assert st["method"] == "apt"
+        assert st["upgrade_command"] == \
+            "sudo apt update && sudo apt upgrade -y sayit-ermano"
+        assert st["error"] is None
+        assert st["route_guide"] == update.ROUTE_GUIDE_URL
+
+    def test_up_to_date(self):
+        st = update.manual_check(
+            method_info={"method": "deb", "marker": "/opt/sayit-ermano/venv"},
+            fetch=lambda: (self._rel("0.5.0"), None))
+        assert st["update_available"] is None
+        assert st["latest"] == "0.5.0"
+        assert st["upgrade_command"] == ""
+
+    def test_no_network_never_raises(self):
+        """Acceptance (#22): the update notice on a machine with no
+        network - one error line, no crash, never 'update available'."""
+        def offline():
+            return (None, "URLError: name resolution failed")
+
+        st = update.manual_check(fetch=offline)
+        assert st["checked"] is True
+        assert st["update_available"] is None
+        assert st["upgrade_command"] == ""
+        assert "name resolution failed" in st["error"]
+        assert st["route_guide"] == update.ROUTE_GUIDE_URL
+
+    def test_fetch_exception_caught(self):
+        def broken():
+            raise TimeoutError("timed out")
+
+        st = update.manual_check(fetch=broken)
+        assert st["checked"] is True
+        assert "timed out" in st["error"]
+
+    def test_env_killswitch_honored(self, monkeypatch):
+        monkeypatch.setenv(update.SKIP_ENV, "1")
+
+        def no_fetch():
+            raise AssertionError("kill-switch must prevent the fetch")
+
+        st = update.manual_check(fetch=no_fetch)
+        assert st["checked"] is False
+        assert update.SKIP_ENV in st["error"]
+
+    def test_writes_no_state(self, tmp_path, monkeypatch):
+        from fluidvoice import paths
+        state = tmp_path / "update-state.json"
+        monkeypatch.setattr(paths, "update_state_file", lambda: state)
+        update.manual_check(fetch=lambda: (self._rel("0.6.0"), None))
+        assert not state.exists()  # manual checks leave no trace
+
+    def test_detection_default_when_method_unspecified(self, monkeypatch):
+        monkeypatch.setattr(update, "detect_install_method",
+                            lambda exe=None, home=None, apt_sources_file=None:
+                            {"method": "pipx", "marker": "/pipx"})
+        st = update.manual_check(fetch=lambda: (self._rel("0.6.0"), None))
+        assert st["method"] == "pipx"
+        assert st["upgrade_command"] == "pipx upgrade sayit-ermano"
 
 
 class TestUpdateChecker:
@@ -499,6 +605,85 @@ class TestDaemonWiring:
         assert resp["update_url"] is None
         assert resp["update"]["enabled"] is False
         assert resp["update"]["method"]  # detected even when disabled
+        assert resp["update"]["route_guide"] == update.ROUTE_GUIDE_URL
+
+    def test_update_check_route_with_active_checker(self):
+        """update-check through the RUNNING checker: result also lands in
+        the status surface."""
+        d = self.make(copy.deepcopy(DEFAULTS))
+
+        class FakeChecker:
+            def __init__(self):
+                self.calls = 0
+
+            def check_now(self):
+                self.calls += 1
+                return {"enabled": True, "checked": True, "latest": "0.6.0",
+                        "update_available": "0.6.0", "url": "u", "error": None,
+                        "checked_at": 1.0, "method": "apt",
+                        "upgrade_command": "sudo apt update"}
+
+            def status(self):
+                return self.check_now()
+
+            def stop(self):
+                pass
+
+        chk = FakeChecker()
+        d._update = chk
+        resp = d.handle_request({"action": "update-check"})
+        assert resp["ok"] is True
+        assert resp["update_available"] == "0.6.0"
+        assert resp["update_url"] == "u"
+        assert chk.calls == 1
+        assert resp["update"]["upgrade_command"] == "sudo apt update"
+        assert resp["update"]["route_guide"] == update.ROUTE_GUIDE_URL
+
+    def test_update_check_route_no_network(self):
+        """Acceptance (#22): the update-check route on an offline machine -
+        ok response with the error surfaced, never a crash, never a bogus
+        'update available'."""
+        d = self.make(copy.deepcopy(DEFAULTS))
+
+        class OfflineChecker:
+            def check_now(self):
+                return None  # fetch failed; status() carries the reason
+
+            def status(self):
+                return {"enabled": True, "checked": True, "latest": None,
+                        "update_available": None, "url": None,
+                        "error": "URLError: net down", "checked_at": 1.0,
+                        "method": "deb", "upgrade_command": ""}
+
+            def stop(self):
+                pass
+
+        d._update = OfflineChecker()
+        resp = d.handle_request({"action": "update-check"})
+        assert resp["ok"] is True
+        assert resp["update_available"] is None
+        assert "net down" in resp["update"]["error"]
+
+    def test_update_check_route_without_checker_uses_manual_check(self, monkeypatch):
+        """No background checker (updates.check=false): the manual route
+        still answers - user-initiated is the no-telemetry-compliant
+        surface."""
+        d = self.make(copy.deepcopy(DEFAULTS))
+        assert d._update is None
+        called = {}
+
+        def fake_manual_check():
+            called["hit"] = True
+            return {"enabled": True, "checked": True, "latest": "0.6.0",
+                    "update_available": "0.6.0", "url": "u", "error": None,
+                    "checked_at": 1.0, "method": "apt",
+                    "upgrade_command": "sudo apt update",
+                    "route_guide": update.ROUTE_GUIDE_URL}
+
+        monkeypatch.setattr(update, "manual_check", fake_manual_check)
+        resp = d.handle_request({"action": "update-check"})
+        assert called.get("hit") is True
+        assert resp["update_available"] == "0.6.0"
 
     def test_start_checker_env_killswitch(self, monkeypatch):
         monkeypatch.setenv(update.SKIP_ENV, "1")
@@ -545,6 +730,18 @@ class TestCliUpdate:
         monkeypatch.setattr(update, "fetch_latest_result",
                             lambda *a, **kw: (result, None)
                             if result is not None else (None, "URLError: down"))
+
+    def test_prints_apt_command(self, monkeypatch, capsys):
+        """The apt route (#22): deb install whose package configured the
+        signed repo - the printed block is plain apt traffic."""
+        self._patch(monkeypatch, "apt",
+                    "/etc/apt/sources.list.d/sayit-ermano.list",
+                    update._parse_release(REL06))
+        assert cli.main(["update"]) == 0
+        out = capsys.readouterr().out
+        assert "install: apt — /etc/apt/sources.list.d/sayit-ermano.list" in out
+        assert "sudo apt update && sudo apt upgrade -y sayit-ermano" in out
+        assert update.ROUTE_GUIDE_URL in out  # routes deep-link
 
     def test_prints_deb_command(self, monkeypatch, capsys):
         self._patch(monkeypatch, "deb", "/opt/sayit-ermano/venv",
@@ -626,6 +823,19 @@ class TestDoctorUpdate:
         assert lines[0].startswith("version: ") and "latest unknown" in lines[0]
         assert "offline or GitHub API error" in lines[0]
         assert any("install:" in l for l in lines)
+
+    def test_update_available_block_apt_route(self, monkeypatch):
+        monkeypatch.setattr(update, "detect_install_method",
+                            lambda exe=None, home=None, apt_sources_file=None:
+                            {"method": "apt",
+                             "marker": "/etc/apt/sources.list.d/sayit-ermano.list"})
+        rel = update._parse_release(REL06)
+        lines = doctor._update_lines(copy.deepcopy(DEFAULTS), check=lambda: rel)
+        assert "update available: sayit-ermano update" in lines[0]
+        assert "install: apt (/etc/apt/sources.list.d/sayit-ermano.list)" \
+            in lines[1]
+        assert any("sudo apt update && sudo apt upgrade -y sayit-ermano" in l
+                   for l in lines)
 
     def test_update_available_block(self, monkeypatch):
         monkeypatch.setattr(update, "detect_install_method",

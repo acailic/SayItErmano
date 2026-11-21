@@ -448,8 +448,23 @@ class Daemon:
                    "update_available": None, "url": None, "error": None,
                    "checked_at": None,
                    "method": update_mod.detect_install_method()["method"],
-                   "upgrade_command": ""}
+                   "upgrade_command": "",
+                   "route_guide": update_mod.ROUTE_GUIDE_URL}
         return dict(upd)
+
+    def _manual_update_check(self) -> dict:
+        """User-initiated update check (control route `update-check`):
+        probes GitHub ONLY because the user asked - the no-telemetry ADR
+        posture. The running checker, when present, does the fetch so the
+        result also lands in the status surface; otherwise (updates.check
+        = false, kill-switch unset) a one-off manual_check runs - it never
+        notifies and never writes state."""
+        if self._update is not None:
+            res = self._update.check_now() or self._update.status()
+        else:
+            res = update_mod.manual_check()
+        res.setdefault("route_guide", update_mod.ROUTE_GUIDE_URL)
+        return res
 
     def _on_locked(self, locked: bool) -> None:
         """lockmon callback - transitions only (the monitor dedups). The

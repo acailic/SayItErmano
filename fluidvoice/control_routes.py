@@ -113,6 +113,16 @@ def _status(d: Any, req: dict) -> dict:
             "language": d._engines.language_status()}
 
 
+def _update_check(d: Any, req: dict) -> dict:
+    """User-initiated "Check for updates" (Settings → About): the daemon
+    probes GitHub only because the user asked (no-telemetry ADR posture;
+    works even with updates.check = false)."""
+    res = d._manual_update_check()
+    return {"ok": True, "update": res,
+            "update_available": res.get("update_available"),
+            "update_url": res.get("url")}
+
+
 def _shutdown(d: Any, req: dict) -> dict:
     d._quit_gracefully()
     return {"ok": True}
@@ -170,6 +180,7 @@ ROUTES: dict[str, Route] = {
     "insert-text": _insert_text,
     "command-rerun": _command_rerun,
     "status": _status,
+    "update-check": _update_check,
     "shutdown": _shutdown,
     "set-device": _set_device,
     "test-dictation": _test_dictation,

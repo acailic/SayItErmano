@@ -105,7 +105,10 @@ Manual dispatch with the version. In order:
 6. **Locked package build** — the deb is built in the pinned container
    (`packaging/deb/Dockerfile`, Ubuntu 24.04 / x86_64 / Python 3.12)
    against the hashed lock; its control `Version` must equal
-   `<version>-1`.
+   `<version>-1`. The build also embeds the signed apt repo channel
+   (`/etc/apt` keyring + sources list from
+   `packaging/apt/sayit-ermano.asc` — absent key fails the build; local
+   dev builds may opt out with `DEB_ALLOW_NO_APT_REPO=1`).
 7. **Provenance manifest (Q4)** — `scripts/release_verify.py manifest`
    binds the built deb to its source: package sha256/size/control
    version, a digest over every tracked file of the post-bump
@@ -132,8 +135,12 @@ evidence**. Every gate fails loudly before anything public happens:
 | Stale constraints | the shared `locklib pins-coverage` check (same as prepare) |
 | Missing evidence | the `evidence` input must quote the deb sha256 from the prepare summary (proving the record refers to the exact bytes published) or carry an explicit `EVIDENCE-SKIP: <why>` waiver; empty/unbound evidence fails the release |
 | Double release | tag `v<version>` must not exist yet |
+| Unprovisioned apt key | after the GitHub release, the deb is signed into the apt repo (`packaging/apt/update-repo.sh` → committed to `site/apt` → served by Pages) using the `APT_REPO_GPG_KEY` secret; missing secret fails the step unless a `skip-apt-reason` waiver input records why. The repo script itself verifies the published tree like a client (sandboxed
+`apt update` + candidate + hash download). Provisioning:
+[packaging/apt/README.md](../../packaging/apt/README.md) |
 
-Only then: push the tag and create the GitHub release with the deb.
+Only then: push the tag and create the GitHub release with the deb,
+then publish the signed apt repo commit.
 Release notes default to the `[Unreleased]` section of `CHANGELOG.md`;
 pass the `notes` input to override. Locally:
 `just release-publish <version> <sha> "<evidence>"`.
