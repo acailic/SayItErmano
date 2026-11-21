@@ -13,6 +13,24 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **Flatpak shipping manifest (#11, ADR-0006)** — the spike manifest
+  becomes the Flathub submission manifest: finish-args carry exactly
+  the reviewed baseline (`--socket=wayland`, `--socket=pulseaudio`,
+  `--device=dri`, `--share=network`; no `--device=all` — uinput and
+  the X11/tray extras are documented opt-in overrides in
+  `docs/packaging/flatpak-permissions.md`, which also holds the
+  per-permission justification table for the submission PR). Desktop
+  integration ships as proper manifest modules: app-id desktop file,
+  appstream metainfo (GPL-3.0-or-later, keywords, OARS), hicolor
+  icons; the pure-Python deps stay sha256-pinned vendored wheels.
+  Daemon lifecycle in the sandbox: the GTK app process owns the
+  daemon + control socket (`fluidvoice/daemon_owner.py` — no systemd
+  user units inside), and login autostart replaces the unit through
+  the freedesktop **Background portal** (Settings → General →
+  "Start dictation at login"; `fluidvoice/portal_background.py`).
+  Structural gates in `tests/test_flatpak_manifest.py`; the CI
+  `.flatpakbundle`-on-tag lane ships as a patch for a human to apply
+  (`packaging/flatpak/ci-flatpak-bundle.md`).
 - **Portal input on Wayland/Flatpak (#10, ADR-0006)** — the dictation
   hotkey now binds through the **GlobalShortcuts portal** (GNOME 48+,
   Plasma 5.27+, Hyprland) with native hold-PTT from the

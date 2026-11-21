@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SayItErmano appstream metadata (Flathub, issue #11).
+
+     Factual claims trace to README.md / CHANGELOG.md (site/ rule: no
+     claim without a source). project_license matches pyproject.toml
+     (GPL-3.0-or-later); metadata_license is the metainfo FILE's license
+     (CC0). Keep <release> in sync with pyproject version — the
+     manifest test pins that. -->
+<component type="desktop-application">
+  <id>io.github.acailic.SayItErmano</id>
+  <name>SayItErmano</name>
+  <summary>Local voice dictation with AI polish</summary>
+  <description>
+    <p>
+      SayItErmano is a dictation app for Linux: press a key, speak, and
+      the polished text lands in any app. Speech-to-text runs 100%
+      locally (Whisper); an optional AI-polish step can clean up raw
+      transcripts through a provider you configure.
+    </p>
+    <p>
+      The unofficial community Linux port of FluidVoice (macOS); not
+      affiliated with the upstream project. History, a native GTK 4
+      settings app, dictation learning and multi-language cycling are
+      built in. Works on X11 and on Wayland via the freedesktop portals
+      (GlobalShortcuts hotkey, RemoteDesktop/EIS text insertion —
+      GNOME 48+, Plasma 5.27+, Hyprland).
+    </p>
+    <ul>
+      <li>Hold-to-talk or toggle dictation with a global hotkey</li>
+      <li>Local Whisper transcription; models download on first run</li>
+      <li>Optional AI polish through your own provider and key</li>
+      <li>Searchable history with export; audio retention is optional</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.acailic.SayItErmano.desktop</launchable>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer_name>acailic</developer_name>
+  <url type="homepage">https://github.com/acailic/SayItErmano</url>
+  <url type="bugtracker">https://github.com/acailic/SayItErmano/issues</url>
+  <url type="help">https://github.com/acailic/SayItErmano/blob/linux/SUPPORT.md</url>
+  <content_rating type="oars-1.1"/>
+  <keywords>
+    <keyword>voice</keyword>
+    <keyword>dictation</keyword>
+    <keyword>speech</keyword>
+    <keyword>whisper</keyword>
+    <keyword>asr</keyword>
+    <keyword>stt</keyword>
+  </keywords>
+  <releases>
+    <release version="0.8.3.1" date="2026-11-12"/>
+  </releases>
+</component>
