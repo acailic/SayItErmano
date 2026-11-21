@@ -13,6 +13,16 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **Bundled local AI polish** (issue #21): Settings → AI toggle
+  "Local polish (works offline)" routes polish through a llama.cpp
+  server the daemon spawns on demand with a qwen3-4b-class chat GGUF
+  (one-click download in Settings → Models, alongside the whisper GGUF
+  flow). Auto-configured endpoint, idle-down after use, zero footprint
+  when off; memory/cold-start budgets documented in
+  docs/guides/local-polish.md. New eval-harness `polish-gate`
+  subcommand scores local vs cloud polish quality with a regression
+  gate (docs/eval/README.md).
+
 ## [v0.8.3.1] — tray flap hotfix (2026-11-12; no GitHub release)
 
 Hotfix post-release, installed directly from the `linux` branch (no

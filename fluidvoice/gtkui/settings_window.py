@@ -80,6 +80,8 @@ class SettingsWindow(
         self._gguf_dl: dict[str, dict] = {}  # name -> {bytes, total, done, error}
         self._parakeet_rows: list[Adw.ActionRow] = []
         self._parakeet_dl: dict[str, dict] = {}
+        self._chat_rows: list[Adw.ActionRow] = []  # local-polish chat GGUFs
+        self._chat_dl: dict[str, dict] = {}
         self._mod_toggles: dict[str, Gtk.ToggleButton] = {}
         self._profiles: dict[str, str] = {}  # prompt profiles (sidecar file)
         self._model_lang_rows: dict[str, Adw.ComboRow] = {}  # name -> row

@@ -246,7 +246,31 @@ class DictationPipeline:
         # the daemon module at call time so patches of daemon.AIClient keep
         # steering this construction, exactly as before the split
         from .daemon import AIClient
-        polisher = self.polisher or AIClient(self.cfg).polish
+        from .local_ai import LocalAIError
+        local_ai = getattr(self, "_local_ai", None)
+        polish_cfg = self.cfg
+        if self.cfg["ai"].get("local_polish"):
+            if local_ai is None:  # no daemon-attached manager (tests)
+                self.log("local polish on but no manager attached; "
+                         "using raw transcription")
+                return text, False
+            try:
+                endpoint = local_ai.ensure_ready()
+            except LocalAIError as e:
+                self.log(f"local polish unavailable ({e}); "
+                         "using raw transcription")
+                self.notify("SayItErmano",
+                            f"Local polish unavailable — typed the raw "
+                            f"transcript ({e})")
+                return text, False
+            # local endpoint overlay: the configured provider is bypassed
+            # entirely while ai.local_polish is on (the offline promise)
+            polish_cfg = {
+                "ai": {**self.cfg["ai"],
+                       "base_url": endpoint["base_url"],
+                       "model": endpoint["model"],
+                       "api_key": "", "api_key_env": ""}}
+        polisher = self.polisher or AIClient(polish_cfg).polish
         # P2: canonical profiles.rules first (inline instructions or a
         # named preset), then the legacy ai.per_app_prompts rules - the
         # result is identical to pre-P2 while no canonical rules exist.

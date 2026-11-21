@@ -108,6 +108,9 @@ def _status(d: Any, req: dict) -> dict:
             # idle-unload policy + live state (doctor/tray read
             # this; additive key - JSON consumers unaffected)
             "model_state": model_state,
+            # bundled local AI polish (llama-server) state — additive,
+            # the doctor/Settings Models rows read this
+            "local_ai": d._local_ai.status(),
             # language cycle + guard state (doctor/CLI/GTK read
             # this; additive key - JSON consumers unaffected)
             "language": d._engines.language_status()}

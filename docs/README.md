@@ -19,6 +19,9 @@ the app itself.
   re-verification method (privacy claim evidence).
 - [guides/configuration.md](guides/configuration.md) — the complete
   `config.toml` reference, generated from the settings registry.
+- [guides/local-polish.md](guides/local-polish.md) — bundled local AI
+  polish (works offline): llama.cpp server lifecycle, the chat GGUF,
+  memory/cold-start budgets, quality gate.
 - [guides/wayland.md](guides/wayland.md) — Wayland capability matrix and
   tool setup (`wtype`/`ydotool`, DE shortcuts, evdev PTT).
 - [guides/command-mode.md](guides/command-mode.md) — voice → terminal

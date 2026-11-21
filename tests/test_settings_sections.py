@@ -77,7 +77,8 @@ class TestDictationSections:
 class TestModelsSections:
     def test_every_section_builds_in_isolation(self, settings_win) -> None:
         for name in ("catalogs", "state", "memory", "engine", "remote",
-                     "hotwords", "lang_overrides", "disk_usage"):
+                     "hotwords", "lang_overrides", "chat_models",
+                     "disk_usage"):
             page = Adw.PreferencesPage()
             getattr(settings_win, f"_section_{name}")(page)
             assert page.get_first_child() is not None, name
@@ -89,12 +90,17 @@ class TestModelsSections:
             ("model", "compute"),
             ("model", "remote_url"), ("model", "remote_model"),
             ("model", "remote_api_key"), ("model", "hotwords"),
+            # local AI polish (issue #21): the AI-page toggle + the
+            # models-page rows must survive section edits
+            ("ai", "local_polish"),
         }
         missing = sorted(str(k) for k in wired if k not in rows)
         assert not missing, f"sections lost their wiring: {missing}"
         # model.name lives on the catalog rows (Use button), idle_unload_s
         # on its dedicated minutes SpinRow — both must exist as widgets
         assert settings_win._idle_unload_row is not None
+        # the chat-GGUF section ships its llama-server status row
+        assert settings_win.chat_binary_row is not None
 
 
 class TestMainWindowSections:

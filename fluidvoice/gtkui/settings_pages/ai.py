@@ -46,6 +46,17 @@ class AIPageMixin:
             "OpenAI, Groq…",
         )
         grp.add(self._switch("ai", "enabled", "Enabled"))
+        grp.add(
+            self._switch(
+                "ai",
+                "local_polish",
+                "Local polish (works offline)",
+                subtitle="Bundled llama.cpp server + a small local model "
+                "— polished text with no cloud key, nothing leaves the "
+                "machine. Spawns on demand, idles down after use; off = "
+                "zero footprint. Get the model in Models → Local AI polish.",
+            )
+        )
         url_row = self._entry("ai", "base_url", "Base URL — http://localhost:11434/v1")
         self.provider_img = Gtk.Image(pixel_size=18)
         self.provider_img.set_valign(Gtk.Align.CENTER)

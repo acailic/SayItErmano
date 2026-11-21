@@ -170,6 +170,26 @@ def _coerce_model_name(value: Any) -> tuple[bool, Any]:
     return (ok, value)
 
 
+def _coerce_chat_model(value: Any) -> tuple[bool, Any]:
+    """ai.local_polish_model: a CHAT_GGUF_CATALOG key (catalog checked at
+    call time — importing model_catalog at module import would be
+    circular). Empty normalizes to the default catalog entry."""
+    from . import model_catalog
+    value = str(value).strip()
+    if not value:
+        return (True, model_catalog.CHAT_MODEL_DEFAULT)
+    return (value in model_catalog.CHAT_GGUF_CATALOG, value)
+
+
+def _coerce_local_idle(value: Any) -> tuple[bool, Any]:
+    """ai.local_polish_idle_s: 0 (keep the llama.cpp server running while
+    the daemon lives) or 30..86400 s of idle before it is stopped."""
+    ok = isinstance(value, int) and not isinstance(value, bool) \
+        and (value == 0 or 30 <= value <= 86400)
+    return (ok, value)
+_coerce_local_idle.bounds = (0, 86400)  # type: ignore[attr-defined]
+
+
 def _coerce_max_retries(value: Any) -> tuple[bool, Any]:
     """ai.max_retries: 0..10; ints and floats both accepted, normalized
     to int (bool rejected — it is an int subclass)."""
@@ -888,6 +908,21 @@ _spec("ai", "profile", "", _str(64, allow_empty=True),
       "settings). Switching via Settings -> AI or the tray's AI profile\n"
       "submenu writes the profile's endpoint values into [ai] and points\n"
       "here; editing the endpoint by hand clears it back to \"\".")
+_spec("ai", "local_polish", False, _bool(),
+      description="Local polish (works offline): route AI polish through\n"
+      "a bundled llama.cpp server + a small local chat GGUF instead of\n"
+      "the configured endpoint — nothing leaves the machine. The server\n"
+      "spawns on the first polished dictation and idles down after\n"
+      "local_polish_idle_s; off (the default) = zero footprint (no\n"
+      "process, no memory). Download the model in Settings -> Models.")
+_spec("ai", "local_polish_model", "Qwen3-4B-Q4_K_M.gguf", _coerce_chat_model,
+      description="The chat GGUF local polish serves (Settings -> Models\n"
+      "downloads it; llama.cpp/ under the models cache).")
+_spec("ai", "local_polish_idle_s", 300, _coerce_local_idle,
+      description="Stop the bundled llama.cpp server after this many idle\n"
+      "seconds (its ~model-size RAM footprint is freed; the next polished\n"
+      "dictation pays the cold start again). 0 = keep it running for the\n"
+      "daemon's lifetime; range 30..86400 when set.")
 
 # -- [insertion] -------------------------------------------------------------
 

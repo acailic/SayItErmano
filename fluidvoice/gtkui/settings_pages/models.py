@@ -27,6 +27,7 @@ class ModelsPageMixin:
         self._section_remote(page)
         self._section_hotwords(page)
         self._section_lang_overrides(page)
+        self._section_chat_models(page)
         self._section_disk_usage(page)
 
         page.add(self._save_group())
@@ -36,6 +37,7 @@ class ModelsPageMixin:
         for row in self._model_rows:
             self.models_group.remove(row)
         self._model_rows = []
+        st = self.c.status() or {}
         active = self._active_model()
         for name, info in model_catalog.MODEL_CATALOG.items():
             row = Adw.ActionRow(
@@ -68,9 +70,9 @@ class ModelsPageMixin:
             self._model_rows.append(row)
         self._refresh_gguf_rows()
         self._refresh_parakeet_rows()
+        self._refresh_chat_rows(st)
         self._refresh_model_language_rows()
         self._refresh_disk_rows()
-        st = self.c.status() or {}
         warm = st.get("warmup") or {}
         if warm.get("running"):
             self.warmup_spinner.start()
@@ -242,7 +244,8 @@ class ModelsPageMixin:
             if entries
             else "empty"
         )
-        active = self._active_model() or self._active_gguf() or self._active_parakeet()
+        active = (self._active_model() or self._active_gguf()
+                  or self._active_parakeet() or self._active_chat())
         for e in entries:
             row = Adw.ActionRow(
                 title=e["name"],
@@ -535,6 +538,151 @@ class ModelsPageMixin:
         self._load()  # resync cfg + rows
         GLib.timeout_add_seconds(1, self._poll_model)
 
+    # -- local AI polish chat models (llama.cpp GGUF, issue #21) -------------
+
+    def _active_chat(self) -> str | None:
+        """The chat GGUF local polish is configured to serve (None when
+        local polish is off or the name is not in the catalog)."""
+        ai = self.cfg.get("ai", {}) or {}
+        if not ai.get("local_polish"):
+            return None
+        name = str(ai.get("local_polish_model") or "")
+        return name if name in model_catalog.CHAT_GGUF_CATALOG else None
+
+    def _chat_dl_subtitle(self, name: str) -> str:
+        st = self._chat_dl.get(name) or {}
+        b, t = st.get("bytes", 0), st.get("total")
+
+        def mb(n):
+            return f"{n / 1_000_000:.0f} MB"
+
+        return f"downloading… {mb(b)} / {mb(t)}" if t else f"downloading… {mb(b)}"
+
+    def _refresh_chat_rows(self, st: dict | None = None) -> None:
+        for row in self._chat_rows:
+            self.chat_group.remove(row)
+        self._chat_rows = []
+        active = self._active_chat()
+        for name, info in model_catalog.CHAT_GGUF_CATALOG.items():
+            row = Adw.ActionRow(
+                title=name,
+                subtitle=f"{info['size']} · offline AI polish · {info['note']}",
+            )
+            if name == active:
+                radio = Gtk.CheckButton()
+                radio.set_active(True)
+                radio.set_sensitive(False)
+                radio.set_valign(Gtk.Align.CENTER)
+                radio.set_tooltip_text("Current local-polish model")
+                row.add_prefix(radio)
+                row.add_suffix(
+                    Gtk.Label(label="Active", css_classes=["success", "caption"])
+                )
+            elif (
+                name in self._chat_dl
+                and not self._chat_dl[name].get("done")
+                and not self._chat_dl[name].get("error")
+            ):
+                row.set_subtitle(self._chat_dl_subtitle(name))
+                row.add_suffix(Gtk.Spinner(spinning=True))
+            elif model_catalog.chat_gguf_downloaded(name):
+                btn = Gtk.Button(label="Use", css_classes=["suggested-action"])
+                btn.set_valign(Gtk.Align.CENTER)
+                btn.connect("clicked", self._use_chat, name)
+                row.add_suffix(btn)
+            else:
+                btn = Gtk.Button(
+                    label="Download & use", css_classes=["suggested-action"]
+                )
+                btn.set_valign(Gtk.Align.CENTER)
+                btn.connect("clicked", self._download_chat, name)
+                row.add_suffix(btn)
+            self.chat_group.add(row)
+            self._chat_rows.append(row)
+        binary = None
+        try:
+            from ...local_ai import find_llama_server
+
+            binary = find_llama_server()
+        except Exception:  # noqa: S110 — cosmetic row; degrade to "not found"
+            pass
+        binary_note = binary or (
+            "llama-server not found — install the llama.cpp package or "
+            "set SAYITERMANO_LLAMA_SERVER")
+        live = ((st or {}).get("local_ai")) if st is not None else None
+        if live is None:  # daemon down: derive what we can from cfg
+            live = {"enabled": bool(self.cfg.get("ai", {}).get("local_polish"))}
+        if live.get("running"):
+            state = f"running (port {live.get('port')})"
+        elif live.get("enabled") is False:
+            state = "off"
+        else:
+            state = "idle (starts on the next polished dictation)"
+        self.chat_binary_row.set_subtitle(
+            f"{binary_note} · server: {state}")
+
+    def _download_chat(self, _btn, name: str) -> None:
+        if name in self._chat_dl and not (
+            self._chat_dl[name].get("done") or self._chat_dl[name].get("error")
+        ):
+            return  # already running
+        self._chat_dl[name] = {
+            "bytes": 0,
+            "total": None,
+            "done": False,
+            "error": None,
+        }
+        self._refresh_models()
+
+        def work():
+            st = self._chat_dl[name]
+            try:
+                model_download.download_chat_gguf(
+                    name, progress=lambda b, t: st.update(bytes=b, total=t)
+                )
+                st["done"] = True
+            except Exception as e:  # noqa: BLE001 - surfaced as a toast
+                st["error"] = str(e)[:300]
+
+        threading.Thread(target=work, daemon=True).start()
+        GLib.timeout_add(400, self._poll_chat_dl, name)
+
+    def _poll_chat_dl(self, name: str) -> bool:
+        st = self._chat_dl.get(name)
+        if st is None or not (st.get("done") or st.get("error")):
+            self._refresh_models()
+            return True
+        self._refresh_models()
+        if st.get("error"):
+            self.toast(f"download failed: {st['error']}")
+        else:
+            self.toast(f"{name} downloaded — click Use to enable local polish")
+        return False
+
+    def _use_chat(self, _btn, name: str) -> None:
+        """One-click local polish: pick the model AND turn the feature on
+        (ai.local_polish + ai.enabled — no cloud key, nothing to type)."""
+        if not model_catalog.chat_gguf_downloaded(name):
+            self.toast(f"{name} is not downloaded yet")
+            return
+        try:
+            resp = self.c.set_config({"ai": {
+                "local_polish_model": name,
+                "local_polish": True,
+                "enabled": True,
+            }})
+        except Exception as e:
+            self.toast(str(e))
+            return
+        if resp.get("rejected") or resp.get("errors"):
+            self.toast(
+                "Rejected: "
+                + ", ".join((resp.get("rejected") or []) + (resp.get("errors") or []))
+            )
+            return
+        self.toast(f"Local polish enabled ({name}) — works offline")
+        self._load()  # resync cfg + rows (AI page toggle included)
+
     def _section_catalogs(self, page: Adw.PreferencesPage) -> None:
         """The three model catalogs (faster-whisper, whisper.cpp GGUF, Parakeet) — rows are filled by _refresh_models."""
         self.models_group = Adw.PreferencesGroup(
@@ -700,6 +848,21 @@ class ModelsPageMixin:
             "empty = inherit, auto = always detect",
         )
         page.add(self.lang_overrides_group)
+
+    def _section_chat_models(self, page: Adw.PreferencesPage) -> None:
+        """Local AI polish: chat GGUF models served by the bundled
+        llama-server (Settings → AI's "Local polish" toggle routes polish
+        here); rows are filled by _refresh_models."""
+        self.chat_group = Adw.PreferencesGroup(
+            title="Local AI polish (llama.cpp)",
+            description="Small chat models for offline polish — the "
+            "bundled llama-server spawns on demand and idles down; "
+            "nothing leaves the machine",
+        )
+        self.chat_binary_row = Adw.ActionRow(title="llama-server", subtitle="—")
+        self.chat_binary_row.set_activatable(False)
+        self.chat_group.add(self.chat_binary_row)
+        page.add(self.chat_group)
 
     def _section_disk_usage(self, page: Adw.PreferencesPage) -> None:
         """Cached-model disk usage."""

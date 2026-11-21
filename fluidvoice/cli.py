@@ -97,7 +97,8 @@ def _build_parser() -> argparse.ArgumentParser:
                        help="local evaluation harness (args passed through; "
                             "see `python -m fluidvoice.evalharness --help`)")
     p.add_argument("harness_args", nargs=argparse.REMAINDER, metavar="ARGS",
-                   help="harness subcommand and flags (run/check/fixtures/soak)")
+                   help="harness subcommand and flags "
+                        "(run/check/fixtures/soak/polish-gate)")
     p.set_defaults(func=_cmd_eval_run)
 
     p = sub.add_parser(

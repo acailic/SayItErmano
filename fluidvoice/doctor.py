@@ -131,6 +131,55 @@ def _ai_polish_lines(cfg: dict) -> list[str]:
     return lines
 
 
+def _local_polish_lines(cfg: dict) -> list[str]:
+    """Bundled local AI polish (llama-server + chat GGUF) report: toggle,
+    model download state, the binary, and the live server when the
+    daemon is up (the status route's local_ai block)."""
+    from . import model_catalog
+    from .local_ai import find_llama_server
+    ai = cfg.get("ai", {}) or {}
+    if not ai.get("local_polish"):
+        return ["  local polish: off (ai.local_polish - zero footprint: "
+                "no llama-server, no model RAM)"]
+    name = str(ai.get("local_polish_model")
+               or model_catalog.CHAT_MODEL_DEFAULT)
+    if name not in model_catalog.CHAT_GGUF_CATALOG:
+        name = model_catalog.CHAT_MODEL_DEFAULT
+    have = model_catalog.chat_gguf_downloaded(name)
+    binary = find_llama_server()
+    binary_note = binary or ("llama-server not found - install the "
+                             "llama.cpp package (llama-server) or set "
+                             "SAYITERMANO_LLAMA_SERVER")
+    idle = int(ai.get("local_polish_idle_s", 300) or 0)
+    lines = [
+        "  local polish: ON (works offline - polish never leaves "
+        "this machine)",
+        f"  model: {name} "
+        + ("downloaded" if have else
+           "NOT downloaded - get it in Settings → Models"),
+        f"  binary: {binary_note}",
+        "  idle stop: " + (f"{idle}s after the last polished dictation"
+                           if idle > 0 else
+                           "off (server stays up with the daemon)"),
+    ]
+    try:
+        from . import control
+        if paths.socket_path().exists():
+            status = control.request("status") or {}
+            live = status.get("local_ai") or {}
+            if live:
+                state = ("running on port "
+                         f"{live.get('port')} (cold start "
+                         f"{live.get('cold_start_s')}s)"
+                         if live.get("running") else "not running")
+                lines.append(f"  server: {state}")
+                if live.get("last_error"):
+                    lines.append(f"  last error: {live['last_error']}")
+    except Exception:  # noqa: BLE001,S110 — daemon down / older daemon
+        pass  # the static config lines above already say everything
+    return lines
+
+
 def _command_mode_lines(cfg: dict) -> list[str]:
     """Command mode v2 resolution: AI readiness, tool registry size,
     the destructive-pattern counts (built-in port + user additions), and
@@ -825,6 +874,8 @@ def run() -> int:
 
     print("\nai polish:")
     for line in _ai_polish_lines(cfg):
+        print(line)
+    for line in _local_polish_lines(cfg):
         print(line)
 
     print("\ninsertion hardening:")

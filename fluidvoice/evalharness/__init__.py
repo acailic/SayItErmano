@@ -13,6 +13,8 @@ Public API:
 - :mod:`fluidvoice.evalharness.metrics` — pure metric functions
 - :func:`run_eval` — execute cases with a transcriber and write
   ``report.json`` / ``report.md`` (``runner`` module)
+- :func:`run_polish_gate` — local-vs-cloud AI polish quality gate
+  (``polish_gate`` module, issue #21)
 - :func:`main` — CLI (``python -m fluidvoice.evalharness``; also exposed
   as ``sayit-ermano eval-run``)
 """
@@ -52,15 +54,27 @@ from .metrics import (
     terminal_punctuation_accuracy,
     wer,
 )
+from .polish_gate import (
+    DEFAULT_CORPUS,
+    DEFAULT_TOLERANCE,
+    PolishCase,
+    PolishCorpusError,
+    load_polish_corpus,
+    run_polish_gate,
+)
 from .runner import TranscriptionOutput, run_eval
 from .synth import SYNTH_KINDS, ensure_case_audio, synth_wav, wav_duration_seconds
 
 __all__ = [
     "Case",
+    "DEFAULT_CORPUS",
+    "DEFAULT_TOLERANCE",
     "GUARD_FLAG",
     "GUARD_NONE",
     "GUARD_OK",
     "ManifestError",
+    "PolishCase",
+    "PolishCorpusError",
     "SYNTH_KINDS",
     "SynthSpec",
     "TranscriptionOutput",
@@ -78,6 +92,7 @@ __all__ = [
     "levenshtein_alignment",
     "load_manifest",
     "load_manifests",
+    "load_polish_corpus",
     "main",
     "mean",
     "normalize_chars",
@@ -86,6 +101,7 @@ __all__ = [
     "real_time_factor",
     "resolve_manifest_path",
     "run_eval",
+    "run_polish_gate",
     "sentence_start_capital_accuracy",
     "snr_bucket",
     "split_sentences",

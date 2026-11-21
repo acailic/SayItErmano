@@ -1,5 +1,5 @@
-"""Streaming model downloads for whisper.cpp GGUF + Parakeet ONNX
-(stdlib only).
+"""Streaming model downloads for whisper.cpp GGUF + llama.cpp chat GGUF
++ Parakeet ONNX (stdlib only).
 
 Progress surfaces (first-use funnel F-02): downloads are observable
 while they run - `observe_downloads()` scans the shared models cache so
@@ -47,7 +47,7 @@ class DownloadProgress:
     """One observable in-flight download (registry or cache scan)."""
 
     label: str            # model identity: "base", "ggml-base.bin", ...
-    kind: str             # "faster-whisper" | "whisper.cpp" | "parakeet" | "file"
+    kind: str             # "faster-whisper" | "whisper.cpp" | "llama.cpp" | "parakeet" | "file"
     done_bytes: int
     total_bytes: int | None  # None = indeterminate (show MB + elapsed)
     elapsed_s: float
@@ -134,6 +134,22 @@ def download_gguf(name: str, progress: Progress | None = None,
     return download_file(model_catalog.GGUF_CATALOG[name]["url"], dest,
                          progress=progress, cancel=cancel, label=name,
                          kind="whisper.cpp")
+
+
+def download_chat_gguf(name: str, progress: Progress | None = None,
+                       cancel: threading.Event | None = None) -> Path:
+    """Fetch a CHAT_GGUF_CATALOG model into models_dir()/llama.cpp/.
+    Returns the final path; no-op when the file already exists."""
+    if name not in model_catalog.CHAT_GGUF_CATALOG:
+        raise ValueError(
+            f"unknown chat gguf model '{name}' "
+            f"(choose from {sorted(model_catalog.CHAT_GGUF_CATALOG)})")
+    dest = model_catalog.chat_gguf_path(name)
+    if dest.exists():
+        return dest
+    return download_file(model_catalog.CHAT_GGUF_CATALOG[name]["url"], dest,
+                         progress=progress, cancel=cancel, label=name,
+                         kind="llama.cpp")
 
 
 def download_file(url: str, dest: Path, progress: Progress | None = None,
@@ -377,10 +393,12 @@ def observe_downloads() -> list[DownloadProgress]:
             elapsed_s=elapsed)
     root = paths.models_dir()
     gguf_names = set(model_catalog.GGUF_CATALOG)
+    chat_names = set(model_catalog.CHAT_GGUF_CATALOG)
     parakeet_names = set(model_catalog.PARAKEET_CATALOG)
     fw_dir = root / "faster-whisper"
     scans: list[tuple[str, Path]] = [
         ("whisper.cpp", root / model_catalog.GGUF_DIR_NAME),
+        ("llama.cpp", root / model_catalog.CHAT_GGUF_DIR_NAME),
         ("parakeet", root / model_catalog.PARAKEET_DIR_NAME),
         ("faster-whisper", fw_dir),
     ]
@@ -397,6 +415,9 @@ def observe_downloads() -> list[DownloadProgress]:
             if kind == "whisper.cpp" and label in gguf_names:
                 total = _approx_bytes(
                     model_catalog.GGUF_CATALOG[label]["size"])
+            elif kind == "llama.cpp" and label in chat_names:
+                total = _approx_bytes(
+                    model_catalog.CHAT_GGUF_CATALOG[label]["size"])
             elif kind == "parakeet":
                 label = label.lstrip(".").removesuffix(".tar.bz2")
                 if label in parakeet_names:

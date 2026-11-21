@@ -9,6 +9,8 @@ Subcommands:
 - ``check``     validate manifest(s) (and audio presence) only
 - ``fixtures``  materialize the synthetic wavs a manifest describes
 - ``soak``      summarize a scripts/soak.py CSV
+- ``polish-gate``  score local vs cloud AI polish over a text corpus
+                (regression gate; docs/eval/README.md)
 
 ``run`` needs no model for a smoke pass (a built-in stub transcriber
 prints a loud warning); real evaluation plugs a backend adapter with
@@ -29,6 +31,13 @@ from .manifest import (
     default_manifest_path,
     load_manifests,
     resolve_manifest_path,
+)
+from .polish_gate import (
+    DEFAULT_CORPUS,
+    DEFAULT_TOLERANCE,
+    PolishCorpusError,
+    load_polish_corpus,
+    run_polish_gate,
 )
 from .runner import Transcriber, run_eval
 from .soak import read_soak_csv, summarize_soak
@@ -115,6 +124,55 @@ def _cmd_run(args: argparse.Namespace) -> int:
     print(f"  guard: {g['false_positive']} false positives / "
           f"{g['false_negative']} false negatives")
     return 1 if s["errors"] else 0
+
+
+def _load_polisher(spec: str):
+    """Resolve ``module:factory`` to a polish callable (factory() ->
+    polish(text) -> str) — same adapter convention as --transcriber."""
+    try:
+        mod_name, _, attr = spec.partition(":")
+        if not mod_name or not attr:
+            raise ValueError("expected 'module:factory'")
+        factory = getattr(importlib.import_module(mod_name), attr)
+        polisher = factory()
+        if not callable(polisher):
+            raise ValueError(f"{spec} produced a non-callable polisher")
+        return polisher
+    except (ImportError, AttributeError, ValueError) as e:
+        raise SystemExit(
+            f"error: cannot load polisher {spec!r}: {e}\n"
+            "(format: 'module:factory' where factory() returns the "
+            "polish callable — see docs/eval/README.md)") from e
+
+
+def _cmd_polish_gate(args: argparse.Namespace) -> int:
+    path = args.corpus or DEFAULT_CORPUS
+    try:
+        cases = load_polish_corpus(path)
+    except PolishCorpusError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    local = _load_polisher(args.local)
+    cloud = _load_polisher(args.cloud)
+    report = run_polish_gate(cases, local, cloud, out_dir=args.out,
+                             tolerance=args.tolerance, source=str(path))
+    s, v = report["summary"], report["verdict"]
+    print(f"{len(cases)} cases -> {args.out / 'polish-gate.json'} + "
+          f"{args.out / 'polish-gate.md'}")
+    for side in ("local", "cloud"):
+        print(f"  {side}: WER mean "
+              f"{_fmt(s[side]['wer_mean'])} · errors "
+              f"{s[side]['errors']} · refusals {s[side]['refusals']}")
+    if v.get("ok"):
+        print(f"  gate: PASS (local within {v['tolerance']} of cloud, "
+              f"delta {v.get('delta')})")
+        return 0
+    print("  gate: REGRESSION "
+          + (f"(local WER {v.get('local_wer_mean'):.3f} > cloud "
+             f"{v.get('cloud_wer_mean'):.3f} + {v['tolerance']})"
+             if v.get("local_wer_mean") is not None
+             else f"({v.get('reason')})"), file=sys.stderr)
+    return 1
 
 
 def _fmt(v: float | None) -> str:
@@ -211,6 +269,26 @@ def main(argv: list[str] | None = None) -> int:
     soak_p.add_argument("csv", type=Path, help="CSV written by "
                         "scripts/soak.py")
     soak_p.set_defaults(func=_cmd_soak)
+
+    pg_p = sub.add_parser(
+        "polish-gate", help="local vs cloud AI polish quality gate")
+    pg_p.add_argument("--corpus", type=Path, default=None, metavar="PATH",
+                      help="polish corpus JSON (default: the packaged "
+                           "CC0 text corpus)")
+    pg_p.add_argument("--local", required=True, metavar="MODULE:FACTORY",
+                      help="local polisher factory (e.g. an adapter over "
+                           "the bundled llama.cpp server)")
+    pg_p.add_argument("--cloud", required=True, metavar="MODULE:FACTORY",
+                      help="cloud-baseline polisher factory")
+    pg_p.add_argument("--out", type=Path, default=Path("eval-polish-gate"),
+                      metavar="DIR", help="output directory "
+                      "(default: ./eval-polish-gate)")
+    pg_p.add_argument("--tolerance", type=float,
+                      default=DEFAULT_TOLERANCE,
+                      metavar="WER", help="absolute WER head-room the local "
+                      "polisher gets vs the cloud baseline "
+                      "(default 0.02)")
+    pg_p.set_defaults(func=_cmd_polish_gate)
 
     args = parser.parse_args(argv)
     return args.func(args)

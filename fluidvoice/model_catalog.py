@@ -48,6 +48,24 @@ GGUF_CATALOG: dict[str, dict[str, str]] = {
 GGUF_DIR_NAME = "whisper.cpp"
 
 
+# Chat GGUF models for local AI polish (ai.local_polish) — served by the
+# bundled llama.cpp server (fluidvoice/local_ai.py). Key = file name as
+# stored under models_dir()/llama.cpp/, like the whisper GGUF catalog.
+# "serve_as" is the --alias handed to llama-server (the OpenAI-compatible
+# model name the daemon requests); "ctx" the context window it is started
+# with (small = small RAM footprint; dictation polish needs no long ctx).
+CHAT_GGUF_CATALOG: dict[str, dict] = {
+    "Qwen3-4B-Q4_K_M.gguf": {
+        "size": "~2.5 GB", "langs": "99",
+        "note": "qwen3-4b-class chat model — offline AI polish",
+        "url": "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf",
+        "serve_as": "qwen3-4b", "ctx": 4096,
+    },
+}
+CHAT_GGUF_DIR_NAME = "llama.cpp"
+CHAT_MODEL_DEFAULT = next(iter(CHAT_GGUF_CATALOG))
+
+
 # NVIDIA Parakeet TDT via the sherpa-onnx community exports (k2-fsa GitHub
 # release, asr-models tag) — one tarball per model; `files` is the
 # post-extract integrity + presence manifest (per-file sha256).
@@ -100,6 +118,19 @@ def gguf_path(name: str) -> Path:
 def gguf_downloaded(name: str) -> bool:
     """True when the catalog model's file exists in the managed cache."""
     return name in GGUF_CATALOG and gguf_path(name).is_file()
+
+
+def chat_gguf_dir() -> Path:
+    return paths.models_dir() / CHAT_GGUF_DIR_NAME
+
+
+def chat_gguf_path(name: str) -> Path:
+    return chat_gguf_dir() / name
+
+
+def chat_gguf_downloaded(name: str) -> bool:
+    """True when the chat GGUF exists in the managed cache."""
+    return name in CHAT_GGUF_CATALOG and chat_gguf_path(name).is_file()
 
 
 def parakeet_dir() -> Path:
@@ -185,6 +216,12 @@ def cached_models() -> list[dict]:
                     and not f.name.endswith(".part")):
                 out.append({"kind": "whisper.cpp", "name": f.name,
                             "path": f, "bytes": f.stat().st_size})
+    if chat_gguf_dir().is_dir():
+        for f in sorted(chat_gguf_dir().iterdir()):
+            if (f.is_file() and f.suffix == ".gguf"
+                    and not f.name.endswith(".part")):
+                out.append({"kind": "llama.cpp", "name": f.name,
+                            "path": f, "bytes": f.stat().st_size})
     if parakeet_dir().is_dir():
         for d in sorted(parakeet_dir().iterdir()):
             if d.is_dir() and not d.name.startswith("."):
@@ -200,10 +237,12 @@ def cache_entry_path(kind: str, name: str) -> Path:
     unknown kind."""
     if kind == "whisper.cpp":
         return gguf_dir() / name
+    if kind == "llama.cpp":
+        return chat_gguf_dir() / name
     if kind == "parakeet":
         return parakeet_dir() / name
     if kind == "faster-whisper":
         repo = backends.FW_MODEL_REPOS.get(name, name)
         return _fw_repo_dir(repo)
     raise ValueError(f"unknown model kind {kind!r} "
-                     f"(faster-whisper, whisper.cpp or parakeet)")
+                     f"(faster-whisper, whisper.cpp, llama.cpp or parakeet)")

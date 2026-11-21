@@ -41,6 +41,7 @@ from .capture import CaptureCoordinator
 from .command_coord import CommandCoordinator
 from .config import load_config
 from .engine_manager import SpeechEngineManager
+from .local_ai import LocalAIManager
 from .micmon import match_priority as micmon_match_priority
 from .pipeline import DictationPipeline, confidence_band, log  # noqa: F401
 from .processing import post_process
@@ -126,6 +127,11 @@ class Daemon:
         self._paste_hotkey = None
         self._language_hotkey = None
         self._extra_hotkeys: list = []
+        # Bundled local AI polish (issue #21): owns the optional
+        # llama-server child; idle-down watcher thread when enabled.
+        self._local_ai = LocalAIManager(self.cfg, log=log)
+        self._local_ai_watch: threading.Thread | None = None
+        self._local_ai_stop = threading.Event()
         self._tray: Any = None
         self._micmon: Any = None  # input-device watcher (micmon.MicMonitor)
         self._mic_missing_logged = False  # warn-once latch for reselects
@@ -201,6 +207,9 @@ class Daemon:
         self._engines.startup_load()
         # Idle unload watcher: only exists when model.idle_unload_s > 0.
         self._engines.start_idle_watch()
+        # Local AI polish idle-down watcher (llama-server lifecycle);
+        # only exists while ai.local_polish is on (zero footprint off).
+        self._start_local_ai_watch()
 
         if self.use_hotkey:
             self._start_hotkey()
@@ -241,6 +250,38 @@ class Daemon:
         where = f"{info.type}" + (f" ({info.desktop})" if info.desktop else "")
         summary = " ".join(f"{k}={v}" for k, v in caps.items())
         log(f"session: {where} - capabilities: {summary}")
+
+    def _start_local_ai_watch(self) -> None:
+        """Start the llama-server idle-down watcher iff local polish is
+        enabled. Off = nothing runs and no child exists (zero footprint)."""
+        if not self.cfg.get("ai", {}).get("local_polish", False):
+            return
+        if self._local_ai_watch is not None \
+                and self._local_ai_watch.is_alive():
+            return
+        self._local_ai_stop = threading.Event()
+        stop = self._local_ai_stop
+        t = self._tasks.prepare(
+            "local-ai-idle",
+            lambda: self._local_ai.watch_loop(stop))
+        self._local_ai_watch = t
+        if t is not None:
+            t.start()
+            log("local polish: idle watcher active "
+                f"(idle stop {self._local_ai.idle_threshold()}s)")
+
+    def _apply_local_polish_setting(self) -> None:
+        """ai.local_polish / local_polish_idle_s flipped live: (re)start
+        or tear down the watcher; turning OFF also stops a running
+        llama-server immediately — the zero-footprint guarantee."""
+        self._local_ai_stop.set()
+        self._tasks.join("local-ai-idle", timeout=2)
+        self._local_ai_watch = None
+        if not self.cfg.get("ai", {}).get("local_polish", False):
+            self._local_ai.stop()
+            log("local polish disabled (llama-server stopped if any)")
+            return
+        self._start_local_ai_watch()
 
     def _start_tray(self) -> None:
         """Panel/tray icon (StatusNotifierItem): click toggles dictation,
@@ -600,6 +641,9 @@ class Daemon:
     def shutdown(self) -> None:
         log("shutting down")
         self._engines.stop_idle_watch()
+        # llama-server child first (bounded), then its watcher thread
+        self._local_ai.shutdown()
+        self._local_ai_stop.set()
         # under the lock: the take-state mutations race the hotkey thread's
         # toggle (N1). The race was benign - callbacks re-validate recorder
         # identity - but serializing costs nothing and matches
@@ -1008,6 +1052,9 @@ class Daemon:
             _try("lock pause", self._apply_lock_setting)
         if "model.idle_unload_s" in changed:
             _try("idle unload", self._engines.apply_idle_unload_setting)
+        if any(k in ("ai.local_polish", "ai.local_polish_idle_s")
+               for k in changed):
+            _try("local polish", self._apply_local_polish_setting)
         return {"applied": applied, "errors": errors}
 
     # -- control protocol ----------------------------------------------------
@@ -1323,6 +1370,9 @@ class Daemon:
                 return
             pipeline = self._pipeline_factory(self.cfg, backend)
             pipeline._profile_override = self._capture.profile_override
+            # local AI polish manager (attribute injection, same pattern
+            # as _profile_override): None = local polish can't run
+            pipeline._local_ai = self._local_ai
             # sticky runtime cycle override (unlike the profile override,
             # deliberately NOT cleared in the finally below: cycle state
             # persists until cycled away or the daemon restarts)

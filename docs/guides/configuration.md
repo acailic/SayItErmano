@@ -140,6 +140,9 @@ drift: `python scripts/gen_config_reference.py` regenerates it.
 | `base_prompt` | `""` |  | Custom base prompt for AI polish (empty = the built-in dictation prompt; Settings -> AI can save named presets of it) |
 | `refusal_guard` | `true` |  | Refusal guardrail: a polish reply that reads as a model refusal ("I'm sorry, I can't assist...") never reaches the doc - the raw transcript is typed instead, with a notification. false = trust the model blindly. |
 | `profile` | `""` |  | Active AI provider profile name ("" = custom endpoint settings). Switching via Settings -> AI or the tray's AI profile submenu writes the profile's endpoint values into [ai] and points here; editing the endpoint by hand clears it back to "". |
+| `local_polish` | `false` |  | Local polish (works offline): route AI polish through a bundled llama.cpp server + a small local chat GGUF instead of the configured endpoint — nothing leaves the machine. The server spawns on the first polished dictation and idles down after local_polish_idle_s; off (the default) = zero footprint (no process, no memory). Download the model in Settings -> Models. |
+| `local_polish_model` | `"Qwen3-4B-Q4_K_M.gguf"` |  | The chat GGUF local polish serves (Settings -> Models downloads it; llama.cpp/ under the models cache). |
+| `local_polish_idle_s` | `300` |  | Stop the bundled llama.cpp server after this many idle seconds (its ~model-size RAM footprint is freed; the next polished dictation pays the cold start again). 0 = keep it running for the daemon's lifetime; range 30..86400 when set. |
 
 ### `[insertion]`
 
@@ -255,6 +258,20 @@ base_url   = "https://api.z.ai/api/paas/v4"
 model      = "glm-4.7"
 api_key_env = "ZAI_API_KEY"   # export ZAI_API_KEY=… in your environment
 ```
+
+**Local polish (works offline)** (`ai.local_polish`): route polish
+through a bundled llama.cpp server + a small local chat GGUF instead of
+the configured endpoint — no cloud key, nothing leaves the machine.
+While it is on, `base_url`/`model` are ignored for polish entirely.
+The server spawns on the first polished dictation and is stopped after
+`ai.local_polish_idle_s` without use (its ~model-size RAM is freed);
+off = zero footprint (no process, no memory — a running server is
+stopped the moment the toggle flips off). `ai.local_polish_model` picks
+the chat GGUF (Settings → Models downloads it next to the whisper
+GGUFs), and `sayit-ermano doctor` reports the whole chain: toggle,
+model download state, the `llama-server` binary and the live server.
+Memory and cold-start budgets, binary discovery and the local-vs-cloud
+quality gate: [local-polish.md](local-polish.md).
 
 Built-in templates (GLM, OpenAI, Groq, OpenRouter, Ollama, LM Studio)
 are offered under Settings → AI → *Add profile → From template* and

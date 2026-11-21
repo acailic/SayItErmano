@@ -30,6 +30,11 @@ python -m fluidvoice.evalharness run --out /tmp/eval-smoke
 
 # summarize a soak CSV (scripts/soak.py) on its own
 python -m fluidvoice.evalharness soak /tmp/sayit-ermano-soak.csv
+
+# local-vs-cloud AI polish quality gate (see §Polish quality gate)
+python -m fluidvoice.evalharness polish-gate \
+    --local my_polish:make_local --cloud my_polish:make_cloud \
+    --out eval-polish-gate
 ```
 
 Every subcommand takes `--manifest PATH` (repeatable; a file or a
@@ -150,6 +155,43 @@ errors), `conventions`, and optionally `soak`. `report.md` is the same
 data as a readable table (summary table + per-case table + soak block).
 Keep the report directory with the release notes when the release
 policy below requires it.
+
+## Polish quality gate
+
+`polish-gate` (issue #21) scores the **AI polish step** rather than
+transcription: the same raw transcripts go through a local polisher
+(the bundled llama.cpp + chat GGUF, via an adapter you write) and a
+cloud baseline, and both are scored against expected polished
+references with the same WER/CER math as decode evaluation.
+
+- Corpus: a JSON list of `{"id", "raw", "expected"}` cases. The
+  packaged default (`fluidvoice/evalharness/corpus/polish-corpus.json`)
+  is CC0-1.0 self-authored text; keep private corpora out of git and
+  pass `--corpus`.
+- Scoring is product-faithful: a polisher that errors or returns a
+  refusal scores the **raw transcript** (exactly what
+  `DictationPipeline._polish` types in both cases), and a local
+  polisher that errors on *every* case can never pass.
+- Regression gate: the run exits non-zero while
+  `local WER mean > cloud WER mean + tolerance`
+  (`--tolerance`, default 0.02). `polish-gate.json` + `.md` land in
+  `--out` (default `./eval-polish-gate`) — keep them with the release
+  notes when the local-polish path changes.
+
+An adapter module is ~5 lines:
+
+```python
+# my_polish.py
+from fluidvoice.ai.client import AIClient
+from fluidvoice.config import load_config
+
+def make_local():
+    cfg = load_config()          # ai.local_polish = true in config
+    from fluidvoice.local_ai import LocalAIManager
+    ep = LocalAIManager(cfg).ensure_ready()
+    client = AIClient({"ai": {**cfg["ai"], **ep}})
+    return client.polish
+```
 
 ## Soak integration and release policy
 

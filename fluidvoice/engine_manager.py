@@ -250,6 +250,14 @@ class SpeechEngineManager:
         if name == active:
             return {"ok": False,
                     "error": f"{name} is the active model (switch models first)"}
+        if kind == "llama.cpp" \
+                and (self.cfg.get("ai", {}) or {}).get("local_polish") \
+                and name == str((self.cfg.get("ai", {}) or {})
+                                .get("local_polish_model", "")):
+            return {"ok": False,
+                    "error": f"{name} is the active local-polish model "
+                             "(turn local polish off or pick another "
+                             "chat model first)"}
         if self.warmup.get("running"):
             return {"ok": False,
                     "error": "a model load is in progress - try again once "

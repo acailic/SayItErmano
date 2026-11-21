@@ -1,0 +1,86 @@
+[
+  {
+    "id": "meeting-time",
+    "raw": "um lets meet on tuesday around 3 no wait 4 p m",
+    "expected": "Let's meet on Tuesday at 4 p.m.",
+    "note": "self-correction + time normalization (the README headline example)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "email-sig",
+    "raw": "can you send me that report by end of day yeah the quarterly one",
+    "expected": "Can you send me that report by end of day — the quarterly one?",
+    "note": "filler removal, casing, question punctuation",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "standup-update",
+    "raw": "yesterday i finished the parser fix and um started looking at the failing integration tests",
+    "expected": "Yesterday I finished the parser fix and started looking at the failing integration tests.",
+    "note": "past-tense narrative, filler dropped",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "number-heavy",
+    "raw": "the invoice total is 1 250 dollars due on march 3rd",
+    "expected": "The invoice total is $1,250, due on March 3rd.",
+    "note": "numbers/currency kept verbatim — polish must not alter digits",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "two-sentences",
+    "raw": "i think the bug is in the retry loop it doesnt back off when the server returns 429",
+    "expected": "I think the bug is in the retry loop. It doesn't back off when the server returns 429.",
+    "note": "sentence splitting + contraction",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "list-request",
+    "raw": "add milk eggs and um bread to the shopping list oh and also coffee",
+    "expected": "Add milk, eggs, and bread to the shopping list — and also coffee.",
+    "note": "list comma insertion, trailing addition",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "proper-nouns",
+    "raw": "i read about it on hacker news it links to a post on the github blog",
+    "expected": "I read about it on Hacker News; it links to a post on the GitHub blog.",
+    "note": "proper-noun casing the model must know, not invent",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "short-command",
+    "raw": "remind me to call the dentist tomorrow morning",
+    "expected": "Remind me to call the dentist tomorrow morning.",
+    "note": "minimal case: near-pass-through, must not expand or reword",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "correction-override",
+    "raw": "send it to jane no not jane her sister i always mix them up",
+    "expected": "Send it to Jane's sister.",
+    "note": "messy self-correction the polisher resolves; rewording risk case",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "technical-terms",
+    "raw": "the pr migrates the oauth callback to use pkce and rotates the refresh token",
+    "expected": "The PR migrates the OAuth callback to use PKCE and rotates the refresh token.",
+    "note": "technical acronym casing (over-correction guard applies)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "long-narrative",
+    "raw": "so we took the train to ljubljana on saturday the weather was great we walked around the old town for hours and then had dinner near the river it was probably my favorite day of the trip",
+    "expected": "We took the train to Ljubljana on Saturday. The weather was great — we walked around the old town for hours and then had dinner near the river. It was probably my favorite day of the trip.",
+    "note": "multi-sentence narrative, city casing",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "question-form",
+    "raw": "do you know if the store is open on sundays",
+    "expected": "Do you know if the store is open on Sundays?",
+    "note": "question mark from syntax",
+    "license": "CC0-1.0"
+  }
+]

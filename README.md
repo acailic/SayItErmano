@@ -47,7 +47,13 @@
 
 ## What's new
 
-**Unreleased** — tray-icon hardening: a tray host that flaps its
+**Unreleased** — bundled **local AI polish** (issue #21): the Settings →
+AI toggle "Local polish (works offline)" routes polish through a
+llama.cpp server the daemon spawns on demand with a small qwen3-4b-class
+GGUF (one-click download in Settings → Models) — polished text with no
+cloud key, zero footprint when off, idle-down after use, plus an eval
+harness `polish-gate` (local vs cloud quality regression gate); also
+tray-icon hardening: a tray host that flaps its
 StatusNotifierWatcher name (seen in the wild: an ubuntu-appindicators
 reload loop) now gets at most one re-registration every 2 s and one log
 line per minute, instead of a registration per flap (a 57-minute flap
@@ -166,6 +172,12 @@ With Ollama: `ollama pull qwen3:8b`. No key needed for local endpoints; for clou
 providers set `api_key_env = "SAYITERMANO_API_KEY"` and export the variable
 (keys are never written to disk by the tooling).
 
+**No cloud key at all?** Flip on **Local polish (works offline)** in
+Settings → AI (or Models → Local AI polish → Download & use): the
+daemon spawns a bundled llama.cpp server with a small local chat model,
+polishes entirely on-device, and idles the server down after use —
+details and budgets in [docs/guides/local-polish.md](docs/guides/local-polish.md).
+
 A **refusal guardrail** (`ai.refusal_guard`, default on) never types model
 refusals into your document — the raw transcript is used instead; see
 [configuration.md](docs/guides/configuration.md).
@@ -181,7 +193,7 @@ refusals into your document — the raw transcript is used instead; see
 | Hotkeys pause while the screen is locked | ✅ | ✅ `general.pause_when_locked` (logind watch, resolves the session under the systemd user unit too; active dictation cancels, tray notes `paused (locked)`) |
 | Filler-word removal + custom dictionary | ✅ | ✅ (same defaults) |
 | Spoken punctuation ("literal comma") | ✅ full rule table | ✅ ported (dot/slash/at-sign contexts included) |
-| AI polish with the original prompt | ✅ (local Fluid Intelligence or cloud) | ✅ (any OpenAI-compatible endpoint + switchable provider profiles; no bundled local LLM yet) |
+| AI polish with the original prompt | ✅ (local Fluid Intelligence or cloud) | ✅ (any OpenAI-compatible endpoint + switchable provider profiles; bundled local polish: llama.cpp + a qwen3-4b GGUF, works offline) |
 | Start/stop sounds | ✅ | ✅ (same GPLv3 SFX) |
 | Live streaming preview overlay | ✅ | ✅ Mac-style pill (live waveform, mode accent colors, state labels, send indicator) |
 | Write/Rewrite selected text | ✅ (⌥R) | ✅ dedicated rewrite hotkey |
