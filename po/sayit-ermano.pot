@@ -22,7 +22,7 @@ msgstr ""
 msgid " — daemon offline, saving to file"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:501
+#: fluidvoice/gtkui/settings_window.py:502
 msgid " — restart daemon for: {keys}"
 msgstr ""
 
@@ -211,6 +211,10 @@ msgstr ""
 msgid "Auto follows the system default"
 msgstr ""
 
+#: fluidvoice/gtkui/settings_pages/general.py:127
+msgid "Autostart off"
+msgstr ""
+
 #: fluidvoice/gtkui/main_window.py:515
 msgid "Avg per dictation"
 msgstr ""
@@ -270,7 +274,7 @@ msgstr ""
 #: fluidvoice/gtkui/settings_pages/ai.py:659
 #: fluidvoice/gtkui/settings_pages/history.py:73
 #: fluidvoice/gtkui/settings_pages/models.py:292
-#: fluidvoice/gtkui/settings_window.py:527
+#: fluidvoice/gtkui/settings_window.py:528
 msgid "Cancel"
 msgstr ""
 
@@ -282,7 +286,7 @@ msgstr ""
 msgid "Cancel key — discards a take"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:525
+#: fluidvoice/gtkui/settings_window.py:526
 msgid "Changes that were not saved will be lost."
 msgstr ""
 
@@ -406,7 +410,7 @@ msgstr ""
 msgid "Copy text"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/general.py:44
+#: fluidvoice/gtkui/settings_pages/general.py:53
 msgid "Copy transcriptions to clipboard"
 msgstr ""
 
@@ -424,6 +428,10 @@ msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/wayland.py:179
 msgid "Could not open: {error}"
+msgstr ""
+
+#: fluidvoice/gtkui/settings_pages/general.py:130
+msgid "Could not set autostart: {detail} — create the login entry manually with your desktop's autostart settings"
 msgstr ""
 
 #: fluidvoice/gtkui/main_window.py:972
@@ -520,7 +528,7 @@ msgstr ""
 msgid "Dictation key — e.g. Right_Control, F9"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/general.py:34
+#: fluidvoice/gtkui/settings_pages/general.py:43
 msgid "Dictation language"
 msgstr ""
 
@@ -537,7 +545,7 @@ msgstr ""
 msgid "Direct ggml models for the whisper.cpp backend"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:528
+#: fluidvoice/gtkui/settings_window.py:529
 #: fluidvoice/gtkui/settings_window.py:239
 msgid "Discard"
 msgstr ""
@@ -546,7 +554,7 @@ msgstr ""
 msgid "Discard obviously-silent recordings ≤ 4 s"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:524
+#: fluidvoice/gtkui/settings_window.py:525
 msgid "Discard unsaved changes?"
 msgstr ""
 
@@ -588,7 +596,7 @@ msgstr ""
 msgid "Evdev push-to-talk"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/general.py:45
+#: fluidvoice/gtkui/settings_pages/general.py:54
 msgid "Every dictation also lands in the clipboard"
 msgstr ""
 
@@ -674,8 +682,8 @@ msgstr ""
 msgid "GPU yes"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/general.py:19
-#: fluidvoice/gtkui/settings_pages/general.py:21
+#: fluidvoice/gtkui/settings_pages/general.py:28
+#: fluidvoice/gtkui/settings_pages/general.py:30
 msgid "General"
 msgstr ""
 
@@ -782,7 +790,7 @@ msgstr ""
 msgid "Instructions"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/general.py:27
+#: fluidvoice/gtkui/settings_pages/general.py:36
 msgid "Interface language — follows the system by default"
 msgstr ""
 
@@ -798,7 +806,7 @@ msgstr ""
 msgid "Key"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/general.py:25
+#: fluidvoice/gtkui/settings_pages/general.py:34
 msgid "Language"
 msgstr ""
 
@@ -978,7 +986,7 @@ msgstr ""
 msgid "New word"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:505
+#: fluidvoice/gtkui/settings_window.py:506
 msgid "No changes"
 msgstr ""
 
@@ -1006,7 +1014,7 @@ msgstr ""
 msgid "No-audio timeout (s)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:495
+#: fluidvoice/gtkui/settings_window.py:496
 msgid "Not fully applied: {detail}"
 msgstr ""
 
@@ -1014,8 +1022,8 @@ msgstr ""
 msgid "Nothing to copy"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/general.py:58
-#: fluidvoice/gtkui/settings_pages/general.py:59
+#: fluidvoice/gtkui/settings_pages/general.py:71
+#: fluidvoice/gtkui/settings_pages/general.py:72
 msgid "Notifications"
 msgstr ""
 
@@ -1071,7 +1079,7 @@ msgstr ""
 msgid "Overrides general.language per model - empty = inherit, auto = always detect"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/general.py:53
+#: fluidvoice/gtkui/settings_pages/general.py:62
 msgid "Panel icon while the daemon runs (toggle applies live)"
 msgstr ""
 
@@ -1129,7 +1137,7 @@ msgstr ""
 msgid "Press a key…"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:544
+#: fluidvoice/gtkui/settings_window.py:545
 msgid "Press the key to use (Esc cancels)"
 msgstr ""
 
@@ -1215,7 +1223,7 @@ msgstr ""
 msgid "Refusal guard"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:492
+#: fluidvoice/gtkui/settings_window.py:493
 msgid "Rejected (bad values): {keys}"
 msgstr ""
 
@@ -1288,6 +1296,10 @@ msgstr ""
 msgid "Rewrite key (optional, needs AI)"
 msgstr ""
 
+#: fluidvoice/gtkui/settings_pages/general.py:93
+msgid "Runs the daemon in the background when you log in"
+msgstr ""
+
 #: fluidvoice/gtkui/main_window.py:228
 #: fluidvoice/gtkui/settings_pages/ai.py:178
 #: fluidvoice/gtkui/settings_window.py:242
@@ -1315,7 +1327,7 @@ msgstr ""
 msgid "Saved profile “{name}”"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:499
+#: fluidvoice/gtkui/settings_window.py:500
 msgid "Saved {n} change"
 msgid_plural "Saved {n} changes"
 
@@ -1345,6 +1357,10 @@ msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/wayland.py:26
 msgid "Session and capabilities"
+msgstr ""
+
+#: fluidvoice/gtkui/settings_pages/general.py:88
+msgid "Set through the freedesktop Background portal; your desktop writes the login entry"
 msgstr ""
 
 #: fluidvoice/gtkui/main_window.py:419
@@ -1377,8 +1393,8 @@ msgstr ""
 msgid "Skip silent takes"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/general.py:62
-#: fluidvoice/gtkui/settings_pages/general.py:63
+#: fluidvoice/gtkui/settings_pages/general.py:75
+#: fluidvoice/gtkui/settings_pages/general.py:76
 msgid "Sounds"
 msgstr ""
 
@@ -1414,8 +1430,20 @@ msgstr ""
 msgid "Start dictating"
 msgstr ""
 
+#: fluidvoice/gtkui/settings_pages/general.py:92
+msgid "Start dictation at login"
+msgstr ""
+
 #: fluidvoice/gtkui/settings_pages/ai.py:166
 msgid "Start editing from the shipped dictation prompt"
+msgstr ""
+
+#: fluidvoice/gtkui/settings_pages/general.py:126
+msgid "Starts at login"
+msgstr ""
+
+#: fluidvoice/gtkui/settings_pages/general.py:87
+msgid "Startup"
 msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/models.py:728
@@ -1551,7 +1579,7 @@ msgstr ""
 msgid "Transcripts"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/general.py:52
+#: fluidvoice/gtkui/settings_pages/general.py:61
 msgid "Tray icon"
 msgstr ""
 
@@ -1609,7 +1637,7 @@ msgstr ""
 msgid "Voice → terminal agent. Every command needs confirmation."
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/general.py:64
+#: fluidvoice/gtkui/settings_pages/general.py:77
 msgid "Volume"
 msgstr ""
 
@@ -1646,7 +1674,7 @@ msgstr ""
 msgid "What the daemon resolved for this session (informational; refreshed on open)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/general.py:36
+#: fluidvoice/gtkui/settings_pages/general.py:45
 msgid "Whisper code the recognizer locks to"
 msgstr ""
 
