@@ -97,6 +97,64 @@ class TestModelsSections:
         assert settings_win._idle_unload_row is not None
 
 
+class TestLocalPolishSections:
+    """Local polish (#21): the AI page toggle + status rows and the
+    Models page chat-GGUF catalog group."""
+
+    def test_ai_keys_wired(self, settings_win) -> None:
+        rows = settings_win._rows
+        wired = {("ai", "local_polish"), ("ai", "local_model"),
+                 ("ai", "local_idle_s"), ("ai", "local_server_binary")}
+        missing = sorted(str(k) for k in wired if k not in rows)
+        assert not missing, f"local polish wiring lost: {missing}"
+
+    def test_toggle_implies_master_switch(self, settings_win) -> None:
+        master = settings_win._rows[("ai", "enabled")]
+        local = settings_win._rows[("ai", "local_polish")]
+        master.set_active(False)
+        local.set_active(True)
+        assert master.get_active() is True  # one-click contract
+        # disabling local polish leaves the master switch alone
+        local.set_active(False)
+        assert master.get_active() is True
+
+    def test_status_row_exists_and_reports_off(self, settings_win) -> None:
+        row = settings_win._local_polish_status_row
+        assert row is not None
+        assert "off" in row.get_subtitle()
+
+    def test_stop_button_wired(self, settings_win) -> None:
+        assert settings_win._local_polish_stop_btn is not None
+        from fluidvoice.gtkui.client import ClientError
+
+        def boom():  # daemon down: surfaces as a toast, never a crash
+            raise ClientError("down")
+        settings_win.c.local_polish_stop = boom
+        settings_win._local_polish_stop_btn.emit("clicked")
+
+    def test_chat_catalog_group_built(self, settings_win) -> None:
+        from fluidvoice import model_catalog
+        assert settings_win.chat_group is not None
+        titles = [r.get_title() for r in settings_win._chat_rows]
+        assert sorted(model_catalog.CHAT_GGUF_CATALOG) == sorted(titles)
+
+    def test_chat_use_button_saves_local_model(self, settings_win) -> None:
+        from fluidvoice import model_catalog
+        model_catalog.chat_model_path(
+            model_catalog.CHAT_MODEL_DEFAULT).parent.mkdir(
+            parents=True, exist_ok=True)
+        model_catalog.chat_model_path(
+            model_catalog.CHAT_MODEL_DEFAULT).write_bytes(b"x" * 1024)
+        settings_win._load()
+        try:
+            settings_win._use_chat(None, model_catalog.CHAT_MODEL_DEFAULT)
+            body = settings_win.c.saved[-1]
+            assert body["ai"]["local_model"] == model_catalog.CHAT_MODEL_DEFAULT
+        finally:
+            model_catalog.chat_model_path(
+                model_catalog.CHAT_MODEL_DEFAULT).unlink(missing_ok=True)
+
+
 class TestMainWindowSections:
     @pytest.fixture
     def win(self):

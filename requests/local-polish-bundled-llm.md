@@ -1,10 +1,11 @@
-One-click local AI polish: a bundled-managed llama.cpp server + a small
-GGUF chat model (qwen3-4b-class), so polished output works with zero setup
-and zero cloud key — closing the "no bundled local LLM yet" parity gap
-end to end (GitHub #21).
+Bundled local AI polish: one-click llama.cpp server + GGUF chat model (#21)
 
 STATUS: SHIPPED
 
+One-click local AI polish: a bundled-managed llama.cpp server + a small
+GGUF chat model (qwen3-4b-class), so polished output works with zero setup
+and zero cloud key — closing the "no bundled local LLM yet" parity gap
+end to end.
 Design (2026-11-21):
 
 1) Toggle: `[ai] local_polish` (default false) — "Local polish (works

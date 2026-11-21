@@ -585,3 +585,48 @@ def _stub_backend():
 def _fresh_tmp() -> Path:
     import tempfile
     return Path(tempfile.mkdtemp(prefix="sayit-local-polish-"))
+
+
+class TestDoctorLines:
+    def test_local_polish_state_lines(self, monkeypatch):
+        from fluidvoice import doctor
+        monkeypatch.setenv("XDG_CACHE_HOME", str(_fresh_tmp()))
+        cfg = local_cfg(local_server_binary="/usr/bin/llama-server")
+        lines = doctor._ai_polish_lines(cfg)
+        assert any("LOCAL polish" in ln and "NOT downloaded" in ln
+                   for ln in lines)
+        put_model()
+        lines = doctor._ai_polish_lines(cfg)
+        assert any("ready (spawns" in ln for ln in lines)
+        assert any("idle stop: 300 s" in ln for ln in lines)
+        # binary missing surfaces when discovery fails
+        cfg["ai"]["local_server_binary"] = ""
+        monkeypatch.setattr(local_llm_module(), "find_llama_server",
+                            lambda c: None)
+        lines = doctor._ai_polish_lines(cfg)
+        assert any("binary NOT found" in ln for ln in lines)
+
+    def test_cloud_lines_untouched_when_off(self):
+        from fluidvoice import doctor
+        cfg = local_cfg(local_polish=False, enabled=True)
+        lines = doctor._ai_polish_lines(cfg)
+        assert any("ai: enabled" in ln for ln in lines)
+        assert not any("LOCAL polish" in ln for ln in lines)
+
+    def test_models_cache_marks_active_chat(self, monkeypatch):
+        from fluidvoice import doctor
+        monkeypatch.setenv("XDG_CACHE_HOME", str(_fresh_tmp()))
+        put_model()
+        cfg = local_cfg()
+        lines = doctor._models_cache_lines(cfg)
+        assert any(f"chat {MODEL}" in ln and "ACTIVE (local polish)" in ln
+                   for ln in lines)
+        cfg["ai"]["local_polish"] = False
+        lines = doctor._models_cache_lines(cfg)
+        assert any(f"chat {MODEL}" in ln and "ACTIVE" not in ln
+                   for ln in lines)
+
+
+def local_llm_module():
+    from fluidvoice import local_llm
+    return local_llm
