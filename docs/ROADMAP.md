@@ -104,9 +104,12 @@ Per compositor, GNOME-Wayland first, then sway:
 
 - **Local HTTP/TCP API** — [ADR-0001](adr/ADR-0001-no-tcp.md): the
   user-owned Unix control socket plus the stdio MCP bridge is the only
-  external interface; the daemon never opens a network listener.
-- Bundling a closed-source "Fluid Intelligence" equivalent — use any
-  local OpenAI-compatible server (Ollama/LM Studio/llama.cpp) instead.
+  external interface; the daemon never opens a network listener (the
+  bundled local-polish llama-server is a loopback-only child process
+  the daemon supervises, not a daemon listener).
+- Bundling a closed-source "Fluid Intelligence" equivalent — the open
+  substitute shipped (bundled llama.cpp + GGUF chat model, issue #21);
+  Ollama/LM Studio/your own llama.cpp remain first-class endpoints.
 - Cohere Transcribe (CoreML-only upstream artifacts; no Linux runtime).
 - macOS support (upstream owns that).
 - Telemetry (upstream ships opt-in analytics; we ship none,

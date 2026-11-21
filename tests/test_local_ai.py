@@ -431,9 +431,11 @@ class TestLocalServer:
 
     def test_status_for_config_never_spawns(self, cache):
         place_model()
+        port = free_port()  # never a well-known port: a real daemon's
+        # local-polish server could legitimately be listening on 8931
         cfg = {"ai": {"enabled": True, "local_polish": True,
                       "local_model": model_catalog.CHAT_DEFAULT_MODEL,
-                      "local_port": L.DEFAULT_PORT}}
+                      "local_port": port}}
         st = L.status_for_config(cfg)
         assert st["toggle"] is True and st["running"] is False
         assert st["model_downloaded"] is True
@@ -642,6 +644,29 @@ class TestDaemonWiring:
             "action": "model-delete", "kind": "llama.cpp-runtime",
             "name": f"llama-server ({model_catalog.LLAMA_CPP_TAG})"})
         assert resp["ok"] is False and "running" in resp["error"]
+
+
+# -- command-mode readiness under local polish --------------------------------
+
+
+class TestCommandModeReady:
+    def base(self, **ai):
+        from fluidvoice.command import command_mode_ready
+        cfg = {"ai": {"enabled": True, "base_url": "", "model": "",
+                      "local_polish": False, **ai}}
+        return command_mode_ready(cfg)
+
+    def test_cloud_path_unchanged(self):
+        assert self.base() == "AI enabled but base_url/model not configured"
+        assert self.base(base_url="http://x/v1", model="m") is None
+
+    def test_local_counts_as_configured_when_downloaded(self, cache):
+        place_model()
+        assert self.base(local_polish=True) is None
+
+    def test_local_not_downloaded_is_actionable(self, cache):
+        msg = self.base(local_polish=True)
+        assert msg and "not downloaded" in msg
 
 
 # -- AIClient override --------------------------------------------------------

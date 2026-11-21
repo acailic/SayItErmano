@@ -238,7 +238,22 @@ def make_local_polisher(cfg: dict | None = None) -> Polisher:
         _touch()
         return client.polish(text)
 
+    def _close() -> None:
+        srv.stop("bench done")
+
+    polish.close = _close  # type: ignore[attr-defined]
     return polish
+
+
+def close_polisher(polisher: Polisher) -> None:
+    """Stop a provider's resources (the local polisher's llama-server).
+    Anything without a close hook (endpoint/identity) is a no-op."""
+    close = getattr(polisher, "close", None)
+    if close is not None:
+        try:
+            close()
+        except Exception:  # noqa: BLE001,S110 - teardown is best-effort
+            pass
 
 
 def make_endpoint_polisher(base_url: str, model: str,
@@ -269,9 +284,14 @@ def run_polish_bench(cases: list[PolishCase],
     """Run every provider over the corpus, evaluate the gate (when both
     its providers ran), write polish-report.json/.md, return the report."""
     results = []
-    for name, polisher in providers.items():
-        results.append(run_provider(name, cases, polisher,
-                                    baseline_raw=name.startswith(NO_POLISH)))
+    try:
+        for name, polisher in providers.items():
+            results.append(run_provider(name, cases, polisher,
+                                        baseline_raw=name.startswith(
+                                            NO_POLISH)))
+    finally:
+        for polisher in providers.values():
+            close_polisher(polisher)  # the local server never outlives a bench
     report: dict = {
         "kind": "polish-bench",
         "generated": time.strftime("%Y-%m-%dT%H:%M:%S"),

@@ -13,6 +13,26 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **Bundled local AI polish — one click, works offline (#21)** — the
+  README parity gap "no bundled local LLM yet" is closed: Settings →
+  Models gains a *Local AI polish (chat GGUF)* group whose **Download &
+  use** fetches a small chat model (Qwen3-4B-Instruct-2507 Q4_K_M,
+  2.5 GB, sha256-pinned) **and** the llama.cpp server (official b12606
+  build, GitHub-digest-verified) in one click; the **Local polish
+  (works offline)** toggle in Settings → AI then runs polish entirely
+  on-machine — the daemon spawns `llama-server` on `127.0.0.1` only
+  when a dictation needs it, auto-configures the endpoint, and stops it
+  after `ai.local_idle_stop_s` idle (default 180 s; off = zero
+  footprint — no process, no memory, enforced by tests). Measured on a
+  16-thread CPU: ~2.6 GB disk, 2.5–3 s cold start, ~2 s warm polish,
+  4.6 GB RAM while running (budgets in
+  docs/guides/local-polish.md). The eval harness gained a
+  **polish-quality gate** (`python -m fluidvoice.evalharness polish
+  --local --cloud-base-url …`): local vs cloud polish scored against
+  the same 16-case corpus (content recall + similarity), PASS only
+  within a 0.05 margin and with zero refusals — first-run evidence in
+  docs/eval/polish-baseline-2026-11-21.md (local 0.866 similarity /
+  0.874 recall vs the 0.628/0.846 no-polish floor).
 - **Update channel for non-Flatpak installs (#22)** — installing the
   official .deb now configures a **signed apt repository** (served from
   this repo's GitHub Pages, published by `release-publish` via reprepro;

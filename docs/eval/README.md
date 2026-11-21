@@ -30,6 +30,13 @@ python -m fluidvoice.evalharness run --out /tmp/eval-smoke
 
 # summarize a soak CSV (scripts/soak.py) on its own
 python -m fluidvoice.evalharness soak /tmp/sayit-ermano-soak.csv
+
+# polish-quality bench: local llama.cpp vs a cloud endpoint over the
+# shared raw-transcript corpus, with the local-vs-cloud regression gate
+python -m fluidvoice.evalharness polish --local \
+  --cloud-base-url https://api.groq.com/openai/v1 \
+  --cloud-model llama-3.3-70b-versatile \
+  --cloud-api-key-env GROQ_API_KEY --require-gate
 ```
 
 Every subcommand takes `--manifest PATH` (repeatable; a file or a
@@ -151,9 +158,31 @@ data as a readable table (summary table + per-case table + soak block).
 Keep the report directory with the release notes when the release
 policy below requires it.
 
-## Soak integration and release policy
+## Polish-quality bench and the local-vs-cloud gate (issue #21)
 
-`scripts/soak.py` samples the running daemon's RSS/CPU into a CSV;
+`polish` scores AI-polish **providers** over the packaged
+raw-transcript corpus (`corpus/polish-baseline.toml`, 16 authored
+disfluent→polished cases — the shared yardstick both gate sides are
+scored against, so reference-wording bias cancels in the comparison):
+
+- **similarity** = 1 − CER vs the reference polish;
+- **content recall** = fraction of reference words that survived
+  (meaning loss is the dictation failure mode that matters);
+- **exact** matches and **hard failures** (empty/refusal outputs).
+
+Providers: `--local` (the bundled llama.cpp stack — spawn + health +
+GGUF chat model, the daemon's own path), `--cloud-base-url/--cloud-model/
+--cloud-api-key-env` (any OpenAI-compatible endpoint), plus an
+always-on **no-polish floor** row (the raw transcripts scored against
+the references). The **gate** (`--require-gate`) passes only when the
+local content-recall and similarity means are each within
+`--gate-margin` (default 0.05) of the cloud baseline's and local hard
+failures are zero; a regression exits non-zero, so it drops into
+release checks like any other gate. Reports land in
+`polish-report.json`/`.md` under `--out`; first-run local evidence:
+[polish-baseline-2026-11-21.md](polish-baseline-2026-11-21.md).
+
+## Soak integration and release policy`scripts/soak.py` samples the running daemon's RSS/CPU into a CSV;
 the harness summarizes it (`soak` subcommand) and embeds it in reports
 (`run --soak-csv`). Policy, wired into the release gates
 ([../dev/release-gates.md](../dev/release-gates.md)):

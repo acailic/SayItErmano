@@ -74,7 +74,12 @@ params (reasoning models, Responses API, think-tag stripping); works
 with any OpenAI-compatible endpoint (live-tested against Ollama);
 provider profiles — named endpoint presets (base URL / model / key env
 var) for GLM, OpenAI, Groq, OpenRouter, Ollama and LM Studio, switchable
-from Settings or the tray's "AI profile" submenu without a restart; AI
+from Settings or the tray's "AI profile" submenu without a restart;
+**bundled local polish (works offline)** — a one-click GGUF chat model
+download (qwen3-4b) plus the pinned llama.cpp server, spawned by the
+daemon on demand, loopback-only, idle-stopped, zero footprint when off
+(docs/guides/local-polish.md), with a local-vs-cloud quality gate in
+the eval harness (docs/eval/polish-baseline-2026-11-21.md); AI
 failure falls back to the raw transcript; custom base prompt + named
 presets; per-app prompt rules.
 

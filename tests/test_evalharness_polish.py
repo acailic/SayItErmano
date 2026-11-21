@@ -200,6 +200,58 @@ class TestBench:
 
 
 class TestProviders:
+    def test_local_polisher_closes_its_server(self, tmp_path, monkeypatch):
+        """Regression: a bench run must never leak the llama-server child
+        (the first real-model run left one on the default port)."""
+        import threading
+
+        from fluidvoice import model_catalog
+        from fluidvoice.ai import local as L
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        p = model_catalog.chat_model_path(model_catalog.CHAT_DEFAULT_MODEL)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(b"gguf")
+        port = 0
+        import socket
+        s = socket.socket()
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+        s.close()
+        cfg = {"ai": {"enabled": True, "local_polish": True,
+                      "local_model": model_catalog.CHAT_DEFAULT_MODEL,
+                      "local_port": port}}
+        stub = tmp_path / "stub.py"
+        stub.write_text(
+            "import sys\n"
+            "from http.server import BaseHTTPRequestHandler, HTTPServer\n"
+            "port = int(sys.argv[sys.argv.index('--port') + 1])\n"
+            "class H(BaseHTTPRequestHandler):\n"
+            "    def do_GET(self):\n"
+            "        self.send_response(200); self.end_headers()\n"
+            "    def log_message(self, *a): pass\n"
+            "HTTPServer(('127.0.0.1', port), H).serve_forever()\n",
+            encoding="utf-8")
+        started = threading.Event()
+        real_init = L.LocalServer.__init__
+
+        def patched_init(self, *a, **kw):
+            kw["command"] = [__import__("sys").executable, "-u", str(stub)]
+            real_init(self, *a, **kw)
+            started.set()
+
+        monkeypatch.setattr(L.LocalServer, "__init__", patched_init)
+        polisher = P.make_local_polisher(cfg)
+        assert started.wait(5)
+        cases = [P.PolishCase("a", "um a", "A.")]
+        P.run_polish_bench(cases, {"local": polisher},
+                           out_dir=tmp_path / "out", gate=None)
+        # close hook fired with the bench
+        import time as _t
+        deadline = _t.monotonic() + 5
+        while L.probe_health(port) and _t.monotonic() < deadline:
+            _t.sleep(0.05)
+        assert not L.probe_health(port), "server must stop after the bench"
+
     def test_endpoint_polisher_config_errors(self):
         with pytest.raises(ValueError, match="base URL"):
             P.make_endpoint_polisher("", "")

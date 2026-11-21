@@ -152,9 +152,18 @@ class ParsedReply:
 
 def command_mode_ready(cfg: dict) -> str | None:
     """None when command mode may run, else the readiness issue (rewrite's
-    wording, adapted) - checked before recording and again in the session."""
+    wording, adapted) - checked before recording and again in the session.
+    Local polish counts as a configured endpoint (the client redirects to
+    the bundled server); the chat model must at least be downloaded."""
     if not cfg["ai"].get("enabled"):
         return "command mode needs [ai] enabled with a model"
+    if cfg["ai"].get("local_polish"):
+        from . import model_catalog
+        name = str(cfg["ai"].get("local_model")
+                   or model_catalog.CHAT_DEFAULT_MODEL)
+        if not model_catalog.chat_model_downloaded(name):
+            return "local polish model not downloaded (Settings → Models)"
+        return None
     if not (cfg["ai"].get("base_url") and cfg["ai"].get("model")):
         return "AI enabled but base_url/model not configured"
     return None

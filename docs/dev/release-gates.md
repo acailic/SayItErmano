@@ -173,6 +173,25 @@ the local evaluation harness is required (`docs/eval/README.md`):
 The harness's metric math is exercised in CI without any model; the
 model-dependent half of this gate is the manual step above.
 
+## Polish-quality gate (issue #21)
+
+Before any release that changes AI polish — the bundled local-polish
+stack (`ai/local.py`, the chat GGUF/runtime pins), the polish prompts,
+or the polish request path — run the local-vs-cloud polish bench and
+attach its report:
+
+```bash
+python -m fluidvoice.evalharness polish --local \
+  --cloud-base-url … --cloud-model … --cloud-api-key-env … --require-gate
+```
+
+PASS requires local polish to stay within the margin (default 0.05) of
+the cloud baseline on content recall and similarity, with zero hard
+failures (empty/refusal outputs); the command exits non-zero on a
+regression. Without a cloud key, run the local side alone and compare
+against the recorded floor in
+[../eval/polish-baseline-2026-11-21.md](../eval/polish-baseline-2026-11-21.md).
+
 ## History
 
 `scripts/release.sh` is the pre-P0.5 interactive single-host release

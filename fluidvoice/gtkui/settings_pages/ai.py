@@ -290,6 +290,8 @@ class AIPageMixin:
         self._local_status_row.set_subtitle(sub)
 
     def _poll_local_ai_status(self) -> bool:
+        if not self.get_visible():  # settings window closed: stop polling
+            return False
         self._local_ai_update_status_row()
         return True  # cheap subtitle refresh while the window lives
 

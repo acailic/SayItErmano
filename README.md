@@ -47,7 +47,15 @@
 
 ## What's new
 
-**Unreleased** — tray-icon hardening: a tray host that flaps its
+**Unreleased** — **bundled local AI polish (works offline)**: one click
+in Settings → Models downloads a small GGUF chat model (qwen3-4b) plus
+the llama.cpp server (~2.6 GB, checksum-pinned); the "Local polish"
+toggle in Settings → AI runs polish entirely on-machine — the daemon
+spawns the server on demand, idles it down after use, and the toggle
+off leaves zero footprint (docs in
+[docs/guides/local-polish.md](docs/guides/local-polish.md)). A
+polish-quality gate in the eval harness compares local vs cloud polish
+over a shared corpus. Also: tray-icon hardening — a tray host that flaps its
 StatusNotifierWatcher name (seen in the wild: an ubuntu-appindicators
 reload loop) now gets at most one re-registration every 2 s and one log
 line per minute, instead of a registration per flap (a 57-minute flap
@@ -84,7 +92,7 @@ Older releases (v0.8.0 and back) live in the
 1. **Global hotkey** (default: Right Ctrl, toggle mode) starts recording — 16 kHz mono via PipeWire.
 2. **Local transcription** — faster-whisper on CUDA GPU when available, CPU int8 otherwise (whisper.cpp, torch, and NVIDIA Parakeet TDT via ONNX Runtime backends also supported).
 3. **Post-processing chain** — filler-word removal → custom dictionary → **spoken punctuation commands** (`literal comma`, `literal new line`, `example literal dot com`, …) — the full FluidVoice rule table.
-4. **Optional AI polish** — the *verbatim* FluidVoice dictation prompt sent to any OpenAI-compatible endpoint (OpenAI, Groq, Ollama, LM Studio, llama.cpp server). Turns *"um lets meet on tuesday around 3 no wait 4 p.m."* into *"Let's meet on Tuesday at 4 p.m."*
+4. **Optional AI polish** — the *verbatim* FluidVoice dictation prompt sent to any OpenAI-compatible endpoint (OpenAI, Groq, Ollama, LM Studio, llama.cpp server) or to the **bundled local llama.cpp server + GGUF chat model** (one download, works offline, zero setup). Turns *"um lets meet on tuesday around 3 no wait 4 p.m."* into *"Let's meet on Tuesday at 4 p.m."*
 5. **Text insertion** — `xdotool type` keystrokes (clipboard-free), or verified clipboard paste with automatic restore for long texts. Plus history, start/stop sounds (the original GPLv3 FluidVoice SFX), and desktop notifications.
 
 ```
@@ -159,6 +167,14 @@ through the UI (use the env var).
 
 ### Enable AI polish (optional)
 
+**Fully local, one click** — Settings → Models → *Local AI polish* →
+**Download & use** (~2.6 GB: a qwen3-4b GGUF chat model + the llama.cpp
+server, both checksum-pinned). The daemon starts the server on demand
+and stops it after idle; toggle off = zero footprint. Details and
+budgets: [docs/guides/local-polish.md](docs/guides/local-polish.md).
+
+**Or any endpoint you already have:**
+
 ```toml
 [ai]
 enabled  = true
@@ -185,7 +201,7 @@ refusals into your document — the raw transcript is used instead; see
 | Hotkeys pause while the screen is locked | ✅ | ✅ `general.pause_when_locked` (logind watch, resolves the session under the systemd user unit too; active dictation cancels, tray notes `paused (locked)`) |
 | Filler-word removal + custom dictionary | ✅ | ✅ (same defaults) |
 | Spoken punctuation ("literal comma") | ✅ full rule table | ✅ ported (dot/slash/at-sign contexts included) |
-| AI polish with the original prompt | ✅ (local Fluid Intelligence or cloud) | ✅ (any OpenAI-compatible endpoint + switchable provider profiles; no bundled local LLM yet) |
+| AI polish with the original prompt | ✅ (local Fluid Intelligence or cloud) | ✅ any OpenAI-compatible endpoint + provider profiles, or the bundled llama.cpp + GGUF chat model (works offline) |
 | Start/stop sounds | ✅ | ✅ (same GPLv3 SFX) |
 | Live streaming preview overlay | ✅ | ✅ Mac-style pill (live waveform, mode accent colors, state labels, send indicator) |
 | Write/Rewrite selected text | ✅ (⌥R) | ✅ dedicated rewrite hotkey |
@@ -209,7 +225,8 @@ macOS-vs-Linux capability matrix — everything under `docs/` is indexed in
 Everything lives in `~/.config/sayit-ermano/config.toml` (`sayit-ermano
 config init` writes the full commented template). The complete annotated
 reference is [docs/guides/configuration.md](docs/guides/configuration.md);
-special-purpose pages: [command mode](docs/guides/command-mode.md),
+special-purpose pages: [local polish](docs/guides/local-polish.md),
+[command mode](docs/guides/command-mode.md),
 [remote STT server](docs/guides/remote-stt.md),
 [file transcription](docs/guides/file-transcription.md), and
 [scripting the daemon / MCP](docs/guides/scripting-and-mcp.md).
