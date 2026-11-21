@@ -23,7 +23,7 @@ claim without support.
 | Dictation transcribes locally, offline | unit: `test_daemon.py`, `test_privacy_contracts.py` (local mode stays local; network guard) | real-model e2e: `tests/integration/test_e2e_transcribe.py` (needs_model) |
 | Nothing outlives a test / the app exits promptly | unit: conftest leak gate + `test_leak_gate_meta.py` (exit-status proven via subprocess runs) | — |
 | History survives crashes, full disks | unit: `test_history_durability.py` (SIGKILL child, ENOSPC, fsync failures) | — |
-| Hotkeys pause on screen lock | unit: `test_lifecycle_sequences.py` (lock gate + regression for the missing `_locked` flip), `test_lock_suppression.py` | live lock/unlock rows: **pending** owner runs via `scripts/wayland_smoke.py` (harness + offline tests committed 2026-11-21; [wayland-matrix brief](../../requests/wayland-matrix-execution.md), OPEN) |
+| Hotkeys pause on screen lock | unit: `test_lifecycle_sequences.py` (lock gate + regression for the missing `_locked` flip), `test_lock_suppression.py` | live lock/unlock rows: **pending** owner runs via `scripts/wayland_smoke.py` ([tracker](wayland/README.md); harness + offline tests committed 2026-11-21; [wayland-matrix brief](../../requests/wayland-matrix-execution.md), OPEN) |
 | Commands never run unconfirmed | unit: `test_command.py` (single/double press, Escape, timeout), `test_command_coord.py` | — |
 | Secrets never appear in user-visible surfaces | unit: `test_privacy_contracts.py` (status/get_config/doctor subprocess), `test_config_registry.py`, `test_remote_stt.py` | — |
 | Deb installs exactly the reviewed dependency set | unit: `test_deb_lock.py` (hash-locked round trip, pip `--require-hashes` consumer) | hashed-lock deb build 2026-09-12 (Q3 acceptance, 66M artifact, every wheel verified) |
@@ -42,9 +42,9 @@ claim without support.
 
 | Requirement | Automated proof | Dated evidence |
 |---|---|---|
-| GTK UI works (settings/history/onboarding) | display tier: `test_gtkui*.py`, `test_onboarding_window.py`, `test_settings_profiles.py` (CI gtk-x11 lane: skips fail) | live desktop: runs on this machine's GNOME X11; **Wayland/sway matrices pending** — harness `scripts/wayland_smoke.py` committed 2026-11-21 ([row tables](../dev/wayland-smoke-matrix.md)), owner live runs open ([brief](../../requests/wayland-matrix-execution.md)) |
+| GTK UI works (settings/history/onboarding) | display tier: `test_gtkui*.py`, `test_onboarding_window.py`, `test_settings_profiles.py` (CI gtk-x11 lane: skips fail) | live desktop: runs on this machine's GNOME X11; **Wayland/sway matrices pending** — harness `scripts/wayland_smoke.py` committed 2026-11-21 ([row tables](../dev/wayland-smoke-matrix.md), [tracker](wayland/README.md)), owner live runs open ([brief](../../requests/wayland-matrix-execution.md)) |
 | Daemon/socket/CLI behave as real processes | process lane: `tests/integration/test_daemon_socket.py`, `test_cli.py` (model-free; headless + Xvfb) | — |
-| Insertion into real apps (editor/terminal/browser/Electron) | — (needs live session) | **pending** desktop matrix execution — per-session rows carried by `scripts/wayland_smoke.py` ([brief](../../requests/wayland-matrix-execution.md), OPEN) |
+| Insertion into real apps (editor/terminal/browser/Electron) | — (needs live session) | **pending** desktop matrix execution — per-session rows carried by `scripts/wayland_smoke.py` ([tracker](wayland/README.md); [brief](../../requests/wayland-matrix-execution.md), OPEN) |
 | Package installs/upgrades/rollbacks cleanly | deb build contract: `build-deb.sh` + locklib gates; matrix harness: `scripts/qa_matrix.py` (unit: `test_qa_matrix.py` — skip logic, evidence files, summary/gate) | [install matrix](install-matrix/README.md) (#14): harness + checklist committed 2026-11-21; **owner fresh-VM runs pending** (Ubuntu 24.04 / Fedora / Arch, GPU + CPU) |
 
 ## Operations / maintenance
