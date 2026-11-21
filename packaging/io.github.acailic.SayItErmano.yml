@@ -1,35 +1,95 @@
-# SPIKE manifest (issue #10/#11, ADR-0006) — proves the sandbox input story.
-# Not the shipping manifest: no metainfo/desktop/icons yet. Permissions are
-# the spike set: fallback-x11 for the XGrabKey+xdotool row, plus the D-Bus
-# session socket (portals) — flatpak always exposes the session bus, the
-# explicit --socket=dbus is documentation here.
-# GPU/model download not exercised by the spike (doctor runs model-free).
+# SayItErmano Flatpak manifest — the SHIPPING manifest (issue #11,
+# ADR-0006). Grew out of the #10 spike; the sandbox input story
+# (GlobalShortcuts portal hotkey, RemoteDesktop/EIS insertion) is
+# client code and rides the app module below.
+#
+# Permissions: exactly the ADR-0006 baseline — nothing else is in
+# finish-args, and every entry's submission-time justification lives in
+# docs/packaging/flatpak-permissions.md (that file also carries the
+# documented opt-in overrides: fallback-x11, uinput/ydotool).
+#
+# Lifecycle inside the sandbox: there is no systemd user unit — the GTK
+# app process spawns and owns the daemon + control socket
+# (fluidvoice/gtkui/daemon_owner.py); login autostart is requested
+# through the org.freedesktop.portal.Background portal, which writes
+# ~/.config/autostart/io.github.acailic.SayItErmano.desktop on the host
+# (fluidvoice/portal_autostart.py). Nothing outside the sandbox reads
+# /app/etc/xdg/autostart, so no packaged autostart file exists.
+#
+# Models: downloaded on first run into XDG dirs, which flatpak redirects
+# under ~/.var/app/io.github.acailic.SayItErmano (see paths.py).
+#
+# GPU: whisper.cpp Vulkan via the runtime GL extension (the Blender
+# pattern). CUDA is deliberately NOT built here — host builds keep that
+# advantage (ADR-0006 decision 3).
 id: io.github.acailic.SayItErmano
 runtime: org.gnome.Platform
 runtime-version: "48"
 sdk: org.gnome.Sdk
 command: sayit-ermano
 
+# NVIDIA hosts get Vulkan drivers through the freedesktop GL extension,
+# mounted at /app/lib/GL (the mount point is created in the
+# desktop-integration module). CPU int8 needs none of this — the
+# extension is only pulled on hosts that have the matching driver.
+add-extensions:
+  org.freedesktop.Platform.GL:
+    directory: lib/GL
+    version: "1.6"
+    subdirectories: true
+    no-autodownload: true
+    autodelete: false
+
 finish-args:
-  - --socket=fallback-x11      # X11 row of the ADR-0006 matrix (XGrabKey + xdotool)
-  - --share=ipc                # X11 needs the ipc socket
-  - --socket=pulseaudio        # PipeWire/Pulse capture (doctor mic probe)
-  - --device=dri               # GPU device nodes (Vulkan path, later slices)
-  - --share=network            # first-run model download (ADR-0006 baseline)
-  - --env=SAYITERMANO_FLATPAK=1
+  - --socket=wayland        # UI + portal-driven input (ADR-0006 matrix)
+  - --socket=pulseaudio     # microphone capture (PipeWire/PulseAudio)
+  - --device=dri            # GPU nodes for whisper.cpp Vulkan (CPU-only hosts ignore it)
+  - --share=network         # first-run model download + optional AI-polish endpoints
 
 modules:
+  - name: whisper-cpp
+    buildsystem: cmake-ninja
+    config-opts:
+      # GPU = Vulkan only in the sandbox (ADR-0006): the runtime GL
+      # extension supplies the NVIDIA Vulkan ICD; GGML_NATIVE=OFF keeps
+      # the distributed binary portable across host CPUs. No GGML_CUDA
+      # here, ever — CUDA stays a host-build advantage.
+      - -DGGML_VULKAN=ON
+      - -DGGML_NATIVE=OFF
+      - -DWHISPER_BUILD_TESTS=OFF
+      - -DWHISPER_BUILD_SERVER=OFF
+    # the backend probes PATH for whisper-cli (backends/__init__.py);
+    # examples must stay ON — whisper-cli itself is an example
+    cleanup:
+      - /bin/whisper-bench
+      - /bin/whisper-stream
+      - /bin/whisper-command
+      - /include
+      - /lib/cmake
+    sources:
+      - type: git
+        url: https://github.com/ggml-org/whisper.cpp.git
+        tag: v1.9.5
+        commit: d1be6fde11ac6e0407606b4e42fe72d34add8037
+
   - name: sayitermano
     buildsystem: simple
     build-commands:
       # flatpak-builder's build sandbox has no network: install from the
-      # local git checkout with the SDK's own setuptools (no isolation).
+      # git checkout with the SDK's own setuptools (no isolation, no
+      # deps — the pinned wheels land in the python-deps module).
+      # The start/stop sounds ride along as package data
+      # ([tool.setuptools.package-data] assets/sfx/*) — no separate
+      # sounds module is needed or wanted.
       - pip3 install --no-build-isolation --no-deps --prefix=/app .
     sources:
+      # SUBMISSION TODO: pin to the release tag + commit being shipped
+      # (branch build is for pre-release verification builds).
       - type: git
-        url: file:///home/nistrator/Documents/github/FluidVoiceLinux-agent
+        url: https://github.com/acailic/SayItErmano.git
         branch: linux
-  - name: deps
+
+  - name: python-deps
     buildsystem: simple
     build-commands:
       # python-xlib/pillow: core deps. dbus-next (MIT) +
@@ -38,15 +98,65 @@ modules:
       # compatibility guidance; section 13 is inert for a desktop app):
       # the GlobalShortcuts portal hotkey + RemoteDesktop/EIS insertion
       # (ADR-0006; vendored wheels — the build sandbox has no network).
+      # pillow is a cp312 wheel: GNOME runtime 48 ships CPython 3.12.
       - pip3 install --prefix=/app python_xlib-0.33-py2.py3-none-any.whl pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl dbus_next-0.2.3-py3-none-any.whl global_shortcut_portal-0.1.0-py3-none-any.whl
     sources:
       - type: file
         path: wheels/python_xlib-0.33-py2.py3-none-any.whl
+        sha256: c3534038d42e0df2f1392a1b30a15a4ff5fdc2b86cfa94f072bf11b10a164398
       - type: file
         path: wheels/pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+        sha256: 42d63be3af4f9b951b199b0a9d23365d37ab14687e6d77b74940432c8515c4ca
       - type: file
         path: wheels/dbus_next-0.2.3-py3-none-any.whl
         sha256: 58948f9aff9db08316734c0be2a120f6dc502124d9642f55e90ac82ffb16a18b
       - type: file
         path: wheels/global_shortcut_portal-0.1.0-py3-none-any.whl
         sha256: b4512ca320f2478f86680b12b6bc7fec5e2ec453799e01f2513247bdd86817f0
+
+  - name: desktop-integration
+    buildsystem: simple
+    build-commands:
+      - install -Dm644 -t /app/share/applications/ io.github.acailic.SayItErmano.desktop
+      - install -Dm644 -t /app/share/metainfo/ io.github.acailic.SayItErmano.metainfo.xml
+      # hicolor PNGs are the brand icon set already shipped by the deb
+      # (packaging/icons/hicolor), installed under the app id so the
+      # desktop-file export finds them
+      - install -Dm644 icons/hicolor/16x16/apps/sayit-ermano.png /app/share/icons/hicolor/16x16/apps/io.github.acailic.SayItErmano.png
+      - install -Dm644 icons/hicolor/32x32/apps/sayit-ermano.png /app/share/icons/hicolor/32x32/apps/io.github.acailic.SayItErmano.png
+      - install -Dm644 icons/hicolor/48x48/apps/sayit-ermano.png /app/share/icons/hicolor/48x48/apps/io.github.acailic.SayItErmano.png
+      - install -Dm644 icons/hicolor/64x64/apps/sayit-ermano.png /app/share/icons/hicolor/64x64/apps/io.github.acailic.SayItErmano.png
+      - install -Dm644 icons/hicolor/128x128/apps/sayit-ermano.png /app/share/icons/hicolor/128x128/apps/io.github.acailic.SayItErmano.png
+      - install -Dm644 icons/hicolor/256x256/apps/sayit-ermano.png /app/share/icons/hicolor/256x256/apps/io.github.acailic.SayItErmano.png
+      - install -Dm644 icons/hicolor/512x512/apps/sayit-ermano.png /app/share/icons/hicolor/512x512/apps/io.github.acailic.SayItErmano.png
+      # mount point for the org.freedesktop.Platform.GL extension
+      # (see add-extensions above)
+      - mkdir -p /app/lib/GL
+    sources:
+      - type: file
+        path: flatpak/io.github.acailic.SayItErmano.desktop
+        sha256: 4e7ee7bac4a76873194a98b28a1d45129cda9137a368c6641c26860aa15c7ac7
+      - type: file
+        path: flatpak/io.github.acailic.SayItErmano.metainfo.xml
+        sha256: 72294d29a88c83df4649abc014dbddfc78ca511bc8c2ead6b8ccd076e3f9756f
+      - type: file
+        path: icons/hicolor/16x16/apps/sayit-ermano.png
+        sha256: 29e96d1afd14c83c9c624bddd278bbabb3a6bfb748afa2c283a5f27d4dda2eab
+      - type: file
+        path: icons/hicolor/32x32/apps/sayit-ermano.png
+        sha256: 76bf326cabfb98c0e213c67d698cc93b3b2a1715b3e8a4672429e5dbfb6dda4a
+      - type: file
+        path: icons/hicolor/48x48/apps/sayit-ermano.png
+        sha256: f5cbc6699f55d5237b5d411e5751272aaf1fc32b86ca361ea96dfb5380b1dd54
+      - type: file
+        path: icons/hicolor/64x64/apps/sayit-ermano.png
+        sha256: 8b27a78ebd8b21cedf028b868c3729dfcf077760c7c436a8c9b157f3b9bffde1
+      - type: file
+        path: icons/hicolor/128x128/apps/sayit-ermano.png
+        sha256: b31f6b9690830af96cef841587d379a7247104cc65b23060d83645797d1980c8
+      - type: file
+        path: icons/hicolor/256x256/apps/sayit-ermano.png
+        sha256: 1bf3c4b9fe3e31078a51b5b63d5e06a89dc8dab273b99607f2b70914c4955acf
+      - type: file
+        path: icons/hicolor/512x512/apps/sayit-ermano.png
+        sha256: 40f7d1577f9cebd95f4856c999ff970ef1faecf307d342d4286a10d5b8cd12ad

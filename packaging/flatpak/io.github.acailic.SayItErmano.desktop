@@ -1,0 +1,18 @@
+[Desktop Entry]
+# Flatpak desktop entry (issue #11): same content as the deb's
+# packaging/sayit-ermano.desktop except for the two flatpak
+# conventions — Exec carries no /usr/bin prefix (the exported file is
+# launched through the sandbox), and the icon is named after the app
+# id (io.github.acailic.SayItErmano) as desktop export expects.
+Type=Application
+Name=SayItErmano
+GenericName=Voice Dictation
+Comment=Local voice dictation with AI polish (Linux port of FluidVoice)
+Comment[hr]=Lokalna glasovna diktatura s AI dotjerivanjem teksta (Linux verzija FluidVoicea)
+Exec=sayit-ermano settings
+Icon=io.github.acailic.SayItErmano
+Terminal=false
+Categories=Utility;Accessibility;
+Keywords=voice;dictation;speech;whisper;asr;stt;sayit;ermano;
+StartupNotify=true
+X-GNOMEUsesNotifications=true

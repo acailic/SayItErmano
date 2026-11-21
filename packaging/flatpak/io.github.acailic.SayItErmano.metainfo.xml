@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metainfo for the Flatpak build (issue #11, ADR-0006).
+     License note: this component is GPL-3.0-or-later (pyproject
+     [project] license); the dbus-next (MIT) and global-shortcut-portal
+     (AGPL-3.0-only) wheels it ships alongside are GPL-3.0-compatible
+     per the FSF one-way GPLv3/AGPLv3 guidance (see the manifest's deps
+     module comment). Submission-time TODOs (docs/packaging/flatpak-
+     permissions.md): update_contact, and refresh <releases> to the
+     tag being submitted. -->
+<component type="desktop-application">
+  <id>io.github.acailic.SayItErmano</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>SayItErmano</name>
+  <summary>Local voice dictation with AI polish</summary>
+  <description>
+    <p>Press a key, speak, and polished text lands in any application.
+      SayItErmano is a local-first dictation app for Linux: the speech
+      model runs on your machine, transcription works offline after the
+      first model download, and the app collects no telemetry.</p>
+    <p>Dictation uses whisper models (CPU int8 by default; GPU
+      acceleration through Vulkan where available). An optional AI
+      polish step can clean up the verbatim transcript — with any
+      OpenAI-compatible endpoint you configure, or fully offline with a
+      bundled local model.</p>
+    <p>Works on X11 and on Wayland sessions (GNOME 48+, KDE Plasma,
+      Hyprland): the dictation hotkey binds through the desktop
+      portals, so no global keyboard grab is needed. A command mode
+      lets single utterances steer formatting, languages, and system
+      actions.</p>
+  </description>
+  <screenshots>
+    <screenshot type="default">
+      <caption>The history window with past dictations</caption>
+      <image type="source" width="760" height="640">https://raw.githubusercontent.com/acailic/SayItErmano/linux/docs/screenshots/history-window.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Settings: dictation — hotkeys, languages, microphone</caption>
+      <image type="source" width="840" height="700">https://raw.githubusercontent.com/acailic/SayItErmano/linux/docs/screenshots/settings-dictation.png</image>
+    </screenshot>
+  </screenshots>
+  <keywords>
+    <keyword>voice</keyword>
+    <keyword>dictation</keyword>
+    <keyword>speech</keyword>
+    <keyword>whisper</keyword>
+    <keyword>asr</keyword>
+    <keyword>stt</keyword>
+    <keyword>sayit</keyword>
+    <keyword>ermano</keyword>
+  </keywords>
+  <categories>
+    <category>Utility</category>
+    <category>Accessibility</category>
+  </categories>
+  <content_rating type="oars-1.1">
+    <content_attribute id="social">infrequent</content_attribute>
+  </content_rating>
+  <launchable type="desktop-id">io.github.acailic.SayItErmano.desktop</launchable>
+  <url type="homepage">https://github.com/acailic/SayItErmano</url>
+  <url type="bugtracker">https://github.com/acailic/SayItErmano/issues</url>
+  <url type="help">https://github.com/acailic/SayItErmano/blob/linux/docs/README.md</url>
+  <url type="faq">https://github.com/acailic/SayItErmano/blob/linux/docs/dev/FAQ.md</url>
+  <url type="translate">https://github.com/acailic/SayItErmano/blob/linux/docs/dev/translations.md</url>
+  <url type="vcs-browser">https://github.com/acailic/SayItErmano</url>
+  <developer_name>acailic</developer_name>
+  <releases>
+    <release version="0.8.3.1" date="2026-11-12">
+      <description>
+        <p>Tray flap hotfix.</p>
+      </description>
+    </release>
+    <release version="0.8.3" date="2026-11-10">
+      <description>
+        <p>AI provider profiles, mic-quality warnings, per-provider
+          settings pages.</p>
+      </description>
+    </release>
+  </releases>
+</component>
