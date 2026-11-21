@@ -13,6 +13,24 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **Paddle checkout wiring (#17)** — the landing site converts from
+  reserve to buy: a Paddle.js overlay checkout (progressive
+  enhancement — with the store ids unset or JS off, the CTA stays a
+  plain link and nothing loads from paddle.com) armed by a single
+  config constant (`site/assets/js/store-config.js`: `mode`
+  sandbox/live + client token / price id / product id; flip for
+  go-live per the checklist in `site/README.md`). The buy CTA carries
+  the funnel tags from #18's decision rule (`utm_source=landing…`,
+  passed as Paddle `customData`), the pricing card shows the $39
+  intro / $49 standard price with a comparison table verified against
+  `docs/PRICING.md` (2026-11-21 numbers), and the privacy section
+  stays above the fold. New owner runbooks:
+  `docs/dev/paddle-refunds.md` (refund request path via the Paddle
+  dashboard, linked from the public refund policy) and
+  `docs/dev/store-emails.md` (first-purchase email copy: Paddle's
+  automatic receipt with VAT invoice + the project's key/download
+  email). Static gate: `tests/test_site_links.py` (dead local links,
+  buy-CTA tags, store-config sanity).
 - **Offline license keys, end to end (#16)** — the purchase-to-key
   pipeline for the ADR-0005 SKU: a Paddle `transaction.completed`
   webhook receiver (`scripts/license_webhook.py`) verifies the signed

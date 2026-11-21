@@ -569,8 +569,8 @@
     <section class="section" id="pricing" aria-labelledby="pricing-title">
       <div class="container">
         <div class="section-head">
-          <p class="eyebrow">08 — pricing</p>
-          <h2 class="h-section" id="pricing-title" data-reveal>Free forever. $49 if you want the easy life.</h2>
+          <p class="eyebrow">09 — pricing</p>
+          <h2 class="h-section" id="pricing-title" data-reveal>Free forever. $39 intro if you want the easy life.</h2>
         </div>
 
         <div class="pricing-grid">
@@ -589,20 +589,93 @@
 
           <div class="price-card featured" data-reveal>
             <div class="plan-name">Supporter license</div>
-            <div class="plan-price">$49 <span class="plan-strike">$39 intro price</span></div>
-            <p class="plan-tag">Same app, plus convenience and support.</p>
+            <div class="plan-price">$39 <span class="plan-strike">$49 after intro</span></div>
+            <p class="plan-tag">Intro price for the launch cohort — same entitlement as the $49 license.</p>
             <ul class="plan-list">
               <li>Packaged builds with the update channel included</li>
               <li>Priority support — first response within 2 business days</li>
               <li>License key identifies you to support; works offline</li>
               <li>14-day refund, no questions asked</li>
             </ul>
-            <a class="plan-cta" href="https://github.com/acailic/SayItErmano/discussions/35" id="buy-cta" rel="noopener">Reserve $39 intro — checkout opens at launch</a>
-            <p class="plan-note" id="pricing-note">Reserving is free and holds the intro price for
-            30 days after launch. Payment at launch is handled by Paddle
-            (merchant of record: payment, VAT, and refunds are processed by Paddle.com).
-            <a href="https://github.com/acailic/SayItErmano/discussions/35" rel="noopener">How it works</a>.</p>
+            <a class="plan-cta" id="buy-cta"
+               href="https://github.com/acailic/SayItErmano/discussions/35"
+               data-utm-source="landing" data-utm-medium="cta" data-utm-campaign="store"
+               rel="noopener">Buy the supporter license — $39</a>
+            <noscript>
+              <p class="plan-note">Checkout needs JavaScript. Without it (or if checkout fails to
+              load), reserve the intro price in
+              <a href="https://github.com/acailic/SayItErmano/discussions/35" rel="noopener">the launch discussion</a>
+              — it holds the same $39 price.</p>
+            </noscript>
+            <p class="plan-note" id="pricing-note">Payment is processed by
+            <a href="https://paddle.com" rel="noopener">Paddle.com</a>, merchant of record:
+            checkout, VAT invoice, and the <a href="refund.html">14-day refund</a> all run
+            through Paddle. Your license key and download link arrive by email after payment.
+            Buying is support + convenience — the app is GPL, every feature works without a
+            license, and your <a href="#privacy">audio never leaves your machine</a>.</p>
+            <p class="plan-note" id="purchase-next" hidden>Thanks for supporting SayItErmano! Two
+            emails are on their way: the Paddle receipt with your VAT invoice, and your license
+            key with the download link. Nothing after an hour? Check spam, then
+            <a href="https://github.com/acailic/SayItErmano/issues" rel="noopener">open an issue</a>.
+            Import the key with <code class="inline-code">sayit-ermano license &lt;KEY&gt;</code> —
+            <a href="https://github.com/acailic/SayItErmano/blob/linux/docs/guides/license.md">license guide ↗</a>.</p>
           </div>
+        </div>
+
+        <div class="compare-wrap" data-reveal>
+          <h3 class="compare-title">Priced against the verified set — not the marketing</h3>
+          <div class="table-scroll">
+            <table class="compare">
+              <caption class="sr-only">Dictation apps compared: Linux support, where audio is processed, price, license</caption>
+              <thead>
+                <tr>
+                  <td></td>
+                  <th scope="col">SayItErmano</th>
+                  <th scope="col">Voicy</th>
+                  <th scope="col">Vibe Typer</th>
+                  <th scope="col">MacWhisper</th>
+                  <th scope="col">Wispr Flow</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">Linux</th>
+                  <td class="us">✅ X11 &amp; Wayland</td>
+                  <td>✅</td>
+                  <td>✅</td>
+                  <td>❌ macOS only</td>
+                  <td>❌ waitlist only</td>
+                </tr>
+                <tr>
+                  <th scope="row">Audio processed</th>
+                  <td class="us">On your machine only</td>
+                  <td>Cloud (offline mode exists)</td>
+                  <td>Cloud</td>
+                  <td>On your Mac</td>
+                  <td>Cloud</td>
+                </tr>
+                <tr>
+                  <th scope="row">Price</th>
+                  <td class="us">$49 once · $39 intro</td>
+                  <td>$8.49/mo · $260 lifetime</td>
+                  <td>$10/mo · $96/yr</td>
+                  <td>EUR 64 once</td>
+                  <td>$15/mo ($12 annual)</td>
+                </tr>
+                <tr>
+                  <th scope="row">Open source</th>
+                  <td class="us">GPL-3.0</td>
+                  <td>No</td>
+                  <td>No</td>
+                  <td>No</td>
+                  <td>No</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="compare-note">All numbers verified at primary sources on 2026-11-21 and kept
+          in sync with <a href="https://github.com/acailic/SayItErmano/blob/linux/docs/PRICING.md">the
+          pricing decision record ↗</a>. $39–49 once equals 5–8 months of any rival's subscription.</p>
         </div>
       </div>
     </section>
@@ -700,5 +773,7 @@
   </footer>
 
   <script src="assets/js/site.js" defer></script>
+  <script src="assets/js/store-config.js" defer></script>
+  <script src="assets/js/store.js" defer></script>
 </body>
 </html>
