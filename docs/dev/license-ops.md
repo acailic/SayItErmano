@@ -3,7 +3,11 @@
 How offline license keys get made, delivered, and supported. The
 buyer-facing story is [guides/license.md](../guides/license.md); the
 decision record is [ADR-0005](../adr/ADR-0005-commercial-sku.md)
-(issue #16).
+(issue #16). Sibling runbooks: the first-purchase email copy
+([first-purchase-email.md](first-purchase-email.md)) and the refund
+flow ([refund-ops.md](refund-ops.md)). The store-side wiring (site
+checkout, product ids, sandbox flag) is documented in
+[site/README.md](../../site/README.md).
 
 The moving parts:
 

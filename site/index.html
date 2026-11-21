@@ -519,7 +519,7 @@
           </details>
           <details>
             <summary>What does it cost?</summary>
-            <p>Nothing — GPLv3, free as in freedom and in beer. If you enable cloud AI polish, you pay your provider for those tokens; with a local model (Ollama, LM Studio, llama.cpp) even that is free.</p>
+            <p>The app is GPLv3 — free as in freedom and in beer, every feature included. An optional <a href="#pricing">supporter license</a> ($39 introductory, $49 standard, one-time) adds packaged builds with the update channel and priority support; buying never gates dictation. If you enable cloud AI polish, you pay your provider for those tokens; with a local model (Ollama, LM Studio, llama.cpp) even that is free.</p>
           </details>
         </div>
       </div>
@@ -589,20 +589,80 @@
 
           <div class="price-card featured" data-reveal>
             <div class="plan-name">Supporter license</div>
-            <div class="plan-price">$49 <span class="plan-strike">$39 intro price</span></div>
-            <p class="plan-tag">Same app, plus convenience and support.</p>
+            <div class="plan-price">$39 <span class="plan-strike">$49</span></div>
+            <p class="plan-tag">Introductory price — same app, plus convenience and support.</p>
             <ul class="plan-list">
               <li>Packaged builds with the update channel included</li>
               <li>Priority support — first response within 2 business days</li>
               <li>License key identifies you to support; works offline</li>
               <li>14-day refund, no questions asked</li>
             </ul>
-            <a class="plan-cta" href="https://github.com/acailic/SayItErmano/discussions/35" id="buy-cta" rel="noopener">Reserve $39 intro — checkout opens at launch</a>
-            <p class="plan-note" id="pricing-note">Reserving is free and holds the intro price for
-            30 days after launch. Payment at launch is handled by Paddle
-            (merchant of record: payment, VAT, and refunds are processed by Paddle.com).
-            <a href="https://github.com/acailic/SayItErmano/discussions/35" rel="noopener">How it works</a>.</p>
+            <a class="plan-cta" href="buy.html?utm_source=landing&amp;utm_medium=cta&amp;utm_campaign=store"
+               id="buy-cta" data-store-buy>Buy the supporter license — $39</a>
+            <p class="plan-note" id="pricing-note">One-time purchase, checkout by
+            <a href="https://paddle.com" rel="noopener">Paddle</a> (merchant of record:
+            payment, VAT invoicing, and refunds are processed by Paddle.com).
+            Your license key and download link arrive by email.
+            <a href="refund.html">14-day refund policy</a>.</p>
+            <p class="plan-note" id="store-mode-note" hidden>Sandbox checkout: this
+            button currently opens a <strong>test</strong> checkout — no real orders
+            are taken yet.</p>
           </div>
+        </div>
+
+        <p class="privacy-fine" data-reveal style="margin-top:2.5rem">
+          Prices verified at primary sources 2026-11-21 — every number below
+          traces to <a href="https://github.com/acailic/SayItErmano/blob/linux/docs/PRICING.md">docs/PRICING.md</a>
+          with source links and check dates.
+        </p>
+        <div class="comparison-wrap" data-reveal>
+          <table class="comparison-table">
+            <caption class="visually-hidden">Linux dictation apps compared — verified 2026-11-21</caption>
+            <thead>
+              <tr>
+                <th scope="col">Verified 2026-11-21</th>
+                <th scope="col">SayItErmano</th>
+                <th scope="col">Voicy</th>
+                <th scope="col">MacWhisper</th>
+                <th scope="col">Vibe Typer</th>
+                <th scope="col">Wispr Flow</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Linux</th>
+                <td>✅</td>
+                <td>✅</td>
+                <td>❌ (macOS)</td>
+                <td>✅</td>
+                <td>❌ (waitlist only)</td>
+              </tr>
+              <tr>
+                <th scope="row">Price</th>
+                <td><strong>$39 intro · $49 once</strong></td>
+                <td>$8.49/mo · $82/yr · $260 lifetime</td>
+                <td>€64 once</td>
+                <td>$10/mo · $96/yr</td>
+                <td>$15/mo ($12 annual)</td>
+              </tr>
+              <tr>
+                <th scope="row">Audio processed</th>
+                <td>On your machine only</td>
+                <td>Cloud (offline mode exists)</td>
+                <td>On your Mac</td>
+                <td>not verified</td>
+                <td>Cloud</td>
+              </tr>
+              <tr>
+                <th scope="row">Open source</th>
+                <td>GPL-3.0</td>
+                <td>No</td>
+                <td>No</td>
+                <td>No</td>
+                <td>No</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </section>
@@ -692,7 +752,7 @@
           <a href="https://github.com/openai/whisper" rel="noopener">OpenAI Whisper</a> (MIT).
         </p>
         <p class="fine">
-          site: hand-crafted html/css, no tracking, no cookies · typeface: Geist &amp; Geist Mono (SIL OFL 1.1) ·
+          site: hand-crafted html/css, no tracking, no cookies — checkout alone runs on Paddle · typeface: Geist &amp; Geist Mono (SIL OFL 1.1) ·
           <a href="https://github.com/acailic/SayItErmano/blob/linux/site/assets/fonts/Geist-OFL.txt">font license</a>
         </p>
       </div>
@@ -700,5 +760,7 @@
   </footer>
 
   <script src="assets/js/site.js" defer></script>
+  <script src="assets/js/store-config.js" defer></script>
+  <script src="assets/js/store.js" defer></script>
 </body>
 </html>
