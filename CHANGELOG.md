@@ -13,6 +13,18 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **Portal input on Wayland/Flatpak (#10, ADR-0006)** — the dictation
+  hotkey now binds through the **GlobalShortcuts portal** (GNOME 48+,
+  Plasma 5.27+, Hyprland) with native hold-PTT from the
+  Activated/Deactivated edges, falling back to a DE custom shortcut
+  running `sayit-ermano toggle` where no portal backend exists (sway,
+  COSMIC). Insertion gains the **RemoteDesktop portal + EIS** backend:
+  in-process `ei` wire client (no libei bindings needed), one-time
+  consent with a persisted restore token, out-of-layout Unicode via
+  clipboard + an EIS-sent Ctrl+V. Backend selection is by runtime
+  protocol probe (Wayland registry scan for `zwp_virtual_keyboard`,
+  portal interface version) — never by desktop name. New settings:
+  `hotkey.wayland_portal`, `insertion.wayland_tool = "eis"`.
 - **Update channel for non-Flatpak installs (#22)** — installing the
   official .deb now configures a **signed apt repository** (served from
   this repo's GitHub Pages, published by `release-publish` via reprepro;

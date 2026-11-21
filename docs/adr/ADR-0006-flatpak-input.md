@@ -1,7 +1,10 @@
 # ADR-0006: Flatpak input architecture — GlobalShortcuts portal for the hotkey, RemoteDesktop/EIS for insertion
 
 Date: 2026-11-21
-Status: Proposed (spike evidence pending; see #10)
+Status: Accepted — the client implementation landed with #10
+(`fluidvoice/portal_hotkey.py`, `fluidvoice/eis.py`,
+`fluidvoice/portal_eis.py`, `fluidvoice/input_probes.py`); the
+live-session verification rows for the matrix are tracked in #13.
 
 ## Context
 

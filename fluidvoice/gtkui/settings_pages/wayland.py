@@ -70,9 +70,19 @@ class WaylandPageMixin:
             self._combo(
                 "insertion",
                 "wayland_tool",
-                "Typing tool",
-                subtitle="auto: wtype (wlroots/KDE) then ydotool (anywhere); "
-                "GNOME has no virtual-keyboard protocol for wtype",
+                "Typing backend",
+                subtitle="auto probes at runtime: eis (RemoteDesktop "
+                         "portal, GNOME/Plasma) → wtype (virtual-keyboard "
+                         "protocol, wlroots/Hyprland) → ydotool (uinput)",
+            )
+        )
+        tools.add(
+            self._switch(
+                "hotkey",
+                "wayland_portal",
+                "GlobalShortcuts portal hotkey",
+                "Bind the dictation hotkey through the portal (GNOME 48+, "
+                "Plasma 5.27+, Hyprland); off = DE custom shortcut only",
             )
         )
         tools.add(

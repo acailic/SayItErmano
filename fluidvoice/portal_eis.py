@@ -201,7 +201,7 @@ class RemoteDesktopPortal:
                               timeout: float | None = None) -> dict:
         """Wait for the Request.Response signal on `request_path`."""
         from dbus_next import Message
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         done = loop.create_future()
 
         def handler(msg: Message) -> None:
