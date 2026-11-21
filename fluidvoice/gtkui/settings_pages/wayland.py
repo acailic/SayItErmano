@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from gi.repository import Adw, Gdk, Gtk
 
+from ...i18n import _
+
 
 class WaylandPageMixin:
     _DE_SHORTCUT_PANELS = {
@@ -16,22 +18,23 @@ class WaylandPageMixin:
         from ... import session as session_mod
 
         self.wayland_page = Adw.PreferencesPage(
-            name="wayland", icon_name="fluidvoice-general-symbolic", title="Wayland"
+            name="wayland", icon_name="fluidvoice-general-symbolic",
+            title=_("Wayland")
         )
 
         caps = Adw.PreferencesGroup(
-            title="Session and capabilities",
-            description="What the daemon resolved for this session "
-            "(informational; refreshed on open)",
+            title=_("Session and capabilities"),
+            description=_("What the daemon resolved for this session "
+                          "(informational; refreshed on open)"),
         )
         self._wayland_cap_rows: dict[str, Adw.ActionRow] = {}
         for cap, label in (
-            ("session", "Session"),
-            ("hotkey", "Hotkey"),
-            ("insertion", "Insertion"),
-            ("clipboard", "Clipboard"),
-            ("overlay", "Live preview"),
-            ("app-hint", "App hints"),
+            ("session", _("Session")),
+            ("hotkey", _("Hotkey")),
+            ("insertion", _("Insertion")),
+            ("clipboard", _("Clipboard")),
+            ("overlay", _("Live preview")),
+            ("app-hint", _("App hints")),
         ):
             row = Adw.ActionRow(title=label, subtitle="\u2014")
             caps.add(row)
@@ -39,73 +42,78 @@ class WaylandPageMixin:
         self.wayland_page.add(caps)
 
         self.wayland_bind_group = Adw.PreferencesGroup(
-            title="Bind your hotkey",
-            description="No global key grabs exist on Wayland: bind a custom "
-            "command shortcut in your desktop environment",
+            title=_("Bind your hotkey"),
+            description=_("No global key grabs exist on Wayland: bind a "
+                          "custom command shortcut in your desktop "
+                          "environment"),
         )
         self.wayland_script_row = Adw.ActionRow(
-            title="Command to bind", subtitle="\u2014"
+            title=_("Command to bind"), subtitle="\u2014"
         )
         copy_btn = Gtk.Button(
-            icon_name="edit-copy-symbolic", css_classes=["flat"], tooltip_text="Copy"
+            icon_name="edit-copy-symbolic", css_classes=["flat"],
+            tooltip_text=_("Copy")
         )
         copy_btn.connect("clicked", self._copy_toggle_script)
         self.wayland_script_row.add_suffix(copy_btn)
         self.wayland_bind_group.add(self.wayland_script_row)
         self._wayland_instruction_rows: list[Adw.ActionRow] = []
         self.wayland_open_row = Adw.ActionRow(
-            title="Shortcut settings", subtitle="Open your desktop environment's panel"
+            title=_("Shortcut settings"),
+            subtitle=_("Open your desktop environment's panel")
         )
-        open_btn = Gtk.Button(label="Open\u2026", css_classes=["suggested-action"])
+        open_btn = Gtk.Button(label=_("Open\u2026"),
+                              css_classes=["suggested-action"])
         open_btn.connect("clicked", self._open_de_shortcut_settings)
         self.wayland_open_row.add_suffix(open_btn)
         self.wayland_bind_group.add(self.wayland_open_row)
         self.wayland_page.add(self.wayland_bind_group)
 
         tools = Adw.PreferencesGroup(
-            title="Insertion and push-to-talk",
-            description="Wayland typing tool and optional physical push-to-talk",
+            title=_("Insertion and push-to-talk"),
+            description=_("Wayland typing tool and optional physical "
+                          "push-to-talk"),
         )
         tools.add(
             self._combo(
                 "insertion",
                 "wayland_tool",
-                "Typing backend",
-                subtitle="auto probes at runtime: eis (RemoteDesktop "
-                         "portal, GNOME/Plasma) → wtype (virtual-keyboard "
-                         "protocol, wlroots/Hyprland) → ydotool (uinput)",
+                _("Typing backend"),
+                subtitle=_("auto probes at runtime: eis (RemoteDesktop "
+                           "portal, GNOME/Plasma) → wtype (virtual-keyboard "
+                           "protocol, wlroots/Hyprland) → ydotool (uinput)"),
             )
         )
         tools.add(
             self._switch(
                 "hotkey",
                 "wayland_portal",
-                "GlobalShortcuts portal hotkey",
-                "Bind the dictation hotkey through the portal (GNOME 48+, "
-                "Plasma 5.27+, Hyprland); off = DE custom shortcut only",
+                _("GlobalShortcuts portal hotkey"),
+                _("Bind the dictation hotkey through the portal (GNOME 48+, "
+                  "Plasma 5.27+, Hyprland); off = DE custom shortcut only"),
             )
         )
         tools.add(
             self._switch(
                 "hotkey",
                 "wayland_evdev",
-                "Evdev push-to-talk",
-                "Hold a physical key read from /dev/input - privileged path "
-                "(input group + python-evdev)",
+                _("Evdev push-to-talk"),
+                _("Hold a physical key read from /dev/input - privileged "
+                  "path (input group + python-evdev)"),
             )
         )
         tools.add(
             self._entry(
                 "hotkey",
                 "wayland_evdev_device",
-                "Device name pattern \u2014 e.g. AT Translated",
+                _("Device name pattern \u2014 e.g. AT Translated"),
             )
         )
         tools.add(
             self._entry(
                 "hotkey",
                 "wayland_evdev_key",
-                "Hold key \u2014 ecodes name (KEY_RIGHTCTRL)",
+                _("Hold key \u2014 ecodes name (KEY_RIGHTCTRL)"),
             )
         )
         self.wayland_page.add(tools)
@@ -154,7 +162,7 @@ class WaylandPageMixin:
         text = self.wayland_script_row.get_subtitle()
         if text and text != "\u2014":
             Gdk.Display.get_default().get_clipboard().set_text(text)
-            self.toast("Copied the command to bind")
+            self.toast(_("Copied the command to bind"))
 
     def _open_de_shortcut_settings(self, *_args) -> None:
         import subprocess
@@ -166,6 +174,6 @@ class WaylandPageMixin:
             subprocess.Popen(
                 panel, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
             )
-            self.toast("Opening shortcut settings")
+            self.toast(_("Opening shortcut settings"))
         except Exception as e:
-            self.toast(f"Could not open: {e}")
+            self.toast(_("Could not open: {error}").format(error=e))

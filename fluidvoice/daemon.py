@@ -30,7 +30,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable
 
-from . import __version__, backends, control, control_routes, insertion, paths, ui
+from . import __version__, backends, control, control_routes, i18n, insertion, paths, ui
 from . import history as history_mod
 from . import session as session_mod
 from . import update as update_mod
@@ -41,6 +41,8 @@ from .capture import CaptureCoordinator
 from .command_coord import CommandCoordinator
 from .config import load_config
 from .engine_manager import SpeechEngineManager
+from .i18n import _
+from .local_llm import LocalPolishManager
 from .micmon import match_priority as micmon_match_priority
 from .pipeline import DictationPipeline, confidence_band, log  # noqa: F401
 from .processing import post_process
@@ -58,6 +60,9 @@ class Daemon:
                  command_session_factory=None,
                  use_hotkey: bool = True, use_sounds: bool = True):
         self.cfg = cfg or load_config()
+        # UI language before anything user-facing can fire (tray menu,
+        # notifications); hot-applied on every ui_language settings save
+        i18n.init_i18n(self.cfg)
         self.use_hotkey = use_hotkey
         self.use_sounds = use_sounds
         self.recorder = recorder or Recorder(
@@ -88,6 +93,14 @@ class Daemon:
             on_unload=self._refresh_tray,
             on_language_change=lambda lang: (self._capture.announce_language(lang),
                                              self._refresh_tray()))
+        # LocalPolishManager: the managed llama.cpp child for offline AI
+        # polish (#21, ADR-0007). Zero footprint until local polish is
+        # enabled AND a dictation actually needs polishing — construction
+        # spawns nothing, and apply/shutdown stop the child.
+        self._local_polish = LocalPolishManager(
+            self.cfg, self._tasks, log=log,
+            notify=lambda title, body: ui.notify(
+                title, body, enabled=self.cfg["notifications"]["enabled"]))
         # CommandCoordinator: the command-conversation state machine
         # (proposal/confirmation/timeout/panel/history, P1.2). Daemon
         # routes control actions and hotkey presses to it.
@@ -270,8 +283,8 @@ class Daemon:
         with self._lock:
             recording, busy = self.recording, self.busy
         hk = self.cfg["hotkey"].get("key", "")
-        state = ("Recording…" if recording else
-                 "Processing…" if busy else "Ready to Record")
+        state = (_("Recording…") if recording else
+                 _("Processing…") if busy else _("Ready to Record"))
         status = f"{state} ({hk})" if hk else state
         text = (self.last_result or {}).get("text") or ""
         if not text:
@@ -281,7 +294,7 @@ class Daemon:
             except Exception:
                 text = ""
         device = self.cfg["recording"].get("device", "")
-        mics = [{"kind": "check", "label": "Auto (system default)",
+        mics = [{"kind": "check", "label": _("Auto (system default)"),
                  "checked": not device,
                  "action": lambda: self._set_device("")}]
         from .micmon import sort_by_priority
@@ -308,27 +321,28 @@ class Daemon:
                      "action": _apply_profile})
         except Exception:
             ai_profile_items = []
+        mic_menu_label = _("Microphone")
         menu = [
             {"kind": "item", "label": status, "enabled": False},
-            {"kind": "item", "label": "Cancel Dictation (Esc)",
+            {"kind": "item", "label": _("Cancel Dictation (Esc)"),
              "enabled": recording, "action": self.cancel},
-            {"kind": "item", "label": "Copy Last Transcript",
+            {"kind": "item", "label": _("Copy Last Transcript"),
              "enabled": bool(text), "action": self._copy_last_transcript},
             {"kind": "separator"},
-            {"kind": "item", "label": "Settings…",
+            {"kind": "item", "label": _("Settings…"),
              "action": lambda: self._open_settings()},
-            {"kind": "item", "label": "History",
+            {"kind": "item", "label": _("History"),
              "action": lambda: self._open_settings("/history")},
-            {"kind": "item", "label": "Microphone", "children": mics},
+            {"kind": "item", "label": mic_menu_label, "children": mics},
             {"kind": "separator"},
-            {"kind": "item", "label": "Quit SayItErmano",
+            {"kind": "item", "label": _("Quit SayItErmano"),
              "action": self._quit_gracefully},
         ]
         if ai_profile_items:
             mic_idx = next(i for i, it in enumerate(menu)
-                           if it.get("label") == "Microphone")
+                           if it.get("label") == mic_menu_label)
             menu.insert(mic_idx + 1,
-                        {"kind": "item", "label": "AI profile",
+                        {"kind": "item", "label": _("AI profile"),
                          "children": ai_profile_items})
         return menu
 
@@ -339,7 +353,7 @@ class Daemon:
             entries = history_mod.tail(1)
             text = entries[0].get("text", "") if entries else ""
         if not text:
-            ui.notify("SayItErmano", "Nothing to copy",
+            ui.notify("SayItErmano", _("Nothing to copy"),
                       enabled=self.cfg["notifications"]["enabled"])
             return
         import shutil
@@ -347,7 +361,8 @@ class Daemon:
         tool = next((t for t in ("xclip", "xsel", "wl-copy")
                      if shutil.which(t)), None)
         if not tool:
-            ui.notify("SayItErmano", "No clipboard tool found (install xclip)",
+            ui.notify("SayItErmano",
+                      _("No clipboard tool found (install xclip)"),
                       enabled=self.cfg["notifications"]["enabled"])
             return
         args = ([tool, "-selection", "clipboard"] if tool == "xclip"
@@ -543,8 +558,9 @@ class Daemon:
             return
         self._mic_missing_logged = False
         self._set_device(best)  # existing path: lock re-check, save, rebuild
-        ui.notify("SayItErmano", f"Microphone switched to {best}",
-                  enabled=self.cfg["notifications"]["enabled"])
+        ui.notify("SayItErmano", _("Microphone switched to {name}").format(
+            name=best),
+            enabled=self.cfg["notifications"]["enabled"])
 
     def _quit_gracefully(self) -> None:
         log("quit requested from menu")
@@ -570,15 +586,15 @@ class Daemon:
     def _tray_tooltip(self) -> str:
         with self._lock:
             if self.recording:
-                state = "Recording… click to stop"
+                state = _("Recording… click to stop")
             elif self.busy:
-                state = "Processing…"
+                state = _("Processing…")
             else:
-                state = "Ready"
+                state = _("Ready")
             backend_unloaded = self.backend is None
             last_activity = self._engines.last_activity
         hk = self.cfg["hotkey"].get("key", "")
-        hint = f" — {hk} or click to dictate" if hk else ""
+        hint = _(" — {key} or click to dictate").format(key=hk) if hk else ""
         tip = f"SayItErmano: {state}{hint}"
         hotkey = self._hotkey  # snapshot: the tray thread reads this too
         if hotkey is not None and not hotkey.hotkey_grabbed:
@@ -617,6 +633,9 @@ class Daemon:
     def shutdown(self) -> None:
         log("shutting down")
         self._engines.stop_idle_watch()
+        # managed llama.cpp child first: terminate + bounded wait, before
+        # the tasks join sweep below (which also reaps the idle watcher)
+        self._local_polish.shutdown()
         # under the lock: the take-state mutations race the hotkey thread's
         # toggle (N1). The race was benign - callbacks re-validate recorder
         # identity - but serializing costs nothing and matches
@@ -729,8 +748,10 @@ class Daemon:
         except HotkeyError as e:
             self._hotkey = None
             log(f"WARN hotkey unavailable: {e}")
-            ui.notify("SayItErmano", f"Hotkey unavailable: {e}\n"
-                      "Bind a DE shortcut to `sayit-ermano toggle` instead.",
+            ui.notify("SayItErmano",
+                      _("Hotkey unavailable: {error}\n"
+                        "Bind a DE shortcut to `sayit-ermano toggle` "
+                        "instead.").format(error=e),
                       timeout_ms=8000, enabled=self.cfg["notifications"]["enabled"])
             error = str(e)
         rewrite_key = (hk.get("rewrite_key") or "").strip()
@@ -900,8 +921,8 @@ class Daemon:
         log(f"WARN {label}hotkey '{key}' grab refused - "
             "held by another client, will retry")
         ui.notify("SayItErmano",
-                  "Hotkey grab refused — another app holds the key; "
-                  "retrying automatically", timeout_ms=8000,
+                  _("Hotkey grab refused — another app holds the key; "
+                    "retrying automatically"), timeout_ms=8000,
                   enabled=self.cfg["notifications"]["enabled"])
 
     def _refresh_tray(self) -> None:
@@ -948,8 +969,9 @@ class Daemon:
         except HotkeyError as e:
             log(f"WARN mouse PTT unavailable: {e}")
             ui.notify("SayItErmano",
-                      f"Mouse push-to-talk unavailable: {e}\n"
-                      "Fix recording.push_to_talk_button in the config.",
+                      _("Mouse push-to-talk unavailable: {error}\n"
+                        "Fix recording.push_to_talk_button in the config."
+                        ).format(error=e),
                       timeout_ms=8000,
                       enabled=self.cfg["notifications"]["enabled"])
             return str(e)
@@ -976,7 +998,9 @@ class Daemon:
         except HotkeyError as e:
             self._mouse_ptt = None
             log(f"WARN mouse PTT unavailable: {e}")
-            ui.notify("SayItErmano", f"Mouse push-to-talk unavailable: {e}",
+            ui.notify("SayItErmano",
+                      _("Mouse push-to-talk unavailable: {error}").format(
+                          error=e),
                       timeout_ms=8000,
                       enabled=self.cfg["notifications"]["enabled"])
             return str(e)
@@ -994,8 +1018,8 @@ class Daemon:
         log(f"WARN mouse PTT button {listener.button} grab refused - "
             "held by another client, will retry")
         ui.notify("SayItErmano",
-                  "Mouse button grab refused — another app holds it; "
-                  "retrying automatically", timeout_ms=8000,
+                  _("Mouse button grab refused — another app holds it; "
+                    "retrying automatically"), timeout_ms=8000,
                   enabled=self.cfg["notifications"]["enabled"])
 
     def _restart_mouse_ptt(self) -> None:
@@ -1109,10 +1133,23 @@ class Daemon:
             _try("microphone", _set_mic)
         if "general.tray_enabled" in changed:
             _try("tray", self._apply_tray_setting)
+        if "general.ui_language" in changed:
+            # live UI language switch: tray menu/tooltip (rebuilt on the
+            # next refresh) and notifications (translated at send time)
+            def _set_ui_language() -> None:
+                from . import i18n
+                i18n.set_language(
+                    self.cfg.get("general", {}).get("ui_language", "system"))
+                self._refresh_tray()
+            _try("ui language", _set_ui_language)
         if "general.pause_when_locked" in changed:
             _try("lock pause", self._apply_lock_setting)
         if "model.idle_unload_s" in changed:
             _try("idle unload", self._engines.apply_idle_unload_setting)
+        if any(k.startswith("ai.local_") for k in changed):
+            # toggle off stops the child at once (zero footprint); other
+            # ai.local_* flips only affect the NEXT spawn
+            _try("local polish", self._local_polish.apply_setting_change)
         return {"applied": applied, "errors": errors}
 
     # -- control protocol ----------------------------------------------------
@@ -1184,7 +1221,9 @@ class Daemon:
         ready = command_mod.command_mode_ready(self.cfg)
         if ready:
             log(ready)
-            ui.notify("SayItErmano", f"Command mode unavailable: {ready}",
+            ui.notify("SayItErmano",
+                      _("Command mode unavailable: {reason}").format(
+                          reason=ready),
                       enabled=self.cfg["notifications"]["enabled"])
             return
         with self._lock:
@@ -1373,8 +1412,9 @@ class Daemon:
     def _on_paste_hotkey(self) -> None:
         ok, detail = self.paste_last()
         if not ok and detail:
-            ui.notify("SayItErmano", f"Paste last: {detail}",
-                      enabled=self.cfg["notifications"]["enabled"])
+            ui.notify("SayItErmano", _("Paste last: {detail}").format(
+                detail=detail),
+                enabled=self.cfg["notifications"]["enabled"])
 
     def paste_last(self) -> tuple[bool, str | None]:
         """Re-type the most recent transcription (upstream paste-last hotkey)."""
@@ -1422,12 +1462,18 @@ class Daemon:
                 backend = self._engines.ensure_backend()
             except Exception as e:
                 log(f"transcription failed: {e}")
-                ui.notify("SayItErmano", f"Transcription failed: {e}",
+                ui.notify("SayItErmano",
+                          _("Transcription failed: {error}").format(error=e),
                           enabled=self.cfg["notifications"]["enabled"])
                 wav.unlink(missing_ok=True)
                 return
             pipeline = self._pipeline_factory(self.cfg, backend)
             pipeline._profile_override = self._capture.profile_override
+            # local polish: inject the managed-server client factory only
+            # when the toggle is on, so the stock daemon.AIClient path
+            # (and its test patches) stays untouched otherwise
+            if self._local_polish.enabled():
+                pipeline._ai_factory = self._local_polish.polish_client
             # sticky runtime cycle override (unlike the profile override,
             # deliberately NOT cleared in the finally below: cycle state
             # persists until cycled away or the daemon restarts)

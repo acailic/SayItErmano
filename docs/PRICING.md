@@ -6,6 +6,11 @@ base: [2026-11-21 productization verification](research/2026-11-21-productizatio
 2026-11-21). Status: prices proposed; final numbers await owner
 approval before the store goes live (#17).
 
+Funnel decision rule — thresholds and change-order for listing copy vs
+price, written before the data: [pricing-funnel-decision-rule.md](pricing-funnel-decision-rule.md)
+(measurement lives in [quality/funnel/](quality/funnel/), no client
+telemetry).
+
 ## The offer
 
 | | Free (source / GitHub release) | Paid (store build) |

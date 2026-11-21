@@ -119,6 +119,25 @@ def _spoken_send_lines(cfg: dict) -> list[str]:
 def _ai_polish_lines(cfg: dict) -> list[str]:
     """AI polish state incl. the refusal guardrail (informational only)."""
     ai = cfg.get("ai", {}) or {}
+    if ai.get("local_polish"):
+        # local polish (#21): the managed llama.cpp child owns polish
+        from . import local_llm, model_catalog
+        name = str(ai.get("local_model")
+                   or model_catalog.CHAT_MODEL_DEFAULT)
+        binary = local_llm.find_llama_server(cfg)
+        state = ("model NOT downloaded - Settings -> Models -> AI polish "
+                 "model" if not model_catalog.chat_model_downloaded(name)
+                 else "binary NOT found - install llama.cpp or set "
+                 "ai.local_server_binary" if not binary
+                 else "ready (spawns on the next dictation)")
+        lines = [f"  ai: LOCAL polish ({name}) - {state}",
+                 f"  idle stop: {ai.get('local_idle_s', 300)} s "
+                 "(ai.local_idle_s; 0 = keep until daemon exit)"]
+        guard = ai.get("refusal_guard", True)
+        lines.append("  refusal guard: on (ai.refusal_guard) - a refusing "
+                     "reply falls back to the raw transcript" if guard else
+                     "  refusal guard: OFF (ai.refusal_guard = false)")
+        return lines
     if not ai.get("enabled"):
         return ["  ai: disabled - raw transcripts typed as-is"]
     from urllib.parse import urlparse
@@ -168,8 +187,16 @@ def _models_cache_lines(cfg: dict) -> list[str]:
     entries = model_catalog.cached_models()
     lines = [f"models cache: {paths.models_dir()}"]
     active = backends.config_model_key(cfg)
+    ai = cfg.get("ai", {}) or {}
+    chat_active = (str(ai.get("local_model")
+                       or model_catalog.CHAT_MODEL_DEFAULT)
+                   if ai.get("local_polish") else None)
     for e in entries:
-        mark = " · ACTIVE" if active and e["name"] == active else ""
+        mark = ""
+        if active and e["name"] == active:
+            mark = " · ACTIVE"
+        elif e["kind"] == "chat" and e["name"] == chat_active:
+            mark = " · ACTIVE (local polish)"
         lines.append(f"  {e['kind']} {e['name']} "
                      f"{model_catalog.human_bytes(e['bytes'])}{mark}")
     total = sum(e["bytes"] for e in entries)

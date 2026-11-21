@@ -20,6 +20,7 @@ from gi.repository import Adw, GLib, Gtk
 
 from ..config import KNOWN_LANGUAGES as LANGUAGES
 from ..config import enum_options, ui_range
+from ..i18n import _, _n
 from .client import Client
 from .settings_pages.about import AboutPageMixin
 from .settings_pages.ai import AIPageMixin
@@ -54,7 +55,7 @@ class SettingsWindow(
     def __init__(self, application=None, client=None):
         super().__init__(
             application=application,
-            title="Settings",
+            title=_("Settings"),
             default_width=840,
             default_height=700,
         )
@@ -78,6 +79,8 @@ class SettingsWindow(
         self._model_rows: list[Adw.ActionRow] = []
         self._gguf_rows: list[Adw.ActionRow] = []
         self._gguf_dl: dict[str, dict] = {}  # name -> {bytes, total, done, error}
+        self._chat_rows: list[Adw.ActionRow] = []
+        self._chat_dl: dict[str, dict] = {}  # local-polish GGUF downloads
         self._parakeet_rows: list[Adw.ActionRow] = []
         self._parakeet_dl: dict[str, dict] = {}
         self._mod_toggles: dict[str, Gtk.ToggleButton] = {}
@@ -135,15 +138,15 @@ class SettingsWindow(
         sidebar_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         sidebar_scroll.set_child(self._sidebar)
         sidebar_header = Adw.HeaderBar(
-            title_widget=Adw.WindowTitle(title="Settings"),
+            title_widget=Adw.WindowTitle(title=_("Settings")),
             show_back_button=False,
         )
         sidebar_toolbar = Adw.ToolbarView()
         sidebar_toolbar.add_top_bar(sidebar_header)
         sidebar_toolbar.set_content(sidebar_scroll)
-        sidebar_page = Adw.NavigationPage(title="Settings", child=sidebar_toolbar)
+        sidebar_page = Adw.NavigationPage(title=_("Settings"), child=sidebar_toolbar)
 
-        self._content_title = Adw.WindowTitle(title="Settings")
+        self._content_title = Adw.WindowTitle(title=_("Settings"))
         content_header = Adw.HeaderBar(title_widget=self._content_title)
         content_toolbar = Adw.ToolbarView()
         content_toolbar.add_top_bar(content_header)
@@ -164,7 +167,7 @@ class SettingsWindow(
         if section not in self._sidebar_sections:
             self._sidebar_sections.add(section)
             self._sidebar.append(self._section_header(
-                "Settings" if section == "settings" else "More"))
+                _("Settings") if section == "settings" else _("More")))
         hbox = Gtk.Box(
             orientation=Gtk.Orientation.HORIZONTAL,
             spacing=10,
@@ -211,7 +214,7 @@ class SettingsWindow(
                             for p in self._iter_pages()
                             if p.get_name() == name
                         ),
-                        "Settings",
+                        _("Settings"),
                     )
                 )
                 break
@@ -233,10 +236,10 @@ class SettingsWindow(
         grp = Adw.PreferencesGroup()
         row = Adw.ActionRow(title=self._save_title())
         self._save_rows.append(row)
-        discard_btn = Gtk.Button(label="Discard", css_classes=["flat"])
+        discard_btn = Gtk.Button(label=_("Discard"), css_classes=["flat"])
         discard_btn.set_valign(Gtk.Align.CENTER)
         discard_btn.connect("clicked", lambda *_: self._load())
-        save_btn = Gtk.Button(label="Save", css_classes=["suggested-action"])
+        save_btn = Gtk.Button(label=_("Save"), css_classes=["suggested-action"])
         save_btn.set_valign(Gtk.Align.CENTER)
         save_btn.connect("clicked", lambda *_: self.save())
         self._save_btns.append(save_btn)
@@ -248,8 +251,9 @@ class SettingsWindow(
         return grp
 
     def _save_title(self) -> str:
-        base = "Unsaved changes" if self._dirty else "All changes saved"
-        suffix = "" if self._from_daemon else " — daemon offline, saving to file"
+        base = _("Unsaved changes") if self._dirty else _("All changes saved")
+        suffix = "" if self._from_daemon else _(
+            " — daemon offline, saving to file")
         return base + suffix
 
     def _sync_save_rows(self) -> None:
@@ -284,7 +288,7 @@ class SettingsWindow(
             btn = Gtk.Button(
                 icon_name="media-record-symbolic",
                 css_classes=["flat"],
-                tooltip_text="Press a key…",
+                tooltip_text=_("Press a key…"),
             )
             btn.connect("clicked", self._start_capture, row)
             row.add_suffix(btn)
@@ -350,7 +354,8 @@ class SettingsWindow(
             self._loading_first_done = True
             GLib.idle_add(
                 self.toast,
-                "Daemon offline — file-only mode; changes apply on next daemon start",
+                _("Daemon offline — file-only mode; changes apply on next "
+                  "daemon start"),
                 6,
             )
         self._fill_mics()  # NOTE: resets _loading to False at its end
@@ -407,6 +412,7 @@ class SettingsWindow(
         self._dirty = False
         self._sync_save_rows()
         self._refresh_models()
+        self._refresh_local_polish()
         self._refresh_wayland_rows()
         # re-sync language-row selections from cfg (Discard semantics);
         # still under the _loading guard so no _touch fires
@@ -483,16 +489,26 @@ class SettingsWindow(
         errors = resp.get("errors") or []
         restart = resp.get("restart_required") or []
         if rejected:
-            self.toast(f"Rejected (bad values): {', '.join(rejected)}")
+            self.toast(_("Rejected (bad values): {keys}").format(
+                keys=", ".join(rejected)))
         elif errors:
-            self.toast(f"Not fully applied: {'; '.join(errors)}")
+            self.toast(_("Not fully applied: {detail}").format(
+                detail="; ".join(errors)))
         elif changed:
-            msg = f"Saved {len(changed)} change{'' if len(changed) == 1 else 's'}"
+            n = len(changed)
+            msg = _n("Saved {n} change", "Saved {n} changes", n).format(n=n)
             if restart:
-                msg += f" — restart daemon for: {', '.join(restart)}"
+                msg += _(" — restart daemon for: {keys}").format(
+                    keys=", ".join(restart))
             self.toast(msg)
         else:
-            self.toast("No changes")
+            self.toast(_("No changes"))
+        if "general.ui_language" in (changed or []):
+            # live UI language switch: rebuild windows via the app's
+            # i18n change listener (no restart; file-only mode included)
+            from .. import i18n
+            i18n.set_language(
+                body.get("general", {}).get("ui_language", "system"))
         self._load()  # resync from the daemon/file
         return True
 
@@ -505,11 +521,11 @@ class SettingsWindow(
         dlg = Adw.MessageDialog(
             transient_for=self,
             modal=True,
-            heading="Discard unsaved changes?",
-            body="Changes that were not saved will be lost.",
+            heading=_("Discard unsaved changes?"),
+            body=_("Changes that were not saved will be lost."),
         )
-        dlg.add_response("cancel", "Cancel")
-        dlg.add_response("discard", "Discard")
+        dlg.add_response("cancel", _("Cancel"))
+        dlg.add_response("discard", _("Discard"))
         dlg.set_response_appearance("discard", Adw.ResponseAppearance.DESTRUCTIVE)
 
         def responded(_dlg, response):
@@ -525,7 +541,7 @@ class SettingsWindow(
         ctrl = Gtk.EventControllerKey()
         self.add_controller(ctrl)
         btn.add_css_class("recording")
-        self.toast("Press the key to use (Esc cancels)", 4)
+        self.toast(_("Press the key to use (Esc cancels)"), 4)
 
         def key_pressed(_ctrl, keyval, _keycode, _state):
             name = _keyname(keyval)
