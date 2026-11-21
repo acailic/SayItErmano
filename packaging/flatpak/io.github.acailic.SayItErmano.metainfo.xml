@@ -9,7 +9,7 @@
 <component type="desktop-application">
   <id>io.github.acailic.SayItErmano</id>
   <name>SayItErmano</name>
-  <summary>Local voice dictation with AI polish</summary>
+  <summary>Dictate locally, polish with AI</summary>
   <description>
     <p>
       SayItErmano is a dictation app for Linux: press a key, speak, and
@@ -39,11 +39,40 @@
   <url type="homepage">https://github.com/acailic/SayItErmano</url>
   <url type="bugtracker">https://github.com/acailic/SayItErmano/issues</url>
   <url type="help">https://github.com/acailic/SayItErmano/blob/linux/SUPPORT.md</url>
+  <!-- Screenshots reference raw.githubusercontent.com on `linux`; the
+       PNGs are captured by the owner per the shot list in
+       packaging/flatpak/screenshots/SHOT-LIST.md (same filenames).
+       Flathub quality rules these follow: best shot first, window
+       only (no desktop), native shadow + rounded corners, default
+       theme, <= 1000x700 logical size, one-sentence captions. -->
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/acailic/SayItErmano/linux/packaging/flatpak/screenshots/01-dictation-pill.png</image>
+      <caption>The dictation pill mid-speech: live waveform and streaming text over any app</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/acailic/SayItErmano/linux/packaging/flatpak/screenshots/02-settings-models.png</image>
+      <caption>Settings models page: local Whisper models with one-click switching</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/acailic/SayItErmano/linux/packaging/flatpak/screenshots/03-history.png</image>
+      <caption>History window: searchable past dictations with replay</caption>
+    </screenshot>
+  </screenshots>
   <content_rating type="oars-1.1"/>
+  <!-- Keyword set covers every Flathub search query verified winnable
+       on 2026-11-21 (issue #12): dictation, voice typing, speech to
+       text, whisper, transcription, voice input. Do not prune
+       "whisper": its Flathub #1 is an unrelated mic-monitor utility,
+       so the phrase keywords are what carry the other queries. -->
   <keywords>
     <keyword>voice</keyword>
     <keyword>dictation</keyword>
+    <keyword>voice typing</keyword>
     <keyword>speech</keyword>
+    <keyword>speech to text</keyword>
+    <keyword>transcription</keyword>
+    <keyword>voice input</keyword>
     <keyword>whisper</keyword>
     <keyword>asr</keyword>
     <keyword>stt</keyword>
