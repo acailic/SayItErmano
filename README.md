@@ -111,7 +111,10 @@ Press **Right Ctrl**, speak, press **Right Ctrl** again. Done.
 All routes — the one-shot installer (user or `--system`), the official
 Ubuntu 24.04 .deb, pipx/pip on any distro, the AUR package, building
 from source, and how updates work — are documented in
-[docs/guides/install.md](docs/guides/install.md). Updates are one command
+[docs/guides/install.md](docs/guides/install.md), ordered
+best-converting first. Every route is verified on fresh VMs per distro
+before a paid release — evidence in the
+[install matrix](docs/quality/install-matrix/README.md). Updates are one command
 on every route: the .deb configures a **signed apt repository**
 (`sudo apt update && sudo apt upgrade sayit-ermano`), the installer has
 `--update` for in-place refreshes (works for pipx/Fedora too), and

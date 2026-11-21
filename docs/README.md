@@ -62,6 +62,9 @@ the app itself.
 
 - [quality/evidence-index.md](quality/evidence-index.md) — every
   verified claim and its run record.
+- [quality/install-matrix/](quality/install-matrix/README.md) — the
+  fresh-VM install matrix (#14): per-route-per-distro evidence files
+  and the owner checklist for every paid-launch install route.
 - [../requests/](../requests/) — the brief ledger; a request's STATUS
   header is the authority on whether it shipped.
 - [plans/](plans/) — active plans, each with a Status header:

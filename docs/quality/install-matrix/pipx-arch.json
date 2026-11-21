@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "generated_at": "2026-11-21T17:43:16+00:00",
+  "route": "pipx",
+  "distro": "arch",
+  "status": "SKIPPED",
+  "skip_reason": "host is Debian GNU/Linux 12 (bookworm) \u2014 this row needs a fresh Arch Linux VM (owner fresh-VM pass)",
+  "steps": [
+    {
+      "status": "SKIP",
+      "title": "Install via the route",
+      "detail": "host is Debian GNU/Linux 12 (bookworm) \u2014 this row needs a fresh Arch Linux VM (owner fresh-VM pass)",
+      "cmd": null,
+      "returncode": null,
+      "output_tail": null
+    },
+    {
+      "status": "SKIP",
+      "title": "First-run onboarding (app opens onboarding once)",
+      "detail": "host is Debian GNU/Linux 12 (bookworm) \u2014 this row needs a fresh Arch Linux VM (owner fresh-VM pass)",
+      "cmd": null,
+      "returncode": null,
+      "output_tail": null
+    },
+    {
+      "status": "SKIP",
+      "title": "Real dictation \u2014 GPU machine AND CPU machine",
+      "detail": "host is Debian GNU/Linux 12 (bookworm) \u2014 this row needs a fresh Arch Linux VM (owner fresh-VM pass)",
+      "cmd": null,
+      "returncode": null,
+      "output_tail": null
+    },
+    {
+      "status": "SKIP",
+      "title": "Update to the next release",
+      "detail": "host is Debian GNU/Linux 12 (bookworm) \u2014 this row needs a fresh Arch Linux VM (owner fresh-VM pass)",
+      "cmd": null,
+      "returncode": null,
+      "output_tail": null
+    }
+  ],
+  "environment": {
+    "distro_key": null,
+    "distro_pretty": "Debian GNU/Linux 12 (bookworm)",
+    "arch": "x86_64",
+    "is_root": false,
+    "has_display": false,
+    "tools": {
+      "bash": true,
+      "curl": true,
+      "dpkg": true,
+      "dpkg-deb": true,
+      "apt": true,
+      "makepkg": false,
+      "sudo": false,
+      "pipx": false,
+      "flatpak": false
+    },
+    "flathub": "unknown",
+    "git_head": "43a001393d7c42bd5eb15d852b104ba79dc8e76b"
+  },
+  "notes": []
+}

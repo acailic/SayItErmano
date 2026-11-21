@@ -44,7 +44,7 @@ claim without support.
 | GTK UI works (settings/history/onboarding) | display tier: `test_gtkui*.py`, `test_onboarding_window.py`, `test_settings_profiles.py` (CI gtk-x11 lane: skips fail) | live desktop: runs on this machine's GNOME X11; **Wayland/sway matrices pending** (brief OPEN) |
 | Daemon/socket/CLI behave as real processes | process lane: `tests/integration/test_daemon_socket.py`, `test_cli.py` (model-free; headless + Xvfb) | — |
 | Insertion into real apps (editor/terminal/browser/Electron) | — (needs live session) | **pending** desktop matrix execution (brief OPEN) |
-| Package installs/upgrades/rollbacks cleanly | deb build contract: `build-deb.sh` + locklib gates | **NOT ESTABLISHED** for the current release line: install/upgrade/rollback matrix is Q9 work |
+| Package installs/upgrades/rollbacks cleanly | deb build contract: `build-deb.sh` + locklib gates; matrix harness: `scripts/qa_matrix.py` (unit: `test_qa_matrix.py` — skip logic, evidence files, summary/gate) | [install matrix](install-matrix/README.md) (#14): harness + checklist committed 2026-11-21; **owner fresh-VM runs pending** (Ubuntu 24.04 / Fedora / Arch, GPU + CPU) |
 
 ## Operations / maintenance
 

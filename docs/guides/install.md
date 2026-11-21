@@ -1,8 +1,22 @@
 # Installing and updating SayItErmano
 
-Part of the [documentation index](../README.md). Routes: one-shot
-installer, Ubuntu .deb, pipx, AUR, source — then updates and the
-update-check switches.
+Part of the [documentation index](../README.md). Routes below are
+ordered **best-converting first** (least friction for a first-time
+paying user) — then updates and the update-check switches. Every route
+is verified on fresh VMs per distro before a paid release:
+[install matrix](../quality/install-matrix/README.md).
+
+### Routes at a glance — best-converting first
+
+| # | Route | Best for | Update path |
+|---|---|---|---|
+| 1 | [one-shot installer (user-space)](#quick-start--one-shot-installer) | Ubuntu 24.04 — one command, no sudo | rerun, or `--update` |
+| 2 | [one-shot `--system`](#quick-start--one-shot-installer) | Ubuntu 24.04, root-owned `/opt` | `--update` (signed apt repo) |
+| 3 | [official .deb + signed apt repo](#ubuntu-2404--official-deb--signed-apt-repo) | Ubuntu 24.04 — apt does the updates | `sudo apt upgrade` |
+| 4 | [pipx](#pipx--pip-any-distro-python-311) | Fedora and any distro (Python 3.11+) | `pipx upgrade` |
+| 5 | [AUR package](#arch-linux-aur) | Arch | rebuild from the new release tag |
+| 6 | Flatpak from Flathub | any distro — *planned, not yet published* | `flatpak update` |
+| 7 | [source](#from-source-development) | development | `git pull` |
 
 ### Quick start — one-shot installer
 
