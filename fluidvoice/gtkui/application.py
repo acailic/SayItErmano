@@ -36,6 +36,13 @@ def run(argv: list[str] | None = None) -> int:
             self._open: str = "history"
             self._onboard: bool = False
             self._windows: dict[str, Adw.ApplicationWindow] = {}
+            self._factories: dict[str, callable] = {}
+            # UI language before the first window builds its strings; a
+            # later ui_language settings save rebuilds every open window
+            from .. import i18n
+            from ..config import load_config
+            i18n.init_i18n(load_config())
+            i18n.register_on_change(self._on_language_change)
             self.add_main_option(
                 "open", ord("o"), GLib.OptionFlags.NONE, GLib.OptionArg.STRING,
                 "window to open: history (default) or settings", "TARGET")
@@ -67,12 +74,41 @@ def run(argv: list[str] | None = None) -> int:
         # -- window registry (raise instead of re-create) ----------------------
 
         def _window(self, key: str, factory):
+            self._factories[key] = factory
             win = self._windows.get(key)
             if win is None:
                 win = factory(self)  # associate with the app or it exits
                 self._windows[key] = win
             win.present()
             return win
+
+        def _on_language_change(self, _code: str) -> None:
+            """Live UI language switch: rebuild every open window (old
+            widgets keep their build-time strings). Idle-scheduled — the
+            change usually fires from inside a Settings save callback."""
+            from gi.repository import GLib
+
+            def rebuild():
+                for key, win in list(self._windows.items()):
+                    factory = self._factories.get(key)
+                    if factory is None:
+                        continue
+                    was_visible = win.get_visible()
+                    del self._windows[key]
+                    try:
+                        win.close()
+                    except Exception:  # noqa: S110 — cosmetic; rebuild continues
+                        pass
+                    win.destroy()
+                    # only re-create windows that were on screen: a
+                    # user-closed window must not pop back open
+                    if was_visible:
+                        new = factory(self)
+                        self._windows[key] = new
+                        new.present()
+                return False  # one-shot idle
+
+            GLib.idle_add(rebuild)
 
         def show_history(self):
             from .main_window import HistoryWindow

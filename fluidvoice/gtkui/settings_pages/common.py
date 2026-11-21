@@ -6,6 +6,7 @@ from __future__ import annotations
 from gi.repository import Adw, Gdk, Gtk
 
 from ... import config
+from ...i18n import _
 
 _KEY_REMAP = {
     "Control_L": "Left_Control",
@@ -75,7 +76,7 @@ class _ExtraShortcutsProxy:
             idx = combo.get_selected()
             name = self.names[idx] if 0 <= idx < len(self.names) else ""
             entry = {"key": key}
-            if name and name != "(none)":
+            if name and name != _("(none)"):
                 entry["profile"] = name
             out.append(entry)
         return out[:2]
@@ -139,10 +140,10 @@ class _PasswordProxy:
         # show the "saved" hint, keep the field empty either way
         if value:
             self.entry.set_text("")
-            self.row.set_subtitle("key saved — type to replace")
+            self.row.set_subtitle(_("key saved — type to replace"))
         else:
             self.entry.set_text("")
-            self.row.set_subtitle("optional bearer token (never shown)")
+            self.row.set_subtitle(_("optional bearer token (never shown)"))
 
     def get_text(self) -> str:
         return self.entry.get_text()
@@ -151,7 +152,9 @@ class _PasswordProxy:
 class _InstructionRow(Adw.PreferencesRow):
     """A preferences-compatible row that hosts the instructions TextView."""
 
-    def __init__(self, text_view: Gtk.TextView, title: str = "Instructions"):
+    def __init__(self, text_view: Gtk.TextView,
+                 title: str | None = None):
+        title = title if title is not None else _("Instructions")
         super().__init__(title=title)
         sw = Gtk.ScrolledWindow(
             child=text_view,

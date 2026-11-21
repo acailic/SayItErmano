@@ -6,33 +6,34 @@ import threading
 
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
+from ...i18n import _
 from .common import _InstructionRow, _TextProxy
 
 
 class AIPageMixin:
     def _build_ai(self) -> None:
         page = Adw.PreferencesPage(
-            name="ai", icon_name="fluidvoice-polish-symbolic", title="AI"
+            name="ai", icon_name="fluidvoice-polish-symbolic", title=_("AI")
         )
         # provider profiles: one click switches the whole endpoint
         # (base_url/model/key-env); values land in [ai] via set-config
         self._prov_group = Adw.PreferencesGroup(
-            title="Provider profiles",
-            description="Named endpoint presets — selecting one switches "
-            "the AI polish provider instantly",
+            title=_("Provider profiles"),
+            description=_("Named endpoint presets — selecting one switches "
+                          "the AI polish provider instantly"),
         )
         self._prov_rows: dict[str, Adw.ActionRow] = {}
         self._prov_checks: dict[str, Gtk.CheckButton] = {}
         self._pending_provider_clear = False
         add_prov_row = Adw.ActionRow(
-            title="Add profile",
-            subtitle="Manual entry, or start from a built-in template",
+            title=_("Add profile"),
+            subtitle=_("Manual entry, or start from a built-in template"),
         )
-        add_btn = Gtk.Button(label="Add…", css_classes=["flat"])
+        add_btn = Gtk.Button(label=_("Add…"), css_classes=["flat"])
         add_btn.set_valign(Gtk.Align.CENTER)
         add_btn.connect("clicked", lambda *_: self._provider_add_dialog())
         add_prov_row.add_suffix(add_btn)
-        tmpl_btn = Gtk.Button(label="From template", css_classes=["flat"])
+        tmpl_btn = Gtk.Button(label=_("From template"), css_classes=["flat"])
         tmpl_btn.set_valign(Gtk.Align.CENTER)
         tmpl_btn.connect("clicked",
                          lambda *_: self._provider_template_dialog())
@@ -41,12 +42,13 @@ class AIPageMixin:
         page.add(self._prov_group)
 
         grp = Adw.PreferencesGroup(
-            title="AI polish",
-            description="Any OpenAI-compatible endpoint — Ollama, LM Studio, "
-            "OpenAI, Groq…",
+            title=_("AI polish"),
+            description=_("Any OpenAI-compatible endpoint — Ollama, LM Studio, "
+                          "OpenAI, Groq…"),
         )
-        grp.add(self._switch("ai", "enabled", "Enabled"))
-        url_row = self._entry("ai", "base_url", "Base URL — http://localhost:11434/v1")
+        grp.add(self._switch("ai", "enabled", _("Enabled")))
+        url_row = self._entry("ai", "base_url",
+                              _("Base URL — http://localhost:11434/v1"))
         self.provider_img = Gtk.Image(pixel_size=18)
         self.provider_img.set_valign(Gtk.Align.CENTER)
         url_row.add_prefix(self.provider_img)
@@ -54,27 +56,29 @@ class AIPageMixin:
         url_row.connect("changed",
                         lambda *_: self._provider_queue_pointer_clear())
         grp.add(url_row)
-        model_row = self._entry("ai", "model", "Model — e.g. qwen3:8b")
+        model_row = self._entry("ai", "model",
+                                _("Model — e.g. qwen3:8b"))
         model_row.connect("changed",
                            lambda *_: self._provider_queue_pointer_clear())
         grp.add(model_row)
-        grp.add(self._entry("ai", "api_key_env", "API key env var (preferred)"))
-        grp.add(self._spin("ai", "temperature", "Temperature", 0.1, digits=1))
-        grp.add(self._spin("ai", "timeout_seconds", "Timeout (s)", 5))
-        grp.add(self._spin("ai", "max_retries", "Max retries", 1))
+        grp.add(self._entry("ai", "api_key_env",
+                            _("API key env var (preferred)")))
+        grp.add(self._spin("ai", "temperature", _("Temperature"), 0.1, digits=1))
+        grp.add(self._spin("ai", "timeout_seconds", _("Timeout (s)"), 5))
+        grp.add(self._spin("ai", "max_retries", _("Max retries"), 1))
         grp.add(
             self._switch(
                 "ai",
                 "refusal_guard",
-                "Refusal guard",
-                subtitle="a reply that reads as a model refusal "
-                "(\"I'm sorry, I can't assist…\") is "
-                "never typed — the raw transcript is "
-                "used instead",
+                _("Refusal guard"),
+                subtitle=_("a reply that reads as a model refusal "
+                           "(\"I'm sorry, I can't assist…\") is "
+                           "never typed — the raw transcript is "
+                           "used instead"),
             )
         )
-        test_row = Adw.ActionRow(title="Test connection")
-        test_btn = Gtk.Button(label="Test", css_classes=["suggested-action"])
+        test_row = Adw.ActionRow(title=_("Test connection"))
+        test_btn = Gtk.Button(label=_("Test"), css_classes=["suggested-action"])
         test_btn.set_valign(Gtk.Align.CENTER)
         self.test_out = Gtk.Label(
             css_classes=["dim-label"], wrap=True, max_width_chars=28
@@ -88,19 +92,20 @@ class AIPageMixin:
         # prompt profiles (macOS parity): radio rows + per-row ⋯ menu +
         # Add; "Save" next to the editor below writes to the selection
         self.prof_grp = Adw.PreferencesGroup(
-            title="Prompt profiles",
-            description="Named presets of the base prompt — selecting one "
-            "loads its text into the editor",
+            title=_("Prompt profiles"),
+            description=_("Named presets of the base prompt — selecting one "
+                          "loads its text into the editor"),
         )
         self._profile_rows: dict[str, Adw.ActionRow] = {}
         self._profile_checks: dict[str, Gtk.CheckButton] = {}
         self._selected_profile_name: str | None = None
         self._profile_none_row = Adw.ActionRow(
-            title="No profiles yet", subtitle="Add one to save preset prompts",
+            title=_("No profiles yet"),
+            subtitle=_("Add one to save preset prompts"),
             activatable=False, selectable=False,
             css_classes=["dim-label"])
-        add_prof_row = Adw.ActionRow(title="Add profile")
-        add_prof_btn = Gtk.Button(label="Add…", css_classes=["flat"])
+        add_prof_row = Adw.ActionRow(title=_("Add profile"))
+        add_prof_btn = Gtk.Button(label=_("Add…"), css_classes=["flat"])
         add_prof_btn.set_valign(Gtk.Align.CENTER)
         add_prof_btn.connect("clicked", lambda *_: self._profile_add())
         add_prof_row.add_suffix(add_prof_btn)
@@ -111,29 +116,31 @@ class AIPageMixin:
         # custom base prompt editor (empty = the built-in dictation prompt;
         # the Prompt profiles group above saves/loads named presets of it)
         prompt_grp = Adw.PreferencesGroup(
-            title="Base prompt",
-            description="The system prompt AI polish starts from "
-            "(empty = the built-in dictation prompt)",
+            title=_("Base prompt"),
+            description=_("The system prompt AI polish starts from "
+                          "(empty = the built-in dictation prompt)"),
         )
         tv = Gtk.TextView(hexpand=True, wrap_mode=Gtk.WrapMode.WORD_CHAR)
         buf = tv.get_buffer()
         buf.connect("changed", lambda *_: self._touch())
         self._rows[("ai", "base_prompt")] = _TextProxy(buf)
-        prompt_grp.add(_InstructionRow(tv, title="Base prompt"))
+        prompt_grp.add(_InstructionRow(tv, title=_("Base prompt")))
         builtin_row = Adw.ActionRow(
-            title="Built-in template",
-            subtitle="Start editing from the shipped dictation prompt",
+            title=_("Built-in template"),
+            subtitle=_("Start editing from the shipped dictation prompt"),
         )
-        builtin_btn = Gtk.Button(label="Insert built-in", css_classes=["flat"])
+        builtin_btn = Gtk.Button(label=_("Insert built-in"),
+                                 css_classes=["flat"])
         builtin_btn.set_valign(Gtk.Align.CENTER)
         builtin_btn.connect("clicked", self._insert_builtin_prompt)
         builtin_row.add_suffix(builtin_btn)
         prompt_grp.add(builtin_row)
         save_prof_row = Adw.ActionRow(
-            title="Save to profile",
-            subtitle="Write the editor contents into the selected profile",
+            title=_("Save to profile"),
+            subtitle=_("Write the editor contents into the selected profile"),
         )
-        save_prof_btn = Gtk.Button(label="Save", css_classes=["suggested-action"])
+        save_prof_btn = Gtk.Button(label=_("Save"),
+                                   css_classes=["suggested-action"])
         save_prof_btn.set_valign(Gtk.Align.CENTER)
         save_prof_btn.connect("clicked", self._profile_save)
         save_prof_row.add_suffix(save_prof_btn)
@@ -141,11 +148,11 @@ class AIPageMixin:
         page.add(prompt_grp)
 
         self.rules_group = Adw.PreferencesGroup(
-            title="Per-app prompts",
-            description="Extra polish instructions when dictating into a "
-            "matching app (first match wins, * = everywhere)",
+            title=_("Per-app prompts"),
+            description=_("Extra polish instructions when dictating into a "
+                          "matching app (first match wins, * = everywhere)"),
         )
-        add_row = Adw.ActionRow(title="Add rule")
+        add_row = Adw.ActionRow(title=_("Add rule"))
         add_btn = Gtk.Button(icon_name="list-add-symbolic", css_classes=["flat"])
         add_btn.connect("clicked", lambda *_: self._add_rule({}))
         add_row.add_suffix(add_btn)
@@ -181,7 +188,7 @@ class AIPageMixin:
         self.provider_img.set_visible(False)
 
     def _test_ai(self, _btn) -> None:
-        self.test_out.set_text("testing…")
+        self.test_out.set_text(_("testing…"))
         url = self._get_text("ai", "base_url")
         model = self._get_text("ai", "model")
 
@@ -192,9 +199,9 @@ class AIPageMixin:
                 resp = {"ok": False, "error": str(e)}
             GLib.idle_add(
                 self.test_out.set_text,
-                f"ok: {resp['reply']}"
+                _("ok: {reply}").format(reply=resp["reply"])
                 if resp.get("ok")
-                else str(resp.get("error") or "failed"),
+                else str(resp.get("error") or _("failed")),
             )
 
         threading.Thread(target=work, daemon=True).start()
@@ -240,12 +247,12 @@ class AIPageMixin:
                 row.add_prefix(check)
                 row.set_activatable_widget(check)
                 menu = Gio.Menu()
-                menu.append("Rename…", f"win.profile.rename::{name}")
-                menu.append("Delete", f"win.profile.delete::{name}")
+                menu.append(_("Rename…"), f"win.profile.rename::{name}")
+                menu.append(_("Delete"), f"win.profile.delete::{name}")
                 mb = Gtk.MenuButton(icon_name="view-more-symbolic",
                                     css_classes=["flat"], menu_model=menu,
                                     valign=Gtk.Align.CENTER,
-                                    tooltip_text="Profile actions")
+                                    tooltip_text=_("Profile actions"))
                 row.add_suffix(mb)
                 self._profile_rows[name] = row
                 self._profile_checks[name] = check
@@ -278,8 +285,8 @@ class AIPageMixin:
         dlg = Adw.MessageDialog(transient_for=self, modal=True, heading=heading)
         entry = Gtk.Entry(text=initial, hexpand=True)
         dlg.set_extra_child(entry)
-        dlg.add_response("cancel", "Cancel")
-        dlg.add_response("ok", "OK")
+        dlg.add_response("cancel", _("Cancel"))
+        dlg.add_response("ok", _("OK"))
         dlg.set_response_appearance("ok", Adw.ResponseAppearance.SUGGESTED)
 
         def responded(_dlg, response):
@@ -293,22 +300,24 @@ class AIPageMixin:
     def _profile_add(self, *_args) -> None:
         def done(name: str) -> None:
             if not name:
-                self.toast("Enter a profile name first")
+                self.toast(_("Enter a profile name first"))
                 return
             text = self._rows[("ai", "base_prompt")].get_value()
             resp = self.c.prompt_profile_save(name, text)
-            self._after_profile_call(resp, f"Saved profile \u201c{name}\u201d")
+            self._after_profile_call(
+                resp, _("Saved profile \u201c{name}\u201d").format(name=name))
 
-        self._ask_profile_name("New profile name", "", done)
+        self._ask_profile_name(_("New profile name"), "", done)
 
     def _profile_save(self, *_args) -> None:
         name = self._selected_profile()
         if name is None:
-            self.toast("Select a profile first")
+            self.toast(_("Select a profile first"))
             return
         text = self._rows[("ai", "base_prompt")].get_value()
         resp = self.c.prompt_profile_save(name, text)
-        self._after_profile_call(resp, f"Saved profile \u201c{name}\u201d")
+        self._after_profile_call(
+            resp, _("Saved profile \u201c{name}\u201d").format(name=name))
 
     def _profile_rename_action(self, _win, _action, param) -> None:
         old = (param.get_string() if param is not None
@@ -321,9 +330,11 @@ class AIPageMixin:
                 return
             resp = self.c.prompt_profile_rename(old, new)
             self._selected_profile_name = new if resp.get("ok") else None
-            self._after_profile_call(resp, f"Renamed to \u201c{new}\u201d")
+            self._after_profile_call(
+                resp, _("Renamed to \u201c{name}\u201d").format(name=new))
 
-        self._ask_profile_name(f"Rename \u201c{old}\u201d to", old, done)
+        self._ask_profile_name(
+            _("Rename \u201c{name}\u201d to").format(name=old), old, done)
 
     def _profile_delete_action(self, _win, _action, param) -> None:
         name = (param.get_string() if param is not None
@@ -333,12 +344,12 @@ class AIPageMixin:
         dlg = Adw.MessageDialog(
             transient_for=self,
             modal=True,
-            heading=f"Delete profile \u201c{name}\u201d?",
-            body="The preset is removed from disk. The prompt saved in your "
-            "config is not touched.",
+            heading=_("Delete profile \u201c{name}\u201d?").format(name=name),
+            body=_("The preset is removed from disk. The prompt saved in "
+                  "your config is not touched."),
         )
-        dlg.add_response("cancel", "Cancel")
-        dlg.add_response("delete", "Delete")
+        dlg.add_response("cancel", _("Cancel"))
+        dlg.add_response("delete", _("Delete"))
         dlg.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
         dlg.connect("response", self._on_delete_profile_response, name)
         dlg.present()
@@ -347,7 +358,8 @@ class AIPageMixin:
         if response != "delete":
             return
         resp = self.c.prompt_profile_delete(name)
-        self._after_profile_call(resp, f"Deleted profile \u201c{name}\u201d")
+        self._after_profile_call(
+            resp, _("Deleted profile \u201c{name}\u201d").format(name=name))
 
     def _after_profile_call(self, resp: dict, ok_msg: str) -> None:
         if resp.get("ok"):
@@ -355,7 +367,8 @@ class AIPageMixin:
             self._load_profiles()
             self.toast(ok_msg)
         else:
-            self.toast(str(resp.get("error") or "profile operation failed"))
+            self.toast(str(resp.get("error")
+                           or _("profile operation failed")))
 
     # -- provider profiles ---------------------------------------------------
 
@@ -371,7 +384,7 @@ class AIPageMixin:
             active = str(self.cfg.get("ai", {}).get("profile") or "")
             group: Gtk.CheckButton | None = None
             for name in ["", *sorted(self.c.provider_profiles())]:
-                label = "Custom (hand-set endpoint)" if not name else name
+                label = _("Custom (hand-set endpoint)") if not name else name
                 check = Gtk.CheckButton()
                 if group is None:
                     group = check
@@ -384,12 +397,12 @@ class AIPageMixin:
                 row.set_activatable_widget(check)
                 if name:
                     menu = Gio.Menu()
-                    menu.append("Rename…", f"win.provider.rename::{name}")
-                    menu.append("Delete", f"win.provider.delete::{name}")
+                    menu.append(_("Rename…"), f"win.provider.rename::{name}")
+                    menu.append(_("Delete"), f"win.provider.delete::{name}")
                     mb = Gtk.MenuButton(icon_name="view-more-symbolic",
                                         css_classes=["flat"], menu_model=menu,
                                         valign=Gtk.Align.CENTER,
-                                        tooltip_text="Profile actions")
+                                        tooltip_text=_("Profile actions"))
                     row.add_suffix(mb)
                 self._prov_rows[name] = row
                 self._prov_checks[name] = check
@@ -418,9 +431,10 @@ class AIPageMixin:
                     "rejected: " + ", ".join(resp.get("rejected") or []))
             self.cfg.setdefault("ai", {}).update(body["ai"])
             self._pending_provider_clear = False
-            self.toast(f"AI profile: {name or 'Custom'}")
+            self.toast(_("AI profile: {name}").format(
+                name=name or _("Custom")))
         except Exception as e:
-            self.toast(f"Profile switch failed: {e}")
+            self.toast(_("Profile switch failed: {error}").format(error=e))
         self._provider_profiles_refresh()
 
     def _provider_queue_pointer_clear(self) -> None:
@@ -433,27 +447,29 @@ class AIPageMixin:
         if resp.get("ok"):
             self.toast(ok_msg)
         else:
-            self.toast(str(resp.get("error") or "profile operation failed"))
+            self.toast(str(resp.get("error")
+                           or _("profile operation failed")))
         self._provider_profiles_refresh()
 
     def _provider_add_dialog(self, *_args) -> None:
         dlg = Adw.MessageDialog(
-            transient_for=self, modal=True, heading="New provider profile",
-            body="Stored beside the config; only the env-var NAME is kept "
-            "- never the key itself.",
+            transient_for=self, modal=True,
+            heading=_("New provider profile"),
+            body=_("Stored beside the config; only the env-var NAME is kept "
+                  "- never the key itself."),
         )
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         entries: dict[str, Adw.EntryRow] = {}
-        for key, title in (("name", "Name (e.g. GLM)"),
-                           ("base_url", "Base URL"),
-                           ("model", "Model"),
-                           ("api_key_env", "API key env var")):
+        for key, title in (("name", _("Name (e.g. GLM)")),
+                           ("base_url", _("Base URL")),
+                           ("model", _("Model")),
+                           ("api_key_env", _("API key env var"))):
             e = Adw.EntryRow(title=title)
             entries[key] = e
             box.append(e)
         dlg.set_extra_child(box)
-        dlg.add_response("cancel", "Cancel")
-        dlg.add_response("add", "Add")
+        dlg.add_response("cancel", _("Cancel"))
+        dlg.add_response("add", _("Add"))
         dlg.set_response_appearance("add", Adw.ResponseAppearance.SUGGESTED)
 
         def responded(_dlg, response):
@@ -461,7 +477,7 @@ class AIPageMixin:
                 return
             name = entries["name"].get_text().strip()
             if not name:
-                self.toast("Enter a profile name first")
+                self.toast(_("Enter a profile name first"))
                 return
             profile = {
                 "base_url": entries["base_url"].get_text().strip(),
@@ -469,7 +485,8 @@ class AIPageMixin:
                 "api_key_env": entries["api_key_env"].get_text().strip(),
             }
             resp = self.c.provider_profile_save(name, profile)
-            self._after_provider_call(resp, f"Added profile \u201c{name}\u201d")
+            self._after_provider_call(
+                resp, _("Added profile \u201c{name}\u201d").format(name=name))
 
         dlg.connect("response", responded)
         dlg.present()
@@ -477,8 +494,8 @@ class AIPageMixin:
     def _provider_template_dialog(self, *_args) -> None:
         from ...ai.provider_profiles import TEMPLATES
         dlg = Adw.MessageDialog(
-            transient_for=self, modal=True, heading="Add from template",
-            body="Copied into your profiles - edit freely afterwards.",
+            transient_for=self, modal=True, heading=_("Add from template"),
+            body=_("Copied into your profiles - edit freely afterwards."),
         )
         names = list(TEMPLATES)
         box = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
@@ -486,7 +503,7 @@ class AIPageMixin:
             t = TEMPLATES[name]
             row = Adw.ActionRow(
                 title=name,
-                subtitle=f"{t['model'] or '(pick a model)'} - {t['base_url']}")
+                subtitle=f"{t['model'] or _('(pick a model)')} - {t['base_url']}")
             box.append(row)
 
         def activated(_box, row):
@@ -498,11 +515,12 @@ class AIPageMixin:
             resp = self.c.provider_profile_save(
                 final, dict(TEMPLATES[name]))
             self._after_provider_call(
-                resp, f"Added profile \u201c{final}\u201d from template")
+                resp, _("Added profile \u201c{name}\u201d from template")
+                .format(name=final))
 
         box.connect("row-activated", activated)
         dlg.set_extra_child(box)
-        dlg.add_response("cancel", "Close")
+        dlg.add_response("cancel", _("Close"))
         dlg.present()
 
     def _provider_rename_action(self, _win, _action, param) -> None:
@@ -515,7 +533,8 @@ class AIPageMixin:
                 return
             self._provider_rename_confirmed(old, new)
 
-        self._ask_profile_name(f"Rename \u201c{old}\u201d to", old, done)
+        self._ask_profile_name(
+            _("Rename \u201c{name}\u201d to").format(name=old), old, done)
 
     def _provider_rename_confirmed(self, old: str, new: str) -> None:
         resp = self.c.provider_profile_rename(old, new)
@@ -523,7 +542,8 @@ class AIPageMixin:
                 self.cfg.get("ai", {}).get("profile") == old:
             self.c.set_config({"ai": {"profile": new}})
             self.cfg["ai"]["profile"] = new
-        self._after_provider_call(resp, f"Renamed to \u201c{new}\u201d")
+        self._after_provider_call(
+            resp, _("Renamed to \u201c{name}\u201d").format(name=new))
 
     def _provider_delete_action(self, _win, _action, param) -> None:
         name = (param.get_string() if param is not None else "")
@@ -531,12 +551,12 @@ class AIPageMixin:
             return
         dlg = Adw.MessageDialog(
             transient_for=self, modal=True,
-            heading=f"Delete profile \u201c{name}\u201d?",
-            body="Removed from the profile store. Settings and the tray "
-            "menu update immediately.",
+            heading=_("Delete profile \u201c{name}\u201d?").format(name=name),
+            body=_("Removed from the profile store. Settings and the tray "
+                  "menu update immediately."),
         )
-        dlg.add_response("cancel", "Cancel")
-        dlg.add_response("delete", "Delete")
+        dlg.add_response("cancel", _("Cancel"))
+        dlg.add_response("delete", _("Delete"))
         dlg.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
         dlg.connect("response", self._on_delete_provider_response, name)
         dlg.present()
@@ -552,7 +572,8 @@ class AIPageMixin:
                 self.cfg.get("ai", {}).get("profile") == name:
             self.c.set_config({"ai": {"profile": ""}})
             self.cfg["ai"]["profile"] = ""
-        self._after_provider_call(resp, f"Deleted profile \u201c{name}\u201d")
+        self._after_provider_call(
+            resp, _("Deleted profile \u201c{name}\u201d").format(name=name))
 
     def _load_rules(self, rules: list) -> None:
         for r in list(self._rule_rows):
@@ -562,8 +583,9 @@ class AIPageMixin:
             self._add_rule(rule)
 
     def _add_rule(self, rule: dict) -> None:
-        exp = Adw.ExpanderRow(title=", ".join(rule.get("apps", [])) or "New rule")
-        apps = Adw.EntryRow(title="App patterns (comma-separated)")
+        exp = Adw.ExpanderRow(title=", ".join(rule.get("apps", []))
+                              or _("New rule"))
+        apps = Adw.EntryRow(title=_("App patterns (comma-separated)"))
         apps.set_text(", ".join(rule.get("apps", [])))
 
         tv = Gtk.TextView(hexpand=True, wrap_mode=Gtk.WrapMode.WORD_CHAR)
@@ -573,7 +595,7 @@ class AIPageMixin:
         remove_btn = Gtk.Button(
             icon_name="user-trash-symbolic", css_classes=["flat", "destructive-action"]
         )
-        head = Adw.ActionRow(title="Instructions")
+        head = Adw.ActionRow(title=_("Instructions"))
         head.add_suffix(remove_btn)
         exp.add_row(apps)
         exp.add_row(head)
@@ -582,7 +604,7 @@ class AIPageMixin:
         remove_btn.connect("clicked", self._remove_rule, row_ref)
 
         def sync_title(*_):
-            exp.set_title(apps.get_text().strip() or "New rule")
+            exp.set_title(apps.get_text().strip() or _("New rule"))
             self._touch()
 
         apps.connect("changed", sync_title)
@@ -609,7 +631,8 @@ class AIPageMixin:
                 rules.append({"apps": apps, "instructions": text})
             elif apps or text:
                 self.toast(
-                    "Incomplete per-app rule skipped (needs apps and instructions)"
+                    _("Incomplete per-app rule skipped "
+                      "(needs apps and instructions)")
                 )
         return rules
 
@@ -631,14 +654,15 @@ class AIPageMixin:
             heard = str(s.get("heard", ""))
             corrected = str(s.get("corrected", ""))
             row = Adw.ActionRow(
-                title=f"{heard} → {corrected}", subtitle=f"seen {s.get('count', 0)}×"
+                title=f"{heard} → {corrected}",
+                subtitle=_("seen {n}×").format(n=s.get("count", 0))
             )
             ref = {"row": row, "heard": heard, "corrected": corrected}
             accept_btn = Gtk.Button(
-                label="Accept", css_classes=["flat", "suggested-action"]
+                label=_("Accept"), css_classes=["flat", "suggested-action"]
             )
             accept_btn.set_valign(Gtk.Align.CENTER)
-            dismiss_btn = Gtk.Button(label="Dismiss", css_classes=["flat"])
+            dismiss_btn = Gtk.Button(label=_("Dismiss"), css_classes=["flat"])
             dismiss_btn.set_valign(Gtk.Align.CENTER)
             accept_btn.connect("clicked", self._on_suggestion_accept, ref)
             dismiss_btn.connect("clicked", self._on_suggestion_dismiss, ref)
@@ -656,13 +680,13 @@ class AIPageMixin:
         try:
             resp = self.c.dict_suggestion_accept(ref["heard"], ref["corrected"])
         except Exception:
-            self.toast("Could not add the word (save failed)")
+            self.toast(_("Could not add the word (save failed)"))
             return
         if not resp.get("ok"):
-            self.toast("Could not add the word (save rejected)")
+            self.toast(_("Could not add the word (save rejected)"))
             return  # keep the row; nothing was recorded
         self._load_dictionary(resp.get("dictionary") or [])
-        self.toast("Added to dictionary")
+        self.toast(_("Added to dictionary"))
         self._load_suggestions()
 
     def _on_suggestion_dismiss(self, _btn, ref: dict) -> None:

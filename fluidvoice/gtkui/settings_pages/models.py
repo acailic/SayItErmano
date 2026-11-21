@@ -9,6 +9,7 @@ from gi.repository import Adw, GLib, Gtk
 from ... import backends, model_catalog, model_download
 from ...config import KNOWN_LANGUAGES as LANGUAGES
 from ...config import ui_range
+from ...i18n import _, _n
 from ..client import ClientError
 from .common import _ListProxy, _PasswordProxy
 
@@ -16,7 +17,7 @@ from .common import _ListProxy, _PasswordProxy
 class ModelsPageMixin:
     def _build_models(self) -> None:
         page = Adw.PreferencesPage(
-            name="models", icon_name="fluidvoice-models-symbolic", title="Models"
+            name="models", icon_name="fluidvoice-models-symbolic", title=_("Models")
         )
         # sections (org plan 5.5): model catalogs, engine policy,
         # remote STT, per-model language, disk usage
@@ -50,15 +51,15 @@ class ModelsPageMixin:
                 radio.set_active(True)
                 radio.set_sensitive(False)
                 radio.set_valign(Gtk.Align.CENTER)
-                radio.set_tooltip_text("Current default model")
+                radio.set_tooltip_text(_("Current default model"))
                 row.add_prefix(radio)
                 row.add_suffix(
-                    Gtk.Label(label="Active", css_classes=["success", "caption"])
+                    Gtk.Label(label=_("Active"), css_classes=["success", "caption"])
                 )
             else:
                 downloaded = model_catalog.model_downloaded(name)
                 btn = Gtk.Button(
-                    label="Use" if downloaded else "Download & use",
+                    label=_("Use") if downloaded else _("Download & use"),
                     css_classes=["suggested-action"],
                 )
                 btn.set_valign(Gtk.Align.CENTER)
@@ -74,9 +75,11 @@ class ModelsPageMixin:
         warm = st.get("warmup") or {}
         if warm.get("running"):
             self.warmup_spinner.start()
-            self.warmup_row.set_subtitle(f"loading {warm.get('model') or ''}…")
+            self.warmup_row.set_subtitle(
+                _("loading {model}…").format(model=warm.get("model") or ""))
         elif warm.get("error"):
-            self.warmup_row.set_subtitle(f"error: {warm['error']}")
+            self.warmup_row.set_subtitle(
+                _("error: {error}").format(error=warm["error"]))
         else:
             self.warmup_spinner.stop()
             rurl = str(
@@ -89,16 +92,20 @@ class ModelsPageMixin:
                     (self.cfg.get("model", {}) or {}).get("remote_model") or "-"
                 )
                 host = urlparse(rurl).netloc or rurl
-                self.warmup_row.set_subtitle(f"active: remote ({rmodel} @ {host})")
+                self.warmup_row.set_subtitle(
+                    _("active: remote ({model} @ {host})").format(
+                        model=rmodel, host=host))
             else:
-                self.warmup_row.set_subtitle(f"active: {active or '—'}")
+                self.warmup_row.set_subtitle(
+                    _("active: {model}").format(model=active or "—"))
         if not (st.get("model_state") or {}).get("loaded", True):
             self.warmup_row.set_subtitle(
-                "unloaded (idle — reloads on the next dictation)"
+                _("unloaded (idle — reloads on the next dictation)")
             )
         if st:  # about rows (daemon offline keeps the placeholder em-dash)
             self.about_backend_row.set_subtitle(st.get("backend") or "—")
-            self.about_gpu_row.set_subtitle("yes" if st.get("cuda") else "no")
+            self.about_gpu_row.set_subtitle(_("yes") if st.get("cuda")
+                                            else _("no"))
             self._apply_about_update(st)
             self.refresh_license_row()
 
@@ -114,22 +121,23 @@ class ModelsPageMixin:
         u = st.get("update") or {}
         if st.get("update_available"):
             self.about_update_row.set_subtitle(
-                f"v{st['update_available']} available — run 'sayit-ermano update'"
+                _("v{version} available — run 'sayit-ermano update'").format(
+                    version=st["update_available"])
             )
         elif u.get("error"):
             # a completed check that could not reach GitHub (offline,
             # API error, kill-switch): say so - never "up to date" on a
             # failed probe
             self.about_update_row.set_subtitle(
-                "latest unknown (offline or GitHub unreachable)")
+                _("latest unknown (offline or GitHub unreachable)"))
         elif not u.get("enabled") and not u.get("checked"):
             # manual checks still run with the background checker off;
             # only claim "disabled" before anything has checked
-            self.about_update_row.set_subtitle("checks disabled")
+            self.about_update_row.set_subtitle(_("checks disabled"))
         elif u.get("checked"):
-            self.about_update_row.set_subtitle("up to date")
+            self.about_update_row.set_subtitle(_("up to date"))
         else:
-            self.about_update_row.set_subtitle("checking…")
+            self.about_update_row.set_subtitle(_("checking…"))
         self.about_update_guide_btn.set_visible(bool(st.get("update_available")))
 
     def _pick_model(self, btn, name: str) -> None:
@@ -139,9 +147,9 @@ class ModelsPageMixin:
             self.toast(str(e))
             return
         if resp.get("ok") is False:
-            self.toast(str(resp.get("error") or "failed"))
+            self.toast(str(resp.get("error") or _("failed")))
             return
-        self.toast(f"Switching to {name}…")
+        self.toast(_("Switching to {name}…").format(name=name))
         GLib.timeout_add_seconds(1, self._poll_model)
 
     def _poll_model(self) -> bool:
@@ -151,7 +159,7 @@ class ModelsPageMixin:
         if warm.get("running"):
             return True
         if warm.get("error"):
-            self.toast(f"model error: {warm['error']}")
+            self.toast(_("model error: {error}").format(error=warm["error"]))
         return False
 
     def _downloaded_model_names(self) -> list[str]:
@@ -171,7 +179,7 @@ class ModelsPageMixin:
         return names
 
     def _model_lang_values(self, saved: str) -> list[tuple[str, str]]:
-        values = [("inherit (general)", ""), ("auto (detect)", "auto")] + [
+        values = [(_("inherit (general)"), ""), (_("auto (detect)"), "auto")] + [
             (c, c) for c in LANGUAGES
         ]
         if saved and saved != "auto" and saved not in LANGUAGES:
@@ -245,11 +253,12 @@ class ModelsPageMixin:
         except Exception:
             entries = []  # a cache listing failure must not break the page
         total = sum(e["bytes"] for e in entries)
+        n = len(entries)
         self.disk_total_row.set_subtitle(
-            f"{len(entries)} model{'' if len(entries) == 1 else 's'} · "
-            f"{model_catalog.human_bytes(total)}"
+            _n("{n} model", "{n} models", n).format(n=n)
+            + " · " + model_catalog.human_bytes(total)
             if entries
-            else "empty"
+            else _("empty")
         )
         active = self._active_model() or self._active_gguf() or self._active_parakeet()
         for e in entries:
@@ -258,11 +267,12 @@ class ModelsPageMixin:
                 subtitle=f"{e['kind']} · "
                 f"{model_catalog.human_bytes(e['bytes'])} · {e['path']}",
             )
-            btn = Gtk.Button(label="Delete", css_classes=["flat", "destructive-action"])
+            btn = Gtk.Button(label=_("Delete"),
+                             css_classes=["flat", "destructive-action"])
             btn.set_valign(Gtk.Align.CENTER)
             if e["name"] == active:
                 btn.set_sensitive(False)
-                btn.set_tooltip_text("This is the active model")
+                btn.set_tooltip_text(_("This is the active model"))
             else:
                 btn.connect("clicked", self._confirm_delete_model, e)
             row.add_suffix(btn)
@@ -273,12 +283,12 @@ class ModelsPageMixin:
         dlg = Adw.MessageDialog(
             transient_for=self,
             modal=True,
-            heading=f"Delete {entry['name']}?",
-            body=f"Frees {model_catalog.human_bytes(entry['bytes'])} from "
-            "the models cache.",
+            heading=_("Delete {name}?").format(name=entry["name"]),
+            body=_("Frees {size} from the models cache.").format(
+                size=model_catalog.human_bytes(entry["bytes"])),
         )
-        dlg.add_response("cancel", "Cancel")
-        dlg.add_response("delete", "Delete")
+        dlg.add_response("cancel", _("Cancel"))
+        dlg.add_response("delete", _("Delete"))
         dlg.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
         dlg.connect("response", self._on_delete_model_response, entry)
         dlg.present()
@@ -294,7 +304,7 @@ class ModelsPageMixin:
             except ClientError:
                 resp = {
                     "ok": False,
-                    "error": "daemon not running - start it to delete models",
+                    "error": _("daemon not running - start it to delete models"),
                 }
             except Exception as e:  # noqa: BLE001 - surfaced as a toast
                 resp = {"ok": False, "error": str(e)}
@@ -305,9 +315,10 @@ class ModelsPageMixin:
     def _after_model_delete(self, name: str, resp: dict) -> None:
         if resp.get("ok"):
             freed = model_catalog.human_bytes(int(resp.get("bytes") or 0))
-            self.toast(f"Deleted {name} (freed {freed})")
+            self.toast(_("Deleted {name} (freed {size})").format(
+                name=name, size=freed))
         else:
-            self.toast(str(resp.get("error") or "delete failed"))
+            self.toast(str(resp.get("error") or _("delete failed")))
         self._refresh_models()
 
     def _active_gguf(self) -> str | None:
@@ -324,7 +335,9 @@ class ModelsPageMixin:
         def mb(n):
             return f"{n / 1_000_000:.0f} MB"
 
-        return f"downloading… {mb(b)} / {mb(t)}" if t else f"downloading… {mb(b)}"
+        return (_("downloading… {done} / {total}") if t
+                else _("downloading… {done}")).format(done=mb(b),
+                                                      total=mb(t) if t else "")
 
     def _refresh_gguf_rows(self) -> None:
         for row in self._gguf_rows:
@@ -344,10 +357,10 @@ class ModelsPageMixin:
                 radio.set_active(True)
                 radio.set_sensitive(False)
                 radio.set_valign(Gtk.Align.CENTER)
-                radio.set_tooltip_text("Current default model")
+                radio.set_tooltip_text(_("Current default model"))
                 row.add_prefix(radio)
                 row.add_suffix(
-                    Gtk.Label(label="Active", css_classes=["success", "caption"])
+                    Gtk.Label(label=_("Active"), css_classes=["success", "caption"])
                 )
             elif (
                 name in self._gguf_dl
@@ -357,13 +370,13 @@ class ModelsPageMixin:
                 row.set_subtitle(self._dl_subtitle(name))
                 row.add_suffix(Gtk.Spinner(spinning=True))
             elif model_catalog.gguf_downloaded(name):
-                btn = Gtk.Button(label="Use", css_classes=["suggested-action"])
+                btn = Gtk.Button(label=_("Use"), css_classes=["suggested-action"])
                 btn.set_valign(Gtk.Align.CENTER)
                 btn.connect("clicked", self._use_gguf, name)
                 row.add_suffix(btn)
             else:
                 btn = Gtk.Button(
-                    label="Download & use", css_classes=["suggested-action"]
+                    label=_("Download & use"), css_classes=["suggested-action"]
                 )
                 btn.set_valign(Gtk.Align.CENTER)
                 btn.connect("clicked", self._download_gguf, name)
@@ -401,14 +414,16 @@ class ModelsPageMixin:
             return True
         self._refresh_models()
         if st.get("error"):
-            self.toast(f"download failed: {st['error']}")
+            self.toast(_("download failed: {error}").format(
+                error=st["error"]))
         else:
-            self.toast(f"{name} downloaded — click Use to switch")
+            self.toast(_("{name} downloaded — click Use to switch").format(
+                name=name))
         return False
 
     def _use_gguf(self, _btn, name: str) -> None:
         if not model_catalog.gguf_downloaded(name):
-            self.toast(f"{name} is not downloaded yet")
+            self.toast(_("{name} is not downloaded yet").format(name=name))
             return
         try:
             resp = self.c.set_config(
@@ -419,11 +434,12 @@ class ModelsPageMixin:
             return
         if resp.get("rejected") or resp.get("errors"):
             self.toast(
-                "Rejected: "
-                + ", ".join((resp.get("rejected") or []) + (resp.get("errors") or []))
+                _("Rejected: {keys}").format(
+                    keys=", ".join((resp.get("rejected") or [])
+                                   + (resp.get("errors") or [])))
             )
             return
-        self.toast(f"Switching to whisper.cpp ({name})…")
+        self.toast(_("Switching to whisper.cpp ({name})…").format(name=name))
         self._load()  # resync cfg + rows
         GLib.timeout_add_seconds(1, self._poll_model)
 
@@ -441,7 +457,9 @@ class ModelsPageMixin:
         def mb(n):
             return f"{n / 1_000_000:.0f} MB"
 
-        return f"downloading… {mb(b)} / {mb(t)}" if t else f"downloading… {mb(b)}"
+        return (_("downloading… {done} / {total}") if t
+                else _("downloading… {done}")).format(done=mb(b),
+                                                      total=mb(t) if t else "")
 
     def _refresh_parakeet_rows(self) -> None:
         for row in self._parakeet_rows:
@@ -459,10 +477,10 @@ class ModelsPageMixin:
                 radio.set_active(True)
                 radio.set_sensitive(False)
                 radio.set_valign(Gtk.Align.CENTER)
-                radio.set_tooltip_text("Current default model")
+                radio.set_tooltip_text(_("Current default model"))
                 row.add_prefix(radio)
                 row.add_suffix(
-                    Gtk.Label(label="Active", css_classes=["success", "caption"])
+                    Gtk.Label(label=_("Active"), css_classes=["success", "caption"])
                 )
             elif (
                 name in self._parakeet_dl
@@ -472,13 +490,13 @@ class ModelsPageMixin:
                 row.set_subtitle(self._parakeet_dl_subtitle(name))
                 row.add_suffix(Gtk.Spinner(spinning=True))
             elif model_catalog.parakeet_downloaded(name):
-                btn = Gtk.Button(label="Use", css_classes=["suggested-action"])
+                btn = Gtk.Button(label=_("Use"), css_classes=["suggested-action"])
                 btn.set_valign(Gtk.Align.CENTER)
                 btn.connect("clicked", self._use_parakeet, name)
                 row.add_suffix(btn)
             else:
                 btn = Gtk.Button(
-                    label="Download & use", css_classes=["suggested-action"]
+                    label=_("Download & use"), css_classes=["suggested-action"]
                 )
                 btn.set_valign(Gtk.Align.CENTER)
                 btn.connect("clicked", self._download_parakeet, name)
@@ -520,14 +538,16 @@ class ModelsPageMixin:
             return True
         self._refresh_models()
         if st.get("error"):
-            self.toast(f"download failed: {st['error']}")
+            self.toast(_("download failed: {error}").format(
+                error=st["error"]))
         else:
-            self.toast(f"{name} downloaded — click Use to switch")
+            self.toast(_("{name} downloaded — click Use to switch").format(
+                name=name))
         return False
 
     def _use_parakeet(self, _btn, name: str) -> None:
         if not model_catalog.parakeet_downloaded(name):
-            self.toast(f"{name} is not downloaded yet")
+            self.toast(_("{name} is not downloaded yet").format(name=name))
             return
         try:
             resp = self.c.set_config({"model": {"backend": "parakeet", "name": name}})
@@ -536,39 +556,41 @@ class ModelsPageMixin:
             return
         if resp.get("rejected") or resp.get("errors"):
             self.toast(
-                "Rejected: "
-                + ", ".join((resp.get("rejected") or []) + (resp.get("errors") or []))
+                _("Rejected: {keys}").format(
+                    keys=", ".join((resp.get("rejected") or [])
+                                   + (resp.get("errors") or [])))
             )
             return
-        self.toast(f"Switching to parakeet ({name})…")
+        self.toast(_("Switching to parakeet ({name})…").format(name=name))
         self._load()  # resync cfg + rows
         GLib.timeout_add_seconds(1, self._poll_model)
 
     def _section_catalogs(self, page: Adw.PreferencesPage) -> None:
         """The three model catalogs (faster-whisper, whisper.cpp GGUF, Parakeet) — rows are filled by _refresh_models."""
         self.models_group = Adw.PreferencesGroup(
-            title="Speech models",
-            description="faster-whisper models (downloaded on first use)",
+            title=_("Speech models"),
+            description=_("faster-whisper models (downloaded on first use)"),
         )
         page.add(self.models_group)
 
         self.gguf_group = Adw.PreferencesGroup(
-            title="whisper.cpp GGUF",
-            description="Direct ggml models for the whisper.cpp backend",
+            title=_("whisper.cpp GGUF"),
+            description=_("Direct ggml models for the whisper.cpp backend"),
         )
         page.add(self.gguf_group)
 
         self.parakeet_group = Adw.PreferencesGroup(
-            title="Parakeet (ONNX)",
-            description="NVIDIA Parakeet TDT via ONNX Runtime — explicit backend",
+            title=_("Parakeet (ONNX)"),
+            description=_("NVIDIA Parakeet TDT via ONNX Runtime — explicit "
+                          "backend"),
         )
         page.add(self.parakeet_group)
 
     def _section_state(self, page: Adw.PreferencesPage) -> None:
         """Live model state row."""
 
-        warm = Adw.PreferencesGroup(title="State")
-        self.warmup_row = Adw.ActionRow(title="Model", subtitle="—")
+        warm = Adw.PreferencesGroup(title=_("State"))
+        self.warmup_row = Adw.ActionRow(title=_("Model"), subtitle="—")
         self.warmup_spinner = Gtk.Spinner()
         self.warmup_row.add_suffix(self.warmup_spinner)
         warm.add(self.warmup_row)
@@ -580,8 +602,8 @@ class ModelsPageMixin:
         # Memory: idle model unload (model.idle_unload_s). Whole minutes in
         # the UI (0 = off); the config stores seconds - see _load/_collect.
         mem = Adw.PreferencesGroup(
-            title="Memory",
-            description="Free RAM/VRAM between dictations (applies live)",
+            title=_("Memory"),
+            description=_("Free RAM/VRAM between dictations (applies live)"),
         )
         # 0..1440 minutes derives from the registry's 0..86400 seconds.
         _idle_bounds = ui_range("model", "idle_unload_s") or (0, 86400)
@@ -589,10 +611,10 @@ class ModelsPageMixin:
             value=0, lower=0, upper=_idle_bounds[1] // 60, step_increment=1
         )
         self._idle_unload_row = Adw.SpinRow(
-            title="Unload model after idle (minutes)",
-            subtitle="0 = keep the model loaded (fastest first word); "
-            "higher frees RAM/VRAM after inactivity — the next "
-            "dictation pays the model load time",
+            title=_("Unload model after idle (minutes)"),
+            subtitle=_("0 = keep the model loaded (fastest first word); "
+                       "higher frees RAM/VRAM after inactivity — the next "
+                       "dictation pays the model load time"),
             adjustment=adj,
             digits=0,
         )
@@ -604,42 +626,44 @@ class ModelsPageMixin:
         """Engine selection: backend, model name, device, compute."""
 
         engine = Adw.PreferencesGroup(
-            title="Engine options", description="Changing these reloads the model"
+            title=_("Engine options"),
+            description=_("Changing these reloads the model")
         )
         engine.add(
             self._combo(
                 "model",
                 "backend",
-                "Backend",
+                _("Backend"),
             )
         )
         engine.add(
             self._combo(
                 "model",
                 "device",
-                "Device",
+                _("Device"),
             )
         )
         engine.add(
             self._combo(
                 "model",
                 "compute",
-                "Compute",
+                _("Compute"),
             )
         )
         engine.add(
             self._entry(
                 "model",
                 "whispercpp_model",
-                "whisper.cpp model — name like ggml-base.bin, or a path",
+                _("whisper.cpp model — name like ggml-base.bin, or a path"),
             )
         )
         engine.add(
             self._switch(
                 "model",
                 "eager_warmup",
-                "Load at startup",
-                "Warm the model when the daemon starts (needs a daemon restart)",
+                _("Load at startup"),
+                _("Warm the model when the daemon starts "
+                  "(needs a daemon restart)"),
             )
         )
         page.add(engine)
@@ -650,17 +674,18 @@ class ModelsPageMixin:
         # Remote OpenAI-compatible STT server: local-first — everything is
         # off while the URL is empty; audio goes only to the URL you set.
         remote = Adw.PreferencesGroup(
-            title="Remote (OpenAI-compatible)",
-            description="Dictation POSTs the recorded WAV to "
-            "<url>/v1/audio/transcriptions — e.g. "
-            "http://lan-box:8000 (vLLM / whisper.cpp server / "
-            "NIM / DGX Spark). Empty URL = local models only; "
-            "audio leaves this machine only toward this URL",
+            title=_("Remote (OpenAI-compatible)"),
+            description=_("Dictation POSTs the recorded WAV to "
+                          "<url>/v1/audio/transcriptions — e.g. "
+                          "http://lan-box:8000 (vLLM / whisper.cpp server / "
+                          "NIM / DGX Spark). Empty URL = local models only; "
+                          "audio leaves this machine only toward this URL"),
         )
-        remote.add(self._entry("model", "remote_url", "Server URL"))
-        remote.add(self._entry("model", "remote_model", "Model name"))
+        remote.add(self._entry("model", "remote_url", _("Server URL")))
+        remote.add(self._entry("model", "remote_model", _("Model name")))
         key_row = Adw.ActionRow(
-            title="API key", subtitle="optional bearer token (never shown)"
+            title=_("API key"),
+            subtitle=_("optional bearer token (never shown)")
         )
         key_entry = Gtk.Entry(
             visibility=False,
@@ -676,10 +701,10 @@ class ModelsPageMixin:
             self._spin(
                 "model",
                 "remote_timeout_s",
-                "Timeout (seconds)",
+                _("Timeout (seconds)"),
                 1,
                 digits=0,
-                subtitle="per-request; retry once on transient network errors",
+                subtitle=_("per-request; retry once on transient network errors"),
             )
         )
         page.add(remote)
@@ -687,15 +712,15 @@ class ModelsPageMixin:
     def _section_hotwords(self, page: Adw.PreferencesPage) -> None:
         """Vocabulary hotwords biasing."""
 
-        hot = Adw.EntryRow(title="Hotwords (comma-separated)")
+        hot = Adw.EntryRow(title=_("Hotwords (comma-separated)"))
         self._rows[("model", "hotwords")] = _ListProxy(hot)
         hot.connect("changed", lambda *_: self._touch())
         hot_group = Adw.PreferencesGroup(
-            title="Vocabulary boosting",
-            description="Words the decoder is biased toward (ADD, not "
-            "replace) — fed as faster-whisper hotwords / "
-            "whisper initial-prompt; changing them reloads "
-            "the engine",
+            title=_("Vocabulary boosting"),
+            description=_("Words the decoder is biased toward (ADD, not "
+                          "replace) — fed as faster-whisper hotwords / "
+                          "whisper initial-prompt; changing them reloads "
+                          "the engine"),
         )
         hot_group.add(hot)
         page.add(hot_group)
@@ -704,9 +729,9 @@ class ModelsPageMixin:
         """Per-model language overrides."""
 
         self.lang_overrides_group = Adw.PreferencesGroup(
-            title="Per-model language",
-            description="Overrides general.language per model - "
-            "empty = inherit, auto = always detect",
+            title=_("Per-model language"),
+            description=_("Overrides general.language per model - "
+                          "empty = inherit, auto = always detect"),
         )
         page.add(self.lang_overrides_group)
 
@@ -714,11 +739,11 @@ class ModelsPageMixin:
         """Cached-model disk usage."""
 
         self.disk_group = Adw.PreferencesGroup(
-            title="Disk usage",
-            description="Cached models under ~/.cache/sayit-ermano/models "
-            "(deletion needs the daemon)",
+            title=_("Disk usage"),
+            description=_("Cached models under ~/.cache/sayit-ermano/models "
+                          "(deletion needs the daemon)"),
         )
-        self.disk_total_row = Adw.ActionRow(title="Total", subtitle="—")
+        self.disk_total_row = Adw.ActionRow(title=_("Total"), subtitle="—")
         self.disk_group.add(self.disk_total_row)
         self._disk_rows: list[Adw.ActionRow] = []
         page.add(self.disk_group)

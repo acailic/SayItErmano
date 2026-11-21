@@ -27,6 +27,7 @@ from gi.repository import Adw, GLib, Gtk
 
 from .. import model_catalog, model_download, paths
 from .. import session as session_mod
+from ..i18n import _
 from .client import Client
 from .onboarding_funnel import FunnelCounters
 from .onboarding_hints import insertion_failure_hints
@@ -67,7 +68,8 @@ class _CheckRow(Gtk.ListBoxRow):
 
 class OnboardingWindow(Adw.ApplicationWindow):
     def __init__(self, application=None, client=None):
-        super().__init__(application=application, title="Welcome to SayItErmano",
+        super().__init__(application=application,
+                         title=_("Welcome to SayItErmano"),
                          default_width=560, default_height=640)
         load_style()  # after super(): display is open, icons resolve
         self.c = client or Client()
@@ -90,10 +92,10 @@ class OnboardingWindow(Adw.ApplicationWindow):
         vbox.append(Adw.HeaderBar())
 
         page = Adw.StatusPage(
-            title="Welcome to SayItErmano",
-            description="A one-pass setup, same as on the Mac: check your mic, "
-                        "the engine, then try a real dictation. Nothing gets "
-                        "typed into your apps.",
+            title=_("Welcome to SayItErmano"),
+            description=_("A one-pass setup, same as on the Mac: check your "
+                          "mic, the engine, then try a real dictation. "
+                          "Nothing gets typed into your apps."),
             icon_name="sayit-ermano", vexpand=True)
         clamp = Adw.Clamp(maximum_size=520, tightening_threshold=400,
                           margin_start=24, margin_end=24, margin_bottom=18)
@@ -118,33 +120,33 @@ class OnboardingWindow(Adw.ApplicationWindow):
         self.updates_lbl = Gtk.Label(wrap=True, xalign=0.0,
                                      css_classes=["dim-label"])
         self.updates_lbl.set_text(
-            "Checks GitHub once a day for a newer release and notifies you — "
-            "`sayit-ermano update` prints the upgrade command; disable with "
-            "`updates.check = false` in the config.")
+            _("Checks GitHub once a day for a newer release and notifies "
+              "you — `sayit-ermano update` prints the upgrade command; "
+              "disable with `updates.check = false` in the config."))
 
         self.mic_row = _CheckRow("audio-input-microphone-symbolic",
-                                 "Microphone", self.mic_lbl)
+                                 _("Microphone"), self.mic_lbl)
         self.model_row = _CheckRow("fluidvoice-models-symbolic",
-                                   "Speech engine", self.model_lbl)
+                                   _("Speech engine"), self.model_lbl)
         self.hotkey_row = _CheckRow("fluidvoice-general-symbolic",
-                                    "Hotkeys", self.hotkey_lbl)
+                                    _("Hotkeys"), self.hotkey_lbl)
         self.ai_row = _CheckRow("fluidvoice-polish-symbolic",
-                                "AI polish", self.ai_lbl)
+                                _("AI polish"), self.ai_lbl)
         self.updates_row = _CheckRow("software-update-available-symbolic",
-                                     "Updates", self.updates_lbl)
+                                     _("Updates"), self.updates_lbl)
         for r in (self.mic_row, self.model_row, self.hotkey_row,
                   self.ai_row, self.updates_row):
             checks.append(r)
         box.append(checks)
 
         try_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        self.try_btn = Gtk.Button(label="Record 3 seconds",
+        self.try_btn = Gtk.Button(label=_("Record 3 seconds"),
                                   css_classes=["suggested-action", "pill"],
                                   halign=Gtk.Align.CENTER)
         self.try_btn.connect("clicked", self._try_dictation)
         self.try_out = Gtk.Label(wrap=True, xalign=0.0, visible=False,
                                  css_classes=["card"])
-        self.try_cancel_btn = Gtk.Button(label="Stop waiting",
+        self.try_cancel_btn = Gtk.Button(label=_("Stop waiting"),
                                          visible=False,
                                          halign=Gtk.Align.CENTER)
         self.try_cancel_btn.connect("clicked", self._try_cancel_clicked)
@@ -158,16 +160,16 @@ class OnboardingWindow(Adw.ApplicationWindow):
                                  spacing=10, visible=False)
         self.final_box.append(Gtk.Label(
             xalign=0.0, css_classes=["heading"],
-            label="One last step — dictate for real"))
+            label=_("One last step — dictate for real")))
         self.final_lbl = Gtk.Label(wrap=True, xalign=0.0,
                                    css_classes=["dim-label"])
         self.final_box.append(self.final_lbl)
         report_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10,
                              halign=Gtk.Align.CENTER)
-        self.report_ok_btn = Gtk.Button(label="I did it — text appeared",
+        self.report_ok_btn = Gtk.Button(label=_("I did it — text appeared"),
                                         css_classes=["suggested-action"])
         self.report_ok_btn.connect("clicked", self._report_ok)
-        self.report_fail_btn = Gtk.Button(label="It didn't work")
+        self.report_fail_btn = Gtk.Button(label=_("It didn't work"))
         self.report_fail_btn.connect("clicked", self._report_fail)
         report_row.append(self.report_ok_btn)
         report_row.append(self.report_fail_btn)
@@ -180,14 +182,15 @@ class OnboardingWindow(Adw.ApplicationWindow):
         buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10,
                           halign=Gtk.Align.END)
         self.funnel_check = Gtk.CheckButton(
-            label="keep local setup counters (JSON in the config dir; "
-                  "no network, ever)",
+            label=_("keep local setup counters (JSON in the config dir; "
+                    "no network, ever)"),
             active=not self.funnel.opted_out())
         self.funnel_check.connect("toggled", self._funnel_toggled)
         buttons.append(self.funnel_check)
-        settings_btn = Gtk.Button(label="Open Settings", css_classes=["flat"])
+        settings_btn = Gtk.Button(label=_("Open Settings"),
+                                  css_classes=["flat"])
         settings_btn.connect("clicked", lambda *_: self._open("settings"))
-        go = Gtk.Button(label="Start dictating",
+        go = Gtk.Button(label=_("Start dictating"),
                         css_classes=["suggested-action"])
         go.connect("clicked", self._finish)
         buttons.append(settings_btn)
@@ -204,10 +207,12 @@ class OnboardingWindow(Adw.ApplicationWindow):
         default = next((m["description"] for m in mics if m.get("default")),
                        mics[0]["description"] if mics else None)
         if default:
-            extra = f" ({len(mics)} inputs)" if len(mics) > 1 else ""
+            extra = _(" ({n} inputs)").format(n=len(mics)) if len(mics) > 1 \
+                else ""
             mic_text = default + extra
         else:
-            mic_text = "none found — connect one and check your sound settings"
+            mic_text = _("none found — connect one and check your sound "
+                         "settings")
         self.mic_lbl.set_text(mic_text)
         self.mic_row.set_state(_OK if default else _WARN)
 
@@ -216,16 +221,18 @@ class OnboardingWindow(Adw.ApplicationWindow):
         hk = self._cfg.get("hotkey", {})
         cancel = hk.get("cancel_key", "") or "Escape"
         self.hotkey_lbl.set_text(
-            f"dictate {hk.get('key', '?')} · cancel {cancel} "
-            "(works while the pill is up)")
+            _("dictate {key} · cancel {cancel} "
+              "(works while the pill is up)").format(
+                key=hk.get("key", "?"), cancel=cancel))
         self.hotkey_row.set_state(_INFO)
 
         ai = self._cfg.get("ai", {})
         configured = bool(ai.get("api_key") or ai.get("base_url"))
         self.ai_lbl.set_text(
-            "active — fine-tune in Settings" if ai.get("enabled")
-            else "configured but off — enable in Settings" if configured
-            else "optional — add an OpenAI-compatible endpoint in Settings")
+            _("active — fine-tune in Settings") if ai.get("enabled")
+            else _("configured but off — enable in Settings") if configured
+            else _("optional — add an OpenAI-compatible endpoint in "
+                   "Settings"))
         self.ai_row.set_state(_OK if ai.get("enabled") else _INFO)
         self.updates_row.set_state(_INFO)
 
@@ -240,33 +247,37 @@ class OnboardingWindow(Adw.ApplicationWindow):
         try:
             ready = model_download.model_readiness(self._cfg)
         except Exception:  # noqa: BLE001 - the row must never crash setup
-            self.model_lbl.set_text("engine state unknown — Settings → Models")
+            self.model_lbl.set_text(
+                _("engine state unknown — Settings → Models"))
             self.model_row.set_state(_WARN)
             return
         kind, name = ready["kind"], ready["name"]
         if kind == "remote":
             self.model_lbl.set_text(
-                "remote STT endpoint — recordings go to the configured URL")
+                _("remote STT endpoint — recordings go to the configured "
+                  "URL"))
             self.model_row.set_state(_OK)
             self._record_model_ready(kind, name)
             return
         if ready["downloaded"]:
-            self.model_lbl.set_text(f"{name} — ready")
+            self.model_lbl.set_text(_("{name} — ready").format(name=name))
             self.model_row.set_state(_OK)
             self._record_model_ready(kind, name)
             return
         prog = ready.get("progress")
         if prog is not None:
             self.model_lbl.set_text(
-                f"{prog.describe()}\nthe tryout and your first dictation "
-                "continue automatically once it's ready")
+                _("{progress}\nthe tryout and your first dictation "
+                  "continue automatically once it's ready").format(
+                      progress=prog.describe()))
             self.model_row.set_state(_BUSY)
             return
         size = _size_note(kind, name)
         size_txt = f" ({size})" if size else ""
         self.model_lbl.set_text(
-            f"{name} — not downloaded yet{size_txt}; the first dictation "
-            "downloads it once, then everything runs locally")
+            _("{name} — not downloaded yet{size}; the first dictation "
+              "downloads it once, then everything runs locally").format(
+                  name=name, size=size_txt))
         self.model_row.set_state(_WARN)
 
     def _record_model_ready(self, kind: str, name: str) -> None:
@@ -311,22 +322,23 @@ class OnboardingWindow(Adw.ApplicationWindow):
             prog = ready.get("progress")
             if prog is not None:
                 self.try_out.set_text(
-                    f"{prog.describe()}\nthe tryout continues automatically "
-                    "when the model is ready — or stop waiting and try "
-                    "again later")
+                    _("{progress}\nthe tryout continues automatically "
+                      "when the model is ready — or stop waiting and try "
+                      "again later").format(progress=prog.describe()))
                 self.try_cancel_btn.set_visible(True)
                 return  # the 1 s ticker re-advances us
             size = _size_note(ready["kind"], ready["name"])
             size_txt = f" (~{size})" if size else ""
             self.try_out.set_text(
-                f"first use: downloading the {ready['name']} model"
-                f"{size_txt} — one-time, then everything runs locally")
+                _("first use: downloading the {name} model{size} — "
+                  "one-time, then everything runs locally").format(
+                      name=ready["name"], size=size_txt))
             self.try_cancel_btn.set_visible(True)
         self._run_tryout_call()
 
     def _run_tryout_call(self) -> None:
         self._try_state = "busy"
-        self.try_out.set_text("recording… speak now")
+        self.try_out.set_text(_("recording… speak now"))
         gen = self._try_gen
 
         def work():
@@ -357,8 +369,8 @@ class OnboardingWindow(Adw.ApplicationWindow):
                 self._busy_retries += 1  # daemon finishing the last attempt
                 self._try_state = "waiting"
                 self.try_out.set_text(
-                    "the engine is still finishing the previous attempt — "
-                    "continuing automatically…")
+                    _("the engine is still finishing the previous attempt "
+                      "— continuing automatically…"))
                 return False
             self._busy_retries = 0
             self._show_tryout(resp, hint=_tryout_hint(resp, ready))
@@ -374,13 +386,16 @@ class OnboardingWindow(Adw.ApplicationWindow):
         self.try_btn.set_sensitive(True)
         self.try_cancel_btn.set_visible(False)
         if resp.get("ok"):
-            text = str(resp.get("text") or "").strip() or "(silence — nothing transcribed)"
+            text = str(resp.get("text") or "").strip() or _(
+                "(silence — nothing transcribed)")
             self.try_out.set_markup(
-                f"<b>heard you ({resp.get('duration_s', 0)} s):</b>\n{text}")
+                _("<b>heard you ({duration} s):</b>\n{text}").format(
+                    duration=resp.get("duration_s", 0), text=text))
             self.funnel.record("tryout_ok")
             self.final_box.set_visible(True)  # the guided real-insertion step
         else:
-            msg = f"failed: {resp.get('error', 'unknown')}"
+            msg = _("failed: {error}").format(
+                error=resp.get("error", _("unknown")))
             self.try_out.set_text(f"{msg}\n{hint}" if hint else msg)
 
     def _try_cancel_clicked(self, _btn=None) -> None:
@@ -395,8 +410,8 @@ class OnboardingWindow(Adw.ApplicationWindow):
         self.try_cancel_btn.set_visible(False)
         self.try_out.set_visible(True)
         self.try_out.set_text(
-            "cancelled — nothing was half-written; the model download "
-            "(if any) continues in the background")
+            _("cancelled — nothing was half-written; the model download "
+              "(if any) continues in the background"))
 
     # -- guided transition to a real insertion (F-19) ------------------------------
 
@@ -404,26 +419,27 @@ class OnboardingWindow(Adw.ApplicationWindow):
         key = self._cfg.get("hotkey", {}).get("key", "?")
         info = session_mod.probe()
         if info.is_wayland:
-            return (f"press the shortcut you bound in your desktop "
-                    f"settings to the toggle script (the on-screen "
-                    f"`{key}` grab only exists on X11) — or run "
-                    f"`sayit-ermano toggle` in a terminal")
-        return f"press {key}"
+            return _("press the shortcut you bound in your desktop "
+                     "settings to the toggle script (the on-screen "
+                     "`{key}` grab only exists on X11) — or run "
+                     "`sayit-ermano toggle` in a terminal").format(key=key)
+        return _("press {key}").format(key=key)
 
     def _final_step_text(self) -> None:
         self.final_lbl.set_text(
-            "Open any app you like — an editor, a chat, the browser "
-            f"address bar. {self._hotkey_phrase()}, say a phrase, and watch "
-            "the text appear where the cursor is. Same engine you just "
-            "tried, same privacy: everything stays on this machine.")
+            _("Open any app you like — an editor, a chat, the browser "
+              "address bar. {hotkey}, say a phrase, and watch "
+              "the text appear where the cursor is. Same engine you just "
+              "tried, same privacy: everything stays on this machine."
+              ).format(hotkey=self._hotkey_phrase()))
 
     def _report_ok(self, _btn=None) -> None:
         self.funnel.record("real_insertion_reported_ok")
         self.final_out.set_visible(True)
         self.final_out.set_text(
-            "That's the whole loop — press the key whenever you want to "
-            "dictate. Every take is saved in History if you ever need it "
-            "again.")
+            _("That's the whole loop — press the key whenever you want to "
+              "dictate. Every take is saved in History if you ever need it "
+              "again."))
         self.report_fail_btn.set_sensitive(False)
 
     def _report_fail(self, _btn=None) -> None:
@@ -435,9 +451,9 @@ class OnboardingWindow(Adw.ApplicationWindow):
         hints = insertion_failure_hints(status, self._cfg)
         self.final_out.set_visible(True)
         self.final_out.set_text(
-            "Let's fix it — most first-run failures are one of these:\n"
-            + "\n".join(hints)
-            + "\n\nAfter fixing, dictate once more and report back.")
+            _("Let's fix it — most first-run failures are one of "
+              "these:\n{hints}\n\nAfter fixing, dictate once more and "
+              "report back.").format(hints="\n".join(hints)))
 
     def _funnel_toggled(self, btn) -> None:
         if not btn.get_active():
@@ -480,10 +496,10 @@ def _tryout_hint(resp: dict, ready: dict) -> str | None:
     err = str(resp.get("error") or "").lower()
     cold = ready.get("kind") != "remote" and not ready.get("downloaded")
     if cold:
-        return ("the speech model is not on disk yet — the one-time "
-                "download may have failed; check the network and press "
-                "Record again (partial data is never kept), or run "
-                "`sayit-ermano doctor`")
+        return _("the speech model is not on disk yet — the one-time "
+                 "download may have failed; check the network and press "
+                 "Record again (partial data is never kept), or run "
+                 "`sayit-ermano doctor`")
     if "timed out" in err:
-        return "the engine took too long to answer — press Record again"
+        return _("the engine took too long to answer — press Record again")
     return None
