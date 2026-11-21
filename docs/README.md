@@ -62,6 +62,9 @@ the app itself.
 
 - [quality/evidence-index.md](quality/evidence-index.md) — every
   verified claim and its run record.
+- [quality/funnel/](quality/funnel/) — the no-telemetry conversion
+  funnel: Flathub installs + Paddle checkout stages, weekly report,
+  cron line ([decision rule](pricing-funnel-decision-rule.md)).
 - [../requests/](../requests/) — the brief ledger; a request's STATUS
   header is the authority on whether it shipped.
 - [plans/](plans/) — active plans, each with a Status header:
