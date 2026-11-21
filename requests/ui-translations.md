@@ -67,7 +67,9 @@ seam, daemon `apply_config` hot-apply, translated tray menu, and
 - libadwaita/GTK stock-string localization (needs `bindtextdomain` on
   the Gtk locale dir; deferred until a stock string is reported
   untranslated).
-- Extraction in CI runs through the repo's `just gate` recipe (unit
-  tier); a dedicated workflow job is provided as a patch artifact (the
-  runner token in the automation environment cannot push workflow
-  files).
+- Extraction in CI: the workflow change is delivered as a patch —
+  [ci-patch-i18n-extraction.md](../docs/dev/ci-patch-i18n-extraction.md)
+  (the runner token in the automation environment cannot push workflow
+  files). Locally, `just gate` and `just translations` already enforce
+  it, and `tests/test_i18n.py` (unit tier, runs in CI's unit job) pins
+  completeness/orphans/`.mo` freshness.
