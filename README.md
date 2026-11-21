@@ -220,6 +220,13 @@ grab and models cache), then the
 with concrete fixes, grouped by audio · hotkeys · Wayland · model
 download · GPU/CPU · installation · tray.
 
+## Support
+
+Bugs and questions go through [issues with a
+template](https://github.com/acailic/SayItErmano/issues/new/choose);
+paid license holders get priority — response targets, refund path and
+what to include live in [SUPPORT.md](SUPPORT.md).
+
 ## Development & testing
 
 Read [AGENTS.md](AGENTS.md) first — one tree per agent, how tests are

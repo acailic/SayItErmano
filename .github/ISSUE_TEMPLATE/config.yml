@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Troubleshooting FAQ
+    url: https://github.com/acailic/SayItErmano/blob/linux/docs/dev/FAQ.md
+    about: 16 common problems with concrete fixes — check here before opening an issue.
+  - name: Install & configuration guides
+    url: https://github.com/acailic/SayItErmano/blob/linux/docs/README.md
+    about: Every install route, the full config reference, Wayland setup.
+  - name: License keys
+    url: https://github.com/acailic/SayItErmano/blob/linux/docs/guides/license.md
+    about: Import, status, lost keys, refunds.
