@@ -3,8 +3,11 @@
 Decision record: [ADR-0005](adr/ADR-0005-commercial-sku.md). Evidence
 base: [2026-11-21 productization verification](research/2026-11-21-productization-verification.md)
 (all market numbers below were verified at primary sources on
-2026-11-21). Status: prices proposed; final numbers await owner
-approval before the store goes live (#17).
+2026-11-21). Status: prices approved; the Paddle checkout wiring is
+in (#17) — landing CTA + funnel tags + comparison table on the site,
+refund runbook and first-purchase email in `docs/dev/`. Remaining
+owner actions live in the #17 ticket: Paddle account + product,
+seller approval, Payoneer payout, sandbox + live test purchase.
 
 Funnel decision rule — thresholds and change-order for listing copy vs
 price, written before the data: [pricing-funnel-decision-rule.md](pricing-funnel-decision-rule.md)
