@@ -4,6 +4,13 @@ Dated research notes live in this directory; raw data under
 [data/](data/), competitor watch under [competitive/](competitive/).
 The newest entries:
 
+- [2026-11-22 checkout options](2026-11-22-checkout-options.md) —
+  MoR vs direct processor for the license SKU (monetization plan
+  question 4): fees/tax/refunds/payouts/chargebacks from current
+  official docs, Serbia/Bosnia eligibility verified per provider
+  (Stripe and Stripe Managed Payments exclude the region; Lemon
+  Squeezy is closing), the integration map against the v0.9.0
+  key system, and a stay-on-Paddle recommendation with top risks.
 - [2026-11-22 interview kit + channel plan](2026-11-22-interview-kit.md) —
   monetization plan question 1 (R1b): screening, 15 questions mapped to
   the cost model's inputs, consent text, results template, and where to
