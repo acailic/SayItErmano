@@ -957,7 +957,8 @@ class HistoryWindow(Adw.ApplicationWindow):
             paused = self._history_paused  # last known state (own toggle)
         else:
             try:
-                cfg, _ = self.c.get_config()
+                # do not unpack into `_`: it shadows the gettext alias
+                cfg, _raw = self.c.get_config()
                 paused = not bool(cfg.get("history", {}).get("save", True))
             except Exception:  # noqa: BLE001 - unreadable -> assume saving
                 paused = False
