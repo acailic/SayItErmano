@@ -238,3 +238,36 @@ as the STT gate above. Offline E2E note: with the network disconnected,
 the `local` variant must still score (that is the feature's promise);
 the `cloud` variant's numbers can come from an earlier online run of
 the same corpus/adapter pair.
+
+## Perf baseline + regression gate (Q8)
+
+The perf half of quality-plan Q8 lives on the same corpus, one level
+up in abstraction: instead of scoring *transcripts*, it scores
+*latency and footprint*. `scripts/perf_baseline.py` (via
+`just perf-baseline`) runs the committed synthetic corpus through a
+real backend in the daemon process shape — a dedicated worker
+subprocess loads the model once and takes every case — recording
+per-take wall time, audio-seconds/second throughput, model load time
+and the worker's peak RSS into a dated evidence file under
+[../quality/perf-baselines/](../quality/perf-baselines/) plus a
+generated Markdown summary table (the install-matrix pattern:
+generated, never hand-edited). `scripts/perf_gate.py`
+(`just perf-gate`) re-runs the same measurement and fails (exit 1)
+when any metric regresses beyond the tolerance — default 25 % per
+metric, `--tolerance` to change; a corrupted newest baseline is an
+error, never silently skipped.
+
+```bash
+just perf-baseline            # record <date>-<host-class>.json + table
+just perf-gate                # fresh run vs the newest baseline
+python scripts/perf_gate.py --tolerance 0.10   # tighter gate
+```
+
+Backend selection follows the app's preference (faster-whisper CPU
+int8, falling back to the whisper.cpp binary + tiny ggml model baked
+into reference runners) and is stamped in every evidence file, so a
+baseline recorded on one backend never silently gates another. The
+measurement/aggregation math, the tolerance comparison, baseline
+resolution and malformed-baseline rejection are model-free and pinned
+by `tests/test_evalharness_perf.py` with a fake backend — same split
+as the rest of this harness: models only produce the numbers.

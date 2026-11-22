@@ -56,6 +56,7 @@ claim without support.
 | Flaky tests never get unlimited reruns | unit: `test_dev_gates.py` (registry shape: owner + expiry; no open row past expiry) | registry + policy in [testing.md](../dev/testing.md); all four historical flakes closed same-day (2026-09-12/14, `95978c3`/`586cb8c`) |
 | Quality is re-reviewed after each release | unit: the same dev-gates guard keeps the practice's paper honest | [post-release review 2026-10-14](../research/2026-10-14-post-release-review-v0.8.2.md) — v0.8.2 + Unreleased delta: uncovered-branch owners, incident recap, slowest tests, compatibility gaps |
 | Long-running stability (memory, FDs, recovery) | soak tooling: `scripts/soak.py`, `evalharness soak` | **pending**: 2h pre-release + 24h lifecycle soaks (Q9) |
+| Dictation-path perf measurable + gated (Q8 perf half) | unit: `test_evalharness_perf.py` (aggregation math, tolerance gate, newest-first baseline resolution, malformed rejection — fake backend, no model) | [perf baselines](perf-baselines/README.md): dated evidence per host class, recorded by `just perf-baseline`; `just perf-gate` fails >25 % regressions |
 | Funnel measured server-side, no client telemetry (#18) | unit: `test_flathub_stats.py` (API parsing, append-only data, report rendering, NOT-LIVE stubs) | weekly report: [quality/funnel/weekly.md](funnel/weekly.md) once cron lands (owner action); decision rule fixed up front: [pricing-funnel-decision-rule.md](../pricing-funnel-decision-rule.md) |
 
 ## Release-to-evidence binding
