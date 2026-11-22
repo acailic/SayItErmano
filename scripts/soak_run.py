@@ -35,7 +35,6 @@ import statistics
 import subprocess
 import sys
 import time
-import urllib.parse
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -337,6 +336,11 @@ def write_evidence(out_dir: Path, report: dict) -> tuple[Path, Path]:
     return json_path, md_path
 
 
+def _fmt(v, spec: str = ".0f") -> str:
+    """Format a verdict number, tolerating the insufficient-data None."""
+    return format(v, spec) if isinstance(v, (int, float)) else "n/a"
+
+
 def render_markdown(r: dict) -> str:
     v = r["verdict"]
     rss, sock = v["rss"], v["socket"]
@@ -353,13 +357,13 @@ def render_markdown(r: dict) -> str:
         "## Verdict math (the gate, in the open)",
         "",
         f"- baseline RSS (median of {rss['warmup_samples']} warmup "
-        f"samples): **{rss['baseline_rss_kb']:.0f} kB**",
+        f"samples): **{_fmt(rss['baseline_rss_kb'])} kB**",
         f"- end RSS (median of the last samples): "
-        f"**{rss['end_rss_kb']:.0f} kB**",
-        f"- growth: **{rss['growth_pct']:.2f}%** (tolerance "
+        f"**{_fmt(rss['end_rss_kb'])} kB**",
+        f"- growth: **{_fmt(rss['growth_pct'], '.2f')}%** (tolerance "
         f"≤ {rss['tolerance_pct']:.0f}% → "
         f"{'within' if rss['ok'] else 'EXCEEDED'})",
-        f"- post-warmup slope: {rss['slope_mb_per_h']:.2f} MB/h "
+        f"- post-warmup slope: {_fmt(rss['slope_mb_per_h'], '.2f')} MB/h "
         "(reported, not gated)",
         f"- socket: {sock['failures']} failed status round-trips of "
         f"{len(r['samples'])} samples"
@@ -371,9 +375,12 @@ def render_markdown(r: dict) -> str:
         "|---|---|---|---|---|",
     ]
     for s in r["samples"]:
-        lines.append(f"| {s['t']:.0f} | {s['rss_kb']:.0f} | {s['fds']} "
-                     f"| {s['threads']} | {'ok' if s['socket_ok'] else 'FAIL'} |")
-    lines += ["", f"Reproduce: `python {Path(r['config']['script']).name}"
+        rss = _fmt(s["rss_kb"]) if "rss_kb" in s else "dead"
+        lines.append(f"| {s['t']:.0f} | {rss} "
+                     f"| {s.get('fds', '—')} | {s.get('threads', '—')} "
+                     f"| {'ok' if s['socket_ok'] else 'FAIL'} |")
+    lines += ["", f"Reproduce: `python scripts/"
+                  f"{Path(r['config']['script']).name}"
                   f" --duration-minutes {r['duration_minutes']}`", ""]
     return "\n".join(lines)
 

@@ -1,0 +1,492 @@
+{
+ "schema": "sayit-soak/1",
+ "started_utc": "2026-11-22T05:13:18+00:00",
+ "repo_sha": "ace9bf6",
+ "daemon_cmd": "/home/node/repo/.venv/bin/python -m fluidvoice daemon --no-hotkey --no-sounds",
+ "daemon_exit": 0,
+ "duration_minutes": 10.0,
+ "config": {
+  "script": "soak_run.py",
+  "interval_s": 15.0,
+  "warmup_s": 60.0,
+  "tolerance_pct": 15.0,
+  "take_every_s": 30.0,
+  "take_hold_s": 2.0
+ },
+ "env": {
+  "python": "/home/node/repo/.venv/bin/python",
+  "kernel": "7.2.15-76070215-generic",
+  "argv": [
+   "--duration-minutes",
+   "10",
+   "--interval-seconds",
+   "15",
+   "--warmup-seconds",
+   "60"
+  ]
+ },
+ "samples": [
+  {
+   "t": 0.0,
+   "rss_kb": 33804.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 3.1
+  },
+  {
+   "t": 15.0,
+   "rss_kb": 33976.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.1
+  },
+  {
+   "t": 30.0,
+   "rss_kb": 33996.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.1
+  },
+  {
+   "t": 45.0,
+   "rss_kb": 34044.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.1
+  },
+  {
+   "t": 60.0,
+   "rss_kb": 34064.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.2
+  },
+  {
+   "t": 75.0,
+   "rss_kb": 34104.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.0
+  },
+  {
+   "t": 90.0,
+   "rss_kb": 34108.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.1
+  },
+  {
+   "t": 105.0,
+   "rss_kb": 34120.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.2
+  },
+  {
+   "t": 120.0,
+   "rss_kb": 34124.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.1
+  },
+  {
+   "t": 135.0,
+   "rss_kb": 34136.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.0
+  },
+  {
+   "t": 150.0,
+   "rss_kb": 34136.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.1
+  },
+  {
+   "t": 165.0,
+   "rss_kb": 34136.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.1
+  },
+  {
+   "t": 180.0,
+   "rss_kb": 34136.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.8
+  },
+  {
+   "t": 195.1,
+   "rss_kb": 34136.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.0
+  },
+  {
+   "t": 210.1,
+   "rss_kb": 34140.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.0
+  },
+  {
+   "t": 225.1,
+   "rss_kb": 34140.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.0
+  },
+  {
+   "t": 240.1,
+   "rss_kb": 34140.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.1
+  },
+  {
+   "t": 255.1,
+   "rss_kb": 34140.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.4
+  },
+  {
+   "t": 270.1,
+   "rss_kb": 34140.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 0.9
+  },
+  {
+   "t": 285.1,
+   "rss_kb": 34140.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.0
+  },
+  {
+   "t": 300.1,
+   "rss_kb": 34140.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.0
+  },
+  {
+   "t": 315.1,
+   "rss_kb": 34140.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.1
+  },
+  {
+   "t": 330.1,
+   "rss_kb": 34140.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.0
+  },
+  {
+   "t": 345.1,
+   "rss_kb": 34140.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.1
+  },
+  {
+   "t": 360.1,
+   "rss_kb": 34140.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.0
+  },
+  {
+   "t": 375.1,
+   "rss_kb": 34140.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.0
+  },
+  {
+   "t": 390.1,
+   "rss_kb": 34144.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.2
+  },
+  {
+   "t": 405.1,
+   "rss_kb": 34144.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.0
+  },
+  {
+   "t": 420.1,
+   "rss_kb": 34144.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.0
+  },
+  {
+   "t": 435.1,
+   "rss_kb": 34144.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 0.9
+  },
+  {
+   "t": 450.1,
+   "rss_kb": 34144.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.1
+  },
+  {
+   "t": 465.1,
+   "rss_kb": 34144.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.0
+  },
+  {
+   "t": 480.1,
+   "rss_kb": 34144.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.0
+  },
+  {
+   "t": 495.1,
+   "rss_kb": 34144.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.0
+  },
+  {
+   "t": 510.1,
+   "rss_kb": 34144.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.1
+  },
+  {
+   "t": 525.1,
+   "rss_kb": 34144.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.0
+  },
+  {
+   "t": 540.1,
+   "rss_kb": 34144.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.1
+  },
+  {
+   "t": 555.1,
+   "rss_kb": 34144.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.1
+  },
+  {
+   "t": 570.1,
+   "rss_kb": 34144.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.1
+  },
+  {
+   "t": 585.1,
+   "rss_kb": 34144.0,
+   "fds": 5,
+   "threads": 10,
+   "socket_ok": true,
+   "socket_ms": 1.1
+  }
+ ],
+ "socket": {
+  "max_status_ms": 3.1
+ },
+ "takes": [
+  {
+   "t": 32.0,
+   "recording": false,
+   "cancelled": true,
+   "error": null
+  },
+  {
+   "t": 62.0,
+   "recording": false,
+   "cancelled": true,
+   "error": null
+  },
+  {
+   "t": 92.0,
+   "recording": false,
+   "cancelled": true,
+   "error": null
+  },
+  {
+   "t": 122.0,
+   "recording": false,
+   "cancelled": true,
+   "error": null
+  },
+  {
+   "t": 152.0,
+   "recording": false,
+   "cancelled": true,
+   "error": null
+  },
+  {
+   "t": 182.0,
+   "recording": false,
+   "cancelled": true,
+   "error": null
+  },
+  {
+   "t": 212.1,
+   "recording": false,
+   "cancelled": true,
+   "error": null
+  },
+  {
+   "t": 242.1,
+   "recording": false,
+   "cancelled": true,
+   "error": null
+  },
+  {
+   "t": 272.1,
+   "recording": false,
+   "cancelled": true,
+   "error": null
+  },
+  {
+   "t": 302.1,
+   "recording": false,
+   "cancelled": true,
+   "error": null
+  },
+  {
+   "t": 332.1,
+   "recording": false,
+   "cancelled": true,
+   "error": null
+  },
+  {
+   "t": 362.1,
+   "recording": false,
+   "cancelled": true,
+   "error": null
+  },
+  {
+   "t": 392.1,
+   "recording": false,
+   "cancelled": true,
+   "error": null
+  },
+  {
+   "t": 422.1,
+   "recording": false,
+   "cancelled": true,
+   "error": null
+  },
+  {
+   "t": 452.1,
+   "recording": false,
+   "cancelled": true,
+   "error": null
+  },
+  {
+   "t": 482.1,
+   "recording": false,
+   "cancelled": true,
+   "error": null
+  },
+  {
+   "t": 512.1,
+   "recording": false,
+   "cancelled": true,
+   "error": null
+  },
+  {
+   "t": 542.1,
+   "recording": false,
+   "cancelled": true,
+   "error": null
+  },
+  {
+   "t": 572.1,
+   "recording": false,
+   "cancelled": true,
+   "error": null
+  }
+ ],
+ "take_summary": "19 driven, 0 started recording, 19 cancelled, 0 errored (no recorder on this host takes the clean error path \u2014 still socket+daemon load)",
+ "verdict": {
+  "ok": true,
+  "reasons": [],
+  "rss": {
+   "tolerance_pct": 15.0,
+   "warmup_s": 60.0,
+   "warmup_samples": 5,
+   "post_samples": 35,
+   "baseline_rss_kb": 33996.0,
+   "end_rss_kb": 34144.0,
+   "growth_pct": 0.44,
+   "slope_mb_per_h": 0.16,
+   "ok": true
+  },
+  "socket": {
+   "failures": 0,
+   "failed_at_s": [],
+   "ok": true
+  }
+ },
+ "daemon_log_tail": "[sayit-ermano] 05:03:17 SayItErmano v0.8.3.1 starting\n[sayit-ermano] 05:03:17 session: unknown - capabilities: hotkey=x11-grab insertion=unavailable clipboard=unavailable overlay=x11-pill app-hint=unavailable preview=x11-pill tray=sni\n[sayit-ermano] 05:03:17 WARN speech backend not ready yet (no speech backend available - run `fluidvoice doctor` (pip install faster-whisper)); will retry on first use\n[sayit-ermano] 05:03:17 tray unavailable (ModuleNotFoundError: No module named 'dbus')\n[sayit-ermano] 05:03:17 tray unavailable on this desktop - running headless\n[sayit-ermano] 05:03:17 mic monitoring unavailable (pactl not found)\n[sayit-ermano] 05:03:17 lock watch unavailable (ModuleNotFoundError: No module named 'dbus')\n[sayit-ermano] 05:03:17 history: lock unavailable (FileNotFoundError(2, 'No such file or directory')) - proceeding unlocked\n[sayit-ermano] 05:03:17 app launch suppressed (--onboard)\n[sayit-ermano] 05:03:17 first run detected - opened the setup page\n[sayit-ermano] 05:03:17 control socket: /tmp/sayit-soak-rdtfqpvk/run/fluidvoice.sock\n[sayit-ermano] 05:03:17 ready - press the hotkey to dictate (or run `sayit-ermano toggle`; config: /tmp/sayit-soak-rdtfqpvk/config.toml)\n[sayit-ermano] 05:03:48 recorder error: no recorder found: install pipewire (pw-record) or pulseaudio-utils (parecord)\n[sayit-ermano] 05:04:18 recorder error: no recorder found: install pipewire (pw-record) or pulseaudio-utils (parecord)\n[sayit-ermano] 05:04:48 recorder error: no recorder found: install pipewire (pw-record) or pulseaudio-utils (parecord)\n[sayit-ermano] 05:05:18 recorder error: no recorder found: install pipewire (pw-record) or pulseaudio-utils (parecord)\n[sayit-ermano] 05:05:48 recorder error: no recorder found: install pipewire (pw-record) or pulseaudio-utils (parecord)\n[sayit-ermano] 05:06:18 recorder error: no recorder found: install pipewire (pw-record) or pulseaudio-utils (parecord)\n[sayit-ermano] 05:06:48 recorder error: no recorder found: install pipewire (pw-record) or pulseaudio-utils (parecord)\n[sayit-ermano] 05:07:18 recorder error: no recorder found: install pipewire (pw-record) or pulseaudio-utils (parecord)\n[sayit-ermano] 05:07:48 recorder error: no recorder found: install pipewire (pw-record) or pulseaudio-utils (parecord)\n[sayit-ermano] 05:08:18 recorder error: no recorder found: install pipewire (pw-record) or pulseaudio-utils (parecord)\n[sayit-ermano] 05:08:48 recorder error: no recorder found: install pipewire (pw-record) or pulseaudio-utils (parecord)\n[sayit-ermano] 05:09:18 recorder error: no recorder found: install pipewire (pw-record) or pulseaudio-utils (parecord)\n[sayit-ermano] 05:09:48 recorder error: no recorder found: install pipewire (pw-record) or pulseaudio-utils (parecord)\n[sayit-ermano] 05:10:18 recorder error: no recorder found: install pipewire (pw-record) or pulseaudio-utils (parecord)\n[sayit-ermano] 05:10:48 recorder error: no recorder found: install pipewire (pw-record) or pulseaudio-utils (parecord)\n[sayit-ermano] 05:11:18 recorder error: no recorder found: install pipewire (pw-record) or pulseaudio-utils (parecord)\n[sayit-ermano] 05:11:48 recorder error: no recorder found: install pipewire (pw-record) or pulseaudio-utils (parecord)\n[sayit-ermano] 05:12:18 recorder error: no recorder found: install pipewire (pw-record) or pulseaudio-utils (parecord)\n[sayit-ermano] 05:12:48 recorder error: no recorder found: install pipewire (pw-record) or pulseaudio-utils (parecord)\n[sayit-ermano] 05:13:18 shutting down\n[sayit-ermano] 05:13:18 control server: shutdown complete (9 threads joined)\n",
+ "written_utc": "2026-11-22T05:13:18+00:00"
+}
