@@ -1,0 +1,156 @@
+# SayItErmano Flatpak manifest — the FLATHUB-SHAPED variant (issue #12,
+# runbook section 0 of docs/packaging/flathub-submission.md).
+#
+# A Flathub submission PR may carry NO sources besides the manifest
+# itself: no source code, no binaries, no `type: dir` sources (the
+# Flathub linter rejects those). This file is the reference shape for
+# that PR — every source is remote and content-pinned:
+#   - the app's git repo at the release tag (desktop file, metainfo and
+#     icons are installed from that checkout: they live in-repo);
+#   - the dependency wheels as PyPI `url` + `sha256` entries (stock
+#     PyPI artifacts; the shape flatpak-builder-tools' pip generator
+#     emits).
+# The git sources carry `tag` AND `commit` because the linter errors on
+# a tag without a commit for new submissions. The commit can only be
+# filled in AFTER release-publish tags the release — which is why the
+# CI variant carries the tag alone (see its header).
+#
+# DIVERGENCE RULE — the two manifests are ONE manifest with two source
+# sets:
+#   packaging/flatpak/io.github.acailic.SayItErmano.flathub.yml (this
+#     file) — remote sources only, Flathub shape;
+#   packaging/io.github.acailic.SayItErmano.yml — local sources, for CI
+#     bundle builds.
+# id, runtime, finish-args, module names, module order and
+# build-commands are byte-identical in both files; ONLY the `sources:`
+# blocks differ. Edit both in the same commit — tests/test_flatpak_manifest.py
+# asserts the parity (and that this file has zero local sources, that
+# every remote file source carries a sha256, and that each wheel's
+# `url` basename + sha256 equal the CI variant's vendored copy).
+#
+# Runtime: org.gnome.Platform 51 ships Python 3.14 (freedesktop-sdk
+# 26.08). The Pillow wheel is a compiled extension: its `cp314` ABI tag
+# is bound to this runtime-version — bump one, bump the other (the
+# manifest test pins the pair). `runtime-version` must be the latest
+# stable GNOME runtime at submission time (Flathub requirement; the
+# linter errors once a runtime is three versions behind).
+#
+# Release pin: tag == `v<pyproject version>` (forward-declared before
+# `just release-prepare`, like the metainfo <release>); `commit` is
+# set right after release-publish tags the release. The per-release
+# recipe is in docs/dev/release-gates.md.
+#
+# NOTE for the submitter (owner): per Flathub's Generative-AI policy
+# this file is repo-side working material — type the manifest you put
+# in the flathub PR by hand and understand every line; see the
+# runbook's policy note. finish-args justifications live in
+# docs/packaging/flatpak-permissions.md.
+#
+# Licenses: every module installs its license(s) to
+# $FLATPAK_DEST/share/licenses/$FLATPAK_ID/<module-or-package>/.
+id: io.github.acailic.SayItErmano
+runtime: org.gnome.Platform
+runtime-version: "51"
+sdk: org.gnome.Sdk
+command: sayit-ermano
+
+finish-args:
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+  - --share=network
+  # not a permission: flags the sandbox so the GTK app process owns the
+  # daemon + control socket (no systemd user units inside; ADR-0006)
+  - --env=SAYITERMANO_FLATPAK=1
+
+modules:
+  # Desktop integration: desktop file (app-id name so flatpak exports
+  # it), appstream metainfo (GPL-3.0-or-later, keywords, OARS), hicolor
+  # icons — installed from the app's git checkout at the release tag
+  # ("metadata must be integrated in the upstream project" — it is).
+  # The start/stop sounds are NOT installed here: they ship as Python
+  # package data (fluidvoice/assets/sfx) through the sayitermano
+  # module's pip install. The desktop file and icons are the app's own
+  # GPL-3.0 work — the project LICENSE from the checkout covers them
+  # (the metainfo file is CC0-1.0).
+  - name: sayitermano-data
+    buildsystem: simple
+    build-commands:
+      - install -Dm644 -t $FLATPAK_DEST/share/applications packaging/flatpak/io.github.acailic.SayItErmano.desktop
+      - install -Dm644 -t $FLATPAK_DEST/share/metainfo packaging/flatpak/io.github.acailic.SayItErmano.metainfo.xml
+      - install -Dm644 packaging/icons/hicolor/16x16/apps/sayit-ermano.png $FLATPAK_DEST/share/icons/hicolor/16x16/apps/sayit-ermano.png
+      - install -Dm644 packaging/icons/hicolor/32x32/apps/sayit-ermano.png $FLATPAK_DEST/share/icons/hicolor/32x32/apps/sayit-ermano.png
+      - install -Dm644 packaging/icons/hicolor/48x48/apps/sayit-ermano.png $FLATPAK_DEST/share/icons/hicolor/48x48/apps/sayit-ermano.png
+      - install -Dm644 packaging/icons/hicolor/64x64/apps/sayit-ermano.png $FLATPAK_DEST/share/icons/hicolor/64x64/apps/sayit-ermano.png
+      - install -Dm644 packaging/icons/hicolor/128x128/apps/sayit-ermano.png $FLATPAK_DEST/share/icons/hicolor/128x128/apps/sayit-ermano.png
+      - install -Dm644 packaging/icons/hicolor/256x256/apps/sayit-ermano.png $FLATPAK_DEST/share/icons/hicolor/256x256/apps/sayit-ermano.png
+      - install -Dm644 packaging/icons/hicolor/512x512/apps/sayit-ermano.png $FLATPAK_DEST/share/icons/hicolor/512x512/apps/sayit-ermano.png
+      - install -Dm0644 -t $FLATPAK_DEST/share/licenses/$FLATPAK_ID/sayitermano-data LICENSE
+    sources:
+      - type: git
+        url: https://github.com/acailic/SayItErmano.git
+        tag: v0.9.0
+        commit: f16a4813c4a6f34b57a2ebaa02d45cfb5bfaad07
+
+  # The app itself: pure-Python wheel built from the release tag with
+  # the SDK's own setuptools (the Flathub build sandbox has no network,
+  # hence --no-build-isolation; --no-deps because the dependency closure
+  # is the `deps` module below). LICENSE: the project's GPL-3.0 text,
+  # from the checkout.
+  - name: sayitermano
+    buildsystem: simple
+    build-commands:
+      - pip3 install --no-build-isolation --no-deps --prefix=$FLATPAK_DEST .
+      - install -Dm0644 -t $FLATPAK_DEST/share/licenses/$FLATPAK_ID/sayitermano LICENSE
+    sources:
+      # Release pin (#12): tag + commit of the release being shipped.
+      # tag == v<pyproject version> (the gate pins it); `commit` is the
+      # tag's commit, set right after release-publish tags the release
+      # (the gate checks it whenever the tag is in the clone).
+      - type: git
+        url: https://github.com/acailic/SayItErmano.git
+        tag: v0.9.0
+        commit: f16a4813c4a6f34b57a2ebaa02d45cfb5bfaad07
+
+  # Pure-Python runtime dependencies as remote PyPI wheels, each
+  # content-pinned by sha256 (the build sandbox has no network).
+  # --no-index: pip resolves the closure from the files on this line
+  # ONLY — a wheel whose dependency is not listed fails the build
+  # instead of silently fetching PyPI.
+  # Licenses incl. the AGPL-3.0-only global-shortcut-portal combination
+  # note: see the engine-scope section of
+  # docs/packaging/flatpak-permissions.md. Every wheel ships its
+  # license inside its .dist-info; pip installs that, and the lines
+  # below copy each one to the Flathub license directory (the
+  # python3* glob follows the runtime's Python version).
+  # The speech engines (faster-whisper chain / whisper.cpp Vulkan) are
+  # deliberately NOT vendored in this slice — same section.
+  - name: deps
+    buildsystem: simple
+    build-commands:
+      - pip3 install --no-index --prefix=$FLATPAK_DEST six-1.17.0-py2.py3-none-any.whl python_xlib-0.33-py2.py3-none-any.whl pillow-13.0.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl dbus_next-0.2.3-py3-none-any.whl global_shortcut_portal-0.1.0-py3-none-any.whl
+      - install -Dm0644 -t $FLATPAK_DEST/share/licenses/$FLATPAK_ID/six $FLATPAK_DEST/lib/python3*/site-packages/six-*.dist-info/LICENSE
+      - install -Dm0644 -t $FLATPAK_DEST/share/licenses/$FLATPAK_ID/python-xlib $FLATPAK_DEST/lib/python3*/site-packages/python_xlib-*.dist-info/LICENSE
+      - install -Dm0644 -t $FLATPAK_DEST/share/licenses/$FLATPAK_ID/pillow $FLATPAK_DEST/lib/python3*/site-packages/pillow-*.dist-info/licenses/LICENSE
+      - install -Dm0644 -t $FLATPAK_DEST/share/licenses/$FLATPAK_ID/dbus-next $FLATPAK_DEST/lib/python3*/site-packages/dbus_next-*.dist-info/LICENSE
+      - install -Dm0644 -t $FLATPAK_DEST/share/licenses/$FLATPAK_ID/global-shortcut-portal $FLATPAK_DEST/lib/python3*/site-packages/global_shortcut_portal-*.dist-info/licenses/LICENSE
+    sources:
+      # six: python-xlib's only runtime dependency (hard import in
+      # Xlib/display.py) — not part of the runtime's Python.
+      - type: file
+        url: https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl
+        sha256: 4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274
+      - type: file
+        url: https://files.pythonhosted.org/packages/fc/b8/ff33610932e0ee81ae7f1269c890f697d56ff74b9f5b2ee5d9b7fa2c5355/python_xlib-0.33-py2.py3-none-any.whl
+        sha256: c3534038d42e0df2f1392a1b30a15a4ff5fdc2b86cfa94f072bf11b10a164398
+      # Pillow is the one compiled wheel: its cp314 ABI tag must match
+      # the runtime's Python (org.gnome.Platform 51 -> 3.14).
+      - type: file
+        url: https://files.pythonhosted.org/packages/1d/f2/1371707ce438ba9a43f9d24089828494ec6f9396e28cd7903aa704dd6306/pillow-13.0.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+        sha256: e91c2b1cbeae768c98752e67e717e283d68dae45717b41f2d91eaee648e37b7d
+      - type: file
+        url: https://files.pythonhosted.org/packages/d2/fc/c0a3f4c4eaa5a22fbef91713474666e13d0ea2a69c84532579490a9f2cc8/dbus_next-0.2.3-py3-none-any.whl
+        sha256: 58948f9aff9db08316734c0be2a120f6dc502124d9642f55e90ac82ffb16a18b
+      - type: file
+        url: https://files.pythonhosted.org/packages/63/4f/3e38cceeec6554ebf1c2f2ab66c9acd05fbe26a1ef58b46c944c6f74705c/global_shortcut_portal-0.1.0-py3-none-any.whl
+        sha256: b4512ca320f2478f86680b12b6bc7fec5e2ec453799e01f2513247bdd86817f0

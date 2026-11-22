@@ -13,6 +13,27 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **Flathub submission prep (#12, runbook section 0)** — the shipping
+  Flatpak manifest gains a Flathub-shaped twin,
+  `packaging/flatpak/io.github.acailic.SayItErmano.flathub.yml`:
+  zero local sources (desktop file, metainfo and icons install from
+  the app's git source at the release tag; the wheels are PyPI
+  `url` + `sha256` entries). The two manifests differ only in their
+  `sources:` blocks and a unit test pins that parity. Both variants
+  now install every module's license to
+  `$FLATPAK_DEST/share/licenses/$FLATPAK_ID`, pin `tag: v0.9.0` (the
+  Flathub copy also the tag's `commit:` — the linter requires it),
+  and move to the GNOME 51 runtime (the newest Flathub hosts; 48 is
+  marked EOL there since 2026-03-24 and is now three versions behind,
+  the lint's error threshold) — which ships Python 3.14, so the
+  compiled Pillow wheel is the `cp314` build (a networked integration
+  test flags a newer hosted runtime).
+  Build breaker fixed on the way: python-xlib hard-imports `six`,
+  which the runtime's Python does not ship and the `deps` module
+  never vendored — `six` is vendored now and the wheel install runs
+  `--no-index`, so an incomplete closure fails the build instead of
+  ever reaching PyPI (flatpak-builder builds have no network).
+
 ## [v0.9.0] — productization: i18n, Flathub, Paddle funnel, local AI, license keys, apt updates (2026-11-22)
 
 - **i18n: translate the model-catalog notes** — the per-model subtitle

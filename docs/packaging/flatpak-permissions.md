@@ -1,7 +1,10 @@
 # Flatpak permissions — justifications, overrides, scope
 
-The reviewer-facing companion to
-`packaging/io.github.acailic.SayItErmano.yml` (issue #11, ADR-0006).
+The reviewer-facing companion to the Flatpak manifests (issue #11,
+ADR-0006): the CI bundle variant
+`packaging/io.github.acailic.SayItErmano.yml` and its Flathub-shaped
+twin `packaging/flatpak/io.github.acailic.SayItErmano.flathub.yml`
+(same finish-args — the variants differ only in sources).
 Every `finish-arg` of the default manifest is justified here in the
 shape the Flathub submission PR needs; the opt-in overrides below are
 documented user choices, NOT defaults. Structural invariants are
@@ -72,17 +75,33 @@ inside the per-app home and survive restarts. `flatpak uninstall
 
 ## Engine scope (what is and is not vendored)
 
-- Vendored as sha256-pinned wheels (build sandbox has no network):
-  `python-xlib`, `pillow` (runtime), `dbus-next`,
-  `global-shortcut-portal` (portal input, ADR-0006).
-  Licensing of the vendored set: python-xlib GPL-2.0+, Pillow
-  HPND-CMU-MIT-style, dbus-next MIT,
+Two manifest variants, one source set difference (the divergence rule
+in their headers; `tests/test_flatpak_manifest.py` enforces it): the
+CI bundle manifest `packaging/io.github.acailic.SayItErmano.yml`
+installs the wheels from the vendored `packaging/wheels/` files, the
+Flathub-shaped `packaging/flatpak/io.github.acailic.SayItErmano.flathub.yml`
+from the same files' PyPI `url` + `sha256`. Both build on
+`org.gnome.Platform` 51 (freedesktop-sdk 26.08, Python 3.14) — the
+compiled Pillow wheel is the `cp314` build; a runtime bump has to
+carry the wheel.
+
+- Vendored as sha256-pinned wheels (the build sandbox has no network;
+  the install runs `--no-index`, so the closure must be complete):
+  `python-xlib` + its hard dependency `six`, `pillow` (the one
+  compiled wheel, runtime), `dbus-next`, `global-shortcut-portal`
+  (portal input, ADR-0006).
+  Licensing of the vendored set: python-xlib **LGPL-2.1-or-later**
+  (its LICENSE text; the project is LGPL, not GPL — say so if
+  asked), six MIT, Pillow MIT-CMU, dbus-next MIT,
   `global-shortcut-portal` **AGPL-3.0-only** — combined with this
   GPL-3.0-or-later program per the FSF's one-way GPLv3↔AGPLv3
   compatibility guidance (section 13 is inert for a desktop app: no
   network users). The Flathub submission must declare GPL-3.0-or-later
   (metainfo matches pyproject), which the one-way compatibility
-  permits.
+  permits. Every module installs its license under
+  `$FLATPAK_DEST/share/licenses/$FLATPAK_ID/` (the wheels' own
+  `.dist-info` license files, one directory per package; the app's
+  LICENSE for the two app modules).
 - **Not vendored in this slice** — the speech engines: the
   `faster-whisper` wheel chain (ctranslate2/onnxruntime/av binaries)
   and a `whisper.cpp` Vulkan build. The GPU decision (ADR-0006) is
