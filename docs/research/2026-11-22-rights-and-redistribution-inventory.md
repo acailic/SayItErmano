@@ -122,7 +122,7 @@ classifier) on 2026-11-22:
 | onnxruntime 1.29.0 | MIT | yes | |
 | huggingface-hub 1.30.0 | Apache-2.0 | yes | |
 | hf-xet 1.6.0 | Apache-2.0 | yes | |
-| tokenizers 0.23.2 | Apache-2.0 | yes | PyPI expression empty; upstream repo declares Apache-2.0 — [huggingface/tokenizers](https://github.com/huggingface/tokenizers) |
+| tokenizers 0.23.2 | Apache-2.0 | yes | PyPI expression empty; verified via the [GitHub license API](https://api.github.com/repos/huggingface/tokenizers) (fetched 2026-11-22) |
 | av 18.1.0 | BSD-3-Clause | yes | wheels bundle FFmpeg — see OPEN-2 below |
 | numpy 1.26.4 | BSD-3 AND 0BSD AND MIT AND Zlib AND CC0 | yes | |
 | pillow 10.2.0 | MIT-CMU | yes | |
