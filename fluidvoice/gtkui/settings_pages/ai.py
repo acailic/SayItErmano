@@ -93,31 +93,31 @@ class AIPageMixin:
         # a managed llama.cpp server on demand and auto-points polish at
         # it while this is on; off = zero footprint (no process, no port).
         local = Adw.PreferencesGroup(
-            title="Local polish",
-            description="Works offline — a bundled llama.cpp server is "
-            "spawned only while polishing, your text never leaves this "
-            "machine",
+            title=_("Local polish"),
+            description=_("Works offline — a bundled llama.cpp server is "
+                          "spawned only while polishing, your text never "
+                          "leaves this machine"),
         )
         local_switch = self._switch(
             "ai",
             "local_polish",
-            "Local polish (works offline)",
-            subtitle="no cloud key or endpoint needed — needs the chat "
-            "model (Settings → Models → AI polish model) and an "
-            "llama-server binary",
+            _("Local polish (works offline)"),
+            subtitle=_("no cloud key or endpoint needed — needs the chat "
+                       "model (Settings → Models → AI polish model) and "
+                       "an llama-server binary"),
         )
         local_switch.connect("notify::active", self._on_local_polish_toggled)
         local.add(local_switch)
         self._local_polish_status_row = Adw.ActionRow(
-            title="Status", subtitle="—", activatable=False, selectable=False
+            title=_("Status"), subtitle="—", activatable=False, selectable=False
         )
         local.add(self._local_polish_status_row)
         stop_row = Adw.ActionRow(
-            title="Stop server now",
-            subtitle="Frees the RAM the polish model uses; it starts "
-            "again on the next dictation",
+            title=_("Stop server now"),
+            subtitle=_("Frees the RAM the polish model uses; it starts "
+                       "again on the next dictation"),
         )
-        self._local_polish_stop_btn = Gtk.Button(label="Stop")
+        self._local_polish_stop_btn = Gtk.Button(label=_("Stop"))
         self._local_polish_stop_btn.set_valign(Gtk.Align.CENTER)
         self._local_polish_stop_btn.connect("clicked",
                                             self._on_local_polish_stop)
@@ -241,14 +241,14 @@ class AIPageMixin:
         try:
             resp = self.c.local_polish_stop()
         except Exception as e:  # noqa: BLE001 - surfaced as a toast
-            self.toast(f"stop failed: {e}")
+            self.toast(_("stop failed: {err}").format(err=e))
             return
         state = (resp.get("local_polish") or {}) if resp.get("ok") else {}
         if resp.get("ok") is False:
-            self.toast(str(resp.get("error") or "stop failed"))
+            self.toast(str(resp.get("error") or _("stop failed")))
             return
-        self.toast("stopped" if not state.get("running")
-                   else "still running?")
+        self.toast(_("stopped") if not state.get("running")
+                   else _("still running?"))
         self._refresh_local_polish()
 
     def _refresh_local_polish(self) -> None:
@@ -263,17 +263,17 @@ class AIPageMixin:
         name = str(ai.get("local_model")
                    or model_catalog.CHAT_MODEL_DEFAULT)
         if not ai.get("local_polish"):
-            row.set_subtitle("off (zero footprint — no server, no port)")
+            row.set_subtitle(_("off (zero footprint — no server, no port)"))
             return
         if not model_catalog.chat_model_downloaded(name):
             row.set_subtitle(
-                f"model {name} not downloaded — Settings → Models → "
-                "AI polish model")
+                _("model {name} not downloaded — Settings → Models → "
+                  "AI polish model").format(name=name))
             return
         if not local_llm.find_llama_server(self.cfg):
             row.set_subtitle(
-                "llama-server binary not found — install an llama.cpp "
-                "package or set ai.local_server_binary")
+                _("llama-server binary not found — install an llama.cpp "
+                  "package or set ai.local_server_binary"))
             return
         running, port = False, None
         try:
@@ -282,11 +282,12 @@ class AIPageMixin:
         except Exception:  # noqa: S110,BLE001 - daemon down: readiness line is enough
             pass  # a status read failure degrades to "ready", never a crash
         if running:
-            row.set_subtitle(f"running (127.0.0.1:{port}) — stops after "
-                             f"{ai.get('local_idle_s', 300)} s idle")
+            row.set_subtitle(
+                _("running (127.0.0.1:{port}) — stops after {idle} s idle")
+                .format(port=port, idle=ai.get("local_idle_s", 300)))
         else:
-            row.set_subtitle("ready — the server spawns on the next "
-                             "dictation")
+            row.set_subtitle(_("ready — the server spawns on the next "
+                               "dictation"))
 
     def _test_ai(self, _btn) -> None:
         self.test_out.set_text(_("testing…"))

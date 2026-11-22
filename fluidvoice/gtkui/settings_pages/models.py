@@ -473,10 +473,10 @@ class ModelsPageMixin:
                 radio.set_active(True)
                 radio.set_sensitive(False)
                 radio.set_valign(Gtk.Align.CENTER)
-                radio.set_tooltip_text("Model used by local polish")
+                radio.set_tooltip_text(_("Model used by local polish"))
                 row.add_prefix(radio)
                 row.add_suffix(
-                    Gtk.Label(label="Active", css_classes=["success", "caption"])
+                    Gtk.Label(label=_("Active"), css_classes=["success", "caption"])
                 )
             elif (
                 name in self._chat_dl
@@ -486,13 +486,13 @@ class ModelsPageMixin:
                 row.set_subtitle(self._chat_dl_subtitle(name))
                 row.add_suffix(Gtk.Spinner(spinning=True))
             elif model_catalog.chat_model_downloaded(name):
-                btn = Gtk.Button(label="Use", css_classes=["suggested-action"])
+                btn = Gtk.Button(label=_("Use"), css_classes=["suggested-action"])
                 btn.set_valign(Gtk.Align.CENTER)
                 btn.connect("clicked", self._use_chat, name)
                 row.add_suffix(btn)
             else:
                 btn = Gtk.Button(
-                    label="Download & use", css_classes=["suggested-action"]
+                    label=_("Download & use"), css_classes=["suggested-action"]
                 )
                 btn.set_valign(Gtk.Align.CENTER)
                 btn.connect("clicked", self._download_chat, name)
@@ -507,7 +507,9 @@ class ModelsPageMixin:
         def mb(n):
             return f"{n / 1_000_000:.0f} MB"
 
-        return f"downloading… {mb(b)} / {mb(t)}" if t else f"downloading… {mb(b)}"
+        return (_("downloading… {done} / {total}") if t
+                else _("downloading… {done}")).format(done=mb(b),
+                                                      total=mb(t) if t else "")
 
     def _download_chat(self, _btn, name: str) -> None:
         if name in self._chat_dl and not (
@@ -543,17 +545,17 @@ class ModelsPageMixin:
             return True
         self._refresh_models()
         if st.get("error"):
-            self.toast(f"download failed: {st['error']}")
+            self.toast(_("download failed: {err}").format(err=st["error"]))
         else:
-            self.toast(f"{name} downloaded — enable Local polish in "
-                       "Settings → AI")
+            self.toast(_("{name} downloaded — enable Local polish in "
+                         "Settings → AI").format(name=name))
         return False
 
     def _use_chat(self, _btn, name: str) -> None:
         """Select the chat model for local polish (ai.local_model; no
         engine reload — the llama.cpp server loads it at the next spawn)."""
         if not model_catalog.chat_model_downloaded(name):
-            self.toast(f"{name} is not downloaded yet")
+            self.toast(_("{name} is not downloaded yet").format(name=name))
             return
         try:
             resp = self.c.set_config({"ai": {"local_model": name}})
@@ -562,11 +564,12 @@ class ModelsPageMixin:
             return
         if resp.get("rejected") or resp.get("errors"):
             self.toast(
-                "Rejected: "
-                + ", ".join((resp.get("rejected") or []) + (resp.get("errors") or []))
+                _("Rejected: {keys}").format(
+                    keys=", ".join((resp.get("rejected") or [])
+                                   + (resp.get("errors") or [])))
             )
             return
-        self.toast(f"Local polish will use {name}")
+        self.toast(_("Local polish will use {name}").format(name=name))
         self._load()  # resync cfg + rows (chat + disk + AI status)
 
     def _active_parakeet(self) -> str | None:
@@ -708,10 +711,11 @@ class ModelsPageMixin:
         page.add(self.gguf_group)
 
         self.chat_group = Adw.PreferencesGroup(
-            title="AI polish model (GGUF)",
-            description="Local-polish chat model for the bundled "
-            "llama.cpp server — qwen3-4b-class, works offline. "
-            "Enable it in Settings → AI → Local polish",
+            title=_("AI polish model (GGUF)"),
+            description=_("Local-polish chat model for the bundled "
+                          "llama.cpp server — qwen3-4b-class, works "
+                          "offline. Enable it in Settings → AI → "
+                          "Local polish"),
         )
         page.add(self.chat_group)
 

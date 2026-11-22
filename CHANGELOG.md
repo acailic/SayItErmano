@@ -13,6 +13,12 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **i18n: wrap the local-polish UI strings (#42 follow-up)** — the
+  Local polish group, GGUF chat-model rows, download/use toasts and
+  status lines from the bundled-polish PR shipped unwrapped; all 23
+  new msgids are now in `_()` with `.format()` placeholders and
+  translated in sr-Latn/sr/bs (catalogs 512 → 535 strings).
+
 - **Flathub listing prep (#12)** — metainfo gains the keyword set
   that carries all six target Flathub searches (`dictation`,
   `voice typing`, `speech to text`, `whisper`, `transcription`,
