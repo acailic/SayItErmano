@@ -4,6 +4,10 @@ Dated research notes live in this directory; raw data under
 [data/](data/), competitor watch under [competitive/](competitive/).
 The newest entries:
 
+- [2026-11-22 competitor landscape refresh](2026-11-22-competitor-landscape-refresh.md) —
+  the COMPARISON.md matrix re-verified at official sources with an
+  advertised-vs-tested split, plus the "gaps we own" ledger (monetization
+  plan question 1). Upstream FluidVoice now has a Linux early beta.
 - [2026-11-22 rights & redistribution inventory](2026-11-22-rights-and-redistribution-inventory.md) —
   what the project may sell under its rights: tree inventory by origin,
   dependency + model-weight licensing sweep (incl. the AGPL
