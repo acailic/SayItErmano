@@ -1,11 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- SayItErmano appstream metadata (Flathub, issue #11).
+<!-- SayItErmano appstream metadata (Flathub, issues #11/#12).
 
      Factual claims trace to README.md / CHANGELOG.md (site/ rule: no
      claim without a source). project_license matches pyproject.toml
      (GPL-3.0-or-later); metadata_license is the metainfo FILE's license
      (CC0). Keep <release> in sync with pyproject version — the
-     manifest test pins that. -->
+     manifest test pins that.
+
+     Keywords target the four Flathub queries this listing must rank
+     for (dictation, voice typing, speech to text, whisper — #12
+     evidence 2026-11-21): phrases for exact-substring engines, the
+     single tokens as insurance for tokenized ones. "whisper" is
+     deliberately not relied on alone (that query's #1 is an unrelated
+     mic-monitor utility).
+
+     Screenshot/video URLs point at raw.githubusercontent.com on the
+     linux branch under docs/screenshots/flathub/ — the files are
+     owner-recorded against the shot list
+     (docs/screenshots/flathub/README.md); the submission checklist
+     (docs/packaging/flathub-submission.md) gates on every URL
+     resolving BEFORE anything is submitted. -->
+
 <component type="desktop-application">
   <id>io.github.acailic.SayItErmano</id>
   <name>SayItErmano</name>
@@ -40,11 +55,36 @@
   <url type="bugtracker">https://github.com/acailic/SayItErmano/issues</url>
   <url type="help">https://github.com/acailic/SayItErmano/blob/linux/SUPPORT.md</url>
   <content_rating type="oars-1.1"/>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Dictating into a chat app: the pill overlay shows the live waveform and streaming transcript while you speak</caption>
+      <image type="source" width="1600" height="900">https://raw.githubusercontent.com/acailic/SayItErmano/linux/docs/screenshots/flathub/dictation-overlay.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Settings: global hotkeys, dictation languages, microphone and model choices — the app is fully usable from its window</caption>
+      <image type="source" width="1280" height="1024">https://raw.githubusercontent.com/acailic/SayItErmano/linux/docs/screenshots/flathub/settings.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>History: searchable list of past dictations with replay and export</caption>
+      <image type="source" width="1280" height="1024">https://raw.githubusercontent.com/acailic/SayItErmano/linux/docs/screenshots/flathub/history.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>One-minute demo: hotkey, speak, polished text lands in any app</caption>
+      <video codec="vp9" width="1920" height="1080">https://raw.githubusercontent.com/acailic/SayItErmano/linux/docs/screenshots/flathub/demo.webm</video>
+    </screenshot>
+  </screenshots>
   <keywords>
     <keyword>voice</keyword>
     <keyword>dictation</keyword>
+    <keyword>voice typing</keyword>
+    <keyword>typing</keyword>
     <keyword>speech</keyword>
+    <keyword>speech to text</keyword>
+    <keyword>text</keyword>
+    <keyword>transcription</keyword>
     <keyword>whisper</keyword>
+    <keyword>voice input</keyword>
+    <keyword>input</keyword>
     <keyword>asr</keyword>
     <keyword>stt</keyword>
   </keywords>

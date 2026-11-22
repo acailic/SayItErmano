@@ -59,7 +59,7 @@ modules:
         sha256: 30e224529c0eef1c630137bb2d2c68bdab69005a2fccf438288363d4dc3de40c
       - type: file
         path: flatpak/io.github.acailic.SayItErmano.metainfo.xml
-        sha256: 9138ce2359458eeafcc206b1b6b215a2c695f55dfba5aa13b289c584aafc892b
+        sha256: b19e8bcf835f03fd457c366455f7679e1ed41482e513981869fe667a6e31d179
       - type: dir
         path: icons
         dest: icons

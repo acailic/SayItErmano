@@ -13,7 +13,9 @@ REVIEWER-FACING contract instead:
   wheels for the pure-Python set, with engines explicitly listed as
   the documented not-vendored remainder;
 * metainfo: license matches the source, OARS rating, keywords, and a
-  release equal to the shipped version.
+  release equal to the shipped version; keywords cover the four Flathub
+  search queries (#12) and the screenshots/video block matches the
+  flathub shot list (docs/screenshots/flathub/README.md).
 
 The manifest is parsed with a minimal YAML-subset parser below (the
 dev environment has no PyYAML; flatpak-builder manifests are a small,
@@ -321,6 +323,117 @@ def test_metainfo_has_oars_keywords_and_current_release():
     releases = root.findall("releases/release")
     assert releases, "no <release> — software centers need at least one"
     assert releases[0].get("version") == pyproject["project"]["version"]
+
+
+# The four Flathub queries the listing must rank for (#12 evidence,
+# 2026-11-21) plus the two reinforcement terms. "whisper" is not relied
+# on alone: that query's #1 result is an unrelated mic-monitor utility.
+SEARCH_KEYWORDS = {
+    "dictation",
+    "voice typing",
+    "speech to text",
+    "whisper",
+    "transcription",
+    "voice input",
+}
+
+
+def test_metainfo_keywords_cover_the_flathub_search_queries():
+    root = _metainfo_root()
+    keywords = {k.text.strip() for k in root.findall("keywords/keyword")}
+    assert SEARCH_KEYWORDS <= keywords
+    # Insurance for tokenized search engines (query "speech to text" ->
+    # tokens {speech, text}): every meaningful token must also be a
+    # standalone keyword. Stopword-length tokens are skipped.
+    tokens = {t for kw in SEARCH_KEYWORDS for t in kw.split() if len(t) > 2}
+    assert tokens <= keywords, tokens - keywords
+
+
+# Listing assets live on the linux branch (stable raw URLs the flathub
+# build can pin); shot list + capture states:
+# docs/screenshots/flathub/README.md.
+FLATHUB_ASSETS_URL = ("https://raw.githubusercontent.com/acailic/"
+                      "SayItErmano/linux/docs/screenshots/flathub/")
+FLATHUB_ASSETS_DIR = REPO / "docs" / "screenshots" / "flathub"
+
+
+def test_metainfo_has_the_required_tags():
+    """The offline stand-in for `appstreamcli validate`: the tags every
+    software-center listing needs (checked with xml.etree, same as the
+    #12 refinement's python3 -c gate)."""
+    root = _metainfo_root()
+    for tag in ("id", "name", "summary", "description", "launchable",
+                "metadata_license", "project_license", "developer_name",
+                "screenshots", "releases", "content_rating", "keywords"):
+        assert root.find(tag) is not None, f"metainfo missing <{tag}>"
+
+
+def test_metainfo_carries_listing_screenshots_and_the_demo_video():
+    root = _metainfo_root()
+    shots = root.findall("screenshots/screenshot")
+    assert len([s for s in shots if s.find("image") is not None]) >= 3, \
+        "the listing needs at least the three shot-list screenshots"
+    assert shots[0].get("type") == "default"
+    for shot in shots:
+        assert shot.findtext("caption"), \
+            "every listing screenshot needs a caption"
+    for img in root.findall("screenshots/screenshot/image"):
+        url = img.text or ""
+        assert url.startswith(FLATHUB_ASSETS_URL), url
+        name = url[len(FLATHUB_ASSETS_URL):]
+        assert name and "/" not in name and name.endswith(".png"), url
+    videos = root.findall("screenshots/screenshot/video")
+    assert len(videos) == 1, \
+        "the submission template requires exactly one demo video"
+    video = videos[0]
+    assert video.text.startswith(FLATHUB_ASSETS_URL)
+    assert video.text.endswith((".webm", ".mp4"))
+    assert video.get("codec") in (None, "vp9", "av1")
+
+
+def test_metainfo_shot_list_names_every_referenced_asset():
+    """Metainfo and the shot list must not drift apart: every asset
+    basename referenced by the metainfo appears in the shot list, and
+    the shot list invents no files the metainfo does not reference."""
+    root = _metainfo_root()
+    referenced = {
+        (el.text or "")[len(FLATHUB_ASSETS_URL):]
+        for el in root.findall("screenshots/screenshot/*")
+        if el.tag in ("image", "video") and (el.text or "").startswith(
+            FLATHUB_ASSETS_URL)
+    }
+    shot_list = (FLATHUB_ASSETS_DIR / "README.md").read_text("utf-8")
+    listed = set()
+    for name in referenced:
+        assert f"flathub/{name}" in shot_list, \
+            f"{name}: referenced by metainfo but missing from the shot list"
+    for line in shot_list.splitlines():
+        line = line.strip()
+        if line.startswith("|") and "flathub/" in line:
+            token = line.split("flathub/", 1)[1].split("|", 1)[0]
+            token = token.split()[0].strip("`")
+            if token and "." in token:
+                listed.add(token)
+    assert referenced <= listed
+    assert listed <= referenced, \
+        f"shot list has entries the metainfo does not use: " \
+        f"{sorted(listed - referenced)}"
+
+
+def test_flathub_asset_directory_exists_with_shot_list():
+    assert (FLATHUB_ASSETS_DIR / "README.md").is_file(), \
+        "docs/screenshots/flathub/README.md is the shot list"
+    # Files may be pending owner capture (GUI work) — but anything
+    # already committed must be one of the referenced names.
+    allowed = {"README.md"}
+    root = _metainfo_root()
+    for el in root.findall("screenshots/screenshot/*"):
+        if el.tag in ("image", "video") and (el.text or "").startswith(
+                FLATHUB_ASSETS_URL):
+            allowed.add((el.text or "")[len(FLATHUB_ASSETS_URL):])
+    for path in FLATHUB_ASSETS_DIR.iterdir():
+        assert path.name in allowed, \
+            f"unlisted asset {path.name} — add it to metainfo + shot list"
 
 
 def test_metainfo_launchable_matches_the_exported_desktop_id():
