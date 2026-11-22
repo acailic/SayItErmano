@@ -34,9 +34,7 @@ Ask = Callable[[str], str]
 
 # VRAM thresholds (MiB) grounding the GPU candidate order: small needs
 # ~2 GB of VRAM for comfortable GPU decode, large-v3 ~8 GB.
-VRAM_SMALL_MIB = 2048
 VRAM_LARGE_MIB = 8192
-RAM_GB_CPU_FLOOR = 4.0
 TEST_TAKE_SECONDS = 2.0
 
 
@@ -62,7 +60,7 @@ class HardwareProfile:
             gpu = (f"  GPU: {self.gpu}{vram} - "
                    f"CUDA {'ready' if self.cuda else 'NOT usable'}")
         else:
-            gpu = (f"  GPU: none detected - CPU path"
+            gpu = ("  GPU: none detected - CPU path"
                    + (f" (CUDA libs present but no device: {self.cuda})"
                       if self.cuda else ""))
         cpu = f"  CPU: {self.cpu_cores or '?'} cores"
@@ -302,10 +300,9 @@ def _default_download(kind: str, name: str, progress: ProgressPrinter) -> Path:
 
 def _default_record(seconds: float, out: Line) -> Path:
     """Record a fixed `seconds` take via the production Recorder."""
-    from . import paths
+    import tempfile
     from .recorder import Recorder
     rec = Recorder()
-    import tempfile
     wav = Path(tempfile.mkdtemp(prefix="sayit-setup-")) / "test-take.wav"
     rec.start(wav)
     deadline = time.monotonic() + seconds
@@ -387,7 +384,6 @@ class SetupWizard:
     # -- model ---------------------------------------------------------------
 
     def _choose_model(self, cands: list[ModelCandidate]) -> ModelCandidate | None:
-        from . import model_catalog
         d = self.deps
         d.out("Recommended models for this machine (why each fits):")
         for i, c in enumerate(cands, 1):

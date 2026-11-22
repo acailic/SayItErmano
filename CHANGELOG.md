@@ -13,6 +13,20 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **Guided first-use setup (`sayit-ermano --setup`, excellence bet 1)** —
+  one interactive pass that verifies the first dictation loop
+  end-to-end instead of leaving it unverified: a hardware probe
+  (GPU/VRAM/CUDA/CPU/RAM, the doctor's probes) grounds a model
+  recommendation whose every candidate explains WHY it fits this
+  machine and language; the download runs through the existing
+  checksummed machinery with percent/size/ETA progress; the desktop
+  insertion path is checked with the exact missing-package line per
+  distro; and the pass ends on a VERIFIED 2 s take (record →
+  transcribe → insert) — exiting green only on that full loop or an
+  explicit, actionable blocker (no mic, no model, no insertion path
+  each name their fix). New one-page
+  [quickstart guide](docs/guides/quickstart.md).
+
 - **Flathub submission prep (#12, runbook section 0)** — the shipping
   Flatpak manifest gains a Flathub-shaped twin,
   `packaging/flatpak/io.github.acailic.SayItErmano.flathub.yml`:

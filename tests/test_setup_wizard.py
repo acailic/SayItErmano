@@ -20,9 +20,8 @@ import pytest
 
 from fluidvoice import setup_wizard as sw
 from fluidvoice.recorder import RecorderError
-from fluidvoice.setup_wizard import (HardwareProfile, ModelCandidate,
-                                     ProgressPrinter, SetupDeps,
-                                     SetupWizard, recommend_models)
+from fluidvoice.setup_wizard import (HardwareProfile, ProgressPrinter,
+                                     SetupDeps, SetupWizard, recommend_models)
 
 
 def ok(args=None, stdout=b""):
@@ -257,7 +256,7 @@ def test_transcription_failure_is_an_actionable_blocker():
 
 def test_empty_transcript_is_an_actionable_blocker():
     f = Fakes(answers=["en", "1"])
-    f._transcribe = lambda wav: ""  # noqa: SLF001 - the fake IS the seam
+    f._transcribe = lambda wav: ""  # instance attr wins over the method
     result = SetupWizard(deps=f.deps()).run()
     assert result.state == "blocked"
     assert "empty" in result.summary and "mic" in result.summary.lower()
