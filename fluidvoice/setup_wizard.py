@@ -69,9 +69,11 @@ class HardwareProfile:
         return [gpu, cpu + ram]
 
 
-def _probe_gpu(runner=subprocess.run) -> tuple[str, int | None]:
+def _probe_gpu(runner=subprocess.run,
+               which: Callable[[str], str | None] | None = None,
+               ) -> tuple[str, int | None]:
     """(name, vram_mib) via nvidia-smi - the same query doctor prints."""
-    if not shutil.which("nvidia-smi"):
+    if not (which or shutil.which)("nvidia-smi"):
         return "", None
     try:
         out = runner(["nvidia-smi", "--query-gpu=name,memory.total",
@@ -112,6 +114,7 @@ def probe_hardware(runner=subprocess.run,
                    meminfo_reader: Callable[[str], str] | None = None,
                    cuda_fn: Callable[[], bool] | None = None,
                    cpu_fn: Callable[[], int | None] | None = None,
+                   which: Callable[[str], str | None] | None = None,
                    ) -> HardwareProfile:
     """The existing probes, gathered: backends.cuda_available(),
     nvidia-smi (doctor's query), os.cpu_count(), /proc/meminfo."""
@@ -120,7 +123,7 @@ def probe_hardware(runner=subprocess.run,
         cuda_fn = backends.cuda_available
     if cpu_fn is None:
         cpu_fn = os.cpu_count
-    gpu, vram = _probe_gpu(runner)
+    gpu, vram = _probe_gpu(runner, which)
     return HardwareProfile(gpu=gpu, vram_mib=vram, cuda=cuda_fn(),
                            cpu_cores=cpu_fn(), ram_gb=_probe_ram(meminfo_reader))
 

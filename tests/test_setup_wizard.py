@@ -74,7 +74,8 @@ def test_probe_hardware_parses_nvidia_smi_and_meminfo():
         return 16_000_000 if key == "MemTotal" else None  # kB -> ~15 GB
 
     hw = sw.probe_hardware(runner=runner, meminfo_reader=meminfo,
-                           cuda_fn=lambda: True, cpu_fn=lambda: 8)
+                           cuda_fn=lambda: True, cpu_fn=lambda: 8,
+                           which=lambda n: "/usr/bin/nvidia-smi")
     assert hw.gpu == "NVIDIA GeForce RTX 3060"
     assert hw.vram_mib == 6144
     assert hw.cuda and hw.cpu_cores == 8 and hw.ram_gb == pytest.approx(15.3, abs=0.2)
@@ -87,7 +88,8 @@ def test_probe_hardware_without_gpu_stays_cpu_path():
         raise FileNotFoundError("no nvidia-smi")
 
     hw = sw.probe_hardware(runner=runner, meminfo_reader=lambda k: None,
-                           cuda_fn=lambda: False, cpu_fn=lambda: 4)
+                           cuda_fn=lambda: False, cpu_fn=lambda: 4,
+                           which=lambda n: "/usr/bin/nvidia-smi")
     assert hw.gpu == "" and hw.vram_mib is None and not hw.cuda
 
 
