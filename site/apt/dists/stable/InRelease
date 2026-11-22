@@ -1,0 +1,37 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+Origin: SayItErmano
+Label: SayItErmano
+Suite: stable
+Codename: stable
+Date: Sun, 22 Nov 2026 10:20:20 UTC
+Architectures: amd64
+Components: main
+Description: SayItErmano - local voice dictation with AI polish (community Linux port of FluidVoice)
+MD5Sum:
+ 759e5db16ce6b1be2dcf758fefcf5a0d 1164 main/binary-amd64/Packages
+ 7b5a48e9218614bac8a56c6d7a8d315d 724 main/binary-amd64/Packages.gz
+ 38647fe798de1aa661a56bd46d1415ec 192 main/binary-amd64/Release
+SHA1:
+ ca9a15063551384d21a972c5c59249ff3a6f68d3 1164 main/binary-amd64/Packages
+ 57373d83914e1bd2e499211514740ec0e0e103f5 724 main/binary-amd64/Packages.gz
+ 82e0a47d37eb9d1c3bd9eb0dcf1eedbfa3757cea 192 main/binary-amd64/Release
+SHA256:
+ c1d6c0592db0ff66ffd20c8d00cddc4fc91c6e9c71d63e5730775866e8a210ba 1164 main/binary-amd64/Packages
+ d86d4ad9bab4de7bd6bc15be6ad476c92d806ece68b1ba0f64db43afb46680b0 724 main/binary-amd64/Packages.gz
+ 26535638466471f8357726f40607ec72e3ec288a021519fa91049534b0953e39 192 main/binary-amd64/Release
+-----BEGIN PGP SIGNATURE-----
+
+iQGzBAEBCgAdFiEEIB16TQu8quVBQ54dQHJ6OF0MVZ0FAmsCweQACgkQQHJ6OF0M
+VZ18lgv8C0bWfYzusdcwMOOn3TaZE6NlLRbp3nosqzqAacrzkORAA8KxdnwcGXux
+Qw4uuudrPofh6w4wlb9ol47tQig4f1r7MmUFkRE/kLM/4AA2Mj3R2lxuHtESXswa
+c55eyDi2VKaBESSZ4juZT7LCy7PzJvfrBdK6++tQ9WlSKyFW01P5xIpfGItUwVa1
+Vr0lLfiGSB5DWV4v0dTqtBOgq33hHYwGxXsggHvXBKBe7BvsPq9NqDDkof++xmPM
+ZCXEizZIanFo9ooKN8YinbWxAHYrWwphoyneYlNWOiZLlrDUpA3Nu9p1p79BRoje
+JDESf6vN3J08VO2KH2p95qQfOvBItjWQvObvWYrtWfPEt+9ehbgtKswU/7d/bViH
+8k+FX2InVrjBSU7F/gzTnS0DaVI9LK1BjA6/88W/Tw1igp4EO58jXBjhLTwPjcrx
+UOmAc7QkJOYLfKlHQSBDsqcmWynf++RvK2++l3ZvndtGo5TEfyoG7wiNl2BIDxhB
+z7CmXomC
+=sgN0
+-----END PGP SIGNATURE-----
