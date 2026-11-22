@@ -23,7 +23,7 @@ must show the sandboxed app exactly as Flathub users get it:
 
 1. Build the bundle from the current manifest
    (`packaging/io.github.acailic.SayItErmano.yml`) as described in
-   [ci-flatpak-bundle.md](../../packaging/flatpak/ci-flatpak-bundle.md).
+   [ci-flatpak-bundle.md](../../../packaging/flatpak/ci-flatpak-bundle.md).
 2. `flatpak install --user --bundled ...` / `flatpak run io.github.acailic.SayItErmano`
    on a clean-ish user session with the default Adwaita light style.
 3. Seed believable state: 6–10 history entries of real-looking text
