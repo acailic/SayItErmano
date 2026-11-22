@@ -79,3 +79,42 @@ class TestParakeetCatalog:
         monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
         assert model_catalog.parakeet_model_dir("parakeet-tdt-0.6b-v3") == \
             paths.models_dir() / "parakeet" / "parakeet-tdt-0.6b-v3"
+
+
+class TestNoteText:
+    """Catalog notes translate at display time (runtime language switch)."""
+
+    def test_every_catalog_note_is_translatable(self):
+        # under a non-English language every catalog note must come back
+        # translated — a note missing from the literal table falls back
+        # to English and fails this guard
+        import fluidvoice.i18n as i18n
+
+        before = i18n.set_language("sr-Latn")
+        try:
+            for catalog in (model_catalog.MODEL_CATALOG,
+                            model_catalog.GGUF_CATALOG,
+                            model_catalog.CHAT_GGUF_CATALOG,
+                            model_catalog.PARAKEET_CATALOG):
+                for name, info in catalog.items():
+                    assert model_catalog.note_text(info["note"]) != \
+                        info["note"], name
+        finally:
+            i18n.set_language(before)
+
+    def test_translates_and_switches_at_runtime(self):
+        import fluidvoice.i18n as i18n
+
+        before = i18n.set_language("sr-Latn")
+        try:
+            assert model_catalog.note_text("best accuracy") == \
+                "najveća tačnost"
+            i18n.set_language("sr")  # no restart: next call re-translates
+            assert model_catalog.note_text("best accuracy") == \
+                "највећа тачност"
+        finally:
+            i18n.set_language(before)
+
+    def test_unknown_note_falls_back_to_english(self):
+        assert model_catalog.note_text("a future catalog note") == \
+            "a future catalog note"

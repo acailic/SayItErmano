@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 from . import backends, paths
+from .i18n import _
 
 # name -> (display size, languages, note)
 MODEL_CATALOG: dict[str, dict[str, str]] = {
@@ -122,6 +123,39 @@ PARAKEET_CATALOG: dict[str, dict] = {
 PARAKEET_DIR_NAME = "parakeet"
 # explicit-backend default; upstream defaults to v3 — divergence noted in STATUS.md
 PARAKEET_DEFAULT_MODEL = "parakeet-tdt-0.6b-v2"
+
+
+def note_text(note: str) -> str:
+    """Translate a catalog note ("note" field) for display.
+
+    The catalogs above are raw English data evaluated at import time —
+    before the UI language is resolved — and i18n.set_language() swaps
+    catalogs without a restart, so the lookup must happen per call.
+    The literal table below keeps every note inside the extractor's
+    view (scripts/extract_translations.py); unknown notes fall back
+    to the raw English text.
+    """
+    table = {
+        "fastest, lowest accuracy": _("fastest, lowest accuracy"),
+        "fast; CPU default": _("fast; CPU default"),
+        "balanced; GPU default": _("balanced; GPU default"),
+        "accurate, heavier": _("accurate, heavier"),
+        "best accuracy": _("best accuracy"),
+        "near-large quality, faster": _("near-large quality, faster"),
+        "fast; CPU-friendly": _("fast; CPU-friendly"),
+        "fast; English only": _("fast; English only"),
+        "balanced": _("balanced"),
+        "balanced; English only": _("balanced; English only"),
+        "accurate; English only": _("accurate; English only"),
+        "best accuracy (no .en upstream)": _("best accuracy (no .en upstream)"),
+        "NVIDIA Parakeet TDT 0.6B v2 — English, punctuation + true case":
+            _("NVIDIA Parakeet TDT 0.6B v2 — English, punctuation + true case"),
+        "NVIDIA Parakeet TDT 0.6B v3 — multilingual (25 European languages)":
+            _("NVIDIA Parakeet TDT 0.6B v3 — multilingual (25 European languages)"),
+        "Qwen3 4B Instruct (2507) Q4_K_M — local AI polish, works offline":
+            _("Qwen3 4B Instruct (2507) Q4_K_M — local AI polish, works offline"),
+    }
+    return table.get(note, note)
 
 
 def gguf_dir() -> Path:

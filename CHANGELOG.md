@@ -13,6 +13,14 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **i18n: translate the model-catalog notes** — the per-model subtitle
+  notes ("fastest, lowest accuracy", "balanced; GPU default", the
+  NVIDIA Parakeet / Qwen3 descriptions) and the "languages" word in
+  the models page shipped as raw English data the extractor couldn't
+  see. `model_catalog.note_text()` now translates notes at display
+  time (language switches are runtime — the catalog dicts stay raw
+  English), 16 new msgids bring sr-Latn/sr/bs to 551 strings.
+
 - **i18n: wrap the local-polish UI strings (#42 follow-up)** — the
   Local polish group, GGUF chat-model rows, download/use toasts and
   status lines from the bundled-polish PR shipped unwrapped; all 23

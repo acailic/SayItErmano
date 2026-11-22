@@ -42,7 +42,9 @@ class ModelsPageMixin:
             row = Adw.ActionRow(
                 title=name,
                 subtitle=(
-                    f"{info['size']} · {info['langs']} languages · {info['note']}"
+                    _("{size} · {langs} languages · {note}").format(
+                        size=info["size"], langs=info["langs"],
+                        note=model_catalog.note_text(info["note"]))
                 ),
             )
             if name == active:
@@ -350,7 +352,9 @@ class ModelsPageMixin:
             row = Adw.ActionRow(
                 title=name,
                 subtitle=(
-                    f"{info['size']} · {info['langs']} languages · {info['note']}"
+                    _("{size} · {langs} languages · {note}").format(
+                        size=info["size"], langs=info["langs"],
+                        note=model_catalog.note_text(info["note"]))
                 ),
             )
             if name == active:
@@ -466,7 +470,8 @@ class ModelsPageMixin:
         for name, info in model_catalog.CHAT_GGUF_CATALOG.items():
             row = Adw.ActionRow(
                 title=name,
-                subtitle=f"{info['size']} · {info['note']}",
+                subtitle=f"{info['size']} · "
+                         f"{model_catalog.note_text(info['note'])}",
             )
             if name == active:
                 radio = Gtk.CheckButton()
@@ -598,7 +603,8 @@ class ModelsPageMixin:
         for name, info in model_catalog.PARAKEET_CATALOG.items():
             row = Adw.ActionRow(
                 title=name,
-                subtitle=f"{info['size']} · {info['langs']} · {info['note']}",
+                subtitle=f"{info['size']} · {info['langs']} · "
+                         f"{model_catalog.note_text(info['note'])}",
             )
             if name == active:
                 # macOS parity: the default model reads as a radio choice
