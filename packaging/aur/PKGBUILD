@@ -11,7 +11,7 @@
 # ctranslate2/onnxruntime/av from its own chain). Anything not mappable
 # to a distro package rides along as a normal wheel dependency.
 pkgname=sayit-ermano
-pkgver=0.8.1
+pkgver=0.9.0
 pkgrel=1
 pkgdesc="Local voice dictation with AI polish (community Linux port of FluidVoice)"
 arch=('any')
@@ -38,10 +38,9 @@ provides=('fluidvoice-linux')
 conflicts=('fluidvoice-linux' 'sayit-ermano-bin')
 replaces=('fluidvoice-linux')
 source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
-# Placeholder while the recipe is unadopted (project precedent): FILL from
-# the release page digest (or `updpkgsums` / `makepkg -g`) before the first
-# publish — a submission with SKIP left in is a packaging bug.
-sha256sums=('SKIP')
+# Digest of the v0.9.0 tag archive (refs/tags/v0.9.0.tar.gz), recorded
+# 2026-11-22; refresh via updpkgsums on the next bump.
+sha256sums=('73968043fc41a10ca03a560fff9364e412e482c0b462ccb610ed6318e63e5d2e')
 
 build() {
     # GitHub tag archives extract to SayItErmano-<tag>/ (repo name, not
