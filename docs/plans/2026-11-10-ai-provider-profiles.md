@@ -681,7 +681,7 @@ body is pinned in the unit tier (`tests/test_ai_provider_profiles.py`,
 - Consumes: existing `provider_for`/`logo_path` contract.
 - Produces: `provider_for("https://api.z.ai/api/paas/v4") == "glm"`; both PNGs 128×128 RGBA.
 
-- [ ] **Step 1: Failing test** — in `tests/test_icons.py` add:
+- [x] **Step 1: Failing test** — in `tests/test_icons.py` add:
 
 ```python
 def test_glm_provider_detected():
@@ -695,8 +695,8 @@ def test_glm_logo_assets_exist():
     assert logo_path("glm") and logo_path("glm", dark=True)
 ```
 
-- [ ] **Step 2: Run, verify failure.**
-- [ ] **Step 3: Implement** — `logos.py` `PROVIDERS` first entry: `("glm", ("z.ai", "bigmodel")),`. Generate assets (standalone process — the daemon never runs this; avoids the Pillow/Pango first-touch trap):
+- [x] **Step 2: Run, verify failure.**
+- [x] **Step 3: Implement** — `logos.py` `PROVIDERS` first entry: `("glm", ("z.ai", "bigmodel")),`. Generate assets (standalone process — the daemon never runs this; avoids the Pillow/Pango first-touch trap):
 
 ```python
 # tools/gen-glm-logo.py — regenerate: .venv/bin/python tools/gen-glm-logo.py
@@ -719,8 +719,22 @@ for dark, suffix in ((False, ""), (True, "-light")):
 
 Run it, `git add` both PNGs + the script.
 
-- [ ] **Step 4: Run, verify pass.**
-- [ ] **Step 5: Commit** — `feat(assets): GLM provider logo + detection`
+- [x] **Step 4: Run, verify pass.**
+- [x] **Step 5: Commit** — `feat(assets): GLM provider logo + detection`
+
+> Task 5 shipped upstream 2026-11-10 (logo commit `b1d6a26`, see
+> requests/ai-provider-profiles.md) and was re-verified 2026-11-22 on the
+> SayItErmano checkout (SIET-22): both PNGs decode 128×128 RGBA,
+> `tools/gen-glm-logo.py` matches the plan snippet modulo a
+> repo-relative `OUT` (runs from any cwd), and `TestGLMLogo` was taken
+> red-then-green — stripping the `("glm", ("z.ai", "bigmodel"))`
+> PROVIDERS entry fails `test_glm_provider_detected`, removing the PNGs
+> fails `test_glm_logo_assets_exist` plus the
+> every-provider-has-a-logo pin; restored, `tests/test_icons.py` is
+> green (9 passed) and `ruff check fluidvoice/ tests/ scripts/` (and
+> the generator script) is clean. Shipped deviation, kept: the tests
+> live in a `TestGLMLogo` class asserting `os.path.isfile` rather than
+> the plan's module-level functions.
 
 ---
 
@@ -729,13 +743,43 @@ Run it, `git add` both PNGs + the script.
 **Files:**
 - Modify: `docs/guides/configuration.md` (AI section)
 
-- [ ] **Step 1:** Add a "Provider profiles" subsection: what's stored where (`~/.config/sayit-ermano/ai-profiles.json`), switching from Settings/tray, env-only key rule (`api_key_env` per profile; never the key itself), GLM example (base_url `https://api.z.ai/api/paas/v4`, model `glm-4.7`, export `ZAI_API_KEY`), pointer semantics (hand-edit clears to Custom).
-- [ ] **Step 2:** Commit — `docs: provider profiles in the configuration guide`.
+- [x] **Step 1:** Add a "Provider profiles" subsection: what's stored where (`~/.config/sayit-ermano/ai-profiles.json`), switching from Settings/tray, env-only key rule (`api_key_env` per profile; never the key itself), GLM example (base_url `https://api.z.ai/api/paas/v4`, model `glm-4.7`, export `ZAI_API_KEY`), pointer semantics (hand-edit clears to Custom).
+- [x] **Step 2:** Commit — `docs: provider profiles in the configuration guide`.
+
+> Task 6 shipped upstream 2026-11-10 (docs commit `0d2ce74`) and was
+> re-verified 2026-11-22: the "Provider profiles" paragraph in
+> docs/guides/configuration.md covers every required element — sidecar
+> location (`ai-profiles.json` beside the config), one-click switching
+> from Settings → AI and the tray's AI profile submenu with
+> next-dictation effect, the env-only key rule ("Profiles store the
+> env-var **name** only — never the key itself"), the GLM example
+> (base_url `https://api.z.ai/api/paas/v4`, model `glm-4.7`, export
+> `ZAI_API_KEY`), and pointer semantics (hand-edit clears to Custom),
+> plus empty-value keep semantics and the template list.
+> `tests/test_docs_links.py` passes in the unit tier.
 
 ---
 
 ### Task 7: Full suite + live verify + spec status
 
-- [ ] **Step 1:** `SAYIT_PY=/home/nistrator/Documents/github/FluidVoiceLinux/.venv/bin/python just test` — full unit tier green.
+- [x] **Step 1:** `SAYIT_PY=/home/nistrator/Documents/github/FluidVoiceLinux/.venv/bin/python just test` — full unit tier green.
 - [ ] **Step 2:** Live smoke (two-step daemon ritual from AGENTS.md): stop `sayit-ermano`, run the repo daemon, add the GLM profile via the socket (`set-config` with the template values + `ZAI_API_KEY` exported by the user), confirm the tray "AI profile" submenu shows GLM with a checkmark, Settings → AI shows radios; then `systemctl --user start sayit-ermano` to restore production. Only "Test connection" touches the network — run it once against `api.z.ai` to answer the open spec item (Coding Plan token vs paas/v4).
-- [ ] **Step 3:** Flip `requests/ai-provider-profiles.md` STATUS to SHIPPED with the commit hash; commit + push.
+- [x] **Step 3:** Flip `requests/ai-provider-profiles.md` STATUS to SHIPPED with the commit hash; commit + push.
+
+> Steps 1 and 3 re-verified 2026-11-22 (SIET-22) on the SayItErmano
+> checkout, where the whole plan is carried by seed commit `c9013e2`.
+> Full unit tier via `scripts/test_tier.py unit`: 4190 passed, 18
+> skipped, 22 deselected, 1 failed —
+> `tests/test_overlay.py::TestPillGeometry::test_medium_wraps_to_two_lines`,
+> a font-metrics test tuned on DejaVu/Noto that this container lacks
+> (only Liberation Sans is installed, which fits the sample on one
+> line); CI's ubuntu-24.04 image ships `fonts-dejavu-core`, so this is
+> an environment gap, not a regression. The recorder/insertion/preview
+> probes need `pw-record`/`parecord`/`xdotool`/`xclip` on PATH (CI
+> apt-installs them); on the runner they were provided as fail-loud
+> PATH shims — the unit tier only `which()`-probes them and fakes
+> execution. Step 2 (live desktop smoke) stays unticked: it is operator
+> territory per AGENTS.md rule 6, was already live-verified upstream
+> 2026-11-10 (see the requests comment), and re-running it — plus
+> "Test connection" against `api.z.ai` once `ZAI_API_KEY` is exported —
+> is the operator follow-up this ticket notes rather than runs.
