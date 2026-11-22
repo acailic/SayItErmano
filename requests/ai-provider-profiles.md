@@ -8,7 +8,14 @@ STATUS: SHIPPED
      hot-applied via socket; restore done). Open: Z.ai paas/v4 answers 401
      without a key - the user must export ZAI_API_KEY (their ZAI_* env vars
      are coding-plan OAuth, not a Bearer key); installed v0.8.1 daemon lags
-     the repo until the next release. -->
+     the repo until the next release.
+     SayItErmano checkout: the full implementation (plan Tasks 1-7) is
+     carried by c9013e2 and re-verified 2026-11-22 (SIET-22; per-task notes
+     in docs/plans/2026-11-10-ai-provider-profiles.md) - GLM logos +
+     generator, configuration-guide section, unit tier green modulo one
+     font-metrics env gap. Operator follow-up: re-run the live daemon smoke
+     (AGENTS.md rule 6 two-step ritual) and "Test connection" against
+     api.z.ai once ZAI_API_KEY is exported. -->
 
 Design agreed 2026-11-10 (approach: sidecar store + switch-writes-config; hot-applies, no daemon changes to the polish path).
 
