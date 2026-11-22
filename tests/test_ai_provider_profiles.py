@@ -66,9 +66,12 @@ class TestStore:
         with pytest.raises(ValueError):
             pp.delete_profile("GLM 2", path=p)
 
-    def test_corrupt_file_warns_exactly_once(self, tmp_path, caplog):
+    @pytest.mark.parametrize("content", [
+        "{not json", '["GLM"]', "42", '"just a string"',
+    ])
+    def test_corrupt_file_warns_exactly_once(self, tmp_path, caplog, content):
         p = tmp_path / "ai-profiles.json"
-        p.write_text("{not json", encoding="utf-8")
+        p.write_text(content, encoding="utf-8")
         with caplog.at_level(logging.WARNING, logger=LOGGER):
             assert pp.load_profiles(path=p) == {}
         assert len([r for r in caplog.records
@@ -138,3 +141,20 @@ class TestConfigKey:
         assert changed == ["ai.profile"]
         assert not rejected
         assert cfg["ai"]["profile"] == ""
+
+    def test_cleared_pointer_stays_cleared_across_saves(self, tmp_path,
+                                                        monkeypatch):
+        import copy
+        import tomllib
+
+        from fluidvoice import config, paths
+        path = tmp_path / "c.toml"
+        monkeypatch.setattr(paths, "config_file", lambda: path)
+        cfg = copy.deepcopy(config.DEFAULTS)
+        cfg["ai"]["profile"] = "GLM"
+        config.save_config(cfg)
+        assert tomllib.loads(path.read_text())["ai"]["profile"] == "GLM"
+        cfg["ai"]["profile"] = ""
+        config.save_config(cfg)
+        assert "profile" not in tomllib.loads(path.read_text())["ai"]
+        assert config.load_config()["ai"]["profile"] == ""
