@@ -312,6 +312,11 @@ def _eur(x: float) -> str:
     return f"{x:,.2f}"
 
 
+def _cost(x: float) -> str:
+    """Cost cell: plain 0.00 for zero lines (avoids '-0.00')."""
+    return f"-{x:.2f}" if x > 0 else "0.00"
+
+
 def _be(x: int | None) -> str:
     return "never" if x is None else f"{x:,}"
 
@@ -360,7 +365,7 @@ def render(markdown: bool = False) -> str:
     out += [f"{h2}Per-sale economics (base refund"
             f" {base_rate:.0%}) — EUR, both payment routes", "",
             f"| price | route | kept revenue | processing | support |"
-            f" distribution | tax | {bold}net / sale {bold}|",
+            f" distribution | tax | {bold}net / sale{bold} |",
             "|---|---|---|---|---|---|---|---|"]
     for pkey in PRICE_KEYS:
         for route in ROUTES:
@@ -368,8 +373,8 @@ def render(markdown: bool = False) -> str:
             out.append(
                 f"| EUR {ps.price:g} | {_route_label(route)} |"
                 f" {ps.kept_revenue:.2f} |"
-                f" -{ps.processing:.2f} | -{ps.support:.2f} |"
-                f" -{ps.distribution:.2f} | -{ps.tax_handling:.2f} |"
+                f" {_cost(ps.processing)} | {_cost(ps.support)} |"
+                f" {_cost(ps.distribution)} | {_cost(ps.tax_handling)} |"
                 f" {bold}{ps.net:.2f}{bold} |")
     out += ["",
             "(processing = pct x price + fixed, charged on every"
