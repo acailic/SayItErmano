@@ -34,37 +34,53 @@ it; Flathub policy evolves.
       dictation app that cannot transcribe out of the box is a
       "non-functional submission" and gets rejected. The remote-STT
       fallback alone is not enough for review.
-- [ ] **Manifest source shape for Flathub**: the shipping manifest
-      uses *local* sources (`flatpak/*.xml`, `icons/` dir, vendored
-      wheel files). A Flathub PR may contain **no source code and no
-      binary/precompiled files** — only the manifest (top level,
-      named after the app ID). Convert before submitting:
-  - metainfo/desktop/icons: install from the app's git source in
-    the `sayitermano` module (they live in-repo; "metadata must be
-    integrated in the upstream project" — ours is);
-  - vendored wheels: become remote `url` + `sha256` sources (the
-    wheels are stock PyPI artifacts —
-    [flatpak-builder-tools](https://github.com/flatpak/flatpak-builder-tools)
-    pip generator produces exactly this shape);
-  - keep the local-source version for CI bundle builds
-    (`packaging/ci-flatpak-bundle.md`) — the Flathub copy diverges
-    only in source locations.
-- [ ] **License files**: every module's license must install to
-  `$FLATPAK_DEST/share/licenses/$FLATPAK_ID` (the current manifest
-  doesn't do this yet).
-- [ ] **Runtime freshness**: `runtime-version` must be the latest
-  stable GNOME runtime *at submission time* (48 today — re-check;
-  EOL runtimes are rejected).
-- [ ] **Release tag**: pin the `sayitermano` git source to the
-  release tag `v<version>` (the `TODO(submission, #12)` in the
-  manifest); tag and push it first. "Insufficient development
-  history" is a rejection class — the tag history is the evidence.
-- [ ] **Screenshots**: captured per
-  [`packaging/flatpak/screenshots/SHOT-LIST.md`](../../packaging/flatpak/screenshots/SHOT-LIST.md),
-  committed on `linux` so the metainfo URLs resolve.
-- [ ] **Demo video**: current per
-  [`packaging/flatpak/screenshots/DEMO-VIDEO.md`](../../packaging/flatpak/screenshots/DEMO-VIDEO.md)
-  — the submission template asks for it.
+- [x] **Manifest source shape for Flathub** (landed 2026-11-22): the
+      submission-shaped copy lives at
+      [`packaging/flatpak/io.github.acailic.SayItErmano.flathub.yml`](../../packaging/flatpak/io.github.acailic.SayItErmano.flathub.yml)
+      — zero local sources (metainfo/desktop/icons install from the
+      `sayitermano` git module; the vendored wheels became remote
+      `url`+`sha256` entries with the same pins). The local-source
+      manifest stays for CI bundle builds
+      (`packaging/ci-flatpak-bundle.md`); the divergence rule (source
+      locations only, everything else byte-identical) is stated in
+      the Flathub copy's header and pinned by
+      `tests/test_flatpak_manifest.py`. **The PR manifest is still
+      hand-typed by the owner from that shape** — see the
+      generative-AI policy above.
+- [x] **License files** (landed 2026-11-22): every module in BOTH
+      manifest variants installs its license to
+      `$FLATPAK_DEST/share/licenses/$FLATPAK_ID` (app + data from the
+      repo `LICENSE`; each wheel's license extracted from its
+      `.dist-info`).
+- [x] **Runtime freshness** (landed 2026-11-22): bumped to the
+      current stable GNOME runtime **51** — Flathub serves
+      `org.gnome.Platform/x86_64/51` and reports `is_eol: false`
+      ([flathub appstream
+      API](https://flathub.org/api/v2/appstream/org.gnome.Platform));
+      GNOME 51.0/51.1 are the stable series per
+      [gnome-build-meta
+      tags](https://gitlab.gnome.org/GNOME/gnome-build-meta/-/tags)
+      (the repo Flathub's runtime is built from). **Re-check both
+      pages at submission time** — EOL runtimes are rejected.
+- [x] **Release tag** (landed 2026-11-22): the `sayitermano` git
+      source is pinned to tag `v0.9.0` in both variants (the old
+      `TODO(submission, #12)`); `tests/test_flatpak_manifest.py`
+      asserts the tag equals `v` + the pyproject version, so it
+      fails loudly on the next release bump. "Insufficient
+      development history" is a rejection class — the tag history is
+      the evidence.
+- [ ] **Screenshots** (owner-captured; GUI work is human-only):
+      captured per
+      [`packaging/flatpak/screenshots/SHOT-LIST.md`](../../packaging/flatpak/screenshots/SHOT-LIST.md),
+      committed on `linux` so the metainfo URLs resolve.
+- [ ] **Demo video** (owner-recorded): current per
+      [`packaging/flatpak/screenshots/DEMO-VIDEO.md`](../../packaging/flatpak/screenshots/DEMO-VIDEO.md)
+      — the submission template asks for it.
+
+Section 0 remaining after this landing: the engine slice (#11),
+screenshot PNGs and the demo video — all owner-only work, plus the
+submission PR itself (section 2) and the local dry run (section 1)
+which needs the engine slice first.
 
 ## 1. Local dry run (expedites review)
 

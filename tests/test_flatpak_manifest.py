@@ -12,6 +12,12 @@ REVIEWER-FACING contract instead:
 * every python dependency is accounted for: sha256-pinned vendored
   wheels for the pure-Python set, with engines explicitly listed as
   the documented not-vendored remainder;
+* the Flathub submission variant (packaging/flatpak/*.flathub.yml)
+  carries NO local sources, pins the same wheel sha256s as remote
+  url sources, and matches the CI manifest everywhere else;
+* both manifests pin the sayitermano git source to the release tag
+  and every module installs its license to
+  $FLATPAK_DEST/share/licenses/$FLATPAK_ID;
 * metainfo: license matches the source, OARS rating, keywords, a
   release equal to the shipped version, and the Flathub screenshot
   shot list (#12).
@@ -40,6 +46,11 @@ FLATPAK_DIR = PACKAGING / "flatpak"
 APP_ID = "io.github.acailic.SayItErmano"
 DESKTOP_NAME = f"{APP_ID}.desktop"
 METAINFO_NAME = f"{APP_ID}.metainfo.xml"
+
+# The Flathub submission-shaped copy (no local sources) and the
+# release tag both manifests pin the sayitermano git source to.
+FLATHUB_MANIFEST_PATH = FLATPAK_DIR / f"{APP_ID}.flathub.yml"
+LICENSES_DIR = "$FLATPAK_DEST/share/licenses/$FLATPAK_ID"
 
 # ADR-0006 decision 4 — the reviewed baseline, and nothing else.
 BASELINE = {
@@ -135,13 +146,7 @@ def parse_manifest(text: str) -> dict:
     return value
 
 
-@pytest.fixture(scope="module")
-def manifest() -> dict:
-    return parse_manifest(MANIFEST_PATH.read_text(encoding="utf-8"))
-
-
-@pytest.fixture(scope="module")
-def modules(manifest) -> dict[str, dict]:
+def _modules_by_name(manifest: dict) -> dict[str, dict]:
     mods = manifest.get("modules") or []
     out = {}
     for mod in mods:
@@ -149,6 +154,26 @@ def modules(manifest) -> dict[str, dict]:
         assert mod["name"] not in out, f"duplicate module {mod['name']}"
         out[mod["name"]] = mod
     return out
+
+
+@pytest.fixture(scope="module")
+def manifest() -> dict:
+    return parse_manifest(MANIFEST_PATH.read_text(encoding="utf-8"))
+
+
+@pytest.fixture(scope="module")
+def flathub_manifest() -> dict:
+    return parse_manifest(FLATHUB_MANIFEST_PATH.read_text(encoding="utf-8"))
+
+
+@pytest.fixture(scope="module")
+def modules(manifest) -> dict[str, dict]:
+    return _modules_by_name(manifest)
+
+
+@pytest.fixture(scope="module")
+def flathub_modules(flathub_manifest) -> dict[str, dict]:
+    return _modules_by_name(flathub_manifest)
 
 
 # -- finish-args: the reviewed baseline, exactly ---------------------------
@@ -177,7 +202,10 @@ def test_identity_and_runtime(manifest):
     assert manifest["id"] == APP_ID  # com.github.* ids are rejected
     assert manifest["runtime"] == "org.gnome.Platform"
     assert manifest["sdk"] == "org.gnome.Sdk"
-    assert manifest["runtime-version"] == "48"
+    # latest stable GNOME runtime at the time of the Flathub prep
+    # (runbook section 0): Flathub serves org.gnome.Platform/x86_64/51
+    # and reports is_eol=false — re-check before every submission
+    assert manifest["runtime-version"] == "51"
     # command must resolve inside /app — the pip console script
     assert manifest["command"] == "sayit-ermano"
     pyproject = tomllib.loads(
@@ -280,6 +308,115 @@ def test_every_python_dep_is_vendored_or_explicitly_deferred(modules):
 def test_wheels_are_hash_pinned(modules):
     for src in modules["deps"]["sources"]:
         assert "sha256" in src, f"unpinned wheel: {src['path']}"
+
+
+# -- the Flathub submission variant (runbook section 0, #12) -----------------
+#
+# A Flathub PR may contain no source code and no binary files — only
+# the manifest. packaging/flatpak/<app-id>.flathub.yml is that shape:
+# NO local sources (git tag for the app + remote url/sha256 wheels),
+# everything else byte-identical to the CI manifest above.
+
+
+def test_flathub_variant_has_no_local_sources(flathub_modules):
+    for mod in flathub_modules.values():
+        for src in mod.get("sources") or []:
+            assert "path" not in src, \
+                f"local source in the Flathub manifest: {src['path']}"
+            assert src.get("type") in ("file", "git"), src
+            if src["type"] == "file":
+                assert src.get("url", "").startswith("https://"), src
+
+
+def test_flathub_wheels_are_remote_and_carry_the_same_pins(
+        flathub_modules, modules):
+    ci_pins = {s["sha256"] for s in modules["deps"]["sources"]}
+    remote = [s for s in flathub_modules["deps"]["sources"]
+              if s["type"] == "file"]
+    assert {s["sha256"] for s in remote} == ci_pins, (
+        "wheel pin drift between the CI and Flathub manifests")
+    # the remote URLs must fetch exactly the vendored wheel files
+    urls = {s["url"].rsplit("/", 1)[-1] for s in remote}
+    assert urls == set(VENDORED_WHEELS.values())
+    for src in remote:
+        assert "sha256" in src, f"unpinned remote wheel: {src['url']}"
+
+
+def test_flathub_data_installs_from_the_git_checkout(flathub_modules):
+    """No sayitermano-data module: desktop/metainfo/icons install from
+    the sayitermano git checkout's in-repo paths instead."""
+    assert "sayitermano-data" not in flathub_modules
+    cmds = "\n".join(flathub_modules["sayitermano"]["build-commands"])
+    assert "packaging/flatpak/" + DESKTOP_NAME in cmds
+    assert "packaging/flatpak/" + METAINFO_NAME in cmds
+    assert "/app/share/applications" in cmds
+    assert "/app/share/metainfo" in cmds
+    for size in (16, 32, 48, 64, 128, 256, 512):
+        target = f"/app/share/icons/hicolor/{size}x{size}/apps/sayit-ermano.png"
+        assert target in cmds, f"icon install missing: {target}"
+
+
+def test_flathub_finish_args_and_runtime_match_the_ci_manifest(
+        flathub_manifest, manifest):
+    assert flathub_manifest["finish-args"] == manifest["finish-args"]
+    assert flathub_manifest["runtime-version"] \
+        == manifest["runtime-version"]
+    assert flathub_manifest["id"] == manifest["id"] == APP_ID
+    assert flathub_manifest["command"] == manifest["command"]
+
+
+# -- release tag + license installs: both variants --------------------------
+
+
+def test_both_variants_pin_the_sayitermano_source_to_the_release_tag(
+        modules, flathub_modules):
+    pyproject = tomllib.loads(
+        (REPO / "pyproject.toml").read_text(encoding="utf-8"))
+    tag = f"v{pyproject['project']['version']}"
+    for mods in (modules, flathub_modules):
+        srcs = mods["sayitermano"]["sources"]
+        assert len(srcs) == 1 and srcs[0]["type"] == "git"
+        assert srcs[0]["url"] == "https://github.com/acailic/SayItErmano.git"
+        assert srcs[0].get("tag") == tag, (
+            "release tag drifted from pyproject — bump with the metainfo "
+            "<release>")
+        assert "branch" not in srcs[0], "moving ref: Flathub needs the tag"
+
+
+def test_every_module_installs_its_license(modules):
+    """Flathub rule: each module's license lands under
+    $FLATPAK_DEST/share/licenses/$FLATPAK_ID."""
+    for mod in modules.values():
+        cmds = " ".join(mod["build-commands"])
+        assert LICENSES_DIR in cmds, \
+            f"module {mod['name']} installs no license"
+
+
+def test_every_flathub_module_installs_its_license(flathub_modules):
+    for mod in flathub_modules.values():
+        cmds = " ".join(mod["build-commands"])
+        assert LICENSES_DIR in cmds, \
+            f"module {mod['name']} installs no license"
+
+
+def test_deps_license_extraction_covers_every_wheel(modules):
+    """unzip -p names the wheel AND its dist-info license member, so a
+    wheel whose internal layout drifts fails the build loudly."""
+    cmds = "\n".join(modules["deps"]["build-commands"])
+    distinfo = {
+        "python_xlib-0.33-py2.py3-none-any.whl":
+            "python_xlib-0.33.dist-info/LICENSE",
+        "pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64"
+        ".manylinux_2_28_x86_64.whl":
+            "pillow-13.0.0.dist-info/licenses/LICENSE",
+        "dbus_next-0.2.3-py3-none-any.whl":
+            "dbus_next-0.2.3.dist-info/LICENSE",
+        "global_shortcut_portal-0.1.0-py3-none-any.whl":
+            "global_shortcut_portal-0.1.0.dist-info/licenses/LICENSE",
+    }
+    assert set(distinfo) == set(VENDORED_WHEELS.values())
+    for wheel, member in distinfo.items():
+        assert f"unzip -p {wheel} {member} " in cmds, wheel
 
 
 def test_sounds_ship_as_package_data():

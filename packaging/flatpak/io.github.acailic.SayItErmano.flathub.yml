@@ -1,0 +1,102 @@
+# SayItErmano Flatpak manifest — the FLATHUB SUBMISSION shape
+# (docs/packaging/flathub-submission.md section 0, #12).
+#
+# DIVERGENCE RULE — this file and packaging/io.github.acailic.SayItErmano.yml
+# (the local-source manifest CI builds .flatpakbundle artifacts from) must
+# stay identical EXCEPT for exactly two, source-shape-only things:
+#   1. NO LOCAL SOURCES here: a Flathub PR may contain no source code and
+#      no binary/precompiled files — only the manifest. The metainfo,
+#      desktop file and icons therefore install from the sayitermano git
+#      checkout (they are in-repo files under packaging/), and the vendored
+#      wheels of the CI manifest become remote url+sha256 sources (the
+#      flatpak-builder-tools pip-generator shape; the sha256 pins are the
+#      SAME ones the CI manifest pins for packaging/wheels/).
+#   2. Consequence of (1): no separate sayitermano-data module here — its
+#      install commands moved into the sayitermano module below, with the
+#      in-repo source paths spelled out.
+# Everything else (id, runtime, finish-args, build commands, wheel pins,
+# license installs, release tag) must match the CI manifest byte-for-byte;
+# tests/test_flatpak_manifest.py pins the parity.
+#
+# The actual flathub PR manifest is HAND-TYPED by the owner from this
+# shape (the runbook's generative-AI policy: agent-authored files must
+# not enter the submission PR) — this file is the repo-side engineering
+# reference, not PR copy.
+#
+# ARCH NOTE: the pinned pillow wheel is x86_64-only (as is the CI
+# bundle lane); before aarch64 builds are enabled, add the aarch64
+# wheel or limit architectures via flathub.json (runbook section 2).
+id: io.github.acailic.SayItErmano
+runtime: org.gnome.Platform
+runtime-version: "51"
+sdk: org.gnome.Sdk
+command: sayit-ermano
+
+finish-args:
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+  - --share=network
+  # not a permission: flags the sandbox so the GTK app process owns the
+  # daemon + control socket (no systemd user units inside; ADR-0006)
+  - --env=SAYITERMANO_FLATPAK=1
+
+modules:
+  # The app AND its desktop integration: everything that lives in-repo
+  # installs from the single git checkout pinned to the release tag
+  # (Flathub builds must come from stable refs). Wheel of the app
+  # itself: built from the checkout with the SDK's own setuptools (the
+  # build sandbox has no network, hence --no-build-isolation; --no-deps
+  # because the dependency closure is the `deps` module below). Bump
+  # the tag with every release, alongside the metainfo <release>.
+  - name: sayitermano
+    buildsystem: simple
+    build-commands:
+      - pip3 install --no-build-isolation --no-deps --prefix=/app .
+      - install -Dm644 -t /app/share/applications packaging/flatpak/io.github.acailic.SayItErmano.desktop
+      - install -Dm644 -t /app/share/metainfo packaging/flatpak/io.github.acailic.SayItErmano.metainfo.xml
+      - install -Dm644 packaging/icons/hicolor/16x16/apps/sayit-ermano.png /app/share/icons/hicolor/16x16/apps/sayit-ermano.png
+      - install -Dm644 packaging/icons/hicolor/32x32/apps/sayit-ermano.png /app/share/icons/hicolor/32x32/apps/sayit-ermano.png
+      - install -Dm644 packaging/icons/hicolor/48x48/apps/sayit-ermano.png /app/share/icons/hicolor/48x48/apps/sayit-ermano.png
+      - install -Dm644 packaging/icons/hicolor/64x64/apps/sayit-ermano.png /app/share/icons/hicolor/64x64/apps/sayit-ermano.png
+      - install -Dm644 packaging/icons/hicolor/128x128/apps/sayit-ermano.png /app/share/icons/hicolor/128x128/apps/sayit-ermano.png
+      - install -Dm644 packaging/icons/hicolor/256x256/apps/sayit-ermano.png /app/share/icons/hicolor/256x256/apps/sayit-ermano.png
+      - install -Dm644 packaging/icons/hicolor/512x512/apps/sayit-ermano.png /app/share/icons/hicolor/512x512/apps/sayit-ermano.png
+      - install -Dm644 LICENSE $FLATPAK_DEST/share/licenses/$FLATPAK_ID/sayitermano/LICENSE
+    sources:
+      - type: git
+        url: https://github.com/acailic/SayItErmano.git
+        tag: v0.9.0
+
+  # Pure-Python runtime dependencies as remote wheels (the flatpak-
+  # builder-tools pip-generator shape: url + sha256, no local files).
+  # Licenses incl. the AGPL-3.0-only global-shortcut-portal
+  # combination note: see the engine-scope section of
+  # docs/packaging/flatpak-permissions.md. The speech engines
+  # (faster-whisper chain / whisper.cpp Vulkan) are deliberately NOT
+  # shipped in this slice — same section. Each wheel's license is
+  # extracted from its .dist-info (unzip -p fails the build if the
+  # wheel's internal layout drifts — re-check the paths when bumping
+  # a pin).
+  - name: deps
+    buildsystem: simple
+    build-commands:
+      - pip3 install --prefix=/app python_xlib-0.33-py2.py3-none-any.whl pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl dbus_next-0.2.3-py3-none-any.whl global_shortcut_portal-0.1.0-py3-none-any.whl
+      - mkdir -p $FLATPAK_DEST/share/licenses/$FLATPAK_ID/deps/python-xlib $FLATPAK_DEST/share/licenses/$FLATPAK_ID/deps/pillow $FLATPAK_DEST/share/licenses/$FLATPAK_ID/deps/dbus-next $FLATPAK_DEST/share/licenses/$FLATPAK_ID/deps/global-shortcut-portal
+      - unzip -p python_xlib-0.33-py2.py3-none-any.whl python_xlib-0.33.dist-info/LICENSE > $FLATPAK_DEST/share/licenses/$FLATPAK_ID/deps/python-xlib/LICENSE
+      - unzip -p pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl pillow-13.0.0.dist-info/licenses/LICENSE > $FLATPAK_DEST/share/licenses/$FLATPAK_ID/deps/pillow/LICENSE
+      - unzip -p dbus_next-0.2.3-py3-none-any.whl dbus_next-0.2.3.dist-info/LICENSE > $FLATPAK_DEST/share/licenses/$FLATPAK_ID/deps/dbus-next/LICENSE
+      - unzip -p global_shortcut_portal-0.1.0-py3-none-any.whl global_shortcut_portal-0.1.0.dist-info/licenses/LICENSE > $FLATPAK_DEST/share/licenses/$FLATPAK_ID/deps/global-shortcut-portal/LICENSE
+    sources:
+      - type: file
+        url: https://files.pythonhosted.org/packages/fc/b8/ff33610932e0ee81ae7f1269c890f697d56ff74b9f5b2ee5d9b7fa2c5355/python_xlib-0.33-py2.py3-none-any.whl
+        sha256: c3534038d42e0df2f1392a1b30a15a4ff5fdc2b86cfa94f072bf11b10a164398
+      - type: file
+        url: https://files.pythonhosted.org/packages/e6/99/fdf65cc539e266ab93546c261bdf98411fe165c6e4e13f9dbf597097192b/pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+        sha256: 42d63be3af4f9b951b199b0a9d23365d37ab14687e6d77b74940432c8515c4ca
+      - type: file
+        url: https://files.pythonhosted.org/packages/d2/fc/c0a3f4c4eaa5a22fbef91713474666e13d0ea2a69c84532579490a9f2cc8/dbus_next-0.2.3-py3-none-any.whl
+        sha256: 58948f9aff9db08316734c0be2a120f6dc502124d9642f55e90ac82ffb16a18b
+      - type: file
+        url: https://files.pythonhosted.org/packages/63/4f/3e38cceeec6554ebf1c2f2ab66c9acd05fbe26a1ef58b46c944c6f74705c/global_shortcut_portal-0.1.0-py3-none-any.whl
+        sha256: b4512ca320f2478f86680b12b6bc7fec5e2ec453799e01f2513247bdd86817f0

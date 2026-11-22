@@ -1,9 +1,14 @@
 # SayItErmano Flatpak manifest — the SHIPPING manifest (issue #11,
 # ADR-0006). The spike (PR #33) proved the sandbox with a reduced
-# permission set and a local git source; this file is what goes to
-# Flathub. Structural invariants are pinned by
-# tests/test_flatpak_manifest.py (finish-args baseline, data modules,
-# wheel pinning) — keep that file green when editing here.
+# permission set and a local git source; this file is what CI builds
+# into .flatpakbundle artifacts (packaging/flatpak/ci-flatpak-bundle.md)
+# using LOCAL sources. The Flathub submission copy — identical except
+# that it carries NO local sources (git tag + remote wheels) — lives at
+# packaging/flatpak/io.github.acailic.SayItErmano.flathub.yml; its
+# header states the divergence rule. Structural invariants of both
+# files are pinned by tests/test_flatpak_manifest.py (finish-args
+# baseline, data modules, wheel pinning, license installs, tag pin) —
+# keep that file green when editing here.
 #
 # Permissions (ADR-0006 decision 4): exactly the reviewed baseline,
 # each justified for the submission PR in
@@ -21,7 +26,7 @@
 # (tray icon).
 id: io.github.acailic.SayItErmano
 runtime: org.gnome.Platform
-runtime-version: "48"
+runtime-version: "51"
 sdk: org.gnome.Sdk
 command: sayit-ermano
 
@@ -41,6 +46,9 @@ modules:
   # sounds are NOT installed here: they ship as Python package data
   # (fluidvoice/assets/sfx, [tool.setuptools.package-data] in
   # pyproject.toml) through the sayitermano module's pip install.
+  # LICENSE rides along so this module installs the license for the
+  # data files it ships (Flathub rule: every module installs its
+  # license to $FLATPAK_DEST/share/licenses/$FLATPAK_ID).
   - name: sayitermano-data
     buildsystem: simple
     build-commands:
@@ -53,6 +61,7 @@ modules:
       - install -Dm644 icons/hicolor/128x128/apps/sayit-ermano.png /app/share/icons/hicolor/128x128/apps/sayit-ermano.png
       - install -Dm644 icons/hicolor/256x256/apps/sayit-ermano.png /app/share/icons/hicolor/256x256/apps/sayit-ermano.png
       - install -Dm644 icons/hicolor/512x512/apps/sayit-ermano.png /app/share/icons/hicolor/512x512/apps/sayit-ermano.png
+      - install -Dm644 LICENSE $FLATPAK_DEST/share/licenses/$FLATPAK_ID/sayitermano-data/LICENSE
     sources:
       - type: file
         path: flatpak/io.github.acailic.SayItErmano.desktop
@@ -63,33 +72,46 @@ modules:
       - type: dir
         path: icons
         dest: icons
+      - type: file
+        path: ../LICENSE
+        sha256: 3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986
 
   # The app itself: pure-Python wheel built from the git checkout with
   # the SDK's own setuptools (the build sandbox has no network, hence
   # --no-build-isolation; --no-deps because the dependency closure is
-  # the vendored `deps` module below).
+  # the vendored `deps` module below). The source is pinned to the
+  # release tag (Flathub builds must come from stable refs; at release
+  # time the tag IS the tip of `linux`, so CI bundle builds and the
+  # Flathub build produce the same tree — bump the tag with every
+  # release, alongside the metainfo <release>).
   - name: sayitermano
     buildsystem: simple
     build-commands:
       - pip3 install --no-build-isolation --no-deps --prefix=/app .
+      - install -Dm644 LICENSE $FLATPAK_DEST/share/licenses/$FLATPAK_ID/sayitermano/LICENSE
     sources:
-      # TODO(submission, #12): pin to the release tag (v<version>) once
-      # it exists — Flathub builds must come from stable refs; branch
-      # keeps CI bundle builds working until then.
       - type: git
         url: https://github.com/acailic/SayItErmano.git
-        branch: linux
+        tag: v0.9.0
 
   # Pure-Python runtime dependencies as vendored wheels (the build
   # sandbox has no network). Licenses incl. the AGPL-3.0-only
   # global-shortcut-portal combination note: see the engine-scope
   # section of docs/packaging/flatpak-permissions.md. The speech
   # engines (faster-whisper chain / whisper.cpp Vulkan) are
-  # deliberately NOT vendored in this slice — same section.
+  # deliberately NOT vendored in this slice — same section. Each
+  # wheel's license is extracted from its .dist-info (unzip -p fails
+  # the build if the wheel's internal layout drifts — re-check the
+  # paths when bumping a pin).
   - name: deps
     buildsystem: simple
     build-commands:
       - pip3 install --prefix=/app python_xlib-0.33-py2.py3-none-any.whl pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl dbus_next-0.2.3-py3-none-any.whl global_shortcut_portal-0.1.0-py3-none-any.whl
+      - mkdir -p $FLATPAK_DEST/share/licenses/$FLATPAK_ID/deps/python-xlib $FLATPAK_DEST/share/licenses/$FLATPAK_ID/deps/pillow $FLATPAK_DEST/share/licenses/$FLATPAK_ID/deps/dbus-next $FLATPAK_DEST/share/licenses/$FLATPAK_ID/deps/global-shortcut-portal
+      - unzip -p python_xlib-0.33-py2.py3-none-any.whl python_xlib-0.33.dist-info/LICENSE > $FLATPAK_DEST/share/licenses/$FLATPAK_ID/deps/python-xlib/LICENSE
+      - unzip -p pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl pillow-13.0.0.dist-info/licenses/LICENSE > $FLATPAK_DEST/share/licenses/$FLATPAK_ID/deps/pillow/LICENSE
+      - unzip -p dbus_next-0.2.3-py3-none-any.whl dbus_next-0.2.3.dist-info/LICENSE > $FLATPAK_DEST/share/licenses/$FLATPAK_ID/deps/dbus-next/LICENSE
+      - unzip -p global_shortcut_portal-0.1.0-py3-none-any.whl global_shortcut_portal-0.1.0.dist-info/licenses/LICENSE > $FLATPAK_DEST/share/licenses/$FLATPAK_ID/deps/global-shortcut-portal/LICENSE
     sources:
       - type: file
         path: wheels/python_xlib-0.33-py2.py3-none-any.whl
