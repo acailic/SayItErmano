@@ -255,8 +255,12 @@ class TestDaemonRewriteMode:
         assert d.recording
         assert d._capture.rewrite_context == "selected words"
         d.toggle()  # stop -> pipeline thread runs with mode=rewrite
+        # seam-poll: wait for the terminal result, never the busy flag —
+        # busy=True is only set inside the processing thread, so sampling
+        # it before the thread boots reads False and races the asserts
+        # (CI 2-core strike 2026-11-22, KeyError: 'mode').
         deadline = time.monotonic() + 5
-        while d.busy and time.monotonic() < deadline:
+        while not d.last_result and time.monotonic() < deadline:
             time.sleep(0.02)
         assert seen["mode"] == "rewrite"
         assert seen["context"] == "selected words"

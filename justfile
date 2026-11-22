@@ -171,6 +171,19 @@ translations:
     {{python}} scripts/build_translations.py --check
     echo "translations: catalogs complete, zero orphans, .mo fresh"
 
+# ── application: perf baselines (quality plan Q8, perf half) ─────────
+# The synthetic corpus through a real backend in the daemon process
+# shape (per-take wall time, audio-seconds/second, model load, worker
+# peak RSS) — one dated evidence file per host class under
+# docs/quality/perf-baselines/ + the generated summary table.
+perf-baseline *ARGS:
+    {{python}} scripts/perf_baseline.py {{ARGS}}
+
+# fresh perf run vs the newest recorded baseline; exit 1 when any
+# metric regresses beyond the tolerance (default 25%, --tolerance FRAC)
+perf-gate *ARGS:
+    {{python}} scripts/perf_gate.py {{ARGS}}
+
 # ── application: release dispatch (manual-only, like all CI here) ───────────
 # prepare bumps the version, runs the full gate + locked deb build, commits
 # and pushes. You then dispatch CI for the produced SHA from the Actions

@@ -15,8 +15,6 @@ class WaylandPageMixin:
     }
 
     def _build_wayland(self) -> None:
-        from ... import session as session_mod
-
         self.wayland_page = Adw.PreferencesPage(
             name="wayland", icon_name="fluidvoice-general-symbolic",
             title=_("Wayland")
@@ -119,7 +117,6 @@ class WaylandPageMixin:
         self.wayland_page.add(tools)
         self.wayland_page.add(self._save_group())
         self._add_page(self.wayland_page, section="more")
-        _ = session_mod
 
     def _refresh_wayland_rows(self) -> None:
         """Fill the session/capability rows, the bindable command and the

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sayit-ermano"
-version = "0.8.3.1"
+version = "0.9.0"
 description = "SayItErmano - local voice dictation with AI polish for Linux (community port of altic-dev/FluidVoice behavior)"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -145,6 +145,13 @@ select = ["I001", "F401", "F541", "F632", "F841", "S110", "B006", "B023"]  # S11
 [tool.coverage.run]
 branch = true
 source = ["fluidvoice"]
+# portal_eis needs a live D-Bus/portal session (Flatpak/host portal
+# extra): its insertion SEAM is unit-tested via the fake inserter in
+# tests/test_insertion.py and the runtime path is desktop-matrix
+# territory (Q5: environment-dependent code is not unit-tier ratchet
+# material). Without the extra installed the module is 0% and drags
+# the honest floor by ~0.9pt.
+omit = ["fluidvoice/portal_eis.py"]
 
 [tool.coverage.report]
 skip_empty = true

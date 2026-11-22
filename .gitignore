@@ -26,3 +26,4 @@ uv.lock
 .junit/
 .coverage
 .zcode/
+.venv-gtk/
