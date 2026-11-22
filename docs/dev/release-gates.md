@@ -147,7 +147,30 @@ pass the `notes` input to override. Locally:
 
 House-style manual follow-ups after publish (unchanged): AUR recipe
 bump (`packaging/aur`), Reddit/HN post, machine refresh
-(`scripts/install-one-shot.sh`).
+(`scripts/install-one-shot.sh`), and the Flatpak pin below.
+
+### Flatpak manifests ride the release (both variants)
+
+The two Flatpak manifests (`packaging/io.github.acailic.SayItErmano.yml`
+for CI bundles, `packaging/flatpak/io.github.acailic.SayItErmano.flathub.yml`
+for the Flathub shape) build the app from a release tag, and the unit
+gate pins `tag == v<pyproject version>` — so:
+
+1. **Before `just release-prepare X`** (same commit that adds the
+   metainfo `<release version="X">` entry): set `tag: vX` in both
+   manifests. Until prepare bumps `pyproject`, the gate's tag and
+   metainfo checks fail on `linux` — that short window is the
+   forward-declaration, as with the metainfo.
+2. **After `release-publish` tags vX**: set `commit:` to the tag's
+   commit in the Flathub-shaped variant only (`git rev-parse vX^{commit}`);
+   the CI variant carries no commit on purpose (a forward-declared one
+   would build the previous release under the new tag). The gate
+   verifies commit == the tag's commit wherever the tag is in the
+   clone.
+
+Runtime bumps are a separate, submission-driven chore: a new GNOME
+runtime means a new Python and a new compiled-wheel ABI — see the
+runtime item in `docs/packaging/flathub-submission.md` section 0.
 
 ## Speech-pipeline evaluation gate (plan P1.4)
 
