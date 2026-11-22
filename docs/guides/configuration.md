@@ -249,7 +249,10 @@ var, optional temperature — switchable with one click in
 Settings → AI or from the tray's *AI profile* submenu. Switching writes
 the preset's values into `[ai]` and takes effect on the next dictation
 (no restart); `ai.profile` records the active name (`""` = custom
-endpoint settings). Editing the base URL or model by hand clears the
+endpoint settings). An empty preset value — the Ollama and LM Studio
+templates ship without a model — keeps the saved setting, like an empty
+row on Save, so you pick the model by hand afterwards. Editing the base
+URL or model by hand clears the
 pointer back to Custom so the tray checkmark never lies. Profiles store
 the env-var **name** only — never the key itself. GLM example:
 

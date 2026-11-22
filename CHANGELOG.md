@@ -34,6 +34,17 @@ not reproduced here.
   `--no-index`, so an incomplete closure fails the build instead of
   ever reaching PyPI (flatpak-builder builds have no network).
 
+- **AI provider profiles: a switch sticks** — selecting a profile in
+  Settings → AI now updates the Base URL / model / key-env rows it
+  drives; they used to keep the pre-switch endpoint, so the next Save or
+  "Test connection" silently sent it back while the pointer still named
+  the profile. Presets without a model or key env (the Ollama and LM
+  Studio templates) switch the endpoint without a spurious "switch
+  failed" toast — an empty preset value keeps the saved setting, the
+  registry rule the rows already follow — a pointer naming no stored
+  profile shows as Custom, and Discard drops the queued pointer clear
+  together with the edit that queued it.
+
 ## [v0.9.0] — productization: i18n, Flathub, Paddle funnel, local AI, license keys, apt updates (2026-11-22)
 
 - **i18n: translate the model-catalog notes** — the per-model subtitle

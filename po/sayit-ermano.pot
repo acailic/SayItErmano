@@ -22,7 +22,7 @@ msgstr ""
 msgid " — daemon offline, saving to file"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:502
+#: fluidvoice/gtkui/settings_window.py:505
 msgid " — restart daemon for: {keys}"
 msgstr ""
 
@@ -39,7 +39,7 @@ msgstr ""
 msgid "(none)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:622
+#: fluidvoice/gtkui/settings_pages/ai.py:653
 msgid "(pick a model)"
 msgstr ""
 
@@ -101,7 +101,7 @@ msgstr ""
 msgid "AI profile"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:550
+#: fluidvoice/gtkui/settings_pages/ai.py:559
 msgid "AI profile: {name}"
 msgstr ""
 
@@ -109,7 +109,7 @@ msgstr ""
 msgid "API key"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:582
+#: fluidvoice/gtkui/settings_pages/ai.py:613
 msgid "API key env var"
 msgstr ""
 
@@ -126,7 +126,7 @@ msgstr ""
 msgid "About SayItErmano"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:778
+#: fluidvoice/gtkui/settings_pages/ai.py:809
 msgid "Accept"
 msgstr ""
 
@@ -141,11 +141,11 @@ msgstr ""
 msgid "Activity"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:588
+#: fluidvoice/gtkui/settings_pages/ai.py:619
 msgid "Add"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:613
+#: fluidvoice/gtkui/settings_pages/ai.py:644
 msgid "Add from template"
 msgstr ""
 
@@ -174,15 +174,15 @@ msgstr ""
 msgid "Add word"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:605
+#: fluidvoice/gtkui/settings_pages/ai.py:636
 msgid "Added profile “{name}”"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:634
+#: fluidvoice/gtkui/settings_pages/ai.py:665
 msgid "Added profile “{name}” from template"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:805
+#: fluidvoice/gtkui/settings_pages/ai.py:836
 msgid "Added to dictionary"
 msgstr ""
 
@@ -207,7 +207,7 @@ msgstr ""
 msgid "App hints"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:704
+#: fluidvoice/gtkui/settings_pages/ai.py:735
 msgid "App patterns (comma-separated)"
 msgstr ""
 
@@ -237,7 +237,7 @@ msgstr ""
 msgid "Backend"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:580
+#: fluidvoice/gtkui/settings_pages/ai.py:611
 msgid "Base URL"
 msgstr ""
 
@@ -283,11 +283,11 @@ msgstr ""
 #: fluidvoice/gtkui/main_window.py:227
 #: fluidvoice/gtkui/settings_pages/ai.py:404
 #: fluidvoice/gtkui/settings_pages/ai.py:467
-#: fluidvoice/gtkui/settings_pages/ai.py:587
-#: fluidvoice/gtkui/settings_pages/ai.py:674
+#: fluidvoice/gtkui/settings_pages/ai.py:618
+#: fluidvoice/gtkui/settings_pages/ai.py:705
 #: fluidvoice/gtkui/settings_pages/history.py:73
 #: fluidvoice/gtkui/settings_pages/models.py:294
-#: fluidvoice/gtkui/settings_window.py:528
+#: fluidvoice/gtkui/settings_window.py:531
 msgid "Cancel"
 msgstr ""
 
@@ -299,7 +299,7 @@ msgstr ""
 msgid "Cancel key — discards a take"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:526
+#: fluidvoice/gtkui/settings_window.py:529
 msgid "Changes that were not saved will be lost."
 msgstr ""
 
@@ -342,7 +342,7 @@ msgstr ""
 msgid "Clipboard"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:639
+#: fluidvoice/gtkui/settings_pages/ai.py:670
 msgid "Close"
 msgstr ""
 
@@ -399,7 +399,7 @@ msgstr ""
 msgid "Copied"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:614
+#: fluidvoice/gtkui/settings_pages/ai.py:645
 msgid "Copied into your profiles - edit freely afterwards."
 msgstr ""
 
@@ -431,11 +431,11 @@ msgstr ""
 msgid "Corrections noticed in your history edits — accept to teach the dictionary"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:799
+#: fluidvoice/gtkui/settings_pages/ai.py:830
 msgid "Could not add the word (save failed)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:802
+#: fluidvoice/gtkui/settings_pages/ai.py:833
 msgid "Could not add the word (save rejected)"
 msgstr ""
 
@@ -457,11 +457,11 @@ msgstr ""
 msgid "Current default model"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:551
+#: fluidvoice/gtkui/settings_pages/ai.py:560
 msgid "Custom"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:503
+#: fluidvoice/gtkui/settings_pages/ai.py:507
 msgid "Custom (hand-set endpoint)"
 msgstr ""
 
@@ -483,9 +483,9 @@ msgstr ""
 
 #: fluidvoice/gtkui/main_window.py:837
 #: fluidvoice/gtkui/settings_pages/ai.py:468
-#: fluidvoice/gtkui/settings_pages/ai.py:675
+#: fluidvoice/gtkui/settings_pages/ai.py:706
 #: fluidvoice/gtkui/settings_pages/ai.py:367
-#: fluidvoice/gtkui/settings_pages/ai.py:517
+#: fluidvoice/gtkui/settings_pages/ai.py:521
 #: fluidvoice/gtkui/settings_pages/models.py:295
 #: fluidvoice/gtkui/settings_pages/models.py:274
 msgid "Delete"
@@ -500,7 +500,7 @@ msgid "Delete every entry and retained audio"
 msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/ai.py:463
-#: fluidvoice/gtkui/settings_pages/ai.py:670
+#: fluidvoice/gtkui/settings_pages/ai.py:701
 msgid "Delete profile “{name}”?"
 msgstr ""
 
@@ -513,7 +513,7 @@ msgid "Delete {name}?"
 msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/ai.py:478
-#: fluidvoice/gtkui/settings_pages/ai.py:692
+#: fluidvoice/gtkui/settings_pages/ai.py:723
 msgid "Deleted profile “{name}”"
 msgstr ""
 
@@ -558,7 +558,7 @@ msgstr ""
 msgid "Direct ggml models for the whisper.cpp backend"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:529
+#: fluidvoice/gtkui/settings_window.py:532
 #: fluidvoice/gtkui/settings_window.py:239
 msgid "Discard"
 msgstr ""
@@ -567,7 +567,7 @@ msgstr ""
 msgid "Discard obviously-silent recordings ≤ 4 s"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:525
+#: fluidvoice/gtkui/settings_window.py:528
 msgid "Discard unsaved changes?"
 msgstr ""
 
@@ -575,7 +575,7 @@ msgstr ""
 msgid "Disk usage"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:781
+#: fluidvoice/gtkui/settings_pages/ai.py:812
 msgid "Dismiss"
 msgstr ""
 
@@ -602,7 +602,7 @@ msgid "Engine options"
 msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/ai.py:419
-#: fluidvoice/gtkui/settings_pages/ai.py:596
+#: fluidvoice/gtkui/settings_pages/ai.py:627
 msgid "Enter a profile name first"
 msgstr ""
 
@@ -778,7 +778,7 @@ msgstr ""
 msgid "Incomplete dictionary word skipped (needs triggers and a replacement)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:750
+#: fluidvoice/gtkui/settings_pages/ai.py:781
 msgid "Incomplete per-app rule skipped (needs apps and instructions)"
 msgstr ""
 
@@ -807,7 +807,7 @@ msgstr ""
 msgid "Insertion and push-to-talk"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:714
+#: fluidvoice/gtkui/settings_pages/ai.py:745
 #: fluidvoice/gtkui/settings_pages/common.py:157
 msgid "Instructions"
 msgstr ""
@@ -938,7 +938,7 @@ msgstr ""
 msgid "Mode"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:581
+#: fluidvoice/gtkui/settings_pages/ai.py:612
 #: fluidvoice/gtkui/settings_pages/models.py:739
 msgid "Model"
 msgstr ""
@@ -998,7 +998,7 @@ msgstr ""
 msgid "NVIDIA Parakeet TDT via ONNX Runtime — explicit backend"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:579
+#: fluidvoice/gtkui/settings_pages/ai.py:610
 msgid "Name (e.g. GLM)"
 msgstr ""
 
@@ -1022,12 +1022,12 @@ msgstr ""
 msgid "New profile name"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:573
+#: fluidvoice/gtkui/settings_pages/ai.py:604
 msgid "New provider profile"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:703
-#: fluidvoice/gtkui/settings_pages/ai.py:723
+#: fluidvoice/gtkui/settings_pages/ai.py:734
+#: fluidvoice/gtkui/settings_pages/ai.py:754
 msgid "New rule"
 msgstr ""
 
@@ -1036,7 +1036,7 @@ msgstr ""
 msgid "New word"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:506
+#: fluidvoice/gtkui/settings_window.py:509
 msgid "No changes"
 msgstr ""
 
@@ -1064,7 +1064,7 @@ msgstr ""
 msgid "No-audio timeout (s)"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:496
+#: fluidvoice/gtkui/settings_window.py:499
 msgid "Not fully applied: {detail}"
 msgstr ""
 
@@ -1187,7 +1187,7 @@ msgstr ""
 msgid "Press a key…"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:545
+#: fluidvoice/gtkui/settings_window.py:548
 msgid "Press the key to use (Esc cancels)"
 msgstr ""
 
@@ -1201,11 +1201,11 @@ msgid "Processing…"
 msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/ai.py:371
-#: fluidvoice/gtkui/settings_pages/ai.py:521
+#: fluidvoice/gtkui/settings_pages/ai.py:525
 msgid "Profile actions"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:553
+#: fluidvoice/gtkui/settings_pages/ai.py:565
 msgid "Profile switch failed: {error}"
 msgstr ""
 
@@ -1277,7 +1277,8 @@ msgstr ""
 msgid "Refusal guard"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:493
+#: fluidvoice/gtkui/settings_pages/ai.py:562
+#: fluidvoice/gtkui/settings_window.py:496
 msgid "Rejected (bad values): {keys}"
 msgstr ""
 
@@ -1311,7 +1312,7 @@ msgstr ""
 msgid "Remove trailing period"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:671
+#: fluidvoice/gtkui/settings_pages/ai.py:702
 msgid "Removed from the profile store. Settings and the tray menu update immediately."
 msgstr ""
 
@@ -1321,17 +1322,17 @@ msgid "Removed {n} entry"
 msgid_plural "Removed {n} entries"
 
 #: fluidvoice/gtkui/settings_pages/ai.py:453
-#: fluidvoice/gtkui/settings_pages/ai.py:653
+#: fluidvoice/gtkui/settings_pages/ai.py:684
 msgid "Rename “{name}” to"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:662
+#: fluidvoice/gtkui/settings_pages/ai.py:693
 #: fluidvoice/gtkui/settings_pages/ai.py:450
 msgid "Renamed to “{name}”"
 msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/ai.py:366
-#: fluidvoice/gtkui/settings_pages/ai.py:516
+#: fluidvoice/gtkui/settings_pages/ai.py:520
 msgid "Rename…"
 msgstr ""
 
@@ -1382,7 +1383,7 @@ msgstr ""
 msgid "Saved profile “{name}”"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_window.py:500
+#: fluidvoice/gtkui/settings_window.py:503
 msgid "Saved {n} change"
 msgid_plural "Saved {n} changes"
 
@@ -1533,7 +1534,7 @@ msgstr ""
 msgid "Store the recording with each entry"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:574
+#: fluidvoice/gtkui/settings_pages/ai.py:605
 msgid "Stored beside the config; only the env-var NAME is kept - never the key itself."
 msgstr ""
 
@@ -2149,7 +2150,7 @@ msgid "processing…"
 msgstr ""
 
 #: fluidvoice/gtkui/settings_pages/ai.py:487
-#: fluidvoice/gtkui/settings_pages/ai.py:567
+#: fluidvoice/gtkui/settings_pages/ai.py:598
 msgid "profile operation failed"
 msgstr ""
 
@@ -2177,7 +2178,7 @@ msgstr ""
 msgid "running (127.0.0.1:{port}) — stops after {idle} s idle"
 msgstr ""
 
-#: fluidvoice/gtkui/settings_pages/ai.py:774
+#: fluidvoice/gtkui/settings_pages/ai.py:805
 msgid "seen {n}×"
 msgstr ""
 

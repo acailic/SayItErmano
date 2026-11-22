@@ -487,7 +487,7 @@ Change the final `return [` … `]` to `menu = [` … `]`, then:
 - Consumes: `provider_profiles.*` (Task 1), `ai.profile` key (Task 2), `self._client.set_config(body)` (`gtkui/client.py:107`), the existing radio-row pattern from the Prompt profiles group (`settings_pages/ai.py:58-96`), `self.save()` collector (`settings_window.py:241`).
 - Produces: first group on the AI page titled "Provider profiles"; radio select = instant `set_config(switch_patch(name))`; "Custom" row (checked when pointer is `""`) clears the pointer only; hand-edited base_url/model queue `ai.profile=""` into the next save.
 
-- [ ] **Step 1: Failing tests** — create `tests/gtkui/test_ai_provider_profiles.py` exercising the headless logic (row-model building + apply semantics through a stub client), not pixel rendering:
+- [x] **Step 1: Failing tests** — create `tests/gtkui/test_ai_provider_profiles.py` exercising the headless logic (row-model building + apply semantics through a stub client), not pixel rendering:
 
 ```python
 """Provider-profile settings group: row model (radios, Custom, active
@@ -530,8 +530,8 @@ def test_custom_patch_only_clears_pointer():
 
 Plus one widget-level test in the established `tests/gtkui/` style (mirror the closest existing page test — see `ls tests/gtkui/`): construct the AI page with a stub client and a tmp store, assert the group exists, radio rows match store names + "Custom", and clicking a profile row calls `set_config` with the switch patch (monkeypatch `paths.ai_profiles_file`). If the existing page tests require a display, they already run under the repo's Xvfb default — no special handling.
 
-- [ ] **Step 2: Run, verify failure.**
-- [ ] **Step 3: Implement** — in `_build_ai`, insert BEFORE the "AI polish" `grp` construction (group becomes the first on the page):
+- [x] **Step 2: Run, verify failure.**
+- [x] **Step 3: Implement** — in `_build_ai`, insert BEFORE the "AI polish" `grp` construction (group becomes the first on the page):
 
 ```python
         # provider profiles: switch the whole endpoint (base_url/model/
@@ -629,8 +629,43 @@ Fill both dialogs following `_profile_add()`'s existing dialog pattern in this f
 
 Also call `self._provider_profiles_refresh()` once at the end of `_build_ai` (after `self._cfg` is loaded) and after get-config refresh if the window re-pulls config.
 
-- [ ] **Step 4: Run** — `SAYIT_PY=... just test` (unit tier covers `tests/gtkui/`) and `just test-ui` for the GUI lane; both green.
-- [ ] **Step 5: Commit** — `feat(gtkui): Provider profiles group on the AI settings page`
+- [x] **Step 4: Run** — `SAYIT_PY=... just test` (unit tier covers `tests/gtkui/`) and `just test-ui` for the GUI lane; both green.
+- [x] **Step 5: Commit** — `feat(gtkui): Provider profiles group on the AI settings page`
+
+> Task 4 shipped in cd2bb70 (see requests/ai-provider-profiles.md) and was
+> re-verified 2026-11-22 on a clean checkout. Shipped deviations from the
+> snippets above, kept: the patch is built from the client's store view
+> (`self.c.provider_profiles()`) rather than the sidecar file, dialogs are
+> `Adw.MessageDialog` (Adw 1.5's `Adw.AlertDialog` is not required), and
+> `tests/gtkui/test_ai_provider_profiles.py` carries the widget tests
+> (display lane; the two `FakeClient` snippets above only exercise the
+> fake). Re-verification found and fixed four gaps in the switch flow,
+> each pinned by a red-then-green test:
+>
+> 1. The endpoint rows kept their pre-switch text after a switch, so the
+>    next Save (or "Test connection") sent the old base URL / model /
+>    key-env back while `ai.profile` still named the profile.
+>    `_provider_apply` now mirrors what the daemon accepted into the rows
+>    (`_sync_ai_rows`, under the `_loading` guard).
+> 2. Templates with an empty model / key env (Ollama, LM Studio, own
+>    llama-server) could never apply cleanly: the registry rejects `""`
+>    for `ai.model` / `ai.api_key_env`, so the daemon took the base URL
+>    and the pointer, reported `ok: false`, and the page toasted "switch
+>    failed" while showing the OLD radio. `switch_body` (shared with the
+>    tray's `switch_patch`) now leaves empty strings out - "keep the saved
+>    value", the rule an empty Settings row already follows - and the
+>    page reports whatever is still rejected instead of failing wholesale.
+> 3. A pointer naming no stored profile (hand-edited or deleted JSON) left
+>    every radio off; it shows as Custom now (exactly one active radio).
+> 4. Discard (`_load()`) did not drop the queued pointer clear, so a
+>    discarded endpoint edit still cleared the pointer on the next Save;
+>    `_load()` resets it and `_provider_queue_pointer_clear` ignores
+>    programmatic row updates.
+
+Structure pins for the group live in `tests/test_settings_sections.py`
+(`TestProviderProfilesSections`); the registry contract for the switch
+body is pinned in the unit tier (`tests/test_ai_provider_profiles.py`,
+`TestSwitchBody`).
 
 ---
 

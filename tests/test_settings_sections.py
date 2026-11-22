@@ -10,6 +10,7 @@ don't reach (span switch, activity-chart drawing).
 from __future__ import annotations
 
 import os
+import threading
 
 import pytest
 
@@ -24,10 +25,11 @@ except ValueError as e:  # pragma: no cover - depends on the machine
 if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
     pytest.skip("no display for GTK tests", allow_module_level=True)  # pragma: no cover
 
-from gi.repository import Adw  # noqa: E402
+from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
 Adw.init()
 
+from fluidvoice import paths  # noqa: E402
 from tests.test_gtkui import StubClient  # noqa: E402
 
 
@@ -37,6 +39,23 @@ def settings_win():
     w = SettingsWindow(client=StubClient())
     yield w
     w.destroy()
+
+
+def _walk(widget, kind) -> list:
+    """Descendants of `widget` that are `kind`, in display order."""
+    found = []
+
+    def visit(w) -> None:
+        child = w.get_first_child()
+        while child is not None:
+            if isinstance(child, kind):
+                found.append(child)
+            else:
+                visit(child)
+            child = child.get_next_sibling()
+
+    visit(widget)
+    return found
 
 
 class TestDictationSections:
@@ -153,6 +172,110 @@ class TestLocalPolishSections:
         finally:
             model_catalog.chat_model_path(
                 model_catalog.CHAT_MODEL_DEFAULT).unlink(missing_ok=True)
+
+
+class TestProviderProfilesSections:
+    """Settings → AI "Provider profiles" group (ai-provider-profiles plan,
+    Task 4): it leads the page, renders Custom plus the stored names, and
+    drives the registry-backed endpoint rows below it. Switch semantics
+    beyond the section wiring live in
+    tests/gtkui/test_ai_provider_profiles.py."""
+
+    GLM = {"base_url": "https://api.z.ai/api/paas/v4",
+           "model": "glm-4.7", "api_key_env": "ZAI_API_KEY"}
+
+    @staticmethod
+    def _ai_page(settings_win) -> Adw.PreferencesPage:
+        return next(p for p in settings_win._iter_pages()
+                    if p.get_name() == "ai")
+
+    @staticmethod
+    def _use_store(monkeypatch, tmp_path, profiles: dict) -> None:
+        """Point the sidecar at tmp_path (the client resolves
+        paths.ai_profiles_file() on every read)."""
+        from fluidvoice.ai import provider_profiles as pp
+        path = tmp_path / "ai-profiles.json"
+        if profiles:
+            pp.save_profiles(profiles, path=path)
+        monkeypatch.setattr(paths, "ai_profiles_file", lambda: path)
+
+    def test_group_leads_the_ai_page(self, settings_win, monkeypatch,
+                                     tmp_path) -> None:
+        self._use_store(monkeypatch, tmp_path, {})
+        settings_win._provider_profiles_refresh()
+        groups = _walk(self._ai_page(settings_win), Adw.PreferencesGroup)
+        assert groups[0] is settings_win._prov_group
+        assert [g.get_title() for g in groups[:2]] == \
+            ["Provider profiles", "AI polish"]
+
+    def test_endpoint_rows_wired_and_registry_backed(self, settings_win) -> None:
+        from fluidvoice import config
+        rows = settings_win._rows
+        wired = {("ai", "base_url"), ("ai", "model"),
+                 ("ai", "api_key_env")}
+        missing = sorted(str(k) for k in wired if k not in rows)
+        assert not missing, f"provider endpoint wiring lost: {missing}"
+        # the rows and the profile pointer answer to one validator
+        for key in ("base_url", "model", "api_key_env", "profile"):
+            assert config.validate("ai", key, "GLM"), key
+            assert not config.validate("ai", key, None), key
+
+    def test_radios_render_custom_plus_the_store(self, settings_win,
+                                                 monkeypatch, tmp_path) -> None:
+        local = {"base_url": "http://localhost:1234/v1", "model": "m",
+                 "api_key_env": ""}
+        self._use_store(monkeypatch, tmp_path,
+                        {"Local": local, "GLM": self.GLM})
+        settings_win._provider_profiles_refresh()
+        assert list(settings_win._prov_rows) == ["", "GLM", "Local"]
+        assert settings_win._prov_rows[""].get_title() == \
+            "Custom (hand-set endpoint)"
+
+        def active() -> list[str]:
+            return [n for n, c in settings_win._prov_checks.items()
+                    if c.get_active()]
+
+        # a pointer naming no stored profile (hand-edited JSON) is Custom
+        settings_win.cfg["ai"]["profile"] = "Ghost"
+        settings_win._provider_profiles_refresh()
+        assert active() == [""]
+        settings_win.cfg["ai"]["profile"] = "GLM"
+        settings_win._provider_profiles_refresh()
+        assert active() == ["GLM"]
+
+    def test_selecting_a_stored_profile_sends_the_switch_patch(
+            self, settings_win, monkeypatch, tmp_path) -> None:
+        self._use_store(monkeypatch, tmp_path, {"GLM": self.GLM})
+        settings_win._provider_profiles_refresh()
+        settings_win._prov_checks["GLM"].set_active(True)
+        assert settings_win.c.saved[-1] == {"ai": {**self.GLM, "profile": "GLM"}}
+        assert settings_win.cfg["ai"]["profile"] == "GLM"
+        # the endpoint rows follow the switch
+        assert settings_win._rows[("ai", "base_url")].get_text() == \
+            self.GLM["base_url"]
+
+    def test_test_connection_reads_the_endpoint_rows(self, settings_win) -> None:
+        calls: list[tuple] = []
+        done = threading.Event()
+
+        def fake_test_ai(url, model):
+            calls.append((url, model))
+            done.set()
+            return {"ok": False, "error": "offline"}
+        settings_win.c.test_ai = fake_test_ai
+        settings_win._rows[("ai", "base_url")].set_text("http://127.0.0.1:11434/v1")
+        settings_win._rows[("ai", "model")].set_text("qwen3:8b")
+        polish = _walk(self._ai_page(settings_win), Adw.PreferencesGroup)[1]
+        row = next(r for r in _walk(polish, Adw.ActionRow)
+                   if r.get_title() == "Test connection")
+        btn = next(b for b in _walk(row, Gtk.Button) if b.get_label() == "Test")
+        btn.emit("clicked")
+        assert done.wait(2.0), "Test never reached the client"
+        assert calls == [("http://127.0.0.1:11434/v1", "qwen3:8b")]
+        loop = GLib.MainLoop()  # let the worker's inline result land
+        GLib.timeout_add(80, loop.quit)
+        loop.run()
+        assert settings_win.test_out.get_text() == "offline"
 
 
 class TestMainWindowSections:
