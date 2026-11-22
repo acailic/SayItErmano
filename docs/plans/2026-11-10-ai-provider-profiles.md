@@ -472,7 +472,7 @@ Change the final `return [` … `]` to `menu = [` … `]`, then:
 - Consumes: `provider_profiles.*` (Task 1), `ai.profile` key (Task 2), `self._client.set_config(body)` (`gtkui/client.py:107`), the existing radio-row pattern from the Prompt profiles group (`settings_pages/ai.py:58-96`), `self.save()` collector (`settings_window.py:241`).
 - Produces: first group on the AI page titled "Provider profiles"; radio select = instant `set_config(switch_patch(name))`; "Custom" row (checked when pointer is `""`) clears the pointer only; hand-edited base_url/model queue `ai.profile=""` into the next save.
 
-- [ ] **Step 1: Failing tests** — create `tests/gtkui/test_ai_provider_profiles.py` exercising the headless logic (row-model building + apply semantics through a stub client), not pixel rendering:
+- [x] **Step 1: Failing tests** — create `tests/gtkui/test_ai_provider_profiles.py` exercising the headless logic (row-model building + apply semantics through a stub client), not pixel rendering:
 
 ```python
 """Provider-profile settings group: row model (radios, Custom, active
@@ -515,8 +515,8 @@ def test_custom_patch_only_clears_pointer():
 
 Plus one widget-level test in the established `tests/gtkui/` style (mirror the closest existing page test — see `ls tests/gtkui/`): construct the AI page with a stub client and a tmp store, assert the group exists, radio rows match store names + "Custom", and clicking a profile row calls `set_config` with the switch patch (monkeypatch `paths.ai_profiles_file`). If the existing page tests require a display, they already run under the repo's Xvfb default — no special handling.
 
-- [ ] **Step 2: Run, verify failure.**
-- [ ] **Step 3: Implement** — in `_build_ai`, insert BEFORE the "AI polish" `grp` construction (group becomes the first on the page):
+- [x] **Step 2: Run, verify failure.**
+- [x] **Step 3: Implement** — in `_build_ai`, insert BEFORE the "AI polish" `grp` construction (group becomes the first on the page):
 
 ```python
         # provider profiles: switch the whole endpoint (base_url/model/
@@ -614,8 +614,21 @@ Fill both dialogs following `_profile_add()`'s existing dialog pattern in this f
 
 Also call `self._provider_profiles_refresh()` once at the end of `_build_ai` (after `self._cfg` is loaded) and after get-config refresh if the window re-pulls config.
 
-- [ ] **Step 4: Run** — `SAYIT_PY=... just test` (unit tier covers `tests/gtkui/`) and `just test-ui` for the GUI lane; both green.
-- [ ] **Step 5: Commit** — `feat(gtkui): Provider profiles group on the AI settings page`
+- [x] **Step 4: Run** — `SAYIT_PY=... just test` (unit tier covers `tests/gtkui/`) and `just test-ui` for the GUI lane; both green.
+- [x] **Step 5: Commit** — `feat(gtkui): Provider profiles group on the AI settings page`
+
+> Task 4 shipped upstream 2026-11-10 (same SHIPPED note as Tasks 1–2)
+> and was re-verified 2026-11-22 on a clean checkout: the shipped group
+> (first on the AI page, radio rows + Custom, add/template dialogs,
+> rename/delete pointer upkeep, save-collector pointer clear) is pinned
+> by `tests/gtkui/test_ai_provider_profiles.py` plus new
+> `TestProviderProfilesSections` in `tests/test_settings_sections.py`
+> (endpoint registry rows validated like the other AI rows, corrupt
+> sidecar degrades to Custom). Unit tier green for the store/config
+> scoped targets; `ruff check fluidvoice/ tests/ scripts/` clean. The
+> display/GTK lane skips headless (PyGObject/GTK4 absent on that
+> runner) — it runs in the CI gtk-x11 lane where a prerequisite skip
+> fails instead of passing.
 
 ---
 
