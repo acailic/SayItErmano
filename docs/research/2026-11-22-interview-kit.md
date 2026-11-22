@@ -47,8 +47,8 @@ provider facts and owner accounting — and the funnel thresholds, which
 were fixed in advance on purpose and may be recalibrated only in
 writing per their own rule.
 
-Note the brackets: the cost model's 9 / 19 / 39 EUR are "task example
-brackets, not the approved store prices"; the approved prices are the
+Note the brackets: the cost model's 9 / 19 / 39 EUR are example
+brackets, "not the approved store prices"; the approved prices are the
 $49 / $39 points in [PRICING.md](../PRICING.md). Purchase history is
 the input that reconciles the two — any change goes through the
 commercial gate, never a silent edit of `INPUTS`.
@@ -120,6 +120,10 @@ theme.
 - Every question must be askable in full sincerity to someone who will
   never use our product. If a question only makes sense as a setup for
   a pitch, it is a pitch — drop it.
+- The product is disclosed in the consent, never in the questions.
+  That disclosure is the price of honesty and it buys courtesy bias;
+  pay for the bias by asking for stories ("tell me about the last
+  time"), not opinions ("do you think").
 - Ask "what happened next?", not "would you…?". Prefer "what made
   you…" over "why did you…" (the latter sounds like a defence).
 - Record numbers, tool names and verbatim phrases exactly; do not
@@ -133,12 +137,12 @@ theme.
 | 3 | Failed alternatives | Which tools have you tried for getting text in faster than typing — or for dictating? Tell me what happened with each. | `refund_rates`, `support.paid_minutes_per_sale` (ticket kinds) | let them list; the moment they quit; what they did when output was wrong. Never list tools for them. |
 | 4 | Failed alternatives | Think of one you stopped using. What was the last straw? *(skip if none)* | `refund_rates` (the quitting trigger that a refund represents) | the "it must never do X" list; whether they asked for money back |
 | 5 | Failed alternatives | When one of those tools broke or did something you didn't expect, what did you do next? | `support.paid_minutes_per_sale` vs `support.community_minutes_per_sale` (self-help or ask; which channel) | forum, issue tracker, vendor email, colleague, gave up — and how long they waited |
-| 6 | Time saved | Compared with typing, how long does it take you to get a finished, send-ready piece of text the way you do it today? | `prices` (perceived advantage — the gate's "measured advantage" is the user-test's number, this is the story behind it) | correction time, "faster but I have to fix it", what "finished" means to them |
+| 6 | Time saved | Compared with typing, how long does it take you to get a finished, send-ready piece of text the way you do it today? *(S3 who never dictated: how long does a long email take you, and what makes it take longer?)* | `prices` (perceived advantage — the gate's "measured advantage" is the user-test's number, this is the story behind it) | correction time, "faster but I have to fix it", what "finished" means to them |
 | 7 | Time saved | Since you started working this way, what can you do now that you couldn't before — or what have you stopped doing? | `prices` (the job the tool is hired for) | new habits (dictating on walks, longer documents, another language), not features |
 | 8 | Privacy | Where does your voice go today when you dictate — do you know, and does it matter to you? *(S3 who never dictated: "If you've used voice typing on a phone, where do you think that audio went?")* | `prices`, `volumes` definition (is on-machine processing a buying criterion) | workplace policy, client confidentiality, "I never thought about it", "I don't care". Never present local as the right answer. |
 | 9 | Privacy | Have you ever chosen, or ruled out, a tool because of where your data went? Tell me about it. | `prices` (privacy as a willingness-to-pay driver), `volumes` definition | what tipped it; whether a policy or a person made the rule; "no" is a finding |
 | 10 | Setup tolerance | Tell me about setting up the tools you use now — what did it take, and how much of that would you do again for a new tool? | `support.paid_minutes_per_sale`, `refund_rates` (the abandon point of a paid buyer) | hours spent, model downloads, hotkeys, Wayland, "I gave up", who helped |
-| 11 | Setup tolerance | After you've installed a tool like this, what do you expect to happen over the following year? | `maintenance.hours_monthly`, update-term wording of the offer | updates, fixes, new features, "leave me alone"; whether "a year" means anything to them |
+| 11 | Setup tolerance | After you've installed a tool like those, what do you expect to happen over the following year? | `maintenance.hours_monthly`, update-term wording of the offer | updates, fixes, new features, "leave me alone"; whether "a year" means anything to them |
 | 12 | Purchase history | Tell me about the last software you paid for with your own money — what was it, what did it cost, how did you decide? *(never paid: what did you use instead, and why?)* | `prices` (reference prices) | amount, one-time or recurring, employer vs. personal, how they found it, what nearly stopped them |
 | 13 | Purchase history | Have you ever paid for a tool and then regretted it, or asked for a refund? What happened? | `refund_rates`, refund-policy expectation | how easy the refund was, whether they got one, whether they told others |
 | 14 | Purchase history | Think of a one-time software purchase and a subscription you've had. What did you expect from each afterwards? | `prices` (one-time vs. recurring framing), `maintenance.hours_monthly` | what "paid once" was expected to include; upgrade feelings; do not say "lifetime" |
@@ -217,7 +221,7 @@ reads and adapts it; keep the five numbered points)*
 2. Белешке и евентуални снимак остају на мом рачунару, ван сваког
    репозиторијума. Снимак бришем када напишем белешке, најкасније
    после 7 дана; белешке бришем на ваш захтев или најкасније после 24
-   месеца, шта год наступи раније.
+   месеца (шта год буде раније).
 3. Објављујем само анонимне, агрегиране налазе. Ниједна белешка вас не
    идентификује; цитате парафразирам и проверавам да не садрже
    препознатљиве детаље.
@@ -247,14 +251,15 @@ reads and adapts it; keep the five numbered points)*
   ([ADR-0001](../adr/ADR-0001-no-tcp.md),
   [egress audit](2026-11-21-network-egress-audit.md)); interviews and
   voluntarily shared summaries are the sanctioned way to learn, as the
-  plan's retention gate already states.
+  plan's "Useful enough to keep" gate already states.
 
 ## 5. Results template
 
 Three layers: a per-interview sheet (private), a per-interview theme
 summary (private), and one aggregated results note per round (public,
 `docs/research/<date>-interview-results.md`, linked from the
-[research index](README.md)). Only the third layer is committed.
+[research index](README.md)) ending in the model-input table of §5.4.
+Only the third layer is committed.
 
 ### 5.1 Per-interview sheet (filled live)
 
@@ -345,9 +350,10 @@ channel on the sheet and read the aggregate with that in mind.
 | **Local LUGs** (meetings, mailing lists, Matrix / IRC channels) | S1, S3; multilingual users | ask the organizer for a 10-minute slot or a list post; run interviews on the spot after the meeting | small rooms; for Serbian-speaking groups use the Cyrillic consent script |
 
 **GitHub pool, checked 2026-11-22 via the GitHub API:** 16 issues, all
-opened by the maintainer; 37 issue comments, of which 36 by the
-maintainer and 1 by another account. The channel is structurally right
-but currently one person deep. Re-check before recruiting:
+opened by the maintainer; 37 comments on issues and pull requests, of
+which 36 by the maintainer and 1 by another account. The channel is
+structurally right but currently one person deep. Re-check before
+recruiting:
 
 ```
 gh issue list --repo acailic/SayItErmano --state all --json number,author,title
