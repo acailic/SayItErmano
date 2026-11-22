@@ -352,7 +352,7 @@ _spec("ai", "profile", "", _str(64),
 - Consumes: `provider_profiles.load_profiles/switch_patch` (Task 1), `Daemon._set_config(body)` (`daemon.py:996`, takes the config dict directly).
 - Produces: menu item `{"kind": "item", "label": "AI profile", "children": [...]}` inserted right after the "Microphone" item, only when the store is non-empty; children are `{"kind": "check", "checked": name == cfg["ai"]["profile"], "action": apply}`.
 
-- [ ] **Step 1: Failing tests** — append to `tests/test_tray.py` (harness mirrors `test_menu_orders_mics_by_priority`: real `Daemon` + `StubRecorder`; store is a tmp file via monkeypatched `paths.ai_profiles_file`):
+- [x] **Step 1: Failing tests** — append to `tests/test_tray.py` (harness mirrors `test_menu_orders_mics_by_priority`: real `Daemon` + `StubRecorder`; store is a tmp file via monkeypatched `paths.ai_profiles_file`):
 
 ```python
 class TestAIProfileMenu:
@@ -419,8 +419,8 @@ class TestAIProfileMenu:
 
 Note: `load_profiles()` in the daemon must resolve via `paths.ai_profiles_file()` at call time (the module-level default `_resolve` does this — verify the monkeypatch above actually reaches it; if `provider_profiles` binds the path at import, fix `_resolve` accordingly).
 
-- [ ] **Step 2: Run, verify failure** (`KeyError: 'AI profile'` from `next()`).
-- [ ] **Step 3: Implement** — in `daemon.py::_build_tray_menu`, after the `mics` loop is built and before the `return [...]` literal, build the submenu and capture the list:
+- [x] **Step 2: Run, verify failure** (`KeyError: 'AI profile'` from `next()`).
+- [x] **Step 3: Implement** — in `daemon.py::_build_tray_menu`, after the `mics` loop is built and before the `return [...]` literal, build the submenu and capture the list:
 
 ```python
         ai_profile_items: list[dict] = []
@@ -456,8 +456,22 @@ Change the final `return [` … `]` to `menu = [` … `]`, then:
 
 (`logging` is already imported in `daemon.py`; if not, add the import.)
 
-- [ ] **Step 4: Run, verify pass** — `... just test tests/test_tray.py`.
-- [ ] **Step 5: Commit** — `feat(tray): AI profile submenu switching provider profiles live`
+- [x] **Step 4: Run, verify pass** — `... just test tests/test_tray.py`.
+- [x] **Step 5: Commit** — `feat(tray): AI profile submenu switching provider profiles live`
+
+> Task 3 shipped upstream 2026-11-10 (commit 1314679) and was re-verified
+> 2026-11-22 on a clean checkout: tests/test_tray.py green under the
+> unit-tier marker selection (18 passed, 1 skip — the DBus-gated pixmap
+> test needs the system `dbus` module), the dependency tier
+> (tests/test_ai_provider_profiles.py, tests/test_config_settings.py,
+> tests/test_config_registry.py, tests/test_daemon.py) green, and
+> `ruff check fluidvoice/ tests/ scripts/` clean. The shipped
+> implementation deviates from the verbatim snippet in two small ways,
+> both i18n discipline: the insertion point is looked up via the
+> translated `mic_menu_label` (not the literal "Microphone"), and both
+> user-facing labels are wrapped in `_()`. `_resolve` resolves
+> `paths.ai_profiles_file()` at call time, so the monkeypatched-path
+> harness reaches the daemon's `load_profiles()` as written.
 
 ---
 
