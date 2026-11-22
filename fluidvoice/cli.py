@@ -23,6 +23,10 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="sayit-ermano",
         description="SayItErmano - local voice dictation with AI polish (community Linux port of FluidVoice)")
     parser.add_argument("--version", action="version", version=__version__)
+    parser.add_argument("--setup", action="store_true",
+                        help="guided first-use setup: hardware-grounded model "
+                             "pick, download, insertion-path check and a "
+                             "VERIFIED test take")
     sub = parser.add_subparsers(dest="cmd")
 
     p = sub.add_parser("daemon", help="run the dictation daemon (foreground)")
@@ -124,6 +128,9 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    if args.setup:
+        from .setup_wizard import run_setup
+        return run_setup().exit_code
     if not args.cmd:
         parser.print_help()
         return 0
