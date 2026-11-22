@@ -162,7 +162,8 @@ APT_REPO_URL="https://acailic.github.io/SayItErmano/apt"
 if [ -f "$APT_KEY" ]; then
     command -v gpg >/dev/null 2>&1 \
         || { echo "ERROR: gpg is required to dearmor $APT_KEY" >&2; exit 1; }
-    mkdir -p "$STAGE/etc/apt/keyrings" "$STAGE/etc/apt/sources.list.d"
+    mkdir -p "$STAGE/etc/apt/keyrings" "$STAGE/etc/apt/sources.list.d" \
+             "$STAGE/DEBIAN"
     gpg --batch --yes --dearmor --output \
         "$STAGE/etc/apt/keyrings/sayit-ermano.gpg" "$APT_KEY"
     printf 'deb [signed-by=/etc/apt/keyrings/sayit-ermano.gpg] %s stable main\n' \
