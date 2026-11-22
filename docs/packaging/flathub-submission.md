@@ -2,7 +2,8 @@
 
 Everything the **human owner** does to get SayItErmano onto Flathub
 stable, in order. Verified against the Flathub docs on 2026-11-21
-(submission, requirements, verification, quality guidelines — links
+(submission, requirements, verification) and again on 2026-11-22 for
+section 0 (requirements, runtimes, quality guidelines — links
 inline). Where a rule is quoted, re-check the page before relying on
 it; Flathub policy evolves.
 
@@ -21,50 +22,106 @@ it; Flathub policy evolves.
 >
 > Consequence for this repo: the manifest, metainfo and desktop file
 > under `packaging/` are working documents (agent sessions have
-> touched them). **Author every file you put into the flathub PR by
-> hand** — type the manifest out yourself, understand every line,
-> and write the PR text, comments and replies in your own words.
-> This checklist and the notes it links are repo-side planning
-> material, not PR copy.
+> touched them — section 0's engineering items included). **Author
+> every file you put into the flathub PR by hand** — type the manifest
+> out yourself, understand every line, and write the PR text, comments
+> and replies in your own words. The Flathub-shaped manifest below is
+> the reference you type from, not PR copy. This checklist and the
+> notes it links are repo-side planning material, not PR copy.
 
 ## 0. Blockers — land these on `linux` first
+
+Checked items are engineering that landed on `linux`; each says what
+is still owner-only.
 
 - [ ] **#11's engine slice**: the manifest must ship a working
       speech engine (whisper.cpp Vulkan / faster-whisper) — a
       dictation app that cannot transcribe out of the box is a
       "non-functional submission" and gets rejected. The remote-STT
-      fallback alone is not enough for review.
-- [ ] **Manifest source shape for Flathub**: the shipping manifest
-      uses *local* sources (`flatpak/*.xml`, `icons/` dir, vendored
-      wheel files). A Flathub PR may contain **no source code and no
-      binary/precompiled files** — only the manifest (top level,
-      named after the app ID). Convert before submitting:
-  - metainfo/desktop/icons: install from the app's git source in
-    the `sayitermano` module (they live in-repo; "metadata must be
-    integrated in the upstream project" — ours is);
-  - vendored wheels: become remote `url` + `sha256` sources (the
-    wheels are stock PyPI artifacts —
-    [flatpak-builder-tools](https://github.com/flatpak/flatpak-builder-tools)
-    pip generator produces exactly this shape);
-  - keep the local-source version for CI bundle builds
-    (`packaging/ci-flatpak-bundle.md`) — the Flathub copy diverges
-    only in source locations.
-- [ ] **License files**: every module's license must install to
-  `$FLATPAK_DEST/share/licenses/$FLATPAK_ID` (the current manifest
-  doesn't do this yet).
-- [ ] **Runtime freshness**: `runtime-version` must be the latest
-  stable GNOME runtime *at submission time* (48 today — re-check;
-  EOL runtimes are rejected).
-- [ ] **Release tag**: pin the `sayitermano` git source to the
-  release tag `v<version>` (the `TODO(submission, #12)` in the
-  manifest); tag and push it first. "Insufficient development
-  history" is a rejection class — the tag history is the evidence.
+      fallback alone is not enough for review. *(Still the first
+      blocker; nothing below substitutes for it.)*
+
+- [x] **Manifest source shape for Flathub** — two variants of one
+      manifest, and ONLY their `sources:` blocks differ (the
+      divergence rule both headers state; `tests/test_flatpak_manifest.py`
+      enforces it):
+      - `packaging/io.github.acailic.SayItErmano.yml` — the CI bundle
+        manifest: keeps the *local* sources (`flatpak/*.xml`,
+        `icons/` dir, vendored wheel files) for
+        [`packaging/ci-flatpak-bundle.md`](../../packaging/flatpak/ci-flatpak-bundle.md);
+      - `packaging/flatpak/io.github.acailic.SayItErmano.flathub.yml`
+        — the Flathub shape: **zero local sources**. Metainfo, desktop
+        file and icons install from the app's git source at the
+        release tag (they live in-repo; "metadata must be integrated
+        in the upstream project" — ours is), the wheels are remote
+        `url` + `sha256` entries (the
+        [flatpak-builder-tools](https://github.com/flatpak/flatpak-builder-tools)
+        pip-generator shape; same files and hashes as the vendored
+        copies). A Flathub PR may contain **no source code and no
+        binary/precompiled files** — only the manifest, top level,
+        named after the app ID.
+      Owner-only remainder: typing the manifest into the PR by hand
+      (policy above); the local dry run (section 1) has not been run
+      against the 51 runtime yet.
+
+- [x] **License files** — every module installs its license to
+      `$FLATPAK_DEST/share/licenses/$FLATPAK_ID/<name>/` in both
+      variants: `sayitermano-data` and `sayitermano` install the
+      project `LICENSE`; `deps` copies each wheel's own `.dist-info`
+      license (`six`, `python-xlib`, `pillow`, `dbus-next`,
+      `global-shortcut-portal`) — the
+      [requirements page](https://docs.flathub.org/docs/for-app-authors/requirements)
+      asks for exactly this location, one directory per module.
+      Fixed on the way: `python-xlib` hard-imports `six`, which the
+      runtime's Python does not ship and which was not vendored — pip
+      would have had no way to resolve it (flatpak-builder builds run
+      without network by default, Flathub's and the CI bundle's
+      alike), failing the `deps` module. `six` is vendored now and the
+      deps install runs `--no-index`, so a missing dependency fails
+      the build instead of ever reaching PyPI.
+
+- [x] **Runtime freshness** — bumped `runtime-version` **48 → 51**
+      in both variants on 2026-11-22. Evidence: Flathub's runtimes API
+      (<https://flathub.org/api/v2/runtimes>) lists `org.gnome.Platform`
+      branches 48–51 with 51 the newest (and the most used); the Flathub
+      repo summary (<https://dl.flathub.org/repo/summary>, the metadata
+      `flatpak-builder-lint`'s EOL check reads) marks 48 `eol` — "no
+      longer supported as of March 24, 2026"; the
+      [requirements page](https://docs.flathub.org/docs/for-app-authors/requirements)
+      requires "the latest version at that time of submission", and the
+      linter reports an EOL runtime three versions behind as an error —
+      which 48 now is. Consequence carried along: GNOME 51 sits on
+      freedesktop-sdk 26.08, i.e. **Python 3.14** (48 was 3.12), so
+      the compiled Pillow wheel moved `cp312` → `cp314`; the unit test
+      pins the runtime ↔ wheel-ABI pair. **Re-check at submission
+      time** (a new GNOME release lands every six months):
+      `.venv/bin/python -m pytest tests/integration/test_flatpak_runtime_freshness.py`
+      — networked, fails as soon as Flathub hosts a newer branch.
+
+- [x] **Release tag** — both variants pin `tag: v0.9.0` (the
+      `TODO(submission, #12)` is gone); the Flathub variant also
+      carries `commit:` (the linter errors on a tag without a commit
+      for new submissions; the CI variant deliberately does not —
+      see its header). The unit gate pins tag == `v<pyproject
+      version>` and, wherever the tag is in the clone, that every
+      file the data module installs exists at the tag. "Insufficient
+      development history" is a rejection class — the tag history is
+      the evidence. Per release from here on: forward-declare the tag
+      before `just release-prepare`, set the commit after
+      `release-publish` tags ([release-gates](../dev/release-gates.md)).
+
 - [ ] **Screenshots**: captured per
-  [`packaging/flatpak/screenshots/SHOT-LIST.md`](../../packaging/flatpak/screenshots/SHOT-LIST.md),
-  committed on `linux` so the metainfo URLs resolve.
+      [`packaging/flatpak/screenshots/SHOT-LIST.md`](../../packaging/flatpak/screenshots/SHOT-LIST.md),
+      committed on `linux` so the metainfo URLs resolve. *(owner-only:
+      GUI capture)*
+
 - [ ] **Demo video**: current per
-  [`packaging/flatpak/screenshots/DEMO-VIDEO.md`](../../packaging/flatpak/screenshots/DEMO-VIDEO.md)
-  — the submission template asks for it.
+      [`packaging/flatpak/screenshots/DEMO-VIDEO.md`](../../packaging/flatpak/screenshots/DEMO-VIDEO.md)
+      — the submission template asks for it. *(owner-only)*
+
+Still owner-only after section 0's engineering: the engine slice
+(#11), the screenshot PNGs, the demo video, the local dry run
+(section 1) and the submission PR itself (section 2).
 
 ## 1. Local dry run (expedites review)
 
@@ -89,7 +146,11 @@ Fork → branch → PR mechanics (per the
 2. `git clone --branch=new-pr git@github.com:<you>/flathub.git &&
    git checkout -b sayitermano-submission new-pr`
 3. Add **only** `io.github.acailic.SayItErmano.yml` at the top level
-   (plus `flathub.json` only if limiting architectures).
+   (plus `flathub.json` only if limiting architectures). Type it by
+   hand from the repo's Flathub-shaped reference,
+   `packaging/flatpak/io.github.acailic.SayItErmano.flathub.yml`
+   (policy note at the top — the reference is not PR copy), then run
+   the linter from section 1 against what you typed.
 4. Open the PR against the **`new-pr`** base branch (never `master`),
    titled `Add io.github.acailic.SayItErmano`. Keep the PR template;
    PRs that strip it get closed unreviewed.
@@ -144,7 +205,11 @@ this right after accepting the repo-access invite.
       week).
 - [ ] Verify (above).
 - [ ] Updates never re-enter the submission flow: PRs against
-      `flathub/io.github.acailic.SayItErmano`.
+      `flathub/io.github.acailic.SayItErmano`. Each release, the
+      flathub repo's manifest needs the new `tag` + `commit` (and any
+      wheel/runtime change made in the repo's Flathub-shaped variant
+      the same cycle — the per-release recipe is in
+      [release-gates](../dev/release-gates.md)).
 - [ ] Beta channel (optional, post-acceptance only): create a
       `beta` branch on that repo per the
       [maintenance guide](https://docs.flathub.org/docs/for-app-authors/maintenance#creating-new-git-branches-for-publishing).
