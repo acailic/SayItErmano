@@ -591,7 +591,12 @@ class FakeInserter:
 @pytest.fixture()
 def wl_eis(monkeypatch):
     """Wayland session + eis resolved + a fake inserter installed.
-    Everything else (wtype/ydotool) stays installed as the fallback."""
+    Everything else (wtype/ydotool) stays installed as the fallback.
+    The eis import probe is forced True so the suite does not depend
+    on dbus-next being installed (CI runs without the portal extra;
+    the fake inserter is the statement 'backend present')."""
+    monkeypatch.setattr(insertion.session_mod, "_eis_importable",
+                        lambda: True)
     monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
     monkeypatch.setenv("XDG_CURRENT_DESKTOP", "GNOME")
     monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
