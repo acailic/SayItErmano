@@ -206,7 +206,7 @@ msgstr "Од почетка"
 msgid "Any OpenAI-compatible endpoint — Ollama, LM Studio, OpenAI, Groq…"
 msgstr "Било која OpenAI-компатибилна тачка — Ollama, LM Studio, OpenAI, Groq…"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:37
+#: fluidvoice/gtkui/settings_pages/wayland.py:35
 msgid "App hints"
 msgstr "Савети за апликације"
 
@@ -257,11 +257,11 @@ msgstr "Основни упит"
 msgid "Best streak (days)"
 msgstr "Најбољи низ (дана)"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:92
+#: fluidvoice/gtkui/settings_pages/wayland.py:90
 msgid "Bind the dictation hotkey through the portal (GNOME 48+, Plasma 5.27+, Hyprland); off = DE custom shortcut only"
 msgstr "Повежите пречицу за диктирање кроз портал (GNOME 48+, Пласма 5.27+, Хyпрланд); искључено = само прилагођена пречица радне околине"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:45
+#: fluidvoice/gtkui/settings_pages/wayland.py:43
 msgid "Bind your hotkey"
 msgstr "Повежите вашу пречицу"
 
@@ -341,7 +341,7 @@ msgstr "Обрисати сву историју?"
 msgid "Clear…"
 msgstr "Обриши…"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:35
+#: fluidvoice/gtkui/settings_pages/wayland.py:33
 msgid "Clipboard"
 msgstr "Остава"
 
@@ -369,7 +369,7 @@ msgstr "Режим наредби није dostupan: {reason}"
 msgid "Command timeout (s)"
 msgstr "Временско ограничење наредбе (с)"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:51
+#: fluidvoice/gtkui/settings_pages/wayland.py:49
 msgid "Command to bind"
 msgstr "Наредба за повезивање"
 
@@ -406,11 +406,11 @@ msgstr "Копирано"
 msgid "Copied into your profiles - edit freely afterwards."
 msgstr "Копирано у ваше профиле — слободно измените kasnije."
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:164
+#: fluidvoice/gtkui/settings_pages/wayland.py:162
 msgid "Copied the command to bind"
 msgstr "Копирана је наредба за повезивање"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:55
+#: fluidvoice/gtkui/settings_pages/wayland.py:53
 msgid "Copy"
 msgstr "Копирај"
 
@@ -442,7 +442,7 @@ msgstr "Реч није додата (чување није успело)"
 msgid "Could not add the word (save rejected)"
 msgstr "Реч није додата (чување је одбијено)"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:178
+#: fluidvoice/gtkui/settings_pages/wayland.py:176
 msgid "Could not open: {error}"
 msgstr "Није могуће otvoriti: {error}"
 
@@ -528,7 +528,7 @@ msgstr "Обрисан {name} (ослобођено {size})"
 msgid "Device"
 msgstr "Уређај"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:109
+#: fluidvoice/gtkui/settings_pages/wayland.py:107
 msgid "Device name pattern — e.g. AT Translated"
 msgstr "Образац назива уређаја — нпр. AT Translated"
 
@@ -609,7 +609,7 @@ msgstr "Опције мотора"
 msgid "Enter a profile name first"
 msgstr "Прво унесите назив профила"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:100
+#: fluidvoice/gtkui/settings_pages/wayland.py:98
 msgid "Evdev push-to-talk"
 msgstr "Евдев притисни-и-говори"
 
@@ -711,7 +711,7 @@ msgstr "GPU да"
 msgid "General"
 msgstr "Опште"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:91
+#: fluidvoice/gtkui/settings_pages/wayland.py:89
 msgid "GlobalShortcuts portal hotkey"
 msgstr "Пречица преко ГлобалСхортцутс портала"
 
@@ -730,15 +730,15 @@ msgstr "Историја је паузирана — нове диктатуре
 msgid "History saving resumed"
 msgstr "Чување историје је настављено"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:101
+#: fluidvoice/gtkui/settings_pages/wayland.py:99
 msgid "Hold a physical key read from /dev/input - privileged path (input group + python-evdev)"
 msgstr "Држите физички тастер читан из /dev/input - привилегована путања (група инпут + python-evdev)"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:116
+#: fluidvoice/gtkui/settings_pages/wayland.py:114
 msgid "Hold key — ecodes name (KEY_RIGHTCTRL)"
 msgstr "Тастер за држање — ецодес назив (KEY_RIGHTCTRL)"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:33
+#: fluidvoice/gtkui/settings_pages/wayland.py:31
 msgid "Hotkey"
 msgstr "Пречица"
 
@@ -806,11 +806,11 @@ msgid "Inserted at cursor"
 msgstr "Уметнуто на позицију курзора"
 
 #: fluidvoice/gtkui/settings_pages/dictation.py:684
-#: fluidvoice/gtkui/settings_pages/wayland.py:34
+#: fluidvoice/gtkui/settings_pages/wayland.py:32
 msgid "Insertion"
 msgstr "Уметање"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:73
+#: fluidvoice/gtkui/settings_pages/wayland.py:71
 msgid "Insertion and push-to-talk"
 msgstr "Уметање и притисни-и-говори"
 
@@ -867,7 +867,7 @@ msgid "License"
 msgstr "Лиценца"
 
 #: fluidvoice/gtkui/settings_pages/dictation.py:452
-#: fluidvoice/gtkui/settings_pages/wayland.py:36
+#: fluidvoice/gtkui/settings_pages/wayland.py:34
 msgid "Live preview"
 msgstr "Живи преглед"
 
@@ -1063,7 +1063,7 @@ msgstr "Још нема наредби"
 msgid "No dictations yet"
 msgstr "Још нема диктирања"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:46
+#: fluidvoice/gtkui/settings_pages/wayland.py:44
 msgid "No global key grabs exist on Wayland: bind a custom command shortcut in your desktop environment"
 msgstr "Глобално хватање тастера не постоји на Wayland-u: повежите прилагођену пречицу команде у свом окружењу радне површине"
 
@@ -1116,15 +1116,15 @@ msgstr "Отвори прозор историје"
 msgid "Open the update route guide"
 msgstr "Отвори водич за начин надоградње"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:63
+#: fluidvoice/gtkui/settings_pages/wayland.py:61
 msgid "Open your desktop environment's panel"
 msgstr "Отворите панел свог окружења радне површине"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:176
+#: fluidvoice/gtkui/settings_pages/wayland.py:174
 msgid "Opening shortcut settings"
 msgstr "Отварање поставки пречица"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:65
+#: fluidvoice/gtkui/settings_pages/wayland.py:63
 msgid "Open…"
 msgstr "Отвори…"
 
@@ -1423,11 +1423,11 @@ msgstr "Прво изаберите профил"
 msgid "Server URL"
 msgstr "URL сервера"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:32
+#: fluidvoice/gtkui/settings_pages/wayland.py:30
 msgid "Session"
 msgstr "Сесија"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:26
+#: fluidvoice/gtkui/settings_pages/wayland.py:24
 msgid "Session and capabilities"
 msgstr "Сесија и могућности"
 
@@ -1449,7 +1449,7 @@ msgstr "Поставке"
 msgid "Settings…"
 msgstr "Поставке…"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:62
+#: fluidvoice/gtkui/settings_pages/wayland.py:60
 msgid "Shortcut settings"
 msgstr "Поставке пречица"
 
@@ -1671,7 +1671,7 @@ msgstr "Иконица у траци"
 msgid "Triggers (comma-separated)"
 msgstr "Окидачи (раздвојени запетама)"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:81
+#: fluidvoice/gtkui/settings_pages/wayland.py:79
 msgid "Typing backend"
 msgstr "Бацкенд за куцање"
 
@@ -1730,7 +1730,7 @@ msgstr "Јачина звука"
 msgid "Warm the model when the daemon starts (needs a daemon restart)"
 msgstr "Припреми модел при покретању даемона (захтева поновно покретање даемона)"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:22
+#: fluidvoice/gtkui/settings_pages/wayland.py:20
 msgid "Wayland"
 msgstr "Wayland"
 
@@ -1738,7 +1738,7 @@ msgstr "Wayland"
 msgid "Wayland has no global hotkey grabs - bind the toggle script in your desktop settings, then press that key to dictate:"
 msgstr "Wayland нема глобално хватање тастера - повежите скрипту за пребацивање у поставкама радне површине, па притисните тај тастер за diktiranje:"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:74
+#: fluidvoice/gtkui/settings_pages/wayland.py:72
 msgid "Wayland typing tool and optional physical push-to-talk"
 msgstr "Wayland алат за куцање и опциони физички притисни-и-говори"
 
@@ -1755,7 +1755,7 @@ msgstr "Wayland: текст долази у оставу (wl-copy) али ниш
 msgid "Welcome to SayItErmano"
 msgstr "Добро дошли у SayItErmano"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:27
+#: fluidvoice/gtkui/settings_pages/wayland.py:25
 msgid "What the daemon resolved for this session (informational; refreshed on open)"
 msgstr "Шта је daemon разрешио за ову сесију (информативно; освежава се при отварању)"
 
@@ -1834,7 +1834,7 @@ msgstr "и његов звук"
 msgid "auto (detect)"
 msgstr "auto (препознај)"
 
-#: fluidvoice/gtkui/settings_pages/wayland.py:82
+#: fluidvoice/gtkui/settings_pages/wayland.py:80
 msgid "auto probes at runtime: eis (RemoteDesktop portal, GNOME/Plasma) → wtype (virtual-keyboard protocol, wlroots/Hyprland) → ydotool (uinput)"
 msgstr "аутоматски се испитује у току rada: еис (РемотеДесктоп портал, GNOME/Plasma) → wtype (протокол виртуелне тастатуре, wlroots/Hyprland) → ydotool (уинпут)"
 
