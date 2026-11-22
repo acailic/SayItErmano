@@ -420,7 +420,7 @@ class TestAIProfileMenu:
 Note: `load_profiles()` in the daemon must resolve via `paths.ai_profiles_file()` at call time (the module-level default `_resolve` does this — verify the monkeypatch above actually reaches it; if `provider_profiles` binds the path at import, fix `_resolve` accordingly).
 
 - [x] **Step 2: Run, verify failure** (`KeyError: 'AI profile'` from `next()`).
-- [ ] **Step 3: Implement** — in `daemon.py::_build_tray_menu`, after the `mics` loop is built and before the `return [...]` literal, build the submenu and capture the list:
+- [x] **Step 3: Implement** — in `daemon.py::_build_tray_menu`, after the `mics` loop is built and before the `return [...]` literal, build the submenu and capture the list:
 
 ```python
         ai_profile_items: list[dict] = []
@@ -474,7 +474,8 @@ Change the final `return [` … `]` to `menu = [` … `]`, then:
 > miss whenever "Microphone" is translated), and
 > `test_lists_profiles_with_active_checkmark` builds the menu once and
 > reuses it for the index assertion instead of calling `_build_tray_menu()`
-> four times — semantics identical.
+> four times — semantics identical. (`_set_config`, cited at
+> `daemon.py:996` above, is at daemon.py:1163 on current `linux`.)
 
 ---
 
