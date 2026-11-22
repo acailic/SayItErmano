@@ -490,16 +490,20 @@ class AIPageMixin:
 
     def _provider_profiles_refresh(self) -> None:
         """Rebuild the provider radio rows: Custom (pointer "") plus every
-        stored name; a broken sidecar degrades to just Custom."""
+        stored name; a broken sidecar degrades to just Custom. A pointer
+        that names no stored profile (hand-edited JSON, deleted profile)
+        shows as Custom, so exactly one radio is ever active."""
         self._suppress_touch = True
         try:
             for row in self._prov_rows.values():
                 self._prov_group.remove(row)
             self._prov_rows.clear()
             self._prov_checks.clear()
-            active = str(self.cfg.get("ai", {}).get("profile") or "")
+            names = sorted(self.c.provider_profiles())
+            pointer = str(self.cfg.get("ai", {}).get("profile") or "")
+            active = pointer if pointer in names else ""
             group: Gtk.CheckButton | None = None
-            for name in ["", *sorted(self.c.provider_profiles())]:
+            for name in ["", *names]:
                 label = _("Custom (hand-set endpoint)") if not name else name
                 check = Gtk.CheckButton()
                 if group is None:
@@ -534,28 +538,55 @@ class AIPageMixin:
     def _provider_apply(self, name: str) -> None:
         """Instant switch: name == "" only clears the pointer (Custom).
         The patch is built from the CLIENT's store view (the single source
-        the UI renders), not the sidecar file directly."""
+        the UI renders), not the sidecar file directly. Whatever the daemon
+        accepted is mirrored into cfg AND the endpoint rows, so a later
+        Save or "Test connection" never sends pre-switch values back;
+        rejected keys are reported and left as they were."""
+        from ...ai.provider_profiles import switch_body
         try:
             profiles = self.c.provider_profiles()
             if name and name not in profiles:
                 raise KeyError(f"no AI provider profile named {name!r}")
             body = ({"ai": {"profile": ""}} if not name
-                    else {"ai": {**profiles[name], "profile": name}})
+                    else switch_body(profiles[name], name))
             resp = self.c.set_config(body)
-            if not resp.get("ok"):
-                raise RuntimeError(
-                    "rejected: " + ", ".join(resp.get("rejected") or []))
-            self.cfg.setdefault("ai", {}).update(body["ai"])
+            rejected = set(resp.get("rejected") or [])
+            taken = {k: v for k, v in body["ai"].items()
+                     if f"ai.{k}" not in rejected}
+            self.cfg.setdefault("ai", {}).update(taken)
+            self._sync_ai_rows(taken)
             self._pending_provider_clear = False
             self.toast(_("AI profile: {name}").format(
                 name=name or _("Custom")))
+            if rejected:
+                self.toast(_("Rejected (bad values): {keys}").format(
+                    keys=", ".join(sorted(rejected))))
         except Exception as e:
             self.toast(_("Profile switch failed: {error}").format(error=e))
         self._provider_profiles_refresh()
 
+    def _sync_ai_rows(self, values: dict) -> None:
+        """Mirror daemon-side [ai] values into their rows as a programmatic
+        change: under the _loading guard it neither dirties the page nor
+        queues a pointer clear."""
+        was_loading = self._loading
+        self._loading = True
+        try:
+            for key, val in values.items():
+                row = self._rows.get(("ai", key))
+                if isinstance(row, Adw.EntryRow):
+                    row.set_text("" if val is None else str(val))
+                elif isinstance(row, Adw.SpinRow):
+                    row.set_value(float(val))
+        finally:
+            self._loading = was_loading
+
     def _provider_queue_pointer_clear(self) -> None:
         """Hand-edits to the endpoint make the active profile stale; the
-        next Save writes ai.profile = "" (back to Custom)."""
+        next Save writes ai.profile = "" (back to Custom). Programmatic row
+        updates (load/discard, a profile switch) are not edits."""
+        if self._loading or self._suppress_touch:
+            return
         if self.cfg.get("ai", {}).get("profile"):
             self._pending_provider_clear = True
 

@@ -129,11 +129,22 @@ def delete_profile(name: str, path=None) -> dict:
     return profiles
 
 
+def switch_body(profile: dict, name: str) -> dict:
+    """set-config body activating an already-loaded profile: the ai.profile
+    pointer plus the profile's endpoint values (temperature only when it
+    carries one). Empty strings are left out: the registry rejects "" for
+    ai.model / ai.api_key_env, so an empty preset value means "keep the
+    saved value" - the same rule an empty Settings row follows. A template
+    without a model (Ollama, LM Studio) thus switches the endpoint alone;
+    the model is picked by hand afterwards."""
+    values = {k: v for k, v in profile.items() if v not in ("", None)}
+    return {"ai": {**values, "profile": name}}
+
+
 def switch_patch(name: str, path=None) -> dict:
-    """set-config body activating `name`: the ai.profile pointer plus the
-    profile's endpoint values (temperature only when it carries one).
+    """set-config body activating stored profile `name` (see switch_body).
     KeyError when the profile does not exist."""
     profile = load_profiles(path).get(name)
     if profile is None:
         raise KeyError(f"no AI provider profile named {name!r}")
-    return {"ai": {**profile, "profile": name}}
+    return switch_body(profile, name)

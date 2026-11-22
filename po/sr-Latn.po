@@ -24,7 +24,7 @@ msgstr " ({n} ulaza)"
 msgid " — daemon offline, saving to file"
 msgstr " — daemon nije pokrenut, čuva se u datoteku"
 
-#: fluidvoice/gtkui/settings_window.py:502
+#: fluidvoice/gtkui/settings_window.py:505
 msgid " — restart daemon for: {keys}"
 msgstr " — ponovo pokrenite daemon za: {keys}"
 
@@ -41,7 +41,7 @@ msgstr "\"doslovno zarez\" → ,"
 msgid "(none)"
 msgstr "(ništa)"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:622
+#: fluidvoice/gtkui/settings_pages/ai.py:653
 msgid "(pick a model)"
 msgstr "(izaberite model)"
 
@@ -104,7 +104,7 @@ msgstr "AI doterano"
 msgid "AI profile"
 msgstr "AI profil"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:550
+#: fluidvoice/gtkui/settings_pages/ai.py:559
 msgid "AI profile: {name}"
 msgstr "AI profil: {name}"
 
@@ -112,7 +112,7 @@ msgstr "AI profil: {name}"
 msgid "API key"
 msgstr "API ključ"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:582
+#: fluidvoice/gtkui/settings_pages/ai.py:613
 msgid "API key env var"
 msgstr "Promenljiva okruženja za API ključ"
 
@@ -129,7 +129,7 @@ msgstr "O programu"
 msgid "About SayItErmano"
 msgstr "O programu SayItErmano"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:778
+#: fluidvoice/gtkui/settings_pages/ai.py:809
 msgid "Accept"
 msgstr "Prihvati"
 
@@ -144,11 +144,11 @@ msgstr "Aktivan"
 msgid "Activity"
 msgstr "Aktivnost"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:588
+#: fluidvoice/gtkui/settings_pages/ai.py:619
 msgid "Add"
 msgstr "Dodaj"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:613
+#: fluidvoice/gtkui/settings_pages/ai.py:644
 msgid "Add from template"
 msgstr "Dodaj iz šablona"
 
@@ -177,15 +177,15 @@ msgstr "Dodaj pravilo"
 msgid "Add word"
 msgstr "Dodaj reč"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:605
+#: fluidvoice/gtkui/settings_pages/ai.py:636
 msgid "Added profile “{name}”"
 msgstr "Dodat profil „{name}“"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:634
+#: fluidvoice/gtkui/settings_pages/ai.py:665
 msgid "Added profile “{name}” from template"
 msgstr "Dodat profil „{name}“ iz šablona"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:805
+#: fluidvoice/gtkui/settings_pages/ai.py:836
 msgid "Added to dictionary"
 msgstr "Dodato u rečnik"
 
@@ -210,7 +210,7 @@ msgstr "Bilo koja OpenAI-kompatibilna tačka — Ollama, LM Studio, OpenAI, Groq
 msgid "App hints"
 msgstr "Saveti za aplikacije"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:704
+#: fluidvoice/gtkui/settings_pages/ai.py:735
 msgid "App patterns (comma-separated)"
 msgstr "Obrasci aplikacija (razdvojeni zapetama)"
 
@@ -240,7 +240,7 @@ msgstr "Prosek po diktiranju"
 msgid "Backend"
 msgstr "Backend"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:580
+#: fluidvoice/gtkui/settings_pages/ai.py:611
 msgid "Base URL"
 msgstr "Osnovni URL"
 
@@ -286,11 +286,11 @@ msgstr "Keširani modeli u ~/.cache/sayit-ermano/models (za brisanje je potreban
 #: fluidvoice/gtkui/main_window.py:227
 #: fluidvoice/gtkui/settings_pages/ai.py:404
 #: fluidvoice/gtkui/settings_pages/ai.py:467
-#: fluidvoice/gtkui/settings_pages/ai.py:587
-#: fluidvoice/gtkui/settings_pages/ai.py:674
+#: fluidvoice/gtkui/settings_pages/ai.py:618
+#: fluidvoice/gtkui/settings_pages/ai.py:705
 #: fluidvoice/gtkui/settings_pages/history.py:73
 #: fluidvoice/gtkui/settings_pages/models.py:294
-#: fluidvoice/gtkui/settings_window.py:528
+#: fluidvoice/gtkui/settings_window.py:531
 msgid "Cancel"
 msgstr "Otkaži"
 
@@ -302,7 +302,7 @@ msgstr "Otkaži diktiranje (Esc)"
 msgid "Cancel key — discards a take"
 msgstr "Taster za otkazivanje — odbacuje snimak"
 
-#: fluidvoice/gtkui/settings_window.py:526
+#: fluidvoice/gtkui/settings_window.py:529
 msgid "Changes that were not saved will be lost."
 msgstr "Izmene koje nisu sačuvane biće izgubljene."
 
@@ -345,7 +345,7 @@ msgstr "Obriši…"
 msgid "Clipboard"
 msgstr "Ostava"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:639
+#: fluidvoice/gtkui/settings_pages/ai.py:670
 msgid "Close"
 msgstr "Zatvori"
 
@@ -402,7 +402,7 @@ msgstr "Kontrolni soket"
 msgid "Copied"
 msgstr "Kopirano"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:614
+#: fluidvoice/gtkui/settings_pages/ai.py:645
 msgid "Copied into your profiles - edit freely afterwards."
 msgstr "Kopirano u vaše profile — slobodno izmenite kasnije."
 
@@ -434,11 +434,11 @@ msgstr "Kopiraj transkripcije u ostavu"
 msgid "Corrections noticed in your history edits — accept to teach the dictionary"
 msgstr "Ispravke primećene u vašim izmenama istorije — prihvatite da naučite rečnik"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:799
+#: fluidvoice/gtkui/settings_pages/ai.py:830
 msgid "Could not add the word (save failed)"
 msgstr "Reč nije dodata (čuvanje nije uspelo)"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:802
+#: fluidvoice/gtkui/settings_pages/ai.py:833
 msgid "Could not add the word (save rejected)"
 msgstr "Reč nije dodata (čuvanje je odbijeno)"
 
@@ -460,11 +460,11 @@ msgstr "Promena stanja nije uspela (potreban daemon): {error}"
 msgid "Current default model"
 msgstr "Trenutno podrazumevani model"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:551
+#: fluidvoice/gtkui/settings_pages/ai.py:560
 msgid "Custom"
 msgstr "Prilagođeno"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:503
+#: fluidvoice/gtkui/settings_pages/ai.py:507
 msgid "Custom (hand-set endpoint)"
 msgstr "Prilagođeno (ručno podešena tačka)"
 
@@ -486,9 +486,9 @@ msgstr "Daemon nije pokrenut — režim samo-datoteke; izmene se primenjuju pri 
 
 #: fluidvoice/gtkui/main_window.py:837
 #: fluidvoice/gtkui/settings_pages/ai.py:468
-#: fluidvoice/gtkui/settings_pages/ai.py:675
+#: fluidvoice/gtkui/settings_pages/ai.py:706
 #: fluidvoice/gtkui/settings_pages/ai.py:367
-#: fluidvoice/gtkui/settings_pages/ai.py:517
+#: fluidvoice/gtkui/settings_pages/ai.py:521
 #: fluidvoice/gtkui/settings_pages/models.py:295
 #: fluidvoice/gtkui/settings_pages/models.py:274
 msgid "Delete"
@@ -503,7 +503,7 @@ msgid "Delete every entry and retained audio"
 msgstr "Obriši svaki zapis i zadržani zvuk"
 
 #: fluidvoice/gtkui/settings_pages/ai.py:463
-#: fluidvoice/gtkui/settings_pages/ai.py:670
+#: fluidvoice/gtkui/settings_pages/ai.py:701
 msgid "Delete profile “{name}”?"
 msgstr "Obrisati profil „{name}“?"
 
@@ -516,7 +516,7 @@ msgid "Delete {name}?"
 msgstr "Obrisati {name}?"
 
 #: fluidvoice/gtkui/settings_pages/ai.py:478
-#: fluidvoice/gtkui/settings_pages/ai.py:692
+#: fluidvoice/gtkui/settings_pages/ai.py:723
 msgid "Deleted profile “{name}”"
 msgstr "Obrisan profil „{name}“"
 
@@ -561,7 +561,7 @@ msgstr "Diktiranja"
 msgid "Direct ggml models for the whisper.cpp backend"
 msgstr "Direktni ggml modeli za whisper.cpp backend"
 
-#: fluidvoice/gtkui/settings_window.py:529
+#: fluidvoice/gtkui/settings_window.py:532
 #: fluidvoice/gtkui/settings_window.py:239
 msgid "Discard"
 msgstr "Odbaci"
@@ -570,7 +570,7 @@ msgstr "Odbaci"
 msgid "Discard obviously-silent recordings ≤ 4 s"
 msgstr "Odbaci očigledno tihe snimke ≤ 4 s"
 
-#: fluidvoice/gtkui/settings_window.py:525
+#: fluidvoice/gtkui/settings_window.py:528
 msgid "Discard unsaved changes?"
 msgstr "Odbaciti nesačuvane izmene?"
 
@@ -578,7 +578,7 @@ msgstr "Odbaciti nesačuvane izmene?"
 msgid "Disk usage"
 msgstr "Zauzeće diska"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:781
+#: fluidvoice/gtkui/settings_pages/ai.py:812
 msgid "Dismiss"
 msgstr "Odbaci"
 
@@ -605,7 +605,7 @@ msgid "Engine options"
 msgstr "Opcije motora"
 
 #: fluidvoice/gtkui/settings_pages/ai.py:419
-#: fluidvoice/gtkui/settings_pages/ai.py:596
+#: fluidvoice/gtkui/settings_pages/ai.py:627
 msgid "Enter a profile name first"
 msgstr "Prvo unesite naziv profila"
 
@@ -785,7 +785,7 @@ msgstr "Gašenje servera pri neaktivnosti (sekundi)"
 msgid "Incomplete dictionary word skipped (needs triggers and a replacement)"
 msgstr "Nepotpuna reč iz rečnika je preskočena (potrebni su okidači i zamena)"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:750
+#: fluidvoice/gtkui/settings_pages/ai.py:781
 msgid "Incomplete per-app rule skipped (needs apps and instructions)"
 msgstr "Nepotpuno pravilo po aplikaciji je preskočeno (potrebne su aplikacije i uputstva)"
 
@@ -814,7 +814,7 @@ msgstr "Umetanje"
 msgid "Insertion and push-to-talk"
 msgstr "Umetanje i pritisni-i-govori"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:714
+#: fluidvoice/gtkui/settings_pages/ai.py:745
 #: fluidvoice/gtkui/settings_pages/common.py:157
 msgid "Instructions"
 msgstr "Uputstva"
@@ -948,7 +948,7 @@ msgstr "Minuta diktirano"
 msgid "Mode"
 msgstr "Režim"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:581
+#: fluidvoice/gtkui/settings_pages/ai.py:612
 #: fluidvoice/gtkui/settings_pages/models.py:739
 msgid "Model"
 msgstr "Model"
@@ -1009,7 +1009,7 @@ msgstr "NVIDIA Parakeet TDT 0.6B v3 — višejezični (25 evropskih jezika)"
 msgid "NVIDIA Parakeet TDT via ONNX Runtime — explicit backend"
 msgstr "NVIDIA Parakeet TDT kroz ONNX Runtime — eksplicitni backend"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:579
+#: fluidvoice/gtkui/settings_pages/ai.py:610
 msgid "Name (e.g. GLM)"
 msgstr "Naziv (npr. GLM)"
 
@@ -1033,12 +1033,12 @@ msgstr "Novi pasus"
 msgid "New profile name"
 msgstr "Novi naziv profila"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:573
+#: fluidvoice/gtkui/settings_pages/ai.py:604
 msgid "New provider profile"
 msgstr "Novi profil provajdera"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:703
-#: fluidvoice/gtkui/settings_pages/ai.py:723
+#: fluidvoice/gtkui/settings_pages/ai.py:734
+#: fluidvoice/gtkui/settings_pages/ai.py:754
 msgid "New rule"
 msgstr "Novo pravilo"
 
@@ -1047,7 +1047,7 @@ msgstr "Novo pravilo"
 msgid "New word"
 msgstr "Nova reč"
 
-#: fluidvoice/gtkui/settings_window.py:506
+#: fluidvoice/gtkui/settings_window.py:509
 msgid "No changes"
 msgstr "Nema izmena"
 
@@ -1075,7 +1075,7 @@ msgstr "Još nema profila"
 msgid "No-audio timeout (s)"
 msgstr "Vremensko ograničenje bez zvuka (s)"
 
-#: fluidvoice/gtkui/settings_window.py:496
+#: fluidvoice/gtkui/settings_window.py:499
 msgid "Not fully applied: {detail}"
 msgstr "Nije u potpunosti primenjeno: {detail}"
 
@@ -1198,7 +1198,7 @@ msgstr "Fraze zamenjene pri umetanju — \"miro board\" → \"Miro board\""
 msgid "Press a key…"
 msgstr "Pritisnite taster…"
 
-#: fluidvoice/gtkui/settings_window.py:545
+#: fluidvoice/gtkui/settings_window.py:548
 msgid "Press the key to use (Esc cancels)"
 msgstr "Pritisnite taster za korišćenje (Esc otkažuje)"
 
@@ -1212,11 +1212,11 @@ msgid "Processing…"
 msgstr "Obrađujem…"
 
 #: fluidvoice/gtkui/settings_pages/ai.py:371
-#: fluidvoice/gtkui/settings_pages/ai.py:521
+#: fluidvoice/gtkui/settings_pages/ai.py:525
 msgid "Profile actions"
 msgstr "Radnje profila"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:553
+#: fluidvoice/gtkui/settings_pages/ai.py:565
 msgid "Profile switch failed: {error}"
 msgstr "Promena profila nije uspela: {error}"
 
@@ -1288,7 +1288,8 @@ msgstr "Osveži listu"
 msgid "Refusal guard"
 msgstr "Zaštita od odbijanja"
 
-#: fluidvoice/gtkui/settings_window.py:493
+#: fluidvoice/gtkui/settings_pages/ai.py:562
+#: fluidvoice/gtkui/settings_window.py:496
 msgid "Rejected (bad values): {keys}"
 msgstr "Odbijeno (loše vrednosti): {keys}"
 
@@ -1322,7 +1323,7 @@ msgstr "Ukloni ovu reč"
 msgid "Remove trailing period"
 msgstr "Ukloni završnu tačku"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:671
+#: fluidvoice/gtkui/settings_pages/ai.py:702
 msgid "Removed from the profile store. Settings and the tray menu update immediately."
 msgstr "Uklonjeno iz skladišta profila. Postavke i meni sistemske trake se odmah ažuriraju."
 
@@ -1335,17 +1336,17 @@ msgstr[1] "Uklonjena {n} zapisa"
 msgstr[2] "Uklonjeno {n} zapisa"
 
 #: fluidvoice/gtkui/settings_pages/ai.py:453
-#: fluidvoice/gtkui/settings_pages/ai.py:653
+#: fluidvoice/gtkui/settings_pages/ai.py:684
 msgid "Rename “{name}” to"
 msgstr "Preimenuj „{name}“ u"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:662
+#: fluidvoice/gtkui/settings_pages/ai.py:693
 #: fluidvoice/gtkui/settings_pages/ai.py:450
 msgid "Renamed to “{name}”"
 msgstr "Preimenovano u „{name}“"
 
 #: fluidvoice/gtkui/settings_pages/ai.py:366
-#: fluidvoice/gtkui/settings_pages/ai.py:516
+#: fluidvoice/gtkui/settings_pages/ai.py:520
 msgid "Rename…"
 msgstr "Preimenuj…"
 
@@ -1396,7 +1397,7 @@ msgstr "Sačuvano"
 msgid "Saved profile “{name}”"
 msgstr "Sačuvan profil „{name}“"
 
-#: fluidvoice/gtkui/settings_window.py:500
+#: fluidvoice/gtkui/settings_window.py:503
 msgid "Saved {n} change"
 msgid_plural "Saved {n} changes"
 msgstr[0] "Sačuvana {n} izmena"
@@ -1550,7 +1551,7 @@ msgstr "Zaustavi čekanje"
 msgid "Store the recording with each entry"
 msgstr "Čuva snimak uz svaki zapis"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:574
+#: fluidvoice/gtkui/settings_pages/ai.py:605
 msgid "Stored beside the config; only the env-var NAME is kept - never the key itself."
 msgstr "Čuva se uz konfiguraciju; čuva se samo NAZIV promenljive okruženja - nikad sam ključ."
 
@@ -2172,7 +2173,7 @@ msgid "processing…"
 msgstr "obrađujem…"
 
 #: fluidvoice/gtkui/settings_pages/ai.py:487
-#: fluidvoice/gtkui/settings_pages/ai.py:567
+#: fluidvoice/gtkui/settings_pages/ai.py:598
 msgid "profile operation failed"
 msgstr "radnja nad profilom nije uspela"
 
@@ -2200,7 +2201,7 @@ msgstr "pokrenite 'sayit-ermano update' za naredbu nadogradnje"
 msgid "running (127.0.0.1:{port}) — stops after {idle} s idle"
 msgstr "radi (127.0.0.1:{port}) — zaustavlja se posle {idle} s mirovanja"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:774
+#: fluidvoice/gtkui/settings_pages/ai.py:805
 msgid "seen {n}×"
 msgstr "viđeno {n}×"
 

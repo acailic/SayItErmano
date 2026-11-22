@@ -410,6 +410,9 @@ class SettingsWindow(
         self._load_profiles()
         self._provider_profiles_refresh()
         self._dirty = False
+        # a reload drops the queued "hand-edited endpoint" pointer clear
+        # with the edits it belonged to (Discard semantics)
+        self._pending_provider_clear = False
         self._sync_save_rows()
         self._refresh_models()
         self._refresh_local_polish()

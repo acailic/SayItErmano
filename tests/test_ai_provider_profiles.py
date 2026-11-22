@@ -100,6 +100,53 @@ class TestSwitchPatch:
         with pytest.raises(KeyError):
             pp.switch_patch("nope", path=tmp_path / "ai-profiles.json")
 
+    def test_switch_patch_is_switch_body_of_the_stored_profile(self, tmp_path):
+        p = tmp_path / "ai-profiles.json"
+        pp.save_named("GLM", _glm(), path=p)
+        assert pp.switch_patch("GLM", path=p) == pp.switch_body(_glm(), "GLM")
+
+
+class TestSwitchBody:
+    """The switch body must clear the same registry validation the
+    Settings endpoint rows save through (config.apply_settings)."""
+
+    @pytest.mark.parametrize("name", sorted(pp.TEMPLATES))
+    def test_every_template_switch_passes_the_registry(self, name):
+        import copy
+
+        from fluidvoice import config
+        cfg = copy.deepcopy(config.DEFAULTS)
+        changed, rejected = config.apply_settings(
+            cfg, pp.switch_body(pp.TEMPLATES[name], name))
+        assert rejected == [], name
+        assert "ai.profile" in changed
+        assert cfg["ai"]["profile"] == name
+
+    def test_empty_values_keep_the_saved_setting(self):
+        """Empty strings are not socket-valid for model / key env (the
+        registry rule an empty Settings row follows too), so a preset
+        without them switches the endpoint and leaves both alone."""
+        import copy
+
+        from fluidvoice import config
+        assert not config.validate("ai", "model", "")
+        assert not config.validate("ai", "api_key_env", "")
+        cfg = copy.deepcopy(config.DEFAULTS)
+        cfg["ai"].update(model="qwen3:8b", api_key_env="MY_KEY")
+        ollama = pp.TEMPLATES["Ollama"]
+        changed, rejected = config.apply_settings(
+            cfg, pp.switch_body(ollama, "Ollama"))
+        assert rejected == []
+        assert cfg["ai"]["model"] == "qwen3:8b"
+        assert cfg["ai"]["api_key_env"] == "MY_KEY"
+        assert cfg["ai"]["base_url"] == ollama["base_url"]
+        assert cfg["ai"]["profile"] == "Ollama"
+
+    def test_only_blank_strings_are_dropped(self):
+        body = pp.switch_body(
+            {"temperature": 0.0, "model": "m", "api_key_env": ""}, "T")["ai"]
+        assert body == {"temperature": 0.0, "model": "m", "profile": "T"}
+
 
 class TestTemplates:
     def test_templates_are_valid_shapes(self):
