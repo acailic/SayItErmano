@@ -123,6 +123,20 @@ class AIPageMixin:
                                             self._on_local_polish_stop)
         stop_row.add_suffix(self._local_polish_stop_btn)
         local.add(stop_row)
+        # tuning rows (registry-backed; the Models page keeps the chat
+        # catalog chooser — ai.local_model here is the advanced override)
+        local.add(self._entry(
+            "ai", "local_model", _("AI polish model (GGUF file name)"),
+        ))
+        local.add(self._spin(
+            "ai", "local_idle_s",
+            _("Idle server shutdown (seconds)"),
+            subtitle=_("0 keeps the server until the daemon exits"),
+        ))
+        local.add(self._entry(
+            "ai", "local_server_binary",
+            _("llama-server path override"),
+        ))
         page.add(local)
 
         # prompt profiles (macOS parity): radio rows + per-row ⋯ menu +

@@ -29,7 +29,10 @@ jobs:
       - name: Install package + dev extra
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          # the portal extra is pure-python (dbus-next): installing it
+          # lets test_portal_hotkey RUN on CI instead of skipping, so
+          # portal_hotkey.py counts toward the unit coverage ratchet.
+          pip install -e ".[dev,portal]"
       - name: Offline suite, warnings as errors (canonical unit gate)
         # Same scope + strictness as `just gate` (Q1): needs_* tiers are
         # deselected by DECLARED requirement, so local and CI collection
