@@ -4,6 +4,13 @@ Dated research notes live in this directory; raw data under
 [data/](data/), competitor watch under [competitive/](competitive/).
 The newest entries:
 
+- [2026-11-22 checkout options](2026-11-22-checkout-options.md) —
+  merchant-of-record vs direct processor for the checkout that sells
+  the key: fee/tax/refund/payout/chargeback columns from official
+  docs, seller eligibility verified for Serbia and Bosnia
+  (individuals and entities), integration map against the v0.9.0
+  license-key code, and a recommendation with risks (monetization
+  plan question 4).
 - [2026-11-22 rights & redistribution inventory](2026-11-22-rights-and-redistribution-inventory.md) —
   what the project may sell under its rights: tree inventory by origin,
   dependency + model-weight licensing sweep (incl. the AGPL
