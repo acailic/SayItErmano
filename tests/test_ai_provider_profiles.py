@@ -3,11 +3,14 @@ key allow-list, template shapes, and the set-config switch patch."""
 from __future__ import annotations
 
 import json
+import logging
 import os
 
 import pytest
 
 from fluidvoice.ai import provider_profiles as pp
+
+LOGGER = "fluidvoice.ai.provider_profiles"
 
 
 def _glm():
@@ -63,6 +66,22 @@ class TestStore:
         with pytest.raises(ValueError):
             pp.delete_profile("GLM 2", path=p)
 
+    @pytest.mark.parametrize("content", [
+        "{not json", '["GLM"]', "42", '"just a string"',
+    ])
+    def test_corrupt_file_warns_exactly_once(self, tmp_path, caplog, content):
+        p = tmp_path / "ai-profiles.json"
+        p.write_text(content, encoding="utf-8")
+        with caplog.at_level(logging.WARNING, logger=LOGGER):
+            assert pp.load_profiles(path=p) == {}
+        assert len([r for r in caplog.records
+                    if r.name == LOGGER and r.levelno == logging.WARNING]) == 1
+
+    def test_missing_file_does_not_warn(self, tmp_path, caplog):
+        with caplog.at_level(logging.WARNING, logger=LOGGER):
+            assert pp.load_profiles(path=tmp_path / "nope.json") == {}
+        assert not [r for r in caplog.records if r.name == LOGGER]
+
 
 class TestSwitchPatch:
     def test_patch_has_pointer_and_values(self, tmp_path):
@@ -110,3 +129,32 @@ class TestConfigKey:
         assert changed == ["ai.profile"]
         assert not rejected
         assert cfg["ai"]["profile"] == "GLM"
+
+    def test_apply_settings_accepts_empty_pointer_clear(self):
+        import copy
+
+        from fluidvoice import config
+        cfg = copy.deepcopy(config.DEFAULTS)
+        cfg["ai"]["profile"] = "GLM"
+        changed, rejected = config.apply_settings(
+            cfg, {"ai": {"profile": ""}})
+        assert changed == ["ai.profile"]
+        assert not rejected
+        assert cfg["ai"]["profile"] == ""
+
+    def test_cleared_pointer_stays_cleared_across_saves(self, tmp_path,
+                                                        monkeypatch):
+        import copy
+        import tomllib
+
+        from fluidvoice import config, paths
+        path = tmp_path / "c.toml"
+        monkeypatch.setattr(paths, "config_file", lambda: path)
+        cfg = copy.deepcopy(config.DEFAULTS)
+        cfg["ai"]["profile"] = "GLM"
+        config.save_config(cfg)
+        assert tomllib.loads(path.read_text())["ai"]["profile"] == "GLM"
+        cfg["ai"]["profile"] = ""
+        config.save_config(cfg)
+        assert "profile" not in tomllib.loads(path.read_text())["ai"]
+        assert config.load_config()["ai"]["profile"] == ""

@@ -2,6 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Status:** SHIPPED in v0.8.3 (2026-11-10) - `requests/ai-provider-profiles.md`
+> carries `STATUS: SHIPPED` with the per-task commits. Do not re-implement
+> (AGENTS.md rule 5). Boxes are ticked per ticket as tasks are re-verified, so
+> an unticked box is not evidence of unimplemented work.
+
 **Goal:** Named AI-polish provider profiles (e.g. "GLM") stored in a sidecar JSON, switchable from Settings → AI and the tray menu, hot-applied via the existing set-config path.
 
 **Architecture:** Sidecar store mirrors `fluidvoice/ai/profiles.py` (prompt profiles) discipline; switching writes the profile's endpoint values + a new `ai.profile` pointer through `set-config` (no `[ai]` key is RESTART_REQUIRED, `AIClient` is constructed per dictation in `rewrite.py:114`, so swaps hot-apply). API key VALUES are never stored — only env-var names.
@@ -28,7 +33,7 @@
 **Interfaces:**
 - Produces: `load_profiles(path=None) -> dict[str, dict]`, `save_profiles(profiles, path=None)`, `save_named(name, profile: dict, path=None) -> dict`, `rename_profile(old, new, path=None) -> dict`, `delete_profile(name, path=None) -> dict`, `switch_patch(name, path=None) -> dict` (returns the `{"ai": {...}}` set-config body), `TEMPLATES: dict[str, dict]`.
 
-- [ ] **Step 1: Write the failing tests** — create `tests/test_ai_provider_profiles.py`:
+- [x] **Step 1: Write the failing tests** — create `tests/test_ai_provider_profiles.py`:
 
 ```python
 """AI provider-profile store: round-trip, corruption fallback, name rules,
@@ -125,8 +130,8 @@ class TestTemplates:
         assert pp.TEMPLATES["GLM"] == _glm()
 ```
 
-- [ ] **Step 2: Run, verify failure** — `SAYIT_PY=/home/nistrator/Documents/github/FluidVoiceLinux/.venv/bin/python just test tests/test_ai_provider_profiles.py` — expected: collection error / ImportError (`provider_profiles` does not exist).
-- [ ] **Step 3: Implement** — `fluidvoice/paths.py`, add after `prompt_profiles_file()`:
+- [x] **Step 2: Run, verify failure** — `SAYIT_PY=/home/nistrator/Documents/github/FluidVoiceLinux/.venv/bin/python just test tests/test_ai_provider_profiles.py` — expected: collection error / ImportError (`provider_profiles` does not exist).
+- [x] **Step 3: Implement** — `fluidvoice/paths.py`, add after `prompt_profiles_file()`:
 
 ```python
 def ai_profiles_file() -> Path:
@@ -274,8 +279,8 @@ def switch_patch(name: str, path=None) -> dict:
     return {"ai": {**profile, "profile": name}}
 ```
 
-- [ ] **Step 4: Run, verify pass** — same command; expected: all green.
-- [ ] **Step 5: Commit** — `git add fluidvoice/paths.py fluidvoice/ai/provider_profiles.py tests/test_ai_provider_profiles.py && git commit -m "feat(ai): provider-profile store (ai-profiles.json) + templates" && git push origin linux`
+- [x] **Step 4: Run, verify pass** — same command; expected: all green.
+- [x] **Step 5: Commit** — `git add fluidvoice/paths.py fluidvoice/ai/provider_profiles.py tests/test_ai_provider_profiles.py && git commit -m "feat(ai): provider-profile store (ai-profiles.json) + templates" && git push origin linux`
 
 ---
 
@@ -288,7 +293,7 @@ def switch_patch(name: str, path=None) -> dict:
 **Interfaces:**
 - Produces: `DEFAULTS["ai"]["profile"] == ""`; `apply_settings` accepts `{"ai": {"profile": "<name>"}}`; NOT in `RESTART_REQUIRED`.
 
-- [ ] **Step 1: Failing test** — append:
+- [x] **Step 1: Failing test** — append:
 
 ```python
 class TestConfigKey:
@@ -311,8 +316,8 @@ class TestConfigKey:
         assert cfg["ai"]["profile"] == "GLM"
 ```
 
-- [ ] **Step 2: Run, verify failure** (KeyError: 'profile').
-- [ ] **Step 3: Implement** — in `config.py` after the `refusal_guard` spec:
+- [x] **Step 2: Run, verify failure** (KeyError: 'profile').
+- [x] **Step 3: Implement** — in `config.py` after the `refusal_guard` spec:
 
 ```python
 _spec("ai", "profile", "", _str(64),
@@ -322,8 +327,18 @@ _spec("ai", "profile", "", _str(64),
       "here; editing the endpoint by hand clears it back to \"\".")
 ```
 
-- [ ] **Step 4: Run, verify pass** — full new test file + `tests/test_config*.py` (registry-size/count fixtures may assert key totals; fix any that enumerate).
-- [ ] **Step 5: Commit** — `feat(config): ai.profile active-provider pointer key`
+- [x] **Step 4: Run, verify pass** — full new test file + `tests/test_config*.py` (registry-size/count fixtures may assert key totals; fix any that enumerate).
+- [x] **Step 5: Commit** — `feat(config): ai.profile active-provider pointer key`
+
+> Tasks 1–2 shipped upstream 2026-11-10 (see requests/ai-provider-profiles.md
+> SHIPPED note) and were re-verified 2026-11-22 on a clean checkout:
+> tests/test_ai_provider_profiles.py and tests/test_config*.py green under
+> the unit-tier marker selection, `ruff check fluidvoice/ tests/ scripts/`
+> clean. The shipped spec is `_str(64, allow_empty=True)` plus
+> `empty_meaningful=True`, not the verbatim `_str(64)` above: the latter
+> rejects the `""` default, and without `empty_meaningful` a cleared pointer
+> is carried over from the saved file on the next Settings save. Both are
+> pinned in the test file.
 
 ---
 
