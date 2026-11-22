@@ -39,6 +39,15 @@ def settings_win():
     w.destroy()
 
 
+def _walk(widget):
+    """Depth-first widget-tree walk (first_child / next_sibling)."""
+    child = widget.get_first_child()
+    while child is not None:
+        yield child
+        yield from _walk(child)
+        child = child.get_next_sibling()
+
+
 class TestDictationSections:
     def test_every_section_builds_in_isolation(self, settings_win) -> None:
         # a fresh page per section: builders must not depend on siblings
@@ -153,6 +162,67 @@ class TestLocalPolishSections:
         finally:
             model_catalog.chat_model_path(
                 model_catalog.CHAT_MODEL_DEFAULT).unlink(missing_ok=True)
+
+
+class TestProviderProfilesSections:
+    """Provider profiles group (plan Task 4, ai-provider-profiles): the
+    AI page leads with it, Custom is the fallback row for an empty or
+    hand-corrupted store, the active pointer marks the radio, and the
+    endpoint registry rows a switch writes stay wired like the other
+    AI rows."""
+
+    def test_ai_endpoint_keys_wired(self, settings_win) -> None:
+        # the registry rows a provider-profile switch writes via
+        # set-config must exist exactly like every other AI row
+        rows = settings_win._rows
+        wired = {("ai", "enabled"), ("ai", "base_url"), ("ai", "model"),
+                 ("ai", "api_key_env"), ("ai", "temperature"),
+                 ("ai", "timeout_seconds"), ("ai", "max_retries"),
+                 ("ai", "refusal_guard")}
+        missing = sorted(str(k) for k in wired if k not in rows)
+        assert not missing, f"AI endpoint wiring lost: {missing}"
+
+    def test_group_leads_the_ai_page(self, settings_win) -> None:
+        page = settings_win._page_stack.get_child_by_name("ai")
+        groups = [w for w in _walk(page)
+                  if isinstance(w, Adw.PreferencesGroup)]
+        assert groups and groups[0] is settings_win._prov_group
+        assert settings_win._prov_group.get_title() == "Provider profiles"
+
+    def test_empty_store_renders_custom_only(self, settings_win) -> None:
+        # XDG-isolated conftest: no sidecar, pointer "" -> just Custom,
+        # checked
+        assert set(settings_win._prov_rows) == {""}
+        assert settings_win._prov_rows[""].get_title() \
+            == "Custom (hand-set endpoint)"
+        assert settings_win._prov_checks[""].get_active() is True
+
+    def test_corrupt_store_degrades_to_custom(self, settings_win,
+                                              monkeypatch, tmp_path) -> None:
+        # hand-edited JSON must not take the group down (store
+        # discipline: {} with one warning, never a crash)
+        from fluidvoice import paths
+        monkeypatch.setattr(paths, "ai_profiles_file",
+                            lambda: tmp_path / "ai-profiles.json")
+        (tmp_path / "ai-profiles.json").write_text("{not json",
+                                                   encoding="utf-8")
+        settings_win._provider_profiles_refresh()
+        assert set(settings_win._prov_rows) == {""}
+
+    def test_stored_profiles_render_checked_by_pointer(
+            self, settings_win, monkeypatch, tmp_path) -> None:
+        from fluidvoice import paths
+        from fluidvoice.ai import provider_profiles as pp
+        p = tmp_path / "ai-profiles.json"
+        pp.save_named("GLM", {"base_url": "https://api.z.ai/api/paas/v4",
+                              "model": "glm-4.7", "api_key_env": "K"}, path=p)
+        monkeypatch.setattr(paths, "ai_profiles_file", lambda: p)
+        settings_win.cfg.setdefault("ai", {})["profile"] = "GLM"
+        settings_win._provider_profiles_refresh()
+        assert set(settings_win._prov_rows) == {"", "GLM"}
+        assert settings_win._prov_rows["GLM"].get_title() == "GLM"
+        assert settings_win._prov_checks["GLM"].get_active() is True
+        assert settings_win._prov_checks[""].get_active() is False
 
 
 class TestMainWindowSections:
