@@ -15,7 +15,8 @@ import copy
 
 import pytest
 
-from fluidvoice import backends, cli, insertion as insertion_mod, setup_flow
+from fluidvoice import backends, cli, setup_flow
+from fluidvoice import insertion as insertion_mod
 from fluidvoice.config import DEFAULTS
 from fluidvoice.gtkui.onboarding_funnel import FunnelCounters
 from fluidvoice.recorder import RecorderError
@@ -296,8 +297,8 @@ class TestInconclusive:
 
 class TestInsertionAudit:
     def test_wayland_lines_carry_install_and_permission_guidance(self):
-        from fluidvoice.insertion import CapabilityReport
         from fluidvoice import session as session_mod
+        from fluidvoice.insertion import CapabilityReport
         report = CapabilityReport(
             ok=False, fallback_ok=False, session_type="wayland",
             typing_tool=None,
@@ -317,8 +318,8 @@ class TestInsertionAudit:
         assert "sudo usermod -aG input $USER" in joined  # doctor's guidance
 
     def test_x11_ready_lines(self):
-        from fluidvoice.insertion import CapabilityReport
         from fluidvoice import session as session_mod
+        from fluidvoice.insertion import CapabilityReport
         report = CapabilityReport(
             ok=True, fallback_ok=True, session_type="x11",
             typing_tool="xdotool", missing_tools=(), install_hint="",

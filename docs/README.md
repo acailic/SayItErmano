@@ -12,6 +12,10 @@ the app itself.
   one-pager (served from [`site/`](../site/) via GitHub Pages).
 - [guides/install.md](guides/install.md) — every install route (one-shot
   installer, Ubuntu .deb, pipx, AUR, source) and updates.
+- [guides/quickstart.md](guides/quickstart.md) — the first-use path:
+  `sayit-ermano setup` grounds the model pick in your hardware,
+  downloads with progress, audits insertion and ends with a verified
+  test take.
 - [guides/license.md](guides/license.md) — license keys: import, status,
   what they do and do not restrict ([PRICING](PRICING.md)).
 - [research/2026-11-21-network-egress-audit.md](research/2026-11-21-network-egress-audit.md) —

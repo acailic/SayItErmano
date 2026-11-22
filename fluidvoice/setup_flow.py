@@ -440,6 +440,9 @@ class SetupFlow:
             self._ask("  press Enter, then click into any text field "
                       "(this terminal works) — insertion follows in 3 s…")
             self._sleep(3.0)
+        else:
+            self._print("  inserting into the focused window "
+                        "(run without --yes to pick a target first)…")
         try:
             strategy = self._insert_fn(text, self.cfg)
         except insertion_mod.InsertionFailure as e:

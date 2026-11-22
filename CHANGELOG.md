@@ -13,6 +13,16 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **First-use setup with a verified test take (`sayit-ermano setup`)** —
+  the product-excellence bet 1 path: hardware-grounded model
+  recommendation (GPU/VRAM/CPU/RAM cited in every why-line, defaulting
+  to what the daemon's `auto` resolution would pick), download with
+  percent/size/rate/ETA, a per-desktop insertion audit printing the
+  exact missing-package line plus doctor's permission guidance, and a
+  real 2 s record → transcribe → insert take. Exit 0 on a full loop or
+  an explicit actionable blocker, 1 on inconclusive takes; the same
+  local funnel counters as onboarding (`source="cli-setup"`). New
+  guide: `docs/guides/quickstart.md`.
 - **Flathub submission prep (#12, runbook section 0)** — the shipping
   Flatpak manifest gains a Flathub-shaped twin,
   `packaging/flatpak/io.github.acailic.SayItErmano.flathub.yml`:
