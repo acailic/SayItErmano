@@ -13,6 +13,8 @@ not reproduced here.
 
 ## [Unreleased]
 
+## [v0.9.0] — productization: i18n, Flathub, Paddle funnel, local AI, license keys, apt updates (2026-11-22)
+
 - **i18n: translate the model-catalog notes** — the per-model subtitle
   notes ("fastest, lowest accuracy", "balanced; GPU default", the
   NVIDIA Parakeet / Qwen3 descriptions) and the "languages" word in
