@@ -137,6 +137,14 @@ NEWEST="$(printf '%s\n' "$WANT" | sort -V | tail -1)"
 [ "$CAND" = "$NEWEST" ] || die "apt candidate $CAND != published $NEWEST"
 
 say "downloading through apt (hash verification)..."
-apt-get "${APT_OPTS[@]}" install --download-only -y sayit-ermano >/dev/null
+# apt-get download, NOT install --download-only: the sandbox has no
+# universe/main sources, so resolving Depends (python3, gir1.2-*) is
+# impossible by design and apt exits 100 "held broken packages".
+# `download` fetches just the named package and still verifies its
+# SHA256 against the signed Packages index - the actual contract.
+mkdir -p "$VERIFY_ROOT/dl"
+(cd "$VERIFY_ROOT/dl" && apt-get "${APT_OPTS[@]}" download sayit-ermano >/dev/null)
+[ -s "$VERIFY_ROOT/dl"/sayit-ermano_*"$CAND"_amd64.deb ] \
+    || die "apt download did not fetch sayit-ermano $CAND"
 
 say "OK: repo serves sayit-ermano $CAND with a valid signature and hashes"
