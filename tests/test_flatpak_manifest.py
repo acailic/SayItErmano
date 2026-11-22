@@ -12,8 +12,9 @@ REVIEWER-FACING contract instead:
 * every python dependency is accounted for: sha256-pinned vendored
   wheels for the pure-Python set, with engines explicitly listed as
   the documented not-vendored remainder;
-* metainfo: license matches the source, OARS rating, keywords, and a
-  release equal to the shipped version.
+* metainfo: license matches the source, OARS rating, keywords, a
+  release equal to the shipped version, and the Flathub screenshot
+  shot list (#12).
 
 The manifest is parsed with a minimal YAML-subset parser below (the
 dev environment has no PyYAML; flatpak-builder manifests are a small,
@@ -321,6 +322,88 @@ def test_metainfo_has_oars_keywords_and_current_release():
     releases = root.findall("releases/release")
     assert releases, "no <release> — software centers need at least one"
     assert releases[0].get("version") == pyproject["project"]["version"]
+
+
+# The six Flathub search queries verified winnable on 2026-11-21
+# (#12 evidence base). "whisper" alone is a discoverability trap
+# (its query #1 is an unrelated mic monitor) — the phrases carry
+# the rest.
+SEARCH_QUERIES = {
+    "dictation",
+    "voice typing",
+    "speech to text",
+    "whisper",
+    "transcription",
+    "voice input",
+}
+
+
+def test_metainfo_keywords_cover_every_target_flathub_query():
+    root = _metainfo_root()
+    keywords = {k.text for k in root.findall("keywords/keyword")}
+    assert SEARCH_QUERIES <= keywords, \
+        f"query with no keyword: {SEARCH_QUERIES - keywords}"
+
+
+# -- screenshots: the Flathub shot list (#12) --------------------------------
+#
+# The PNGs are owner-captured (GUI work is human-only); until they
+# land, only the URL contract is pinned. Files appear at the same
+# path the metainfo URLs point at (raw.githubusercontent `linux`).
+SCREENSHOT_DIR = FLATPAK_DIR / "screenshots"
+SCREENSHOT_URL_PREFIX = (
+    "https://raw.githubusercontent.com/acailic/SayItErmano"
+    "/linux/packaging/flatpak/screenshots/"
+)
+SCREENSHOTS = [
+    "01-dictation-pill.png",
+    "02-settings-models.png",
+    "03-history.png",
+]
+
+
+def test_metainfo_pins_the_flathub_shot_list():
+    root = _metainfo_root()
+    shots = root.findall("screenshots/screenshot")
+    assert shots, "no <screenshots> — Flathub listings need at least one"
+    assert shots[0].get("type") == "default", \
+        "the first screenshot is the listing's face — mark it default"
+    urls = [s.findtext("image") for s in shots]
+    assert urls == [SCREENSHOT_URL_PREFIX + n for n in SCREENSHOTS]
+    for shot, url in zip(shots, urls):
+        assert url.startswith("https://"), url  # flathub rejects http
+        caption = shot.findtext("caption")
+        assert caption and not caption.endswith("."), \
+            "captions are one sentence without a trailing full stop"
+        assert not caption[0].isdigit(), caption
+
+
+def test_shot_list_documents_every_pinned_screenshot():
+    text = (SCREENSHOT_DIR / "SHOT-LIST.md").read_text(encoding="utf-8")
+    for name in SCREENSHOTS:
+        assert f"`{name}`" in text, \
+            f"{name}: shot list and metainfo drifted apart"
+
+
+def _png_size(data: bytes) -> tuple[int, int]:
+    """Width/height from the IHDR chunk — no imaging dependency."""
+    assert data[:8] == b"\x89PNG\r\n\x1a\n", "not a PNG"
+    width = int.from_bytes(data[16:20], "big")
+    height = int.from_bytes(data[20:24], "big")
+    return width, height
+
+
+def test_screenshot_files_respect_flathub_window_bounds():
+    """Flathub quality rule: <= 1000x700 logical px, 2000x1400 for
+    HiDPI physical. Activates itself as the owner commits the PNGs;
+    files that don't exist yet are skipped, not silently passed."""
+    for name in SCREENSHOTS:
+        path = SCREENSHOT_DIR / name
+        if not path.is_file():
+            continue  # owner capture pending — see SHOT-LIST.md
+        width, height = _png_size(path.read_bytes())
+        assert width <= 2000 and height <= 1400, \
+            f"{name}: {width}x{height} exceeds the HiDPI ceiling"
 
 
 def test_metainfo_launchable_matches_the_exported_desktop_id():

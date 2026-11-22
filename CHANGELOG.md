@@ -13,6 +13,20 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **Flathub listing prep (#12)** — metainfo gains the keyword set
+  that carries all six target Flathub searches (`dictation`,
+  `voice typing`, `speech to text`, `whisper`, `transcription`,
+  `voice input`; "whisper" alone is a discoverability trap — its
+  query #1 is an unrelated mic monitor), a screenshot block pinned
+  to `packaging/flatpak/screenshots/` (shot list + Flathub quality
+  rules there; PNGs are owner-captured), and a ≤35-char summary
+  ("Dictate locally, polish with AI") per the quality guidelines.
+  New owner runbook `docs/packaging/flathub-submission.md`: the
+  human-only submission PR checklist (new-pr branch mechanics,
+  per-finish-arg justifications, stable-first, `io.github.*`
+  login-provider verification, demo-video requirement) under
+  Flathub's Generative-AI policy, plus a one-minute demo-video
+  storyboard in `packaging/flatpak/screenshots/DEMO-VIDEO.md`.
 - **Flatpak shipping manifest (#11, ADR-0006)** — the spike manifest
   becomes the Flathub submission manifest: finish-args carry exactly
   the reviewed baseline (`--socket=wayland`, `--socket=pulseaudio`,

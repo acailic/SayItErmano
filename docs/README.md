@@ -74,6 +74,10 @@ the app itself.
   the fresh-VM install-route QA gate (issue #14): one evidence file
   per route per distro, the owner checklist and the harness
   (`scripts/qa_matrix.py`).
+- [packaging/flathub-submission.md](packaging/flathub-submission.md) —
+  the owner-only Flathub submission runbook (#12): blockers, shot
+  list, PR mechanics, per-permission justifications, verification.
+  Human-only under Flathub's Generative-AI policy.
 - [../requests/](../requests/) — the brief ledger; a request's STATUS
   header is the authority on whether it shipped.
 - [plans/](plans/) — active plans, each with a Status header:
