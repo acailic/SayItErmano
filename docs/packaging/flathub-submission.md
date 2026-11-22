@@ -3,8 +3,9 @@
 Everything the **human owner** does to get SayItErmano onto Flathub
 stable, in order. Verified against the Flathub docs on 2026-11-21
 (submission, requirements, verification, quality guidelines — links
-inline). Where a rule is quoted, re-check the page before relying on
-it; Flathub policy evolves.
+inline); requirements/runtimes re-checked 2026-11-22 for the section-0
+items below. Where a rule is quoted, re-check the page before relying
+on it; Flathub policy evolves.
 
 > **Generative-AI policy — read first.**
 > Flathub's [Generative AI policy](https://docs.flathub.org/docs/for-app-authors/requirements#generative-ai-policy)
@@ -34,37 +35,51 @@ it; Flathub policy evolves.
       dictation app that cannot transcribe out of the box is a
       "non-functional submission" and gets rejected. The remote-STT
       fallback alone is not enough for review.
-- [ ] **Manifest source shape for Flathub**: the shipping manifest
-      uses *local* sources (`flatpak/*.xml`, `icons/` dir, vendored
-      wheel files). A Flathub PR may contain **no source code and no
-      binary/precompiled files** — only the manifest (top level,
-      named after the app ID). Convert before submitting:
-  - metainfo/desktop/icons: install from the app's git source in
-    the `sayitermano` module (they live in-repo; "metadata must be
-    integrated in the upstream project" — ours is);
-  - vendored wheels: become remote `url` + `sha256` sources (the
-    wheels are stock PyPI artifacts —
-    [flatpak-builder-tools](https://github.com/flatpak/flatpak-builder-tools)
-    pip generator produces exactly this shape);
-  - keep the local-source version for CI bundle builds
-    (`packaging/ci-flatpak-bundle.md`) — the Flathub copy diverges
-    only in source locations.
-- [ ] **License files**: every module's license must install to
-  `$FLATPAK_DEST/share/licenses/$FLATPAK_ID` (the current manifest
-  doesn't do this yet).
-- [ ] **Runtime freshness**: `runtime-version` must be the latest
-  stable GNOME runtime *at submission time* (48 today — re-check;
-  EOL runtimes are rejected).
-- [ ] **Release tag**: pin the `sayitermano` git source to the
-  release tag `v<version>` (the `TODO(submission, #12)` in the
-  manifest); tag and push it first. "Insufficient development
-  history" is a rejection class — the tag history is the evidence.
+- [x] **Manifest source shape for Flathub** (landed 2026-11-22):
+      the submission-shaped copy lives at
+      `packaging/flatpak/io.github.acailic.SayItErmano.flathub.yml` —
+      zero local sources (metainfo/desktop/icons install from the
+      `sayitermano` git module; the wheels are remote PyPI
+      `url`+`sha256` entries pinned to the very artifacts vendored
+      for CI). It diverges from `packaging/io.github.acailic
+      .SayItErmano.yml` **only in source locations** — that
+      divergence rule is pinned by `tests/test_flatpak_manifest.py`.
+      For the PR itself: re-type the manifest by hand (Generative-AI
+      policy above) and copy it to the top level of the fork as
+      `io.github.acailic.SayItErmano.yml`.
+- [x] **License files** (landed 2026-11-22): every module in both
+      variants installs its license to
+      `$FLATPAK_DEST/share/licenses/$FLATPAK_ID` (per-module
+      subdirectories; wheel licenses extract from each wheel's
+      `.dist-info`). Enforced by
+      `test_every_module_installs_its_license`.
+- [x] **Runtime freshness** (checked 2026-11-22): GNOME **51** is the
+      latest stable — [release.gnome.org](https://release.gnome.org/)
+      lists 51 as the current release, and runtime branches track
+      GNOME releases with EOL on the next stable
+      ([runtimes doc](https://docs.flathub.org/docs/for-app-authors/runtimes)).
+      Both manifests bumped 48 → 51; note 51's freedesktop-sdk 26.08
+      base ships Python 3.14, so the pillow wheel is now the cp314
+      build. **Re-check the branch again on submission day** — EOL
+      runtimes are rejected.
+- [x] **Release tag** (landed 2026-11-22): the `sayitermano` git
+      source is pinned to tag `v0.9.0` in BOTH variants (the
+      `TODO(submission, #12)` resolved). The pin is
+      version-following: `tests/test_flatpak_manifest.py` asserts it
+      equals `v<pyproject version>`, so release-prepare's version
+      bump fails the suite until the pin moves — bump both manifests
+      when tagging a release.
 - [ ] **Screenshots**: captured per
-  [`packaging/flatpak/screenshots/SHOT-LIST.md`](../../packaging/flatpak/screenshots/SHOT-LIST.md),
-  committed on `linux` so the metainfo URLs resolve.
+      [`packaging/flatpak/screenshots/SHOT-LIST.md`](../../packaging/flatpak/screenshots/SHOT-LIST.md),
+      committed on `linux` so the metainfo URLs resolve.
 - [ ] **Demo video**: current per
-  [`packaging/flatpak/screenshots/DEMO-VIDEO.md`](../../packaging/flatpak/screenshots/DEMO-VIDEO.md)
-  — the submission template asks for it.
+      [`packaging/flatpak/screenshots/DEMO-VIDEO.md`](../../packaging/flatpak/screenshots/DEMO-VIDEO.md)
+      — the submission template asks for it.
+
+Remaining owner-only work in this section: the engine slice (#11),
+the screenshot PNGs (GUI capture), the demo video — and the
+submission PR itself (section 2), which by the Generative-AI policy
+must be hand-authored throughout.
 
 ## 1. Local dry run (expedites review)
 

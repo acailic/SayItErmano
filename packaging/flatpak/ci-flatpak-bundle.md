@@ -32,15 +32,19 @@ trigger adds no branch churn.
 ## Notes for the first run
 
 - The manifest's app module builds from
-  `https://github.com/acailic/SayItErmano.git` `branch: linux`; on a
-  release tag the tag IS the tip of `linux` (release-prepare pushes
-  the bump commit to `linux` before tagging). The
-  `TODO(submission, #12)` comment in the manifest switches the source
-  to the pinned tag for the Flathub PR — the workflow needs no change
-  when that happens.
-- First run downloads the GNOME 48 Sdk/Platform (~1 GB); later runs
+  `https://github.com/acailic/SayItErmano.git` pinned to the release
+  tag (`v0.9.0` today — the Flathub submission requirement; the tag
+  is the tip of `linux` because release-prepare pushes the version
+  bump before tagging). The pin is version-following
+  (`tests/test_flatpak_manifest.py` asserts it equals
+  `v<pyproject version>`) — bump it in BOTH manifest variants when
+  tagging a release. The workflow needs no change for any of this:
+  it builds whatever the checkout's manifest pins.
+- First run downloads the GNOME 51 Sdk/Platform (~1 GB); later runs
   benefit from a cache if you add `flatpak-builder` cache steps
-  (left out to keep the patch minimal).
+  (left out to keep the patch minimal). 51's freedesktop-sdk 26.08
+  base ships Python 3.14 — the `deps` wheel set pins the cp314
+  pillow build accordingly.
 - Wheels for the `deps` module are committed under
   `packaging/wheels/` — no network needed inside flatpak-builder's
   build sandbox.
@@ -77,7 +81,7 @@ trigger adds no branch churn.
 +    steps:
 +      - uses: actions/checkout@v7
 +
-+      - name: Install flatpak-builder + GNOME 48 runtime
++      - name: Install flatpak-builder + GNOME 51 runtime
 +        run: |
 +          set -euo pipefail
 +          sudo apt-get update -qq
@@ -85,7 +89,7 @@ trigger adds no branch churn.
 +          flatpak --user remote-add --if-not-exists flathub \
 +              https://flathub.org/repo/flathub.flatpakrepo
 +          flatpak --user install -y --noninteractive \
-+              org.gnome.Sdk//48 org.gnome.Platform//48
++              org.gnome.Sdk//51 org.gnome.Platform//51
 +
 +      - name: Build the manifest into a local repo
 +        run: |

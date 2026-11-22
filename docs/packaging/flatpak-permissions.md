@@ -1,12 +1,15 @@
 # Flatpak permissions — justifications, overrides, scope
 
-The reviewer-facing companion to
-`packaging/io.github.acailic.SayItErmano.yml` (issue #11, ADR-0006).
-Every `finish-arg` of the default manifest is justified here in the
-shape the Flathub submission PR needs; the opt-in overrides below are
-documented user choices, NOT defaults. Structural invariants are
-pinned by `tests/test_flatpak_manifest.py` — changing the baseline
-means changing the ADR first.
+The reviewer-facing companion to the Flatpak manifests (issue #11,
+ADR-0006): the local-source CI variant
+`packaging/io.github.acailic.SayItErmano.yml` and its Flathub-shaped
+copy `packaging/flatpak/io.github.acailic.SayItErmano.flathub.yml`
+(the two share this baseline — they diverge only in source
+locations). Every `finish-arg` of the default manifest is justified
+here in the shape the Flathub submission PR needs; the opt-in
+overrides below are documented user choices, NOT defaults.
+Structural invariants are pinned by `tests/test_flatpak_manifest.py`
+— changing the baseline means changing the ADR first.
 
 ## Default finish-args (the ADR-0006 baseline, exactly)
 

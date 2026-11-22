@@ -13,6 +13,23 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **Flathub submission prep: manifest shape + licenses + runtime
+  pin (#12 runbook §0)** — new Flathub-shaped manifest
+  `packaging/flatpak/io.github.acailic.SayItErmano.flathub.yml` with
+  zero local sources (desktop/metainfo/icons install from the
+  release-tag git checkout; the vendored wheels become PyPI
+  `url`+`sha256` sources pinned to the identical vendored
+  artifacts), kept from drifting out of the CI-bundle variant by a
+  pinned divergence rule in `tests/test_flatpak_manifest.py`. Every
+  module in both variants now installs its license to
+  `$FLATPAK_DEST/share/licenses/$FLATPAK_ID` (Flathub requirement —
+  wheel licenses extract from each wheel's `.dist-info`). Runtime
+  bumped 48 → **51** (latest stable per release.gnome.org; 51's
+  freedesktop-sdk 26.08 base ships Python 3.14, so pillow re-vendors
+  as the cp314 wheel), and the `sayitermano` git source is pinned to
+  tag `v0.9.0` in both variants — the pin is version-following
+  (asserted against `pyproject.toml`), so releases must move it.
+
 ## [v0.9.0] — productization: i18n, Flathub, Paddle funnel, local AI, license keys, apt updates (2026-11-22)
 
 - **i18n: translate the model-catalog notes** — the per-model subtitle

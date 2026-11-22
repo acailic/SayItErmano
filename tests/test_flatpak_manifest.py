@@ -1,7 +1,7 @@
-"""Structural gates for the SHIPPING Flatpak manifest (#11, ADR-0006).
+"""Structural gates for the two Flatpak manifests (#11/#12, ADR-0006).
 
 flatpak-builder does not run here (no flatpak on this runner, and the
-Flathub build happens in CI) — so these tests pin the manifest's
+Flathub build happens in CI) — so these tests pin the manifests'
 REVIEWER-FACING contract instead:
 
 * finish-args carry exactly the ADR-0006 permission baseline
@@ -14,7 +14,14 @@ REVIEWER-FACING contract instead:
   the documented not-vendored remainder;
 * metainfo: license matches the source, OARS rating, keywords, a
   release equal to the shipped version, and the Flathub screenshot
-  shot list (#12).
+  shot list (#12);
+* the Flathub-submission variant (packaging/flatpak/*.flathub.yml)
+  carries ZERO local sources (a Flathub PR may contain no source code
+  or binaries), pins every wheel remotely by url+sha256 to the very
+  artifacts vendored for CI, builds from the release tag, and the two
+  manifests diverge in nothing but module source locations;
+* every module of both manifests installs its license to
+  $FLATPAK_DEST/share/licenses/$FLATPAK_ID (Flathub requirements).
 
 The manifest is parsed with a minimal YAML-subset parser below (the
 dev environment has no PyYAML; flatpak-builder manifests are a small,
@@ -35,6 +42,9 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 PACKAGING = REPO / "packaging"
 MANIFEST_PATH = PACKAGING / "io.github.acailic.SayItErmano.yml"
+FLATHUB_MANIFEST_PATH = PACKAGING / "flatpak" \
+    / "io.github.acailic.SayItErmano.flathub.yml"
+WHEELS_DIR = PACKAGING / "wheels"
 FLATPAK_DIR = PACKAGING / "flatpak"
 
 APP_ID = "io.github.acailic.SayItErmano"
@@ -141,6 +151,11 @@ def manifest() -> dict:
 
 
 @pytest.fixture(scope="module")
+def flathub_manifest() -> dict:
+    return parse_manifest(FLATHUB_MANIFEST_PATH.read_text(encoding="utf-8"))
+
+
+@pytest.fixture(scope="module")
 def modules(manifest) -> dict[str, dict]:
     mods = manifest.get("modules") or []
     out = {}
@@ -173,13 +188,25 @@ def test_only_extra_finish_arg_is_the_flatpak_marker(manifest):
     assert envs == ["--env=SAYITERMANO_FLATPAK=1"]
 
 
-def test_identity_and_runtime(manifest):
-    assert manifest["id"] == APP_ID  # com.github.* ids are rejected
-    assert manifest["runtime"] == "org.gnome.Platform"
-    assert manifest["sdk"] == "org.gnome.Sdk"
-    assert manifest["runtime-version"] == "48"
-    # command must resolve inside /app — the pip console script
-    assert manifest["command"] == "sayit-ermano"
+def _project_version() -> str:
+    return tomllib.loads(
+        (REPO / "pyproject.toml").read_text(encoding="utf-8")
+    )["project"]["version"]
+
+
+def test_identity_and_runtime(manifest, flathub_manifest):
+    # GNOME 51 = the current stable runtime branch at submission time
+    # (release.gnome.org lists 51 as the latest release; branch policy:
+    # docs.flathub.org/docs/for-app-authors/runtimes) — 48's Python
+    # 3.12 (freedesktop-sdk 24.08) is why the CI variant used to pin
+    # the cp312 pillow wheel.
+    for parsed in (manifest, flathub_manifest):
+        assert parsed["id"] == APP_ID  # com.github.* ids are rejected
+        assert parsed["runtime"] == "org.gnome.Platform"
+        assert parsed["sdk"] == "org.gnome.Sdk"
+        assert parsed["runtime-version"] == "51"
+        # command must resolve inside /app — the pip console script
+        assert parsed["command"] == "sayit-ermano"
     pyproject = tomllib.loads(
         (REPO / "pyproject.toml").read_text(encoding="utf-8"))
     assert pyproject["project"]["scripts"]["sayit-ermano"]
@@ -229,6 +256,11 @@ def test_app_module_builds_offline_from_the_git_checkout(modules):
     srcs = app["sources"]
     assert len(srcs) == 1 and srcs[0]["type"] == "git"
     assert srcs[0]["url"] == "https://github.com/acailic/SayItErmano.git"
+    # Flathub builds from stable refs only: the tag pin must follow the
+    # release (release-prepare bumps the version; forgetting the pin
+    # makes this — and the v0.9.0-built bundle — drift).
+    assert srcs[0].get("tag") == f"v{_project_version()}"
+    assert "branch" not in srcs[0]
 
 
 # -- python dependency accounting ------------------------------------------
@@ -236,7 +268,9 @@ def test_app_module_builds_offline_from_the_git_checkout(modules):
 
 VENDORED_WHEELS = {
     "python-xlib": "python_xlib-0.33-py2.py3-none-any.whl",
-    "pillow": "pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64"
+    # cp314: the GNOME 51 runtime's Python is 3.14 (freedesktop-sdk
+    # 26.08); the cp312 wheel served GNOME 48's 3.12.
+    "pillow": "pillow-13.0.0-cp314-cp314-manylinux_2_27_x86_64"
               ".manylinux_2_28_x86_64.whl",
     "dbus-next": "dbus_next-0.2.3-py3-none-any.whl",
     "global-shortcut-portal": "global_shortcut_portal-0.1.0-py3-none-any.whl",
@@ -451,3 +485,105 @@ def test_permissions_doc_justifies_every_baseline_arg():
         assert arg.split("=", 1)[1] in text, \
             f"{arg}: justification missing from {doc}"
     assert "--device=all" in text  # documented as the opt-in override
+
+
+# -- the Flathub-submission variant (#12 runbook section 0) -------------------
+#
+# A Flathub PR contains ONLY the manifest — no source code, no binary
+# or precompiled files. packaging/flatpak/io.github.acailic.SayItErmano
+# .flathub.yml is the submission-shaped copy: every source remote,
+# desktop/metainfo/icons installed from the sayitermano git module,
+# wheels as PyPI url+sha256 entries.
+
+
+def _module_map(parsed: dict) -> dict[str, dict]:
+    out = {}
+    for mod in parsed["modules"]:
+        assert isinstance(mod, dict) and mod["name"] not in out, mod
+        out[mod["name"]] = mod
+    return out
+
+
+def test_flathub_manifest_has_no_local_sources(flathub_manifest):
+    for mod in flathub_manifest["modules"]:
+        for src in mod.get("sources") or []:
+            assert "path" not in src, \
+                f"{mod['name']}: local source — a Flathub build takes " \
+                "remote sources only (git/url), never repo files"
+
+
+def test_flathub_app_module_installs_data_from_the_git_checkout(
+        flathub_manifest):
+    app = _module_map(flathub_manifest)["sayitermano"]
+    cmds = "\n".join(app["build-commands"])
+    # "metadata must be integrated in the upstream project": desktop
+    # file, metainfo and icons install from the checkout's own paths
+    assert "packaging/flatpak/io.github.acailic.SayItErmano.desktop" in cmds
+    assert "/app/share/applications" in cmds
+    assert "packaging/flatpak/io.github.acailic.SayItErmano.metainfo.xml" \
+        in cmds
+    assert "/app/share/metainfo" in cmds
+    for size in (16, 32, 48, 64, 128, 256, 512):
+        src = f"packaging/icons/hicolor/{size}x{size}/apps/sayit-ermano.png"
+        dst = f"/app/share/icons/hicolor/{size}x{size}/apps/sayit-ermano.png"
+        assert src in cmds and dst in cmds, f"icon install missing: {src}"
+    srcs = app["sources"]
+    assert len(srcs) == 1 and srcs[0]["type"] == "git"
+    assert srcs[0]["url"] == "https://github.com/acailic/SayItErmano.git"
+    assert srcs[0].get("tag") == f"v{_project_version()}"
+    assert "branch" not in srcs[0]
+
+
+def test_flathub_wheels_are_remote_copies_of_the_vendored_set(
+        flathub_manifest):
+    deps = _module_map(flathub_manifest)["deps"]
+    sources = deps["sources"]
+    assert {s["url"].rsplit("/", 1)[-1] for s in sources} \
+        == set(VENDORED_WHEELS.values())
+    for src in sources:
+        assert src["type"] == "file"
+        assert src["url"].startswith("https://files.pythonhosted.org/"), \
+            src["url"]  # stock PyPI artifact, pip-generator shape
+        # bit-identical to the artifact the CI bundle build pins:
+        # same basename, same sha256 as the vendored wheel
+        vendored = WHEELS_DIR / src["url"].rsplit("/", 1)[-1]
+        assert vendored.is_file(), f"not vendored: {vendored.name}"
+        assert src["sha256"] == hashlib.sha256(
+            vendored.read_bytes()).hexdigest()
+    # the pip install line consumes exactly those wheels
+    for wheel in VENDORED_WHEELS.values():
+        assert wheel in " ".join(deps["build-commands"])
+
+
+def test_manifests_diverge_only_in_module_sources(manifest, flathub_manifest):
+    """Divergence rule (header of the .flathub.yml copy): id, runtime,
+    command, finish-args and the deps build must NOT drift between the
+    variants — only where each module's sources come from (and the
+    data installs that follow them) differs."""
+    for key in ("id", "runtime", "runtime-version", "sdk", "command",
+                "finish-args"):
+        assert manifest[key] == flathub_manifest[key], key
+    assert _module_map(manifest)["deps"]["build-commands"] \
+        == _module_map(flathub_manifest)["deps"]["build-commands"], \
+        "deps module drifted between variants"
+    app_install = "pip3 install --no-build-isolation --no-deps " \
+        "--prefix=/app ."
+    for parsed in (manifest, flathub_manifest):
+        assert app_install in \
+            _module_map(parsed)["sayitermano"]["build-commands"]
+
+
+def test_every_module_installs_its_license(manifest, flathub_manifest):
+    """Flathub requirements: each module's license files install to
+    $FLATPAK_DEST/share/licenses/$FLATPAK_ID — every module, BOTH
+    variants."""
+    license_dir = "$FLATPAK_DEST/share/licenses/$FLATPAK_ID"
+    for variant, parsed in (("ci", manifest), ("flathub", flathub_manifest)):
+        mods = parsed["modules"]
+        assert mods, variant
+        for mod in mods:
+            cmds = "\n".join(mod["build-commands"])
+            assert license_dir in cmds, \
+                f"{variant}/{mod['name']}: no license install"
+    # the app license the sayitermano modules install exists upstream
+    assert (REPO / "LICENSE").is_file()
