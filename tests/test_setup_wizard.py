@@ -20,8 +20,13 @@ import pytest
 
 from fluidvoice import setup_wizard as sw
 from fluidvoice.recorder import RecorderError
-from fluidvoice.setup_wizard import (HardwareProfile, ProgressPrinter,
-                                     SetupDeps, SetupWizard, recommend_models)
+from fluidvoice.setup_wizard import (
+    HardwareProfile,
+    ProgressPrinter,
+    SetupDeps,
+    SetupWizard,
+    recommend_models,
+)
 
 
 def ok(args=None, stdout=b""):
@@ -273,7 +278,7 @@ def test_insert_failure_is_an_actionable_blocker():
 
 
 def test_already_downloaded_model_skips_download():
-    from fluidvoice import model_catalog, paths
+    from fluidvoice import model_catalog
     ggml = model_catalog.gguf_path("ggml-base.en.bin")
     ggml.parent.mkdir(parents=True, exist_ok=True)
     ggml.write_bytes(b"x")

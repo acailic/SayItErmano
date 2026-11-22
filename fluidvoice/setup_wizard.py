@@ -304,6 +304,7 @@ def _default_download(kind: str, name: str, progress: ProgressPrinter) -> Path:
 def _default_record(seconds: float, out: Line) -> Path:
     """Record a fixed `seconds` take via the production Recorder."""
     import tempfile
+
     from .recorder import Recorder
     rec = Recorder()
     wav = Path(tempfile.mkdtemp(prefix="sayit-setup-")) / "test-take.wav"
@@ -336,8 +337,9 @@ class SetupWizard:
     through CLI (`sayit-ermano --setup`) in production."""
 
     def __init__(self, cfg: dict | None = None, deps: SetupDeps | None = None):
-        from .config import DEFAULTS
         import copy
+
+        from .config import DEFAULTS
         self.cfg = copy.deepcopy(cfg) if cfg is not None else copy.deepcopy(DEFAULTS)
         self.deps = (deps or SetupDeps()).resolve()
         self._last_blocker: SetupResult | None = None
