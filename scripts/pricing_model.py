@@ -1,460 +1,564 @@
 #!/usr/bin/env python3
 """One-time purchase cost model — monetization plan question R3.
 
-Pure stdlib arithmetic: does a one-time purchase price cover its own
-costs? No demand claims, no market sizing — every input below is an
-ASSUMPTION to be replaced with measured values; the model only makes
-the arithmetic reproducible and checkable.
+Answers "does a one-time purchase cover its costs?" with arithmetic
+only: given the INPUTS dict below, it computes net contribution per
+sale, break-even volume per price point, 24-month cash outcomes for
+low/base/high volumes, and a one-at-a-time sensitivity ranking of the
+assumptions. Every number in
+docs/research/2026-11-22-one-time-purchase-cost-model.md is generated
+by this script (marker-checked block); `--check` re-verifies the
+arithmetic so the note can be regenerated:
 
-Cost model per sold license (all EUR):
+    python3 scripts/pricing_model.py           # print the generated tables
+    python3 scripts/pricing_model.py --check   # self-verify + note sync
 
-  net contribution = kept_revenue - processing - support
-                                   - distribution - tax_handling
-  kept_revenue  = price * (1 - refund_rate)     # refunds return the
-    full price; processing fees on refunded transactions are NOT
-    returned by either route (charged on every transaction above).
-  Fixed monthly costs (route-dependent: tax compliance) are covered by
-  a funded maintenance reserve of `maintenance_reserve_months` months;
-  break-even volume = units whose net contribution funds that reserve.
-  One-off development is SUNK and stated separately — it is not a cash
-  obligation of sales, but a recovery line is shown for context.
+Model shape (a sale = one license at the list price):
 
-Usage:
-  scripts/pricing_model.py             # human-readable tables (stdout)
-  scripts/pricing_model.py --markdown  # markdown block for the note in
-                                       # docs/research/2026-11-22-one-time-purchase-cost-model.md
-  scripts/pricing_model.py --check     # self-verify sums + break-even
-                                       # solve; exit 0 = green
+- Per-sale cash costs: processor fee (charged on every transaction;
+  refunds do not claw back the fee — conservative), refund loss
+  (refund_rate x price), paid support minutes x rate, variable
+  distribution (GB x cost), chargeback expectation (rate x (price +
+  chargeback fee)).
+- Hurdle ("target"): fixed monthly cash costs over the 24-month window
+  (storage + tooling + seller-side tax compliance + maintenance hours
+  valued at the maintainer rate) PLUS a funded maintenance reserve of
+  `reserve_months` months of the same fixed costs.
+- Break-even N* = smallest integer N with N * net_contribution >=
+  target (closed form: ceil(target / net)); None when net <= 0 — the
+  price point never covers its per-sale costs.
+- Stated separately, never inside per-sale economics: sunk one-off
+  development, and unpaid community-support time (valued at the same
+  hourly rate for an "economic payback" view only).
 
-Companion test: tests/test_pricing_model.py (offline, stdlib only).
+All inputs are assumptions, not measurements; see the research note
+for provenance and limits. Stdlib only, offline.
 """
 from __future__ import annotations
 
 import argparse
+import copy
 import math
+import re
 import sys
-from dataclasses import dataclass
+from pathlib import Path
 
-# ── inputs (ALL assumptions, not measurements) ──────────────────────────────
+REPO_ROOT = Path(__file__).resolve().parents[1]
+NOTE_PATH = (REPO_ROOT / "docs" / "research"
+             / "2026-11-22-one-time-purchase-cost-model.md")
+BEGIN_MARKER = "<!-- BEGIN GENERATED TABLES (scripts/pricing_model.py) -->"
+END_MARKER = "<!-- END GENERATED TABLES -->"
 
+# ---------------------------------------------------------------------------
+# Inputs — every number here is a labeled assumption, not a measurement.
+# ---------------------------------------------------------------------------
 INPUTS: dict = {
-    # Price points under test (EUR, one-time, VAT-exclusive).
-    "prices_eur": {"low": 9, "base": 19, "high": 39},
-
-    # Sales volumes over the 24-month horizon (units, assumptions).
-    "volumes_24m": {"low": 300, "base": 900, "high": 2500},
-
-    # Payment routes: merchant-of-record vs direct card collection.
-    #   MoR    ~10% + €0.50 — provider is the seller of record, handles
-    #           VAT/sales tax (that service is inside the 10%).
-    #   direct ~3% + €0.30  — we are the seller: VAT/OSS registration,
-    #           filings and invoicing remain ours (costed under "tax").
-    "payment": {
-        "mor": {"label": "MoR (Paddle-class)", "pct": 0.10, "fixed": 0.50},
-        "direct": {"label": "Direct (Stripe-class)", "pct": 0.03,
-                   "fixed": 0.30},
+    "currency": "EUR",
+    "window_months": 24,
+    # Three price points per the task brief (e.g. 9/19/39 EUR).
+    "prices": {"low": 9.00, "base": 19.00, "high": 39.00},
+    # Sales of the paid SKU over the full window — planning brackets,
+    # not forecasts.
+    "volumes": {"low": 300, "base": 1500, "high": 5000},
+    # Two processor columns: a merchant-of-record checkout (handles VAT
+    # as the reseller, higher take) vs a direct card processor (seller
+    # keeps VAT compliance — see tax_compliance_monthly). MoR pct is the
+    # conservative ~10% class; "paddle" carries Paddle's published
+    # 5% + $0.50 (verified 2026-11-21, docs/PRICING.md; fixed fee taken
+    # as €0.50 ≈ $0.50) — it appears in the processor-scenarios table,
+    # not the two main columns.
+    "processors": {
+        "mor": {"label": "MoR ~10% + fixed", "pct": 0.10, "fixed": 0.50},
+        "direct": {"label": "Direct ~3% + 30c", "pct": 0.03, "fixed": 0.30},
+        "paddle": {"label": "Paddle published 5% + $0.50", "pct": 0.05,
+                   "fixed": 0.50},
     },
-
-    # Refund scenarios (fraction of sales refunded, full price returned).
-    "refund_rates": {"low": 0.05, "base": 0.10, "high": 0.20},
-
-    # Support: contact minutes per sold unit (refunded buyers contact
-    # too, so minutes are charged on ALL sales) x hourly cost.
-    "support": {"minutes_per_sale": 6, "hourly_cost_eur": 35},
-
-    # Distribution: apt repo + GitHub Pages + Flathub sit on free/bundled
-    # bandwidth (≈ €0 per download); artifact/release storage is a small
-    # fixed monthly line (see fixed_monthly).
-    "distribution": {"per_sale_bandwidth_eur": 0.0},
-
-    # Taxes: MoR handles them (marginal €0 — paid via the 10%); direct
-    # route leaves EU-OSS compliance, invoicing and filings with us.
-    "tax": {
-        "mor": {"handled_by": "provider", "monthly_compliance_eur": 0.0,
-                "per_sale_eur": 0.0},
-        "direct": {"handled_by": "seller", "monthly_compliance_eur": 20.0,
-                   "per_sale_eur": 0.10},
+    "refund_rates": [0.05, 0.10, 0.20],
+    # Support: paid-channel minutes per sale; community (free-tier)
+    # minutes are unpaid — valued for the economic view only.
+    "support": {
+        "paid_minutes_per_sale": 15,
+        "community_minutes_per_sale": 10,
+        "rate_per_hour": 40.0,
     },
-
-    # Fixed monthly costs (independent of sales volume).
-    "fixed_monthly": {
-        "artifact_storage_eur": 2.0,   # release artifacts / hosting
-        "web_domain_eur": 1.0,         # landing site domain
-        "maintenance_hours": 8.0,      # paid upkeep budget per month
-        "maintenance_hourly_eur": 35.0,
-    },
-
-    # The reserve a one-time price must fund on top of per-sale costs:
-    # N months of fixed costs, banked for the maintenance tail.
-    "maintenance_reserve_months": 12,
-
-    # One-off development, SUNK at decision time — stated separately,
-    # never inside per-sale economics (shown only as a recovery line).
-    "development_sunk": {"hours": 400, "hourly_cost_eur": 35},
+    "chargeback": {"rate": 0.005, "fee": 15.0},
+    # Distribution: apt repo on GitHub Pages + Flathub CDN => bandwidth
+    # ~0; artifact storage/hosting as a fixed monthly line, plus a
+    # token per-sale GB figure for release downloads.
+    "distribution": {"fixed_monthly": 10.0, "gb_per_sale": 0.3,
+                     "cost_per_gb": 0.01},
+    # Taxes: the MoR is the seller of record (VAT handled inside its
+    # cut); a direct processor leaves EU OSS/VAT filings with the
+    # seller — priced as a monthly compliance line, 0 for the MoR.
+    "tax_compliance_monthly": {"mor": 0.0, "direct": 60.0, "paddle": 0.0},
+    "tooling_monthly": 15.0,
+    # Maintenance: hours per month of fixed upkeep (builds, distro
+    # rebuilds, security follows) valued at the maintainer rate; the
+    # reserve funds `reserve_months` of all fixed monthly costs.
+    "maintenance": {"hours_monthly": 10, "rate_per_hour": 40.0},
+    "reserve_months": 12,
+    # One-off development to date — sunk, stated separately.
+    "sunk": {"hours": 1000, "rate_per_hour": 40.0},
+    # Base case used for the sensitivity ranking.
+    "base_case": {"price": "base", "processor": "mor", "refund_rate": 0.10},
 }
 
-ROUTES = ("mor", "direct")
-PRICE_KEYS = ("low", "base", "high")
+
+# ---------------------------------------------------------------------------
+# Pure model
+# ---------------------------------------------------------------------------
+def fixed_monthly_costs(inputs: dict, processor: str) -> float:
+    """Fixed cash cost per month for one processor column."""
+    maintenance = inputs["maintenance"]
+    return (
+        inputs["distribution"]["fixed_monthly"]
+        + inputs["tooling_monthly"]
+        + inputs["tax_compliance_monthly"][processor]
+        + maintenance["hours_monthly"] * maintenance["rate_per_hour"]
+    )
 
 
-# ── model ───────────────────────────────────────────────────────────────────
-#
-# Every function takes an explicit `inputs` (defaulting to INPUTS) so
-# sensitivity variants are computed on merged copies — the module-level
-# INPUTS dict is never mutated after import.
-
-def fixed_monthly(route: str, inputs: dict = INPUTS) -> float:
-    """Route-dependent fixed cost per month (EUR)."""
-    f = inputs["fixed_monthly"]
-    base = (f["artifact_storage_eur"] + f["web_domain_eur"]
-            + f["maintenance_hours"] * f["maintenance_hourly_eur"])
-    return base + inputs["tax"][route]["monthly_compliance_eur"]
+def funded_target(inputs: dict, processor: str, include_sunk: bool = False) -> float:
+    """The hurdle sales must cover: window fixed costs + reserve (+ sunk)."""
+    monthly = fixed_monthly_costs(inputs, processor)
+    target = monthly * (inputs["window_months"] + inputs["reserve_months"])
+    if include_sunk:
+        target += inputs["sunk"]["hours"] * inputs["sunk"]["rate_per_hour"]
+    return target
 
 
-def reserve_target(route: str, inputs: dict = INPUTS) -> float:
-    """Maintenance reserve the sales must fund (EUR)."""
-    return (inputs["maintenance_reserve_months"]
-            * fixed_monthly(route, inputs))
+def per_sale_costs(price: float, inputs: dict, processor: str,
+                   refund_rate: float) -> dict[str, float]:
+    """Expected per-sale cost lines (cash), keyed by line name."""
+    proc = inputs["processors"][processor]
+    support = inputs["support"]
+    dist = inputs["distribution"]
+    cb = inputs["chargeback"]
+    return {
+        "processing": price * proc["pct"] + proc["fixed"],
+        "refunds": refund_rate * price,
+        "support": (support["paid_minutes_per_sale"] / 60.0
+                    * support["rate_per_hour"]),
+        "distribution": dist["gb_per_sale"] * dist["cost_per_gb"],
+        "chargebacks": cb["rate"] * (price + cb["fee"]),
+    }
 
 
-def development_sunk(inputs: dict = INPUTS) -> float:
-    d = inputs["development_sunk"]
-    return d["hours"] * d["hourly_cost_eur"]
+def net_contribution(price: float, inputs: dict, processor: str,
+                     refund_rate: float) -> float:
+    """Cash left per sale after per-sale costs, before fixed costs."""
+    return price - sum(per_sale_costs(price, inputs, processor,
+                                      refund_rate).values())
 
 
-@dataclass(frozen=True)
-class PerSale:
-    """Cost lines and net contribution for one sold license."""
-    price: float
-    route: str
-    refund_rate: float
-    kept_revenue: float
-    processing: float
-    support: float
-    distribution: float
-    tax_handling: float
-    net: float
-
-    def lines(self) -> list[tuple[str, float]]:
-        return [("kept revenue (after refunds)", self.kept_revenue),
-                ("payment processing", self.processing),
-                ("support", self.support),
-                ("distribution", self.distribution),
-                ("tax handling", self.tax_handling)]
+def unpaid_support_per_sale(inputs: dict) -> float:
+    """Value of unpaid community-support time per sale (non-cash)."""
+    support = inputs["support"]
+    return (support["community_minutes_per_sale"] / 60.0
+            * support["rate_per_hour"])
 
 
-def per_sale(price: float, route: str, refund_rate: float,
-             inputs: dict = INPUTS) -> PerSale:
-    p = inputs["payment"][route]
-    s = inputs["support"]
-    kept = price * (1.0 - refund_rate)
-    processing = price * p["pct"] + p["fixed"]
-    support = s["minutes_per_sale"] / 60.0 * s["hourly_cost_eur"]
-    dist = inputs["distribution"]["per_sale_bandwidth_eur"]
-    tax = inputs["tax"][route]["per_sale_eur"]
-    return PerSale(price=price, route=route, refund_rate=refund_rate,
-                   kept_revenue=kept, processing=processing, support=support,
-                   distribution=dist, tax_handling=tax,
-                   net=kept - processing - support - dist - tax)
+def economic_net_contribution(price: float, inputs: dict, processor: str,
+                              refund_rate: float) -> float:
+    """Net per sale also valuing unpaid community-support time."""
+    return (net_contribution(price, inputs, processor, refund_rate)
+            - unpaid_support_per_sale(inputs))
 
 
-def break_even_units(price: float, route: str, refund_rate: float,
-                     target: float, inputs: dict = INPUTS) -> int | None:
-    """Smallest unit count whose net contribution funds `target`;
-    None when per-sale net is zero/negative (price never breaks even)."""
-    net = per_sale(price, route, refund_rate, inputs).net
+def break_even_volume(price: float, inputs: dict, processor: str,
+                      refund_rate: float, economic: bool = False) -> int | None:
+    """Smallest N with N * net >= target; None if net <= 0 (never).
+
+    `economic` additionally values unpaid community-support time in the
+    per-sale net and includes sunk development in the target.
+    """
+    if economic:
+        net = economic_net_contribution(price, inputs, processor, refund_rate)
+        target = funded_target(inputs, processor, include_sunk=True)
+    else:
+        net = net_contribution(price, inputs, processor, refund_rate)
+        target = funded_target(inputs, processor)
     if net <= 0:
         return None
     return math.ceil(target / net)
 
 
-def total_contribution(volume: int, price: float, route: str,
-                       refund_rate: float, inputs: dict = INPUTS) -> float:
-    """Scenario total: per-sale net aggregated over the 24-month volume."""
-    return volume * per_sale(price, route, refund_rate, inputs).net
+def window_outcome(volume: int, price: float, inputs: dict, processor: str,
+                   refund_rate: float) -> float:
+    """Cash at window end: volume * net minus the funded target."""
+    return (volume * net_contribution(price, inputs, processor, refund_rate)
+            - funded_target(inputs, processor))
 
 
-# ── sensitivity (base price, base refund; which assumption moves
-#    break-even most) ────────────────────────────────────────────────────────
-
-def _sensitivity_variants() -> list[tuple[str, str, list[dict]]]:
-    """(dimension, label, [{input overrides for low}, {for high}]) —
-    each override carries a COMPLETE replacement sub-dict, so a shallow
-    top-level merge is a sound variant (no cross-dimension leakage)."""
-    s = INPUTS["support"]
-    f = INPUTS["fixed_monthly"]
-    p = INPUTS["payment"]["mor"]
-    return [
-        ("refund_rate", "refund rate 5% vs 20%",
-         [{"refund_rates": {**INPUTS["refund_rates"], "base": 0.05}},
-          {"refund_rates": {**INPUTS["refund_rates"], "base": 0.20}}]),
-        ("support", "support minutes 3 vs 12 per sale",
-         [{"support": {**s, "minutes_per_sale": 3.0}},
-          {"support": {**s, "minutes_per_sale": 12.0}}]),
-        ("mor_pct", "MoR fee 8% vs 12%",
-         [{"payment": {**INPUTS["payment"], "mor": {**p, "pct": 0.08}}},
-          {"payment": {**INPUTS["payment"], "mor": {**p, "pct": 0.12}}}]),
-        ("maintenance", "maintenance 4h vs 16h per month",
-         [{"fixed_monthly": {**f, "maintenance_hours": 4.0}},
-          {"fixed_monthly": {**f, "maintenance_hours": 16.0}}]),
-    ]
+def economic_outcome(volume: int, price: float, inputs: dict, processor: str,
+                     refund_rate: float) -> float:
+    """Economic outcome: also values unpaid support, recovers sunk dev."""
+    return (volume * economic_net_contribution(price, inputs, processor,
+                                               refund_rate)
+            - funded_target(inputs, processor, include_sunk=True))
 
 
-def sensitivity() -> list[dict]:
-    """Break-even at base price/MoR route/base refund under each variant
-    pair, ranked by absolute swing. Variants are merged COPIES; the
-    module-level INPUTS is left untouched."""
-    price = INPUTS["prices_eur"]["base"]
-    rate = INPUTS["refund_rates"]["base"]
-    baseline = break_even_units(price, "mor", rate, reserve_target("mor"))
-    rows = []
-    for dim, label, pair in _sensitivity_variants():
-        vals = []
-        for overrides in pair:
-            variant = {**INPUTS, **overrides}
-            v_rate = variant["refund_rates"]["base"]
-            vals.append(break_even_units(price, "mor", v_rate,
-                                         reserve_target("mor", variant),
-                                         variant))
-        rows.append({"dimension": dim, "label": label,
-                     "low": vals[0], "high": vals[1],
-                     "swing": abs(vals[1] - vals[0]), "baseline": baseline})
-    rows.sort(key=lambda r: r["swing"], reverse=True)
+def _tweak_setters(inputs: dict) -> dict[str, object]:
+    """Named setters over a (deep-copied) inputs dict, base-case slots."""
+    price_key = inputs["base_case"]["price"]
+    proc_key = inputs["base_case"]["processor"]
+
+    def set_price(i: dict, v: float) -> None:
+        i["prices"][price_key] = v
+
+    def set_pct(i: dict, v: float) -> None:
+        i["processors"][proc_key]["pct"] = v
+
+    def set_refund(i: dict, v: float) -> None:
+        i["base_case"]["refund_rate"] = v
+
+    def set_support(i: dict, v: float) -> None:
+        i["support"]["paid_minutes_per_sale"] = v
+
+    def set_maintenance(i: dict, v: float) -> None:
+        i["maintenance"]["hours_monthly"] = v
+
+    def set_chargeback(i: dict, v: float) -> None:
+        i["chargeback"]["rate"] = v
+
+    return {
+        "list price": set_price,
+        "processor percentage fee": set_pct,
+        "refund rate": set_refund,
+        "paid support minutes/sale": set_support,
+        "maintenance hours/month": set_maintenance,
+        "chargeback rate": set_chargeback,
+    }
+
+
+def sensitivity(inputs: dict) -> list[dict]:
+    """One-at-a-time ±25% perturbations, ranked by break-even swing.
+
+    Each row perturbs one assumption of the base case and recomputes
+    the cash break-even. A side that turns break-even to "never"
+    (net <= 0) counts as the largest possible swing.
+    """
+    base_case = inputs["base_case"]
+    base_price = inputs["prices"][base_case["price"]]
+    base_be = break_even_volume(base_price, inputs, base_case["processor"],
+                                base_case["refund_rate"])
+    rows: list[dict] = []
+    for name, setter in _tweak_setters(inputs).items():
+        entry: dict = {"assumption": name, "base": base_be, "low": None,
+                       "high": None, "swing": None}
+        for tag, mult in (("low", 0.75), ("high", 1.25)):
+            tweaked = copy.deepcopy(inputs)
+            setter(tweaked, round(_read_value(inputs, name) * mult, 6))
+            # read the (possibly tweaked) price back: the "list price"
+            # row must feed the perturbed price into the solve
+            be_price = tweaked["prices"][tweaked["base_case"]["price"]]
+            entry[tag] = break_even_volume(
+                be_price, tweaked, tweaked["base_case"]["processor"],
+                tweaked["base_case"]["refund_rate"])
+        if base_be is not None:
+            if entry["low"] is None or entry["high"] is None:
+                entry["swing"] = math.inf
+            else:
+                entry["swing"] = max(abs(entry["low"] - base_be),
+                                     abs(entry["high"] - base_be))
+        rows.append(entry)
+    rows.sort(key=lambda r: (-(r["swing"] if r["swing"] is not None
+                                else -math.inf), r["assumption"]))
     return rows
 
 
-# ── self-verification (--check) ─────────────────────────────────────────────
-
-def check() -> list[str]:
-    """Independent re-derivation of every published number; empty = green.
-
-    Sums are recomputed with math.fsum from the line items, aggregates
-    re-derived by iterating unit-by-unit, and each break-even N is
-    proven MINIMAL: (N-1)*net < target <= N*net.
-    """
-    problems: list[str] = []
-    tol = 1e-9
-    dev = development_sunk()
-
-    for route in ROUTES:
-        target = reserve_target(route)
-        want = INPUTS["maintenance_reserve_months"] * fixed_monthly(route)
-        if abs(target - want) > tol:
-            problems.append(f"reserve({route}): {target} != {want}")
-        if fixed_monthly("mor") > fixed_monthly("direct") + tol:
-            problems.append("MoR fixed monthly must not exceed direct "
-                            "(only direct carries seller compliance)")
-
-    for pkey in PRICE_KEYS:
-        price = INPUTS["prices_eur"][pkey]
-        for route in ROUTES:
-            for rkey in ("low", "base", "high"):
-                rate = INPUTS["refund_rates"][rkey]
-                ps = per_sale(price, route, rate)
-                # 1. line-sum identity (fsum, independent order)
-                costs = math.fsum([-ps.processing, -ps.support,
-                                   -ps.distribution, -ps.tax_handling])
-                if abs(ps.kept_revenue + costs - ps.net) > tol:
-                    problems.append(f"net sum mismatch {pkey}/{route}/{rkey}")
-                # 2. unit-by-unit aggregate == per-sale x volume
-                vol = INPUTS["volumes_24m"]["base"]
-                loop_total = math.fsum(
-                    per_sale(price, route, rate).net for _ in range(vol))
-                if abs(loop_total - vol * ps.net) > 1e-6:
-                    problems.append(f"aggregate mismatch {pkey}/{route}/{rkey}")
-                # 3. break-even minimality
-                n = break_even_units(price, route, rate, reserve_target(route))
-                if n is None:
-                    if ps.net > 0:
-                        problems.append(f"break-even None but net>0 "
-                                        f"{pkey}/{route}/{rkey}")
-                    continue
-                if not isinstance(n, int) or n < 1:
-                    problems.append(f"break-even not a positive int: {n}")
-                if not ((n - 1) * ps.net < reserve_target(route)
-                        <= n * ps.net + tol):
-                    problems.append(f"break-even not minimal "
-                                    f"{pkey}/{route}/{rkey}: N={n}")
-
-    rows = {r["dimension"]: r for r in sensitivity()}
-    price_base = INPUTS["prices_eur"]["base"]
-    for dim, _label, pair in _sensitivity_variants():
-        row = rows[dim]
-        for side, overrides in zip(("low", "high"), pair):
-            n = row[side]
-            # re-merge the variant independently and prove N's minimality
-            # against THAT variant's own economics
-            variant = {**INPUTS, **overrides}
-            v_rate = variant["refund_rates"]["base"]
-            v_net = per_sale(price_base, "mor", v_rate, variant).net
-            v_target = reserve_target("mor", variant)
-            if n is None:
-                if v_net > 0:
-                    problems.append(f"sensitivity {dim}/{side}: None "
-                                    "but variant net > 0")
-                continue
-            if n < 1 or not isinstance(n, int):
-                problems.append(f"sensitivity {dim}/{side} invalid: {n}")
-                continue
-            if not ((n - 1) * v_net < v_target <= n * v_net + 1e-9):
-                problems.append(f"sensitivity {dim}/{side} not minimal:"
-                                f" N={n}")
-
-    if abs(dev - INPUTS["development_sunk"]["hours"]
-           * INPUTS["development_sunk"]["hourly_cost_eur"]) > tol:
-        problems.append("sunk development line does not sum")
-    return problems
+def _read_value(inputs: dict, name: str) -> float:
+    """Read the current base-case value of a tweakable assumption."""
+    base_case = inputs["base_case"]
+    table = {
+        "list price": lambda: inputs["prices"][base_case["price"]],
+        "processor percentage fee": lambda: inputs["processors"][
+            base_case["processor"]]["pct"],
+        "refund rate": lambda: base_case["refund_rate"],
+        "paid support minutes/sale": lambda: inputs["support"][
+            "paid_minutes_per_sale"],
+        "maintenance hours/month": lambda: inputs["maintenance"][
+            "hours_monthly"],
+        "chargeback rate": lambda: inputs["chargeback"]["rate"],
+    }
+    return table[name]()
 
 
-# ── rendering ───────────────────────────────────────────────────────────────
-
+# ---------------------------------------------------------------------------
+# Rendering — every table in the note comes from here
+# ---------------------------------------------------------------------------
 def _eur(x: float) -> str:
     return f"{x:,.2f}"
 
 
-def _cost(x: float) -> str:
-    """Cost cell: plain 0.00 for zero lines (avoids '-0.00')."""
-    return f"-{x:.2f}" if x > 0 else "0.00"
+def _signed(x: float) -> str:
+    return f"{x:+,.2f}"
 
 
-def _be(x: int | None) -> str:
-    return "never" if x is None else f"{x:,}"
+def _pct(x: float) -> str:
+    return f"{x * 100:.0f}%"
 
 
-def _route_label(route: str) -> str:
-    """Short route name for tables: 'mor' / 'direct'."""
-    return INPUTS["payment"][route]["label"].split(" ")[0].lower()
+def _be(v: int | None) -> str:
+    return "never" if v is None else f"{v:,}"
 
 
-def render(markdown: bool = False) -> str:
-    md = markdown
+def render(inputs: dict) -> str:
+    """The full generated block embedded in the research note."""
     out: list[str] = []
-    h2 = "## " if md else ""
-    bold = "**" if md else ""
-    price = INPUTS["prices_eur"]
-    vol = INPUTS["volumes_24m"]
-    base_rate = INPUTS["refund_rates"]["base"]
-    dev = development_sunk()
+    cur = inputs["currency"]
+    prices = inputs["prices"]
+    base_case = inputs["base_case"]
+    base_rate = base_case["refund_rate"]
+    w = inputs["window_months"]
+    r = inputs["reserve_months"]
 
-    out += [f"{h2}Assumptions (inputs to replace with measurements)"]
-    out += ["",
-            f"Prices EUR {price['low']}/{price['base']}/{price['high']}"
-            f" (low/base/high), volumes over 24 months"
-            f" {vol['low']}/{vol['base']}/{vol['high']} units.",
-            f"Refund scenarios {INPUTS['refund_rates']['low']:.0%}/"
-            f"{base_rate:.0%}/{INPUTS['refund_rates']['high']:.0%};"
-            f" support"
-            f" {INPUTS['support']['minutes_per_sale']:g} min x EUR"
-            f" {INPUTS['support']['hourly_cost_eur']}/h per sale"
-            " (charged on all sales, refunded buyers included).",
-            f"Fixed monthly: storage EUR"
-            f" {INPUTS['fixed_monthly']['artifact_storage_eur']:g} +"
-            f" domain EUR"
-            f" {INPUTS['fixed_monthly']['web_domain_eur']:g} +"
-            f" maintenance"
-            f" {INPUTS['fixed_monthly']['maintenance_hours']:g} h x EUR"
-            f" {INPUTS['fixed_monthly']['maintenance_hourly_eur']:g}"
-            f" (+ seller tax compliance EUR"
-            f" {INPUTS['tax']['direct']['monthly_compliance_eur']:g}/mo"
-            " on the direct route only).",
-            f"Maintenance reserve to fund:"
-            f" {INPUTS['maintenance_reserve_months']} months of fixed"
-            " costs. One-off development is SUNK (EUR"
-            f" {_eur(dev)}) and excluded from per-sale economics.", ""]
-
-    out += [f"{h2}Per-sale economics (base refund"
-            f" {base_rate:.0%}) — EUR, both payment routes", "",
-            f"| price | route | kept revenue | processing | support |"
-            f" distribution | tax | {bold}net / sale{bold} |",
-            "|---|---|---|---|---|---|---|---|"]
-    for pkey in PRICE_KEYS:
-        for route in ROUTES:
-            ps = per_sale(price[pkey], route, base_rate)
-            out.append(
-                f"| EUR {ps.price:g} | {_route_label(route)} |"
-                f" {ps.kept_revenue:.2f} |"
-                f" {_cost(ps.processing)} | {_cost(ps.support)} |"
-                f" {_cost(ps.distribution)} | {_cost(ps.tax_handling)} |"
-                f" {bold}{ps.net:.2f}{bold} |")
-    out += ["",
-            "(processing = pct x price + fixed, charged on every"
-            " transaction including refunded ones; the direct route's"
-            " cheaper rate is partly offset by seller-side tax handling.)",
-            ""]
-
-    out += [f"{h2}Break-even volume per price point", "",
-            "Units whose net contribution funds the"
-            f" {INPUTS['maintenance_reserve_months']}-month maintenance"
-            " reserve (route-dependent fixed costs; sunk development is"
-            " NOT in this target — the last column shows it separately).",
-            "",
-            "| price | route | reserve target | net / sale |"
-            f" {bold}break-even units{bold} | of which to also recover"
-            " sunk dev |", "|---|---|---|---|---|---|"]
-    for pkey in PRICE_KEYS:
-        for route in ROUTES:
-            ps = per_sale(price[pkey], route, base_rate)
-            target = reserve_target(route)
-            n = break_even_units(price[pkey], route, base_rate, target)
-            with_dev = (None if ps.net <= 0 else
-                        math.ceil((target + dev) / ps.net))
-            out.append(f"| EUR {ps.price:g} | {_route_label(route)} |"
-                       f" {_eur(target)} | {ps.net:.2f} | {_be(n)} |"
-                       f" {_be(with_dev)} |")
+    out.append("### Fixed monthly costs and the funding hurdle")
+    out.append("")
+    out.append("| Line | MoR column | Direct column |")
+    out.append("| --- | ---: | ---: |")
+    m = fixed_monthly_costs(inputs, "mor")
+    d = fixed_monthly_costs(inputs, "direct")
+    fixed_flat = inputs["distribution"]["fixed_monthly"]
+    out.append(f"| Artifact storage/hosting | {_eur(fixed_flat)} "
+               f"| {_eur(fixed_flat)} |")
+    out.append(f"| Support/tooling subscriptions | "
+               f"{_eur(inputs['tooling_monthly'])} "
+               f"| {_eur(inputs['tooling_monthly'])} |")
+    tax = inputs["tax_compliance_monthly"]
+    out.append(f"| Tax compliance (seller side) | {_eur(tax['mor'])} "
+               f"| {_eur(tax['direct'])} |")
+    mt = inputs["maintenance"]
+    mh = mt["hours_monthly"] * mt["rate_per_hour"]
+    out.append(f"| Maintenance time ({mt['hours_monthly']} h × "
+               f"{_eur(mt['rate_per_hour'])}/h) | {_eur(mh)} | {_eur(mh)} |")
+    out.append(f"| **Fixed total per month** | **{_eur(m)}** | **{_eur(d)}** |")
+    out.append("")
+    out.append(f"Hurdle = {w} months of fixed costs + a {r}-month maintenance "
+               f"reserve = {w + r} × monthly: "
+               f"**{_eur(funded_target(inputs, 'mor'))} {cur} (MoR)**, "
+               f"**{_eur(funded_target(inputs, 'direct'))} {cur} "
+               f"(direct)**. Stated separately (never inside per-sale "
+               f"economics): sunk development "
+               f"{_eur(inputs['sunk']['hours'] * inputs['sunk']['rate_per_hour'])} "
+               f"{cur}, and unpaid community-support time "
+               f"{_eur(unpaid_support_per_sale(inputs))} {cur}/sale valued at "
+               f"the same rate.")
     out.append("")
 
-    out += [f"{h2}24-month scenarios (base price"
-            f" EUR {price['base']}, base refund {base_rate:.0%})", "",
-            "| route | volume | total contribution | reserve | dev"
-            " (sunk) | covers reserve? | covers reserve+dev? |",
-            "|---|---|---|---|---|---|---|"]
-    for route in ROUTES:
-        for vkey in PRICE_KEYS:
-            v = vol[vkey]
-            total = total_contribution(v, price["base"], route, base_rate)
-            target = reserve_target(route)
-            ok_r = "yes" if total >= target else "no"
-            ok_d = "yes" if total >= target + dev else "no"
-            out.append(f"| {_route_label(route)} | {v:,} |"
-                       f" {_eur(total)} | {_eur(target)} |"
-                       f" {_eur(dev)} | {ok_r} | {ok_d} |")
+    out.append(f"### Net contribution per sale (base refund rate "
+               f"{_pct(base_rate)})")
+    for proc_key in ("mor", "direct"):
+        proc = inputs["processors"][proc_key]
+        out.append("")
+        out.append(f"**{proc['label']}** — all figures {cur}:")
+        out.append("")
+        out.append("| Cost line | " + " | ".join(
+            f"{k} price = {_eur(prices[k])}" for k in
+            ("low", "base", "high")) + " |")
+        out.append("| --- | ---: | ---: | ---: |")
+        lines: dict[str, list[float]] = {name: [] for name in
+                                         per_sale_costs(prices["low"], inputs,
+                                                        proc_key, base_rate)}
+        nets = []
+        for k in ("low", "base", "high"):
+            costs = per_sale_costs(prices[k], inputs, proc_key, base_rate)
+            for name, val in costs.items():
+                lines[name].append(val)
+            nets.append(net_contribution(prices[k], inputs, proc_key,
+                                         base_rate))
+        for name, vals in lines.items():
+            out.append(f"| {name} | " + " | ".join(_eur(v) for v in vals)
+                       + " |")
+        out.append("| **Net contribution per sale** | "
+                   + " | ".join(f"**{_eur(v)}**" for v in nets) + " |")
     out.append("")
 
-    rows = sensitivity()
-    out += [f"{h2}Sensitivity — which assumption moves break-even most", "",
-            f"(base price EUR {price['base']}, MoR route, base refund"
-            f" {base_rate:.0%}; baseline break-even"
-            f" {_be(rows[0]['baseline']) if rows else '?'} units)", "",
-            "| assumption (low vs high) | break-even low | break-even"
-            " high | swing (units) |", "|---|---|---|---|"]
-    for r in rows:
-        out.append(f"| {r['label']} | {_be(r['low'])} | {_be(r['high'])}"
-                   f" | {r['swing']:,} |")
+    out.append("### Net contribution per sale vs refund rate")
     out.append("")
+    out.append("| Price point × processor | "
+               + " | ".join(f"refunds {_pct(rt)}" for rt in
+                            inputs["refund_rates"]) + " |")
+    out.append("| --- | ---: | ---: | ---: |")
+    for proc_key in ("mor", "direct"):
+        for k in ("low", "base", "high"):
+            cells = [_eur(net_contribution(prices[k], inputs, proc_key, rt))
+                     for rt in inputs["refund_rates"]]
+            out.append(f"| {_eur(prices[k])} {cur} × {proc_key} | "
+                       + " | ".join(cells) + " |")
+    out.append("")
+
+    out.append("### Processor scenarios at the base price")
+    out.append("")
+    out.append(f"Base price {_eur(prices['base'])} {cur}, refunds "
+               f"{_pct(base_rate)}. The two main columns use the task's "
+               f"conservative classes; the middle row is Paddle's published "
+               f"rate as verified 2026-11-21 (docs/PRICING.md):")
+    out.append("")
+    out.append("| Processor scenario | Fee per sale | Net per sale | "
+               "Cash break-even |")
+    out.append("| --- | ---: | ---: | ---: |")
+    for proc_key in ("mor", "paddle", "direct"):
+        proc = inputs["processors"][proc_key]
+        fee = per_sale_costs(prices["base"], inputs, proc_key,
+                             base_rate)["processing"]
+        net = net_contribution(prices["base"], inputs, proc_key, base_rate)
+        be = break_even_volume(prices["base"], inputs, proc_key, base_rate)
+        out.append(f"| {proc['label']} | {_eur(fee)} | {_eur(net)} | "
+                   f"{_be(be)} |")
+    out.append("")
+
+    out.append(f"### Break-even volume (base refund rate {_pct(base_rate)})")
+    out.append("")
+    out.append(f"Sales over the {w}-month window needed to cover the hurdle "
+               "(cash), and the full economic payback (also values unpaid "
+               "community-support time and recovers sunk development):")
+    out.append("")
+    out.append("| Price | Cash break-even (MoR) | Cash break-even (direct) "
+               "| Economic payback (MoR) |")
+    out.append("| --- | ---: | ---: | ---: |")
+    for k in ("low", "base", "high"):
+        cash_mor = break_even_volume(prices[k], inputs, "mor", base_rate)
+        cash_dir = break_even_volume(prices[k], inputs, "direct", base_rate)
+        econ = break_even_volume(prices[k], inputs, "mor", base_rate,
+                                 economic=True)
+        out.append(f"| {_eur(prices[k])} {cur} | {_be(cash_mor)} | "
+                   f"{_be(cash_dir)} | {_be(econ)} |")
+    out.append("")
+
+    out.append(f"### {w}-month cash outcome by volume (base refund rate "
+               f"{_pct(base_rate)})")
+    out.append("")
+    out.append(f"Window cash = volume × net − hurdle, in {cur}. Negative = "
+               "the modeled volume does not cover the modeled costs:")
+    out.append("")
+    for proc_key in ("mor", "direct"):
+        proc = inputs["processors"][proc_key]
+        out.append(f"**{proc['label']}**:")
+        out.append("")
+        out.append("| Price | " + " | ".join(
+            f"{name} volume ({vol:,})" for name, vol in
+            inputs["volumes"].items()) + " |")
+        out.append("| --- | ---: | ---: | ---: |")
+        for k in ("low", "base", "high"):
+            cells = [_signed(window_outcome(inputs["volumes"][vname],
+                                            prices[k], inputs, proc_key,
+                                            base_rate))
+                     for vname in ("low", "base", "high")]
+            out.append(f"| {_eur(prices[k])} | " + " | ".join(cells) + " |")
+        out.append("")
+
+    rows = sensitivity(inputs)
+    out.append("### Sensitivity — which assumption moves break-even most")
+    out.append("")
+    out.append(f"One-at-a-time ±25% perturbations around the base case "
+               f"({_eur(prices[base_case['price']])} {cur}, "
+               f"{base_case['processor']} column, refunds "
+               f"{_pct(base_rate)}; base break-even {_be(rows[0]['base'])} "
+               f"sales). A side that turns break-even to \"never\" counts "
+               f"as the largest possible swing:")
+    out.append("")
+    out.append("| Assumption (±25%) | Break-even at −25% | Break-even at +25% "
+               "| Max swing (sales) |")
+    out.append("| --- | ---: | ---: | ---: |")
+    for row in rows:
+        swing = ("∞ (never)" if row["swing"] == math.inf else
+                 f"{row['swing']:,}" if row["swing"] is not None else "—")
+        out.append(f"| {row['assumption']} | {_be(row['low'])} | "
+                   f"{_be(row['high'])} | {swing} |")
+    out.append("")
+
     return "\n".join(out)
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        description="One-time purchase cost model (monetization plan R3)")
-    ap.add_argument("--markdown", action="store_true",
-                    help="emit markdown tables for the research note")
-    ap.add_argument("--check", action="store_true",
-                    help="self-verify arithmetic and break-even solve")
-    args = ap.parse_args(argv)
+# ---------------------------------------------------------------------------
+# Self-verification (--check)
+# ---------------------------------------------------------------------------
+def run_checks(inputs: dict) -> list[str]:
+    """Return a list of problems; empty means green.
 
+    Verifies (1) the per-sale identity price == sum(costs) + net, (2)
+    break-even minimality by substitution (N* clears the hurdle, N*−1
+    does not) in both the cash and economic views, (3) the closed-form
+    window outcome against a naive per-sale accumulation loop, (4) the
+    note's embedded tables match a fresh render.
+    """
+    problems: list[str] = []
+    tol = 1e-9
+    rates = inputs["refund_rates"]
+    for proc_key in inputs["processors"]:
+        for k in inputs["prices"]:
+            price = inputs["prices"][k]
+            for rate in rates:
+                costs = per_sale_costs(price, inputs, proc_key, rate)
+                net = net_contribution(price, inputs, proc_key, rate)
+                # fsum re-adds the line items in a different order than
+                # net_contribution accumulated them
+                if abs(math.fsum([price] + [-v for v in costs.values()])
+                       - net) > tol:
+                    problems.append(f"per-sale identity drift: {price} "
+                                    f"{proc_key} r={rate}")
+                for economic, outcome_fn in (
+                        (False, window_outcome), (True, economic_outcome)):
+                    n = break_even_volume(price, inputs, proc_key, rate,
+                                          economic=economic)
+                    if n is None:
+                        continue
+                    if outcome_fn(n, price, inputs, proc_key, rate) < -tol:
+                        problems.append(
+                            f"break-even {n} does not clear hurdle: {price} "
+                            f"{proc_key} r={rate} econ={economic}")
+                    if n > 1 and outcome_fn(n - 1, price, inputs, proc_key,
+                                            rate) >= -tol:
+                        problems.append(
+                            f"break-even {n} not minimal: {price} "
+                            f"{proc_key} r={rate} econ={economic}")
+        # closed form vs naive loop on a representative cell
+        price = inputs["prices"]["base"]
+        rate = inputs["base_case"]["refund_rate"]
+        net = net_contribution(price, inputs, proc_key, rate)
+        volume = inputs["volumes"]["base"]
+        naive = sum(net for _ in range(volume)) - funded_target(inputs,
+                                                                proc_key)
+        if abs(naive - window_outcome(volume, price, inputs, proc_key,
+                                      rate)) > tol:
+            problems.append(f"closed form != naive accumulation: {proc_key}")
+
+    if NOTE_PATH.exists():
+        note = NOTE_PATH.read_text(encoding="utf-8")
+        match = re.search(re.escape(BEGIN_MARKER) + r"\n(.*?)"
+                          + re.escape(END_MARKER), note, re.DOTALL)
+        if match is None:
+            problems.append(f"note {NOTE_PATH.name} has no generated block")
+        else:
+            embedded = match.group(1).rstrip("\n")
+            fresh = render(inputs).rstrip("\n")
+            if embedded != fresh:
+                problems.append(
+                    f"note {NOTE_PATH.name} tables are stale — regenerate "
+                    f"with: python3 {Path(__file__).name}")
+    else:
+        problems.append(f"note {NOTE_PATH.name} not found")
+    return problems
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--check", action="store_true",
+                        help="self-verify arithmetic and note sync")
+    args = parser.parse_args(argv)
     if args.check:
-        problems = check()
+        problems = run_checks(INPUTS)
         for p in problems:
             print(f"FAIL: {p}", file=sys.stderr)
         if problems:
             return 1
-        print(f"check green: {len(PRICE_KEYS) * len(ROUTES) * 3}"
-              " per-sale rows + sensitivity variants — sums, aggregates"
-              " and break-even minimality verified")
+        print("pricing_model: all arithmetic checks green, note tables "
+              "in sync")
         return 0
-
-    print(render(markdown=args.markdown), end="")
+    print(BEGIN_MARKER)
+    print(render(INPUTS))
+    print(END_MARKER)
     return 0
 
 

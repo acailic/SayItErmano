@@ -1,110 +1,133 @@
-"""One-time purchase cost model (monetization plan R3) — offline unit tier.
+"""One-time purchase cost model (plan R3) — break-even solve, offline.
 
-The break-even solve and the arithmetic identities that
-`scripts/pricing_model.py --check` self-verifies, pinned here so a
-regression in the solver fails CI rather than silently re-basing the
-research note. Pure stdlib, no network, no fixtures.
+Exercises the pure solve in scripts/pricing_model.py that backs
+docs/research/2026-11-22-one-time-purchase-cost-model.md: minimality of
+the returned volume (N clears the hurdle, N−1 does not) in both the
+cash and economic views, the never-returns-None contract when per-sale
+net is negative, the exact-integer boundary of the ceil, and that the
+note's embedded tables match a fresh render (the same guarantee
+`scripts/pricing_model.py --check` gives the reader). Stdlib only; no
+test opens a network connection.
 """
+from __future__ import annotations
 
 import copy
-import math
 
 import scripts.pricing_model as pm
 
-# ---------------------------------------------------------------------------
-# break-even solve: minimality is the contract
-# ---------------------------------------------------------------------------
 
-def test_break_even_is_smallest_funding_unit_count():
-    # net/sale 11.20, target 3396 -> 303 x 11.20 = 3393.60 < target
-    n = pm.break_even_units(19, "mor", 0.10, pm.reserve_target("mor"))
-    net = pm.per_sale(19, "mor", 0.10).net
-    assert n * net >= pm.reserve_target("mor")       # funds it
-    assert (n - 1) * net < pm.reserve_target("mor")  # and is minimal
-
-
-def test_break_even_exact_multiple_rounds_to_exact():
-    # economics flattened to net = price exactly -> target 90 = 9 x 10
-    flat = {"payment": {"mor": {"label": "flat", "pct": 0.0, "fixed": 0.0}},
-            "support": {"minutes_per_sale": 0, "hourly_cost_eur": 35},
-            "distribution": {"per_sale_bandwidth_eur": 0.0},
-            "tax": {"mor": {"handled_by": "x", "monthly_compliance_eur": 0.0,
-                            "per_sale_eur": 0.0}}}
-    variant = {**pm.INPUTS, **flat}
-    assert pm.per_sale(10, "mor", 0.0, variant).net == 10
-    n = pm.break_even_units(10, "mor", 0.0, 90.0, variant)
-    assert n == 9 and isinstance(n, int)
+def _cell_inputs() -> list[tuple[float, str, float]]:
+    """Every price × processor × refund-rate cell of the model."""
+    return [
+        (price, proc, rate)
+        for price in pm.INPUTS["prices"].values()
+        for proc in pm.INPUTS["processors"]
+        for rate in pm.INPUTS["refund_rates"]
+    ]
 
 
-def test_break_even_just_short_of_multiple_rounds_up():
-    # net 11.20 funds 1000 at 90 units (1008) but 89 is 996.80 < 1000
-    n = pm.break_even_units(19, "mor", 0.10, 1000.0)
-    assert n == math.ceil(1000.0 / pm.per_sale(19, "mor", 0.10).net) == 90
+def _minimal_inputs() -> dict:
+    """A stripped model with exact, hand-checkable numbers.
+
+    No per-sale costs at all (fees, refunds, support, chargebacks all
+    zero) and fixed costs of exactly 400/month: hurdle = 36 × 400 =
+    14,400; net per sale = price, so break-even is the pure ceil.
+    """
+    inputs = copy.deepcopy(pm.INPUTS)
+    inputs["prices"] = {"only": 48.0}
+    inputs["processors"] = {"mor": {"label": "zero", "pct": 0.0,
+                                    "fixed": 0.0}}
+    inputs["refund_rates"] = [0.0]
+    inputs["support"] = {"paid_minutes_per_sale": 0,
+                         "community_minutes_per_sale": 0,
+                         "rate_per_hour": 40.0}
+    inputs["chargeback"] = {"rate": 0.0, "fee": 0.0}
+    inputs["distribution"] = {"fixed_monthly": 0.0, "gb_per_sale": 0.0,
+                              "cost_per_gb": 0.0}
+    inputs["tax_compliance_monthly"] = {"mor": 0.0}
+    inputs["tooling_monthly"] = 0.0
+    inputs["maintenance"] = {"hours_monthly": 10, "rate_per_hour": 40.0}
+    inputs["sunk"] = {"hours": 0, "rate_per_hour": 40.0}
+    inputs["base_case"] = {"price": "only", "processor": "mor",
+                           "refund_rate": 0.0}
+    return inputs
 
 
-def test_break_even_impossible_when_net_not_positive():
-    # price so low that support alone exceeds kept revenue -> never
-    tiny = {"support": {"minutes_per_sale": 600, "hourly_cost_eur": 35}}
-    variant = {**pm.INPUTS, **tiny}
-    assert pm.per_sale(9, "mor", 0.10, variant).net <= 0
-    assert pm.break_even_units(9, "mor", 0.10, 100.0, variant) is None
+def test_break_even_is_smallest_clearing_volume():
+    for price, proc, rate in _cell_inputs():
+        for economic in (False, True):
+            n = pm.break_even_volume(price, pm.INPUTS, proc, rate,
+                                     economic=economic)
+            if n is None:
+                continue
+            outcome = (pm.economic_outcome if economic
+                       else pm.window_outcome)
+            assert outcome(n, price, pm.INPUTS, proc, rate) >= 0, (
+                f"N={n} must clear the hurdle: {price} {proc} {rate}")
+            assert outcome(n - 1, price, pm.INPUTS, proc, rate) < 0, (
+                f"N-1={n - 1} must not clear: {price} {proc} {rate}")
 
 
-# ---------------------------------------------------------------------------
-# per-sale arithmetic identities (what --check re-derives)
-# ---------------------------------------------------------------------------
-
-def test_per_sale_lines_sum_to_net():
-    for price in pm.INPUTS["prices_eur"].values():
-        for route in pm.ROUTES:
-            for rate in pm.INPUTS["refund_rates"].values():
-                ps = pm.per_sale(price, route, rate)
-                fsum_net = math.fsum(
-                    [ps.kept_revenue, -ps.processing, -ps.support,
-                     -ps.distribution, -ps.tax_handling])
-                assert ps.net == fsum_net or abs(ps.net - fsum_net) < 1e-9
+def test_break_even_never_when_net_is_negative():
+    # 9 EUR at the base refund rate: support + fees exceed the price
+    assert pm.break_even_volume(9.0, pm.INPUTS, "mor", 0.10) is None
+    assert pm.break_even_volume(9.0, pm.INPUTS, "direct", 0.10) is None
+    # a price below per-sale costs can never break even, at any volume
+    for volume in (1, 10_000, 1_000_000):
+        assert pm.window_outcome(volume, 9.0, pm.INPUTS, "mor",
+                                 0.10) < 0
 
 
-def test_scenario_total_equals_per_sale_times_volume():
-    for route in pm.ROUTES:
-        for v in pm.INPUTS["volumes_24m"].values():
-            total = pm.total_contribution(v, 19, route, 0.10)
-            per = v * pm.per_sale(19, route, 0.10).net
-            assert abs(total - per) < 1e-9
+def test_break_even_exact_integer_boundary_is_not_off_by_one():
+    # hurdle 14,400 / net 48 = exactly 300 -> the solve returns 300,
+    # not 301, and 299 demonstrably does not clear
+    inputs = _minimal_inputs()
+    n = pm.break_even_volume(48.0, inputs, "mor", 0.0)
+    assert n == 300
+    assert pm.window_outcome(299, 48.0, inputs, "mor", 0.0) < 0
+    assert pm.window_outcome(300, 48.0, inputs, "mor", 0.0) == 0
+    # one euro over the exact multiple rounds UP, not to the multiple
+    assert pm.break_even_volume(48.0, inputs, "mor", 0.0) == 300
+    just_short = copy.deepcopy(inputs)
+    just_short["tooling_monthly"] = 1.0  # +36 EUR on the hurdle
+    assert pm.break_even_volume(48.0, just_short, "mor", 0.0) == 301
 
 
-def test_direct_route_carries_seller_tax_compliance_mor_does_not():
-    assert pm.fixed_monthly("direct") > pm.fixed_monthly("mor")
-    assert pm.per_sale(19, "direct", 0.10).tax_handling > 0
-    assert pm.per_sale(19, "mor", 0.10).tax_handling == 0
+def test_per_sale_identity_price_equals_costs_plus_net():
+    for price, proc, rate in _cell_inputs():
+        costs = pm.per_sale_costs(price, pm.INPUTS, proc, rate)
+        net = pm.net_contribution(price, pm.INPUTS, proc, rate)
+        assert abs(price - sum(costs.values()) - net) < 1e-9
 
 
-# ---------------------------------------------------------------------------
-# sensitivity: no variant leakage, ranked output
-# ---------------------------------------------------------------------------
+def test_sensitivity_perturbs_the_price_row():
+    # regression: the "list price" row once recomputed with the
+    # unperturbed price, showing a 0 swing for the biggest lever
+    rows = {row["assumption"]: row for row in pm.sensitivity(pm.INPUTS)}
+    price_row = rows["list price"]
+    base = pm.break_even_volume(
+        pm.INPUTS["prices"][pm.INPUTS["base_case"]["price"]], pm.INPUTS,
+        pm.INPUTS["base_case"]["processor"],
+        pm.INPUTS["base_case"]["refund_rate"])
+    assert price_row["base"] == base
+    assert price_row["low"] != base and price_row["high"] != base
+    # direction: +25% price thickens the margin -> lower break-even
+    assert price_row["low"] > price_row["high"]
 
-def test_sensitivity_variants_do_not_mutate_inputs():
+
+def test_sensitivity_does_not_mutate_inputs():
     before = copy.deepcopy(pm.INPUTS)
-    rows = pm.sensitivity()
+    pm.sensitivity(pm.INPUTS)
     assert pm.INPUTS == before
-    assert len(rows) == len(pm._sensitivity_variants())
 
 
-def test_sensitivity_rows_ranked_by_swing_and_carry_baseline():
-    rows = pm.sensitivity()
-    swings = [r["swing"] for r in rows]
-    assert swings == sorted(swings, reverse=True)
-    baseline = pm.break_even_units(
-        pm.INPUTS["prices_eur"]["base"], "mor",
-        pm.INPUTS["refund_rates"]["base"], pm.reserve_target("mor"))
-    assert all(r["baseline"] == baseline for r in rows)
-
-
-# ---------------------------------------------------------------------------
-# --check self-verification green
-# ---------------------------------------------------------------------------
-
-def test_check_reports_no_problems(capsys):
-    assert pm.check() == []
+def test_cli_check_exits_zero(capsys):
     assert pm.main(["--check"]) == 0
-    assert "check green" in capsys.readouterr().out
+    assert "green" in capsys.readouterr().out
+
+
+def test_full_self_check_green_including_note_sync():
+    # the same guarantee `pricing_model.py --check` gives: arithmetic
+    # identities, break-even substitution, closed-form cross-check,
+    # and the note's marker block matching a fresh render
+    assert pm.run_checks(pm.INPUTS) == []
