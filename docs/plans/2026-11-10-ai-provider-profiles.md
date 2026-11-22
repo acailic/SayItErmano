@@ -2,6 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Status:** SHIPPED in v0.8.3 (2026-11-10) - `requests/ai-provider-profiles.md`
+> carries `STATUS: SHIPPED` with the per-task commits. Do not re-implement
+> (AGENTS.md rule 5). Boxes are ticked per ticket as tasks are re-verified, so
+> an unticked box is not evidence of unimplemented work.
+
 **Goal:** Named AI-polish provider profiles (e.g. "GLM") stored in a sidecar JSON, switchable from Settings → AI and the tray menu, hot-applied via the existing set-config path.
 
 **Architecture:** Sidecar store mirrors `fluidvoice/ai/profiles.py` (prompt profiles) discipline; switching writes the profile's endpoint values + a new `ai.profile` pointer through `set-config` (no `[ai]` key is RESTART_REQUIRED, `AIClient` is constructed per dictation in `rewrite.py:114`, so swaps hot-apply). API key VALUES are never stored — only env-var names.
@@ -326,9 +331,14 @@ _spec("ai", "profile", "", _str(64),
 - [x] **Step 5: Commit** — `feat(config): ai.profile active-provider pointer key`
 
 > Tasks 1–2 shipped upstream 2026-11-10 (see requests/ai-provider-profiles.md
-> SHIPPED note). Re-verified 2026-11-22 on a clean checkout: 15/15 in
-> tests/test_ai_provider_profiles.py, 1130/1130 across tests/test_config*.py
-> (unit-tier marker selection), `ruff check fluidvoice/ tests/ scripts/` clean.
+> SHIPPED note) and were re-verified 2026-11-22 on a clean checkout:
+> tests/test_ai_provider_profiles.py and tests/test_config*.py green under
+> the unit-tier marker selection, `ruff check fluidvoice/ tests/ scripts/`
+> clean. The shipped spec is `_str(64, allow_empty=True)` plus
+> `empty_meaningful=True`, not the verbatim `_str(64)` above: the latter
+> rejects the `""` default, and without `empty_meaningful` a cleared pointer
+> is carried over from the saved file on the next Settings save. Both are
+> pinned in the test file.
 
 ---
 
