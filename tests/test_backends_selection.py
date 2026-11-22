@@ -318,7 +318,10 @@ class TestWaylandInputBackendSelection:
             which=lambda n: f"/usr/bin/{n}" if n in installed else None,
             probes=probes)
 
-    def test_auto_prefers_eis_when_portal_probe_passes(self):
+    def test_auto_prefers_eis_when_portal_probe_passes(self, monkeypatch):
+        # CI runs without the portal extra: the probe pass is the
+        # statement that the backend is present here.
+        monkeypatch.setattr(session_mod, "_eis_importable", lambda: True)
         tool, _ = self.resolve(installed=("wtype", "ydotool"),
                                probes={"remote_desktop": True,
                                        "virtual_keyboard": True})
