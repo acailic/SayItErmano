@@ -1,8 +1,0 @@
-Origin: SayItErmano
-Label: SayItErmano
-Suite: stable
-Codename: stable
-Architectures: amd64
-Components: main
-Description: SayItErmano - local voice dictation with AI polish (community Linux port of FluidVoice)
-SignWith: default
