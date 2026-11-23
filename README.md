@@ -121,7 +121,13 @@ documented in
 on every route: the .deb configures a **signed apt repository**
 (`sudo apt update && sudo apt upgrade sayit-ermano`), the installer has
 `--update` for in-place refreshes (works for pipx/Fedora too), and
-Settings → About has a manual "Check for updates". Requirements in brief:
+Settings → About has a manual "Check for updates". Honesty note: these
+routes are verified on the maintainer's daily-driver X11 machine; the
+per-distro fresh-VM verification matrix
+([docs/quality/install-matrix/](docs/quality/install-matrix/)) is still
+being filled in — see
+[docs/STATUS.md](docs/STATUS.md) › Verification for exactly what is
+proven where. Requirements in brief:
 Python 3.11+, `pipewire`/`xdotool`/`xclip`/`libnotify-bin`, a whisper
 model on first use (default `small` ≈ 484 MB), GPU optional. On Wayland
 the hotkey binds through the **GlobalShortcuts portal** (or a DE
