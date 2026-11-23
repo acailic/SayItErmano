@@ -338,6 +338,25 @@ class Daemon:
             {"kind": "item", "label": _("Quit SayItErmano"),
              "action": self._quit_gracefully},
         ]
+        # Pending dictionary suggestions (History inline-repair diffs) are
+        # otherwise invisible: their Settings group is hidden while empty
+        # and sits below the fold of the Dictation page. The menu is
+        # rebuilt on every open, so the count is live (doctor prints the
+        # same number). Same shape as the AI-profile submenu: absent when
+        # there is nothing to act on.
+        try:
+            from .processing import dict_learn
+            pending = len(dict_learn.pending_suggestions(
+                self.cfg, history_mod.read_all()))
+        except Exception:  # noqa: BLE001 — a bad history file must not break the menu
+            pending = 0
+        if pending:
+            mic_idx = next(i for i, it in enumerate(menu)
+                           if it.get("label") == mic_menu_label)
+            menu.insert(mic_idx, {
+                "kind": "item",
+                "label": _("Dictionary suggestions ({n})…").format(n=pending),
+                "action": lambda: self._open_settings("dictation")})
         if ai_profile_items:
             mic_idx = next(i for i, it in enumerate(menu)
                            if it.get("label") == mic_menu_label)
@@ -626,8 +645,12 @@ class Daemon:
             log(f"WARN could not launch the app: {e}")
 
     def _open_settings(self, page: str = "") -> None:
-        target = (page or "").strip("/") or "settings"
-        self._spawn_app("--open", "history" if target == "history" else "settings")
+        """Spawn the app on a window or Settings page (`app --open`).
+        An empty page opens Settings on its first page; the app maps
+        unknown names to its default window, so nothing is validated
+        here (GTK-free: the daemon never imports the app module)."""
+        target = (page or "").strip().strip("/") or "settings"
+        self._spawn_app("--open", target)
         log(f"tray: opened {target}")
 
     def shutdown(self) -> None:
