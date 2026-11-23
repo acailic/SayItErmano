@@ -91,7 +91,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/acailic/SayItErmano.git
-        tag: v0.9.0
+        tag: v0.9.1
         commit: f16a4813c4a6f34b57a2ebaa02d45cfb5bfaad07
 
   # The app itself: pure-Python wheel built from the release tag with
@@ -111,7 +111,7 @@ modules:
       # (the gate checks it whenever the tag is in the clone).
       - type: git
         url: https://github.com/acailic/SayItErmano.git
-        tag: v0.9.0
+        tag: v0.9.1
         commit: f16a4813c4a6f34b57a2ebaa02d45cfb5bfaad07
 
   # Pure-Python runtime dependencies as remote PyPI wheels, each
