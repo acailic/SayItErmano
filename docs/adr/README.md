@@ -12,7 +12,7 @@ one gets a new ADR that marks the old one Superseded.
 | [ADR-0005](ADR-0005-commercial-sku.md) | The commercial SKU is a convenience-and-support bundle sold through Paddle | Proposed |
 | [ADR-0006](ADR-0006-flatpak-input.md) | Flatpak input: GlobalShortcuts portal hotkey, RemoteDesktop/EIS insertion, Vulkan GPU | Proposed |
 | [ADR-0007](ADR-0007-managed-llama-server.md) | Local polish uses a managed loopback llama.cpp child, not a daemon listener | Accepted |
-| [ADR-0008](ADR-0008-paid-artifact-agpl-policy.md) | Paid artifacts either offer the AGPL portal wheel's source or drop the portal extra — OPERATOR picks via PAID_ARTIFACT_OPTION | Proposed (decision: OPERATOR) |
+| [ADR-0008](ADR-0008-paid-artifact-agpl-policy.md) | Paid artifacts either offer the AGPL portal wheel's source (vendored, pinned sdist) or drop the portal extra — the operator records the choice in the ADR's decision marker; `PAID_ARTIFACT=1` fails closed until then | Proposed (decision: OPERATOR) |
 
 Context: what shipped is [STATUS.md](../STATUS.md); what is next is
 [ROADMAP.md](../ROADMAP.md); vocabulary is the

@@ -3,10 +3,11 @@
 Date: 2026-11-23
 Status: **Proposed — decision deferred to OPERATOR.** Both options are
 implemented, tested and rehearsed behind one switch
-(`PAID_ARTIFACT=1`, option via `PAID_ARTIFACT_OPTION=A|B`); the code
-default (A) is this ADR's *recommendation*, not a decision. The
-operator marks the chosen option here — flipping the launch posture is
-then one environment variable, no code.
+(`PAID_ARTIFACT=1`), and the switch **fails closed** while the decision
+marker below reads `OPERATOR`. The code default (A) is this ADR's
+*recommendation* — what `paid_policy.py option` prints for a free build,
+never what a paid build gets. The operator marks the chosen option here
+— flipping the launch posture is then one environment variable, no code.
 
 ## Context
 
@@ -40,17 +41,44 @@ so the operator's choice is a one-line decision, tested now.
 ## Decision
 
 **OPERATOR — the choice between A and B is not made by this ADR.**
-What IS decided (engineering, both options verified by
-[tests/test_paid_policy.py](../../tests/test_paid_policy.py)):
+
+Paid-artifact decision: OPERATOR
+
+The line above is the machine-readable decision marker, read by
+[packaging/paid_policy.py](../../packaging/paid_policy.py). The operator
+records the choice by changing its value to `A` or `B`; nothing else
+opens a paid build. What IS decided (engineering, both options verified
+by [tests/test_paid_policy.py](../../tests/test_paid_policy.py)):
 
 - one switch: `PAID_ARTIFACT=1` (env var, default off — free builds are
-  byte-for-byte unaffected);
-- one selector: `PAID_ARTIFACT_OPTION=A|B` (default `A`, the
-  recommendation below);
+  byte-for-byte unaffected; any other value is an error, so a mistyped
+  switch never reads as a free build);
+- **fail closed:** while the marker reads `OPERATOR`, every paid path
+  refuses with a message naming this ADR and builds nothing — there is no
+  code default and no environment variable that selects a paid option;
+- one cross-check: `PAID_ARTIFACT_OPTION=A|B` is optional and must AGREE
+  with the marker — unset means the recorded decision, a different value
+  is an error;
 - the machinery lives in
   [packaging/paid_policy.py](../../packaging/paid_policy.py) and is
   consumed by `packaging/build-deb.sh` and the Flatpak manifest
   rehearsal below.
+
+**Mechanical hardening (landed 2026-11-23; the decision remains
+OPERATOR).** Option A's offer no longer leans on a third party: the AGPL
+wheel's Corresponding-Source sdist — `global_shortcut_portal-0.1.0.tar.gz`,
+the exact bytes the pinned PyPI URL serves — is vendored under
+`packaging/wheels/` with its sha256 pinned in `packaging/paid_policy.py`,
+and verified offline against the pin *and* against the wheel (same
+package, version and license expression; every installed `.py`
+byte-identical) by the unit tier and again by every paid path before it
+ships — inside the deb's offer directory, and as a sha256-pinned source
+of the paid Flatpak's `agpl-source-offer` module. With the fail-closed
+gate above, a `PAID_ARTIFACT=1` build therefore either follows a
+recorded operator decision with the source obligations mechanically
+met, or builds nothing. Which option that is stays the operator's call;
+the rehearsal commands below assume the marker has been set to the
+option they rehearse.
 
 ### Option A — paid artifacts bundle/offer the AGPL wheel's source
 
@@ -61,20 +89,28 @@ the free build) and satisfies the AGPL offer duty mechanically:
   and its sources are extracted from the vendored wheel into the
   artifact —
   - deb: `/usr/share/doc/sayit-ermano/global-shortcut-portal/`
-    (`LICENSE`, `src/`, and a `SOURCE` notice); the pure-Python
-    wheel's `.py` files are the preferred form for modification;
+    (`LICENSE`, `src/`, the `SOURCE` notice and the sdist itself);
+    the pure-Python wheel's `.py` files are the preferred form for
+    modification;
   - Flatpak: a generated `agpl-source-offer` module copies the
-    installed sources to `/app/share/doc/global-shortcut-portal/src`
-    and the license to the Flathub-required
-    `share/licenses/$FLATPAK_ID/agpl-source-offer/`.
-- **Source tarball URL next to the artifact:** the pinned sdist of the
-  exact vendored version — `global_shortcut_portal-0.1.0.tar.gz`,
-  sha256 `bae2d6ba…c22aebda`, URL recorded in
-  `packaging/paid_policy.py` (`AGPL_SDIST_URL`, verified against the
-  PyPI JSON API 2026-11-23; the upstream codeberg repo has no `v0.1.0`
-  tag, oldest is `v0.2.0`, so the PyPI sdist is the only exact
-  Corresponding-Source tarball) — is published as a release asset / an
-  apt-repo entry adjacent to the paid download, at no further charge.
+    installed sources to `/app/share/doc/global-shortcut-portal/src`,
+    the license to the Flathub-required
+    `share/licenses/$FLATPAK_ID/agpl-source-offer/`, and the sdist
+    next to the sources (a sha256-pinned source — local `path:` in the
+    CI variant, the PyPI `url:` in the Flathub one, like the wheels).
+- **The Corresponding-Source tarball, in the artifact:** the sdist of
+  the exact vendored version — `global_shortcut_portal-0.1.0.tar.gz`,
+  sha256 `bae2d6ba…c22aebda` — is vendored at
+  `packaging/wheels/global_shortcut_portal-0.1.0.tar.gz`: the same
+  bytes the pinned PyPI URL serves (`AGPL_SDIST_URL` in
+  `packaging/paid_policy.py`; verified against the PyPI JSON API and by
+  byte-comparing the download on 2026-11-23 — the upstream codeberg
+  repo has no `v0.1.0` tag, oldest is `v0.2.0`, so the PyPI sdist is
+  the only exact Corresponding-Source tarball). It ships inside both
+  artifacts' offer directories, and the URL is additionally published as
+  a release asset / an apt-repo entry adjacent to the paid download, at
+  no further charge. `python3 packaging/paid_policy.py verify` re-checks
+  the pin and the wheel match offline.
 - **What "offer" means per channel:**
   - **apt/deb channel:** the deb itself carries license + sources
     (above), and the sale page / release notes link the sdist URL.
@@ -155,9 +191,10 @@ Trade-offs of A: the paid artifact conveys a GPL+AGPL combined work —
 that part can never be relicensed or offered under different terms
 (already true of the free Flatpak); the adjacent-source duty must be
 remembered at every paid release (mitigated: the build fails loudly if
-the vendored wheel lacks license/source, and the ADR documents the
-sdist pin). Trade-offs of B: single-license story for the paid channel
-and zero offer bookkeeping, at the price of the portal hotkey on
+the vendored wheel lacks license/source or the vendored sdist is not
+its pinned Corresponding Source, and the ADR documents the sdist pin).
+Trade-offs of B: single-license story for the paid channel and zero
+offer bookkeeping, at the price of the portal hotkey on
 GNOME/Plasma/Hyprland paid builds and a free/paid capability gap that
 support must explain.
 
@@ -166,19 +203,25 @@ support must explain.
 - `packaging/paid_policy.py` is the single implementation of both
   paths; `build-deb.sh` and the flatpak rehearsal consume it, and the
   unit tier pins both branches offline (fakes for lock/manifest shape,
-  the real vendored wheel for the offer bytes) —
+  the real vendored wheel and sdist for the offer bytes) —
   `python3 scripts/test_tier.py unit -q tests/test_paid_policy.py`.
 - Free builds never set `PAID_ARTIFACT`; the committed manifests and
   lock are untouched by this ADR's machinery (the paid flatpak manifest
   is *generated*, never committed).
-- When the operator decides, they mark the choice here (and, if B,
-  whether it applies to every channel or deb-only), set the launch
-  pipeline's `PAID_ARTIFACT_OPTION`, and re-run the rehearsal commands
-  above; no code change is expected.
-- A wheel version bump re-pins `AGPL_SDIST_URL`/`AGPL_SDIST_SHA256`
-  and the manifests' sha256 entries in the same commit
-  (tests catch drift: the offer notice carries the wheel's own sha256,
-  and the manifest suite pins the vendored hashes).
+- No paid build exists without a recorded decision: `PAID_ARTIFACT=1`
+  refuses while the marker above reads `OPERATOR`, for the deb, the
+  Flatpak manifest and every `paid_policy.py` subcommand alike.
+- When the operator decides, they change the marker's value (and, if B,
+  record here whether it applies to every channel or deb-only), may set
+  the launch pipeline's `PAID_ARTIFACT_OPTION` to the same value, and
+  re-run the rehearsal commands above; no code or test change is
+  expected (the unit tier exercises decided markers on temporary
+  copies, so flipping the committed one breaks nothing).
+- A wheel version bump re-pins `AGPL_SDIST_URL`/`AGPL_SDIST_SHA256`,
+  re-vendors the sdist and updates the manifests' sha256 entries in the
+  same commit (tests catch drift: the offer notice carries the wheel's
+  own sha256, the manifest suite pins the vendored hashes, and the sdist
+  is refused unless it is the wheel's own source).
 - Revisit triggers: a paid Flatpak shipping at all (re-evaluate B's
   parity cost with real users), upstream tagging the vendored version
   (switch the offer target to the codeberg tarball), or counsel input

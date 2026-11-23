@@ -74,16 +74,24 @@ STAGE="$(mktemp -d)/pkg"
 trap 'rm -rf "$(dirname "$STAGE")"' EXIT
 
 # 0b. Paid-artifact policy hooks (ADR-0008): PAID_ARTIFACT=1 engages the
-# one-switch AGPL remediation; the OPERATOR picks the option via
-# PAID_ARTIFACT_OPTION (default A). Free builds never set the switch and
-# are unaffected. Option A writes the AGPL wheel's Corresponding-Source
-# offer (sources + license + pinned-sdist notice) into the deb's docs;
+# one-switch AGPL remediation and FAILS CLOSED — the option comes from the
+# operator's decision marker in the ADR (read by paid_policy.py). With no
+# recorded decision the build stops HERE, before any payload exists, and
+# names the ADR. Free builds never set the switch and are unaffected.
+# Option A writes the AGPL wheel's Corresponding-Source offer (sources +
+# license + the sha256-pinned sdist itself + notice) into the deb's docs;
 # option B filters the portal extra OUT of the paid dependency lock — a
 # verified no-op today (the deb's closure never carried the AGPL wheel),
 # and a hard guarantee it never does without this switch being seen.
 PAID_CONSTRAINTS="$CONSTRAINTS"
-if [ "${PAID_ARTIFACT:-0}" = "1" ]; then
-    PAID_OPTION="$(python3 "$REPO/packaging/paid_policy.py" option)"
+if [ "${PAID_ARTIFACT:-0}" != "0" ]; then
+    # every non-default value routes through the module: '1' engages (and
+    # is refused while ADR-0008 is undecided); a typo is an error, never a
+    # silent free build
+    PAID_OPTION="$(python3 "$REPO/packaging/paid_policy.py" option)" || {
+        echo "ERROR: PAID_ARTIFACT=${PAID_ARTIFACT:-} build REFUSED - no artifact built (ADR-0008)." >&2
+        exit 1
+    }
     echo ">> PAID_ARTIFACT=1: ADR-0008 option $PAID_OPTION"
     case "$PAID_OPTION" in
         A)
