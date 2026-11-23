@@ -23,6 +23,17 @@ not reproduced here.
   an explicit actionable blocker, 1 on inconclusive takes; the same
   local funnel counters as onboarding (`source="cli-setup"`). New
   guide: `docs/guides/quickstart.md`.
+- **Correction surfaces are findable (bet 3)** — the tray menu grows a
+  live **Dictionary suggestions (N)…** item whenever History edits have
+  produced a pending dictionary suggestion (it opens Settings on the
+  Dictation page, where the group is otherwise hidden while empty and
+  below the fold); `sayit-ermano app --open <page>` deep-links every
+  Settings page; Custom dictionary ⇄ Vocabulary boosting and Prompt
+  profiles ⇄ shortcut-profile combos cross-link each other; the History
+  row's edit tooltip and the dictionary description say that
+  corrections become suggestions. New quickstart section "When the
+  text is wrong: corrections" and the survey
+  `docs/research/2026-11-23-correction-discoverability.md`.
 - **Flathub submission prep (#12, runbook section 0)** — the shipping
   Flatpak manifest gains a Flathub-shaped twin,
   `packaging/flatpak/io.github.acailic.SayItErmano.flathub.yml`:

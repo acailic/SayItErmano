@@ -4,6 +4,12 @@ Dated research notes live in this directory; raw data under
 [data/](data/), competitor watch under [competitive/](competitive/).
 The newest entries:
 
+- [2026-11-23 correction discoverability](2026-11-23-correction-discoverability.md) —
+  survey of the four correction surfaces (history, dictionary
+  suggestions, vocabulary hints, per-app prompt profiles): every UI
+  surface with file:line citations, honest click counts, docs coverage,
+  the ranked gaps and the three fixes shipped (product-excellence bet 3).
+  Records the per-app migration shadowing defect found on the way.
 - [2026-11-22 checkout options](2026-11-22-checkout-options.md) —
   merchant-of-record vs direct processor from current vendor docs,
   seller eligibility for Serbia/Bosnia verified per provider and

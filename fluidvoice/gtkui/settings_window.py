@@ -40,6 +40,15 @@ from .settings_pages.wayland import WaylandPageMixin
 from .style import load_style
 
 
+def _descendants(widget):
+    """Every widget below `widget`, depth-first."""
+    child = widget.get_first_child()
+    while child is not None:
+        yield child
+        yield from _descendants(child)
+        child = child.get_next_sibling()
+
+
 class SettingsWindow(
     Adw.ApplicationWindow,
     GeneralPageMixin,
@@ -88,6 +97,7 @@ class SettingsWindow(
         self._model_lang_rows: dict[str, Adw.ComboRow] = {}  # name -> row
         self._model_lang_values_map: dict[str, list] = {}  # name -> values
         self._suppress_touch = False  # programmatic combo rebuilds
+        self._link_rows: list[tuple[Adw.ActionRow, str]] = []  # cross-links
 
         self._build_chrome()
         # macOS-parity sidebar order (upstream Settings screenshot set,
@@ -225,12 +235,15 @@ class SettingsWindow(
             yield child
             child = child.get_next_sibling()
 
-    def _show_page(self, name: str) -> None:
-        """Programmatic page select (tests, drivers)."""
+    def open_page(self, name: str) -> None:
+        """Show one page by name - the deep-link target of `app --open
+        <page>` (tray items, drivers). A narrow window is pushed onto the
+        page like a sidebar click does; unknown names are a no-op."""
         row = self._sidebar_rows.get(name)
         if row is not None:
             self._sidebar.select_row(row)
             self._show_selected_page(row)
+            self._split.set_show_content(True)
 
     def _save_group(self) -> Adw.PreferencesGroup:
         grp = Adw.PreferencesGroup()
@@ -346,6 +359,32 @@ class SettingsWindow(
         self._rows[(section, key)] = _SwitchProxy(switch, title)
         row.add_suffix(switch)
         return row
+
+    def _link_row(self, title: str, subtitle: str, page: str) -> Adw.ActionRow:
+        """Cross-link to another Settings page (correction discoverability,
+        bet 3 fix 2): adjacent features that live on different pages point
+        at each other, so the user lands one click from where they are
+        instead of hunting the sidebar."""
+        row = Adw.ActionRow(title=title, subtitle=subtitle)
+        btn = Gtk.Button(label=_("Open"), css_classes=["flat"])
+        btn.set_valign(Gtk.Align.CENTER)
+        btn.connect("clicked", lambda *_: self.open_page(page))
+        row.add_suffix(btn)
+        self._link_rows.append((row, page))
+        return row
+
+    @staticmethod
+    def _keep_last(group: Adw.PreferencesGroup, row) -> None:
+        """Re-append `row` after a dynamic rebuild so a group's trailing
+        cross-link stays last (rows live in the group's internal list,
+        so the parent check goes through the widget tree)."""
+        child = group.get_first_child()
+        while child is not None:
+            if child is row or row in _descendants(child):
+                group.remove(row)
+                break
+            child = child.get_next_sibling()
+        group.add(row)
 
     def _load(self) -> None:
         self._loading = True

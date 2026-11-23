@@ -182,9 +182,13 @@ class HistoryEntryRow(Gtk.ListBoxRow):
                               tooltip_text=_("Copy text"))
         copy_btn.connect("clicked", on_copy, self)
         meta.append(copy_btn)
+        # the hint sits at the signal source: this edit is what the
+        # dictionary learner reads (processing/dict_learn.py)
         edit_btn = Gtk.Button(icon_name="document-edit-symbolic",
                               css_classes=["flat"],
-                              tooltip_text=_("Edit text"))
+                              tooltip_text=_("Edit text — repeated "
+                                             "corrections become dictionary "
+                                             "suggestions"))
         edit_btn.connect("clicked", self._start_edit)
         meta.append(edit_btn)
         del_btn = Gtk.Button(icon_name="user-trash-symbolic",

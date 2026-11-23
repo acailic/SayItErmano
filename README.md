@@ -166,6 +166,14 @@ and page order:
   default on; `sayit-ermano doctor` shows the learned per-mic baseline).
 - **Onboarding** — opens once on first launch with a real 3-second tryout.
 
+When a take comes out wrong, four surfaces fix it — the History row's
+inline edit, the custom dictionary (Settings → Dictation), vocabulary
+hotwords (Settings → Models) and per-app prompts (Settings → AI); the
+tray menu grows a **Dictionary suggestions (N)…** item whenever your
+History corrections have taught it a word. The
+[quickstart's corrections section](docs/guides/quickstart.md#when-the-text-is-wrong-corrections)
+says where each one lives and which to use.
+
 With the daemon stopped, History still works and Settings writes the
 config directly. Settings talk to the daemon over the user-owned unix
 control socket — no network listener exists; API keys are never exposed

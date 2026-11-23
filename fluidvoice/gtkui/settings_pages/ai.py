@@ -161,6 +161,11 @@ class AIPageMixin:
         add_prof_row.add_suffix(add_prof_btn)
         self._profile_add_row = add_prof_row
         self.prof_grp.add(add_prof_row)
+        self._profile_link_row = self._link_row(
+            _("Use a profile"),
+            _("Bind it to an extra dictation shortcut on the Dictation page"),
+            "dictation")
+        self.prof_grp.add(self._profile_link_row)
         page.add(self.prof_grp)
 
         # custom base prompt editor (empty = the built-in dictation prompt;
@@ -380,6 +385,7 @@ class AIPageMixin:
             self._selected_profile_name = sel
             if sel is not None:
                 self._profile_checks[sel].set_active(True)
+            self._keep_last(self.prof_grp, self._profile_link_row)
         finally:
             self._suppress_touch = False
 

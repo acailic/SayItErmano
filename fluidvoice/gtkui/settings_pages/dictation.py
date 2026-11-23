@@ -129,6 +129,7 @@ class DictationPageMixin:
         self._dict_rows = []
         for entry in entries:
             self._add_dict_word(entry)
+        self._keep_last(self.dict_group, self._dict_link_row)
 
     def _add_dict_word(self, entry: dict) -> None:
         exp = Adw.ExpanderRow(title=", ".join(entry.get("triggers", []))
@@ -356,6 +357,13 @@ class DictationPageMixin:
             self._mod_toggles[mod] = tb
             mods.add_suffix(tb)
         hk.add(mods)
+        # the shortcut-profile combos above offer preset names only: the
+        # presets themselves are made three pages over
+        hk.add(self._link_row(
+            _("Prompt profiles"),
+            _("Create and edit the presets the shortcut profiles above "
+              "can use, on the AI page"),
+            "ai"))
         page.add(hk)
 
     def _section_languages(self, page: Adw.PreferencesPage) -> None:
@@ -656,14 +664,23 @@ class DictationPageMixin:
 
         self.dict_group = Adw.PreferencesGroup(
             title=_("Custom dictionary"),
+            # says where the (hidden-while-empty) suggestions below come
+            # from, so the learning loop is known before it pays off
             description=_('Phrases replaced on insert — '
-                          '"miro board" → "Miro board"'),
+                          '"miro board" → "Miro board". Corrections you make '
+                          'in History become suggestions below.'),
         )
         add_w = Adw.ActionRow(title=_("Add word"))
         add_w_btn = Gtk.Button(icon_name="list-add-symbolic", css_classes=["flat"])
         add_w_btn.connect("clicked", lambda *_: self._add_dict_word({}))
         add_w.add_suffix(add_w_btn)
         self.dict_group.add(add_w)
+        self._dict_link_row = self._link_row(
+            _("Vocabulary boosting"),
+            _("Names the recognizer keeps mishearing? Bias the decoder "
+              "on the Models page"),
+            "models")
+        self.dict_group.add(self._dict_link_row)
         page.add(self.dict_group)
 
         # auto-learned suggestions (dict_learn), below the hand-curated

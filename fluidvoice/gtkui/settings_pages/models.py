@@ -869,6 +869,10 @@ class ModelsPageMixin:
                           "the engine"),
         )
         hot_group.add(hot)
+        hot_group.add(self._link_row(
+            _("Custom dictionary"),
+            _("Fix a phrase after transcription on the Dictation page"),
+            "dictation"))
         page.add(hot_group)
 
     def _section_lang_overrides(self, page: Adw.PreferencesPage) -> None:

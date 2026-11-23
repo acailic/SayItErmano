@@ -58,6 +58,114 @@ def _walk(widget, kind) -> list:
     return found
 
 
+def _descendants(widget):
+    """Every widget below `widget`, depth-first (no early stop)."""
+    child = widget.get_first_child()
+    while child is not None:
+        yield child
+        yield from _descendants(child)
+        child = child.get_next_sibling()
+
+
+def _page_of(settings_win, widget):
+    """The Settings page that contains `widget` (None when orphaned)."""
+    return next((p for p in settings_win._iter_pages()
+                 if any(d is widget for d in _descendants(p))), None)
+
+
+class TestCorrectionLinks:
+    """Correction discoverability (bet 3 survey, fixes 1-2): the deep-link
+    vocabulary covers every sidebar page, `open_page` lands on a page,
+    and the cross-link rows between dictionary / vocabulary boosting /
+    prompt profiles / shortcut combos all resolve to real pages."""
+
+    def test_every_sidebar_page_is_a_deep_link_target(self, settings_win) -> None:
+        from fluidvoice.gtkui.application import (
+            OPEN_TARGETS,
+            SETTINGS_PAGE_TARGETS,
+            normalize_open_target,
+        )
+        names = {p.get_name() for p in settings_win._iter_pages()}
+        assert names == {"general", "dictation", "models", "ai", "history",
+                         "wayland", "about"}
+        # the page named "history" is shadowed by the History window
+        assert set(SETTINGS_PAGE_TARGETS) == names - {"history"}
+        assert set(OPEN_TARGETS) == names | {"settings"}
+        for page in SETTINGS_PAGE_TARGETS:
+            assert normalize_open_target(page) == page
+
+    def test_open_page_lands_and_ignores_unknown_names(self, settings_win) -> None:
+        stack = settings_win._page_stack
+        assert stack.get_visible_child_name() == "general"  # first page
+        settings_win.open_page("dictation")
+        assert stack.get_visible_child_name() == "dictation"
+        assert settings_win._sidebar.get_selected_row() is \
+            settings_win._sidebar_rows["dictation"]
+        settings_win.open_page("no-such-page")
+        assert stack.get_visible_child_name() == "dictation"
+
+    def test_cross_links_target_real_pages(self, settings_win) -> None:
+        from fluidvoice.gtkui.application import SETTINGS_PAGE_TARGETS
+        pages = {p.get_name() for p in settings_win._iter_pages()}
+        links = settings_win._link_rows
+        assert len(links) == 4
+        for row, page in links:
+            assert page in pages, (row.get_title(), page)
+            assert page in SETTINGS_PAGE_TARGETS
+
+    def test_each_link_button_switches_to_its_page(self, settings_win) -> None:
+        stack = settings_win._page_stack
+        for row, page in settings_win._link_rows:
+            btn = next(b for b in _descendants(row)
+                       if isinstance(b, Gtk.Button) and b.get_label() == "Open")
+            btn.emit("clicked")
+            assert stack.get_visible_child_name() == page, row.get_title()
+
+    def test_dictionary_links_to_vocabulary_boosting(self, settings_win) -> None:
+        row = settings_win._dict_link_row
+        assert _page_of(settings_win, row).get_name() == "dictation"
+        assert row.get_title() == "Vocabulary boosting"
+        # stays last through a dictionary reload (entries are re-added)
+        settings_win._load_dictionary([{"triggers": ["gnu plot"],
+                                        "replacement": "gnuplot"}])
+        assert settings_win._dict_link_row is row
+        rows = _walk(settings_win.dict_group, Adw.PreferencesRow)
+        assert rows[-1] is row
+        # the hidden-while-empty suggestions group is announced here
+        assert "suggestions" in settings_win.dict_group.get_description()
+        assert settings_win.suggest_group.get_visible() is False
+
+    def test_vocabulary_boosting_links_back(self, settings_win) -> None:
+        row, page = next(r for r in settings_win._link_rows
+                        if r[0].get_title() == "Custom dictionary")
+        assert page == "dictation"
+        assert _page_of(settings_win, row).get_name() == "models"
+
+    def test_prompt_profiles_and_shortcut_combos_link(self, settings_win) -> None:
+        hot = next(r for r in settings_win._link_rows
+                   if r[0].get_title() == "Prompt profiles")
+        assert hot[1] == "ai"
+        assert _page_of(settings_win, hot[0]).get_name() == "dictation"
+        prof = next(r for r in settings_win._link_rows
+                    if r[0].get_title() == "Use a profile")
+        assert prof[1] == "dictation"
+        assert _page_of(settings_win, prof[0]).get_name() == "ai"
+        # stays last through a profile rebuild
+        settings_win._load_profiles()
+        rows = _walk(settings_win.prof_grp, Adw.PreferencesRow)
+        assert rows[-1] is prof[0]
+
+    def test_history_edit_tooltip_points_at_the_learner(self) -> None:
+        from fluidvoice.gtkui.main_window import HistoryEntryRow
+        row = HistoryEntryRow({"ts": 1.0, "text": "x"}, lambda *_: None,
+                              lambda *_: None, lambda *_: None,
+                              lambda *_: True)
+        edit = next(b for b in _descendants(row)
+                    if b.get_tooltip_text() and "Edit text" in
+                    b.get_tooltip_text())
+        assert "dictionary suggestions" in edit.get_tooltip_text()
+
+
 class TestDictationSections:
     def test_every_section_builds_in_isolation(self, settings_win) -> None:
         # a fresh page per section: builders must not depend on siblings

@@ -19,6 +19,9 @@ from .config import load_config, write_template
 
 
 def _build_parser() -> argparse.ArgumentParser:
+    # GTK-free module (the gi imports live inside run()): only the target
+    # names are needed here, so `--open` validates like the app does
+    from .gtkui.application import OPEN_TARGETS
     parser = argparse.ArgumentParser(
         prog="sayit-ermano",
         description="SayItErmano - local voice dictation with AI polish (community Linux port of FluidVoice)")
@@ -77,8 +80,9 @@ def _build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=_cmd_settings)
 
     p = sub.add_parser("app", help="open the native GTK app (History/Settings)")
-    p.add_argument("--open", choices=["history", "settings"], default="history",
-                   help="window to raise (default: history)")
+    p.add_argument("--open", choices=list(OPEN_TARGETS), default="history",
+                   help="window to raise (default: history); a Settings page "
+                        "name opens Settings on that page")
     p.add_argument("--onboard", action="store_true",
                    help="run the first-run onboarding flow")
     p.set_defaults(func=_cmd_app)

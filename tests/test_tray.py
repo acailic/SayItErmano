@@ -372,3 +372,94 @@ class TestAIProfileMenu:
         assert d.cfg["ai"]["profile"] == "GLM"
         assert d.cfg["ai"]["base_url"] == "https://api.z.ai/api/paas/v4"
         assert d.cfg["ai"]["model"] == "glm-4.7"
+
+
+class TestDictionarySuggestionsMenu:
+    """Correction discoverability (bet 3 survey, fix 1): pending dictionary
+    suggestions - invisible until accepted, hidden while empty, below the
+    fold of the Dictation page - get a tray item with the live count that
+    lands on their page. Absent when nothing is pending."""
+
+    @pytest.fixture(autouse=True)
+    def _paths(self, tmp_path, monkeypatch):
+        from fluidvoice import paths
+        hpath = tmp_path / "history.jsonl"
+        spath = tmp_path / "dictionary-suggestions.json"
+        monkeypatch.setattr(paths, "history_file", lambda: hpath)
+        monkeypatch.setattr(paths, "dictionary_suggestions_file",
+                            lambda: spath)
+
+    def _daemon(self):
+        import copy
+
+        import fluidvoice.daemon as dm
+        from fluidvoice.config import DEFAULTS
+        from tests.test_daemon import StubRecorder
+        return dm.Daemon(copy.deepcopy(DEFAULTS), recorder=StubRecorder(),
+                         backend_factory=lambda c: None,
+                         use_hotkey=False, use_sounds=False)
+
+    @staticmethod
+    def _correct(ts, old, new):
+        from fluidvoice import history
+        history.append({"ts": ts, "text": old})
+        history.update_text(ts, new)
+
+    def _labels(self, d):
+        return [i.get("label") for i in d._build_tray_menu()]
+
+    def test_absent_while_nothing_is_pending(self):
+        labels = self._labels(self._daemon())
+        assert not any("Dictionary suggestions" in (label or "")
+                       for label in labels)
+        # one correction is below the 2-occurrence threshold
+        self._correct(1.0, "open the miro board app",
+                      "open the Miro board app")
+        assert not any("Dictionary suggestions" in (label or "")
+                       for label in self._labels(self._daemon()))
+
+    def test_counts_pending_and_sits_before_the_microphone(self):
+        self._correct(1.0, "open the miro board app",
+                      "open the Miro board app")
+        self._correct(2.0, "the miro board again", "the Miro board again")
+        self._correct(3.0, "send the flud report",
+                      "send the fluid report")
+        self._correct(4.0, "flud report v2", "fluid report v2")
+        d = self._daemon()
+        labels = self._labels(d)
+        item = "Dictionary suggestions (2)…"
+        assert item in labels
+        assert labels.index(item) == labels.index("Microphone") - 1
+        assert labels.index("History") == labels.index(item) - 1
+
+    def test_action_opens_the_dictation_page(self, monkeypatch):
+        self._correct(1.0, "open the miro board app",
+                      "open the Miro board app")
+        self._correct(2.0, "the miro board again", "the Miro board again")
+        d = self._daemon()
+        spawned = []
+        monkeypatch.setattr(d, "_spawn_app",
+                             lambda *a: spawned.append(a))
+        item = next(i for i in d._build_tray_menu()
+                    if (i.get("label") or "").startswith("Dictionary"))
+        item["action"]()
+        assert spawned == [("--open", "dictation")]
+
+    def test_count_follows_a_dismissal(self):
+        from fluidvoice.processing import dict_learn
+        self._correct(1.0, "open the miro board app",
+                      "open the Miro board app")
+        self._correct(2.0, "the miro board again", "the Miro board again")
+        d = self._daemon()
+        assert "Dictionary suggestions (1)…" in self._labels(d)
+        dict_learn.dismiss("miro board", "Miro board")
+        assert not any("Dictionary suggestions" in (label or "")
+                       for label in self._labels(d))
+
+    def test_unreadable_history_never_breaks_the_menu(self, monkeypatch):
+        import fluidvoice.daemon as dm
+        d = self._daemon()
+        monkeypatch.setattr(dm.history_mod, "read_all",
+                            lambda: (_ for _ in ()).throw(OSError("bad")))
+        labels = self._labels(d)
+        assert "History" in labels and "Quit SayItErmano" in labels
