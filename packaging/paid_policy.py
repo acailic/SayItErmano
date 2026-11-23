@@ -163,13 +163,13 @@ def operator_decision(adr_path: Path = ADR_PATH) -> str:
             "recorded decision is the only thing that opens a paid build")
     if len(found) != 1:
         raise PolicyError(
-            f"{adr_path}: {len(found)} decision marker lines — exactly one "
-            f"`{DECISION_PREFIX} <value>` line is allowed")
+            f"{adr_path}: {len(found)} decision marker lines — {ADR_NAME} "
+            f"allows exactly one `{DECISION_PREFIX} <value>` line")
     value = found[0]
     if value not in (OPERATOR, OPTION_A, OPTION_B):
         raise PolicyError(
-            f"{adr_path}: decision marker reads {value!r} — expected "
-            f"{OPERATOR}, {OPTION_A} or {OPTION_B}")
+            f"{adr_path}: {ADR_NAME} decision marker reads {value!r} — "
+            f"expected {OPERATOR}, {OPTION_A} or {OPTION_B}")
     return value
 
 
