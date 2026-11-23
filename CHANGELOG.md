@@ -13,6 +13,10 @@ not reproduced here.
 
 ## [Unreleased]
 
+- Nothing yet.
+
+## [0.9.1] - 2026-11-23
+
 - **First-use setup with a verified test take (`sayit-ermano setup`)** —
   the product-excellence bet 1 path: hardware-grounded model
   recommendation (GPU/VRAM/CPU/RAM cited in every why-line, defaulting
