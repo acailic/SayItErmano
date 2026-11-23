@@ -26,6 +26,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -269,7 +270,9 @@ class TestManPage:
     def test_man_page_covers_every_cli_subcommand(self):
         r"""Parse `python -m fluidvoice --help` and require every
         subcommand of the {a,b,...} positional to appear in the man
-        page's SUBCOMMANDS section (roff `\-` escapes normalized)."""
+        page's SUBCOMMANDS section (roff `\-` escapes normalized) —
+        and to have its own bolded entry line, not just a mention
+        (e.g. `config` also occurs in the daemon's --config flag)."""
         env = {**os.environ, "PYTHONPATH": str(REPO)}
         result = subprocess.run(
             [sys.executable, "-m", "fluidvoice", "--help"],
@@ -286,6 +289,49 @@ class TestManPage:
         missing = [c for c in subcommands if c not in subcommands_section]
         assert not missing, \
             f"man page SUBCOMMANDS section lacks: {missing} — update docs/man"
+        unentryed = [
+            c for c in subcommands
+            if not re.search(rf"(?m)^\.B(?:[IR])?\s+{re.escape(c)}"
+                             r"(?:\s|$)", subcommands_section)]
+        assert not unentryed, \
+            f"no bolded .B entry for: {unentryed} — update docs/man"
+
+    def test_th_version_tracks_the_shipping_version(self):
+        """The .TH header cites the shipping version; pin it to
+        pyproject (same invariant the metainfo <release> carries) so a
+        release bump that forgets docs/man fails here, not in the
+        package."""
+        text = self.MAN.read_text(encoding="utf-8")
+        header = next(ln for ln in text.splitlines()
+                      if ln.startswith(".TH ")).replace("\\-", "-")
+        match = re.fullmatch(
+            r'\.TH SAYIT-ERMANO 1 "\d{4}-\d{2}-\d{2}" '
+            r'"SayItErmano ([0-9][^"]*)" "User Commands"', header)
+        assert match, f"unexpected .TH header: {header!r}"
+        pyproject = tomllib.loads(
+            (REPO / "pyproject.toml").read_text(encoding="utf-8"))
+        assert match.group(1) == pyproject["project"]["version"], \
+            "man page .TH version drifted from pyproject"
+
+    def test_files_section_claims_the_real_xdg_locations(self):
+        """FILES must keep telling the truth: the config, history,
+        retained-audio and models claims come from
+        fluidvoice/paths.py — pin them so a rename cannot silently
+        stale the man page."""
+        files_section = self._section("FILES")
+        for claim in ("~/.config/sayit-ermano/config.toml",
+                      "~/.local/share/sayit-ermano/history.jsonl",
+                      "~/.local/share/sayit-ermano/audio/",
+                      "~/.cache/sayit-ermano/models/"):
+            assert claim.replace("-", r"\-") in files_section \
+                or claim in files_section, f"FILES lost: {claim}"
+
+    def _section(self, name: str) -> str:
+        text = self.MAN.read_text(encoding="utf-8")
+        chunks = re.split(r"(?m)^\.SH (\S+)\s*$", text)
+        sections = dict(zip(chunks[1::2], chunks[2::2]))
+        assert name in sections, f"missing .SH {name}"
+        return sections[name]
 
     @pytest.mark.skipif(
         not shutil.which("groff"), reason="groff unavailable on this host")
