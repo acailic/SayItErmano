@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from . import backends, insertion, ui
+from . import backends, insertion, redact, ui
 from . import context as context_mod
 from . import history as history_mod
 from . import profiles as profiles_mod
@@ -334,7 +334,8 @@ class DictationPipeline:
         strategy = self._insert(rewritten)
         out = {"raw": raw, "text": rewritten, "ai": True,
                "strategy": strategy, "mode": "rewrite", "confidence": conf}
-        self.log(f"rewrote ({strategy}, {len(rewritten)} chars): {rewritten[:120]}")
+        self.log("rewrote "
+                 f"({strategy}): {redact.describe('text', rewritten, preview_chars=120)}")
         entry = {"ts": time.time(), "duration_s": round(duration, 2),
                  "raw": raw, "text": rewritten, "ai": True,
                  "backend": self.backend.name, "app": None, "mode": "rewrite"}
@@ -348,7 +349,9 @@ class DictationPipeline:
         """Command mode turn 0: hand the instruction back to the daemon (the
         CommandSession inserts nothing, polishes nothing and writes history
         only for EXECUTED commands, later)."""
-        self.log(f"command instruction ({len(instruction)} chars): {instruction[:120]}")
+        self.log("command instruction: "
+                 + redact.describe("instruction", instruction,
+                                   preview_chars=120))
         return {"mode": "command", "text": instruction, "raw": raw,
                 "duration_s": round(duration, 2)}
 
@@ -539,8 +542,10 @@ class DictationPipeline:
                 # "Thank you." was typed over a dead monitor while every
                 # guard passed) - either way, say so, it is actionable
                 self.log("dead capture path: mic delivered digital silence"
-                         + (f"; suppressed hallucinated text "
-                            f"{raw.strip()[:40]!r}" if raw.strip() else ""))
+                          + ("; suppressed hallucinated "
+                             + redact.describe("text", raw.strip(),
+                                               preview_chars=40)
+                             if raw.strip() else ""))
                 self.notify("SayItErmano",
                             "No audio from the mic — check that it is "
                             "connected and selected")
@@ -552,8 +557,9 @@ class DictationPipeline:
                 # a pure repetition loop is never the intended speech
                 # (bad-mic whisper artifact); typing it is worse than
                 # nothing - tell the user what to check instead
-                self.log(f"hallucination guard: suppressed repetition "
-                         f"output ({len(raw)} chars): {raw[:60]!r}")
+                self.log("hallucination guard: suppressed repetition "
+                         "output "
+                         + redact.describe("text", raw, preview_chars=60))
                 self.notify("SayItErmano",
                             "No usable speech caught — check mic and language")
                 return None
@@ -589,8 +595,10 @@ class DictationPipeline:
                 self._set_pill_badge("⏎ skipped (terminal)")
             out = {"raw": raw, "text": polished, "ai": ai_used,
                    "strategy": strategy, "confidence": conf}
-            self.log(f"typed ({strategy}, {len(polished)} chars, {duration:.1f}s audio, "
-                     f"{time.monotonic() - started:.1f}s total): {polished[:120]}")
+            self.log(f"typed ({strategy}, {duration:.1f}s audio, "
+                     f"{time.monotonic() - started:.1f}s total): "
+                     + redact.describe("text", polished,
+                                       preview_chars=120))
             entry = {"ts": time.time(), "duration_s": round(duration, 2),
                      "raw": raw, "text": polished, "ai": ai_used,
                      "backend": self.backend.name, "app": app_hint}

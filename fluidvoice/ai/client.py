@@ -194,7 +194,15 @@ class AIClient:
                     detail = e.read().decode(errors="replace")[:300]
                 except Exception:  # noqa: S110 — best-effort path; caller must proceed
                     pass
-                last_err = AIError(f"HTTP {e.code}: {detail}")
+                # the provider's error body is its text, but a 400-style
+                # validation error can echo request content (i.e. the
+                # dictated transcript) back — descriptor only, unless the
+                # diagnostics opt-in is set (fluidvoice/redact.py)
+                from ..redact import describe
+                last_err = AIError(
+                    f"HTTP {e.code}: "
+                    + (describe("body", detail, preview_chars=300)
+                       if detail else "empty body"))
                 if e.code in (400, 401, 403, 404, 422):
                     raise last_err  # config errors won't fix themselves
                 # Divergence (intentional): 429/5xx are retried, unlike upstream.

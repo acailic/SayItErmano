@@ -13,6 +13,9 @@ or recordings anywhere near these tests:
 * DEFAULT RETENTION IS NOTHING: a dictation retains no audio file unless
   history.save_audio opts in, and a dictation session writes no context
   artifacts to disk (history.jsonl is the only new data file);
+* TRANSCRIPTS STAY OUT OF DIAGNOSTICS: log lines / guard suppressions /
+  provider error bodies carry a length+sha256 descriptor, never content,
+  unless SAYITERMANO_LOG_TRANSCRIPTS=1 opts in (with a loud warning);
 * unconfirmed/denied command proposals never execute — heavily pinned
   already in test_command.py / test_command_coord.py (single/double
   press, Escape, timeout); those are the contracts, not duplicated here.
@@ -22,13 +25,14 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
-from fluidvoice import backends, paths
+from fluidvoice import backends, paths, redact
 from fluidvoice import daemon as dm
 from fluidvoice.ai import client as ai_client
 from fluidvoice.config import DEFAULTS
@@ -195,3 +199,153 @@ class TestDefaultRetentionIsNothing:
                 (tmp_path / "xdata" / "history.jsonl").read_text().splitlines()
                 if l.strip()]
         assert rows and rows[0].get("audio") == str(wavs[0])
+
+
+class TestTranscriptsStayOutOfDiagnostics:
+    """Excellence bet 5: every diagnostic path that once printed a
+    transcript prefix (daemon log lines, guard suppressions, provider
+    error bodies) now prints a content-free descriptor — length + sha256
+    prefix — unless SAYITERMANO_LOG_TRANSCRIPTS=1 is explicitly set
+    (docs/quality/redaction-audit.md)."""
+
+    SECRET = "the launch code is hunter2 forget i said this"
+
+    def _pipe(self, cfg, tmp_path, text, *, logger, mode="dictate",
+              loud=True, rewriter=None):
+        wav = make_wav(tmp_path / "utt.wav", loud=loud)
+        pipe = DictationPipeline(
+            cfg, StubBackend(text), inserter=lambda t, c: "typed",
+            logger=logger, rewriter=rewriter)
+        return pipe.run(wav, "TestApp", mode=mode) or {}
+
+    def _run_capturing_log(self, cfg, tmp_path, text, **kw):
+        lines: list[str] = []
+        out = self._pipe(cfg, tmp_path, text, logger=lines.append, **kw)
+        return out, "\n".join(lines)
+
+    # -- the four log sites, redacted by default -------------------------
+
+    def test_typed_line_is_descriptor_not_content(self, isolated):
+        tmp_path, _ = isolated
+        out, logged = self._run_capturing_log(
+            copy.deepcopy(DEFAULTS), tmp_path, self.SECRET)
+        assert out["text"] == self.SECRET  # the dictation itself is intact
+        assert self.SECRET not in logged
+        assert "hunter2" not in logged
+        assert re.search(r"typed \(typed, .*text \(\d+ chars, "
+                         r"sha256:[0-9a-f]{8}\)", logged), logged
+
+    def test_rewrite_log_is_descriptor_not_content(self, isolated):
+        tmp_path, _ = isolated
+        cfg = copy.deepcopy(DEFAULTS)
+        out, logged = self._run_capturing_log(
+            cfg, tmp_path, "ignored raw text", mode="rewrite",
+            rewriter=lambda instr, ctx: f"rewritten {self.SECRET}")
+        assert self.SECRET not in logged
+        assert re.search(r"rewrote \(typed\): text \(\d+ chars, "
+                         r"sha256:[0-9a-f]{8}\)", logged), logged
+
+    def test_command_instruction_log_is_descriptor_not_content(
+            self, isolated):
+        tmp_path, _ = isolated
+        out, logged = self._run_capturing_log(
+            copy.deepcopy(DEFAULTS), tmp_path, self.SECRET, mode="command")
+        assert out.get("text") == self.SECRET  # handed to the daemon intact
+        assert self.SECRET not in logged
+        assert re.search(r"command instruction: instruction \(\d+ chars, "
+                         r"sha256:[0-9a-f]{8}\)", logged), logged
+
+    def test_repetition_suppression_log_is_descriptor_not_content(
+            self, isolated):
+        tmp_path, _ = isolated
+        loop = "you you you you you"
+        out, logged = self._run_capturing_log(
+            copy.deepcopy(DEFAULTS), tmp_path, loop)
+        assert out == {}  # suppressed: nothing typed
+        assert "you you" not in logged
+        assert re.search(r"hallucination guard: suppressed repetition "
+                         r"output text \(\d+ chars, sha256:[0-9a-f]{8}\)",
+                         logged), logged
+
+    def test_dead_capture_suppression_log_is_descriptor_not_content(
+            self, isolated):
+        tmp_path, _ = isolated
+        out, logged = self._run_capturing_log(
+            copy.deepcopy(DEFAULTS), tmp_path, self.SECRET, loud=False)
+        assert out == {}  # suppressed: nothing typed
+        assert self.SECRET not in logged
+        assert re.search(r"dead capture path: .*suppressed hallucinated "
+                         r"text \(\d+ chars, sha256:[0-9a-f]{8}\)",
+                         logged), logged
+
+    # -- the opt-in: content only behind a loud warning -------------------
+
+    def test_opt_in_env_unlocks_content_with_loud_warning(
+            self, isolated, monkeypatch, capsys):
+        tmp_path, _ = isolated
+        monkeypatch.setenv("SAYITERMANO_LOG_TRANSCRIPTS", "1")
+        monkeypatch.setattr(redact, "_warned", False)
+        _, logged = self._run_capturing_log(
+            copy.deepcopy(DEFAULTS), tmp_path, self.SECRET)
+        err = capsys.readouterr().err
+        assert self.SECRET in logged          # content present...
+        assert redact.OPT_IN_ENV in err and "WARNING" in err  # ...and loud
+        # one second take: the warning prints once per process, not per line
+        _, logged2 = self._run_capturing_log(
+            copy.deepcopy(DEFAULTS), tmp_path, self.SECRET)
+        err2 = capsys.readouterr().err
+        assert self.SECRET in logged2
+        assert "WARNING" not in err2
+
+    # -- the provider error body (AIError text reaches logs + toasts) -----
+
+    def test_ai_http_error_body_redacted_by_default(self, monkeypatch):
+        import io
+        import urllib.error
+
+        def refuse(req, timeout=None):
+            body = json.dumps(
+                {"error": f"invalid request echoing {self.SECRET}"}).encode()
+            raise urllib.error.HTTPError(
+                "url", 400, "Bad Request", {}, io.BytesIO(body))
+
+        client = ai_client.AIClient({
+            "ai": {"base_url": "https://ai.example.internal/v1",
+                   "model": "some-model", "api_key": ""}})
+        monkeypatch.setattr(ai_client.urllib.request, "urlopen", refuse)
+        with pytest.raises(ai_client.AIError) as exc:
+            client.chat("x")
+        assert "HTTP 400" in str(exc.value)     # the code survives
+        assert self.SECRET not in str(exc.value)  # the body does not
+        assert re.search(r"sha256:[0-9a-f]{8}", str(exc.value))
+
+    def test_ai_http_error_body_content_with_opt_in(self, monkeypatch):
+        import io
+        import urllib.error
+
+        def refuse(req, timeout=None):
+            body = json.dumps(
+                {"error": f"invalid request echoing {self.SECRET}"}).encode()
+            raise urllib.error.HTTPError(
+                "url", 400, "Bad Request", {}, io.BytesIO(body))
+
+        monkeypatch.setenv("SAYITERMANO_LOG_TRANSCRIPTS", "1")
+        monkeypatch.setattr(redact, "_warned", False)
+        client = ai_client.AIClient({
+            "ai": {"base_url": "https://ai.example.internal/v1",
+                   "model": "some-model", "api_key": ""}})
+        monkeypatch.setattr(ai_client.urllib.request, "urlopen", refuse)
+        with pytest.raises(ai_client.AIError) as exc:
+            client.chat("x")
+        assert self.SECRET in str(exc.value)
+
+    # -- the descriptor primitive itself -----------------------------------
+
+    def test_describe_shape_is_length_and_hash_only(self):
+        d = redact.describe("text", "hello")
+        assert d == "text (5 chars, sha256:" + redact.digest("hello") + ")"
+        assert "hello" not in d
+        # stable for the same content, distinct across content
+        assert redact.describe("text", "hello") == d
+        assert redact.digest("hello") != redact.digest("hell0")
+        assert re.fullmatch(r"[0-9a-f]{8}", redact.digest("hello"))
