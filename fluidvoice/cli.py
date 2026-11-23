@@ -86,6 +86,19 @@ def _build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("doctor", help="environment check")
     p.set_defaults(func=_cmd_doctor)
 
+    p = sub.add_parser(
+        "setup",
+        help="guided first-use setup: hardware-grounded model pick, "
+             "download with progress, insertion check, verified test take")
+    p.add_argument("--language", metavar="LANG",
+                   help="dictation language code (default: prompt, or en)")
+    p.add_argument("--model", metavar="NAME",
+                   help="skip the recommendation and use this model")
+    p.add_argument("-y", "--yes", action="store_true",
+                   help="accept every default, no prompts")
+    p.add_argument("--config", type=Path, help="alternative config file")
+    p.set_defaults(func=_cmd_setup)
+
     p = sub.add_parser("mcp",
                        help="run the MCP server on stdio (for MCP-capable "
                             "agents; forwards to the running daemon)")
@@ -314,6 +327,17 @@ def _cmd_eval_run(args: argparse.Namespace) -> int:
 
 def _cmd_doctor(args: argparse.Namespace) -> int:
     return doctor_mod.run()
+
+
+def _cmd_setup(args: argparse.Namespace) -> int:
+    from .setup_flow import SetupFlow
+    cfg = load_config(args.config)
+    try:
+        return SetupFlow(cfg, language=args.language, model=args.model,
+                         assume_yes=args.yes).run()
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
 
 
 def _cmd_update(args) -> int:
