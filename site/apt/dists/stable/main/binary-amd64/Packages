@@ -1,5 +1,5 @@
 Package: sayit-ermano
-Version: 0.9.0-1
+Version: 0.9.1-1
 Architecture: amd64
 Depends: python3 (>= 3.12), python3 (<< 3.13), pipewire-audio-utils | pulseaudio-utils, xdotool, xclip, libnotify-bin, python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1
 Recommends: pulseaudio-utils, llama.cpp
@@ -9,11 +9,11 @@ Provides: fluidvoice-linux
 Maintainer: SayItErmano contributors
 Priority: optional
 Section: sound
-Filename: pool/main/s/sayit-ermano/sayit-ermano_0.9.0-1_amd64.deb
-Size: 82761840
-SHA256: f40742cc1a18b7cdeab40cc757fc418a89e559798fad4202867e729956312874
-SHA1: f33c27bbbb470194ab12031fea4f45a22b8c4eff
-MD5sum: 9d347d19ae619295b6c908f701c437ec
+Filename: pool/main/s/sayit-ermano/sayit-ermano_0.9.1-1_amd64.deb
+Size: 82781632
+SHA256: c15b78fbf3e897411813f0ee03020ef85584ec2cbb44dc7868d530515a8207ed
+SHA1: 965b4091953f2479be55cb613c88bc94137744ec
+MD5sum: 14d59d22d1c39da983da449dd3acdcb5
 Description: SayItErmano - local voice dictation with AI polish (Linux port of FluidVoice)
  Community port of altic-dev/FluidVoice behavior to Linux: global hotkey,
  on-device Whisper transcription (CUDA when available), spoken punctuation

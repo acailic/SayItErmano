@@ -5,33 +5,33 @@ Origin: SayItErmano
 Label: SayItErmano
 Suite: stable
 Codename: stable
-Date: Sun, 22 Nov 2026 10:20:20 UTC
+Date: Mon, 23 Nov 2026 21:02:03 UTC
 Architectures: amd64
 Components: main
 Description: SayItErmano - local voice dictation with AI polish (community Linux port of FluidVoice)
 MD5Sum:
- 759e5db16ce6b1be2dcf758fefcf5a0d 1164 main/binary-amd64/Packages
- 7b5a48e9218614bac8a56c6d7a8d315d 724 main/binary-amd64/Packages.gz
+ 0e6e715e3efe19434372a15d14c472ec 1164 main/binary-amd64/Packages
+ 533d55ff690fdca4923f581872f58e53 725 main/binary-amd64/Packages.gz
  38647fe798de1aa661a56bd46d1415ec 192 main/binary-amd64/Release
 SHA1:
- ca9a15063551384d21a972c5c59249ff3a6f68d3 1164 main/binary-amd64/Packages
- 57373d83914e1bd2e499211514740ec0e0e103f5 724 main/binary-amd64/Packages.gz
+ 36c65d5866e5f8a343a2402cb122ce9c926aec5a 1164 main/binary-amd64/Packages
+ 20fa676e62900b689ef7f7b042320c39f6ec30f1 725 main/binary-amd64/Packages.gz
  82e0a47d37eb9d1c3bd9eb0dcf1eedbfa3757cea 192 main/binary-amd64/Release
 SHA256:
- c1d6c0592db0ff66ffd20c8d00cddc4fc91c6e9c71d63e5730775866e8a210ba 1164 main/binary-amd64/Packages
- d86d4ad9bab4de7bd6bc15be6ad476c92d806ece68b1ba0f64db43afb46680b0 724 main/binary-amd64/Packages.gz
+ 6a675851efa207eba66aa8f0058bcf7ebf15a3632039569bdfe23d866819ed40 1164 main/binary-amd64/Packages
+ 39e671f64a8d3acee738c19eb24e83ba9bf2d7d8661148394b3c2f2a2771bacf 725 main/binary-amd64/Packages.gz
  26535638466471f8357726f40607ec72e3ec288a021519fa91049534b0953e39 192 main/binary-amd64/Release
 -----BEGIN PGP SIGNATURE-----
 
-iQGzBAEBCgAdFiEEIB16TQu8quVBQ54dQHJ6OF0MVZ0FAmsCweQACgkQQHJ6OF0M
-VZ18lgv8C0bWfYzusdcwMOOn3TaZE6NlLRbp3nosqzqAacrzkORAA8KxdnwcGXux
-Qw4uuudrPofh6w4wlb9ol47tQig4f1r7MmUFkRE/kLM/4AA2Mj3R2lxuHtESXswa
-c55eyDi2VKaBESSZ4juZT7LCy7PzJvfrBdK6++tQ9WlSKyFW01P5xIpfGItUwVa1
-Vr0lLfiGSB5DWV4v0dTqtBOgq33hHYwGxXsggHvXBKBe7BvsPq9NqDDkof++xmPM
-ZCXEizZIanFo9ooKN8YinbWxAHYrWwphoyneYlNWOiZLlrDUpA3Nu9p1p79BRoje
-JDESf6vN3J08VO2KH2p95qQfOvBItjWQvObvWYrtWfPEt+9ehbgtKswU/7d/bViH
-8k+FX2InVrjBSU7F/gzTnS0DaVI9LK1BjA6/88W/Tw1igp4EO58jXBjhLTwPjcrx
-UOmAc7QkJOYLfKlHQSBDsqcmWynf++RvK2++l3ZvndtGo5TEfyoG7wiNl2BIDxhB
-z7CmXomC
-=sgN0
+iQGzBAEBCgAdFiEEIB16TQu8quVBQ54dQHJ6OF0MVZ0FAmsEqcsACgkQQHJ6OF0M
+VZ2mLgv9EYOyZJP2ZSzawF6/1+dqZe3saPkRf9PPiF9SDwwwbR9NpdxvH1IlSQW2
+6wBcXZNgJAFwKtFrUrUrs/x1M5Ri99uyZiPWhYdiH1Q3EDQ+GMkivQ//3wNJN5hM
+7b2UvY1KPaHNGdwkfuea7ER5H8MFsnDdDLEt3aCBKehAYffI+PNl+S7oR1KL42M3
+4YOV+aJezKPgbFoVaS3cKhc3y16OxI88VuXAnulV8/Bg0vrdPRf3lNj+EruxZand
+wBGQQFjqMzQ64Suviv0IVyHQ4rrSuLJ+WLYqUpN143fQcbosCTYYnUmWb3CFSiY0
+mHXZEooUQKEM428oAozZ4ZrHRcfOnwcNQGqcjyyVLqq3t8r2e9H6O0R1LNck0ugu
+HkJEB6CxzzGM8LqyLu9Yr2llBS7aqSvTht7izlGgjvqZXbB1Xsq63TRvVdk+Uuwz
+QRNLsjtzqAMGFSPg+iQqaQOrP6vHHIoo0xGyR2JcBs3GsBuSuKt6otj/f1lNzkvp
+OoIYaxfF
+=8f5w
 -----END PGP SIGNATURE-----
