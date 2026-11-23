@@ -4,6 +4,12 @@ Dated research notes live in this directory; raw data under
 [data/](data/), competitor watch under [competitive/](competitive/).
 The newest entries:
 
+- [2026-11-22 checkout options](2026-11-22-checkout-options.md) —
+  merchant-of-record vs direct processor from current vendor docs,
+  seller eligibility for Serbia/Bosnia verified per provider and
+  entity type, the integration map onto the v0.9.0 license-key
+  webhook, and the Paddle-primary/Polar-fallback recommendation with
+  its top three risks (monetization plan question 4).
 - [2026-11-22 interview kit + channel plan](2026-11-22-interview-kit.md) —
   monetization plan question 1 (R1b): screening, 15 questions mapped to
   the cost model's inputs, consent text, results template, and where to
