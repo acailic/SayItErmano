@@ -70,6 +70,18 @@ if [ "$HASHED" != 1 ] && [ "${DEB_ALLOW_PIN_ONLY:-0}" != "1" ]; then
     exit 1
 fi
 
+# --- ADR-0008: paid-artifact AGPL policy switch ------------------------------
+# PAID_ARTIFACT=1 engages paid mode (default off = today's free build);
+# PAID_AGPL_POLICY then picks the global-shortcut-portal (AGPL-3.0-only)
+# remediation, source (bundle wheel + Corresponding Source + license) or
+# drop-portal (the AGPL wheel stays out of the artifact). The operator's
+# one-line choice — analysis: docs/adr/ADR-0008-paid-artifact-agpl-policy.md.
+# Rehearsal: PAID_ARTIFACT=1 PAID_AGPL_POLICY=source packaging/build-deb.sh
+# (see ADR-0008 "Rehearsal").
+PAID_MODE="$(python3 "$REPO/packaging/paidartifact.py" resolve)"
+[ "$PAID_MODE" = "off" ] \
+    || python3 "$REPO/packaging/paidartifact.py" deb-guard --lock "$CONSTRAINTS"
+
 STAGE="$(mktemp -d)/pkg"
 trap 'rm -rf "$(dirname "$STAGE")"' EXIT
 
@@ -97,6 +109,28 @@ else
     echo ">> wheel artifacts NOT verified. Never ship a deb built this way." >&2
     "$PIP" install -q --no-cache-dir -c "$CONSTRAINTS" .
 fi
+
+# ADR-0008 option A (PAID_ARTIFACT=1 PAID_AGPL_POLICY=source): the paid
+# deb BUNDLES the AGPL wheel (portal hotkey on the host install) plus its
+# Corresponding Source + license text under
+# /usr/share/licenses/$NAME/global-shortcut-portal/ — GPLv3 §13 permits
+# the combination; bundling the source satisfies AGPL §6 / GPL §6 for a
+# paid conveyance. Filenames/pins live in packaging/paidartifact.py
+# (tests pin script and module to the same bytes).
+AGPL_WHEEL="packaging/wheels/global_shortcut_portal-0.1.0-py3-none-any.whl"
+AGPL_SDIST="packaging/wheels/global_shortcut_portal-0.1.0.tar.gz"
+AGPL_LICENSE_DIR="$STAGE/usr/share/licenses/$NAME/global-shortcut-portal"
+if [ "$PAID_MODE" = "source" ]; then
+    python3 "$REPO/packaging/paidartifact.py" verify
+    "$PIP" install -q --no-deps "$REPO/$AGPL_WHEEL"
+    install -Dm644 "$REPO/$AGPL_SDIST" \
+        "$AGPL_LICENSE_DIR/$(basename "$AGPL_SDIST")"
+    python3 "$REPO/packaging/paidartifact.py" extract-license \
+        -o "$AGPL_LICENSE_DIR/LICENSE"
+    echo ">> PAID (ADR-0008 option A): AGPL wheel installed; Corresponding" >&2
+    echo ">> Source + license staged in /usr/share/licenses/$NAME/global-shortcut-portal/" >&2
+fi
+
 rm -rf "$STAGE/opt/$NAME/venv/share"  # docs/man from wheels
 
 # strip the pyc cache (rebuilt on first run) to shrink the package

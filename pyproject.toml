@@ -172,6 +172,7 @@ files = [  # 5.7 ratchet: IPC + persistence boundaries join the typed seam
     "fluidvoice/control_server.py",
     "fluidvoice/mcp_server.py",
     "packaging/deb/locklib.py",
+    "packaging/paidartifact.py",
     "scripts/release_verify.py",
 ]
 follow_imports = "silent"
