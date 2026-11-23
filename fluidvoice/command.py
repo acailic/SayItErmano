@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import history as history_mod
+from . import redact
 from .ai.client import AIClient, AIError, strip_thinking
 
 
@@ -230,6 +231,16 @@ def is_destructive_command(command: str,
     return False
 
 
+def _proposal_desc(raw: str) -> str:
+    """Content-free descriptor for the model's proposal in error text.
+    CommandError strings reach the daemon log AND the 'Command mode
+    failed' desktop notification (command_coord.py), and the proposal is
+    model output derived from the dictated instruction — it can quote
+    what was said. Descriptor only unless SAYITERMANO_LOG_TRANSCRIPTS=1
+    (redaction audit, docs/quality/redaction-audit.md)."""
+    return redact.describe("proposal", raw, preview_chars=200)
+
+
 def parse_reply(content: str,
                 extra_patterns: list[str] | None = None) -> ParsedReply:
     """Model output is never trusted: <think> stripped, fences stripped,
@@ -250,7 +261,7 @@ def parse_reply(content: str,
                 data = None
     if not isinstance(data, dict):
         raise CommandError(
-            f"could not parse the model's proposal: {cleaned}")
+            f"could not parse the model's proposal: {_proposal_desc(cleaned)}")
     if data.get("done"):
         summary = data.get("summary")
         return ParsedReply("done", summary=str(summary) if summary else "Done.")
@@ -260,7 +271,8 @@ def parse_reply(content: str,
                  for i, c in enumerate(calls_data)]
         if calls:
             return ParsedReply("proposal", calls=calls)
-    raise CommandError(f"could not parse the model's proposal: {cleaned}")
+    raise CommandError(
+        f"could not parse the model's proposal: {_proposal_desc(cleaned)}")
 
 
 def _parse_tool_call(index: int, data, raw: str,
@@ -271,33 +283,36 @@ def _parse_tool_call(index: int, data, raw: str,
     would run an empty shell)."""
     if not isinstance(data, dict):
         raise CommandError(
-            f"tool call must be an object in the model's proposal: {raw}")
+            f"tool call must be an object in the model's proposal: "
+            f"{_proposal_desc(raw)}")
     name = data.get("name")
     if not isinstance(name, str) or name not in TOOL_REGISTRY:
         # upstream honors execute_terminal_command only (silently falls
-        # through to text); we fail loudly naming the tool
+        # through to text); we fail loudly naming the tool. The name is
+        # model output too — cap it, never echo it whole.
         raise CommandError(
-            f"unknown tool {name!r} in the model's proposal: {raw}")
+            f"unknown tool {str(name)[:40]!r} in the model's proposal: "
+            f"{_proposal_desc(raw)}")
     args = data.get("arguments")
     if not isinstance(args, dict):
         raise CommandError(
             f"tool {name} arguments must be an object in the model's "
-            f"proposal: {raw}")
+            f"proposal: {_proposal_desc(raw)}")
     command = args.get("command")
     if not isinstance(command, str) or not command.strip():
         raise CommandError(
             f"tool {name} needs a non-empty string 'command' in the model's "
-            f"proposal: {raw}")
+            f"proposal: {_proposal_desc(raw)}")
     working_dir_raw = args.get("workingDirectory")
     if working_dir_raw is not None and not isinstance(working_dir_raw, str):
         raise CommandError(
             f"tool {name} workingDirectory must be a string in the model's "
-            f"proposal: {raw}")
+            f"proposal: {_proposal_desc(raw)}")
     purpose_raw = args.get("purpose")
     if purpose_raw is not None and not isinstance(purpose_raw, str):
         raise CommandError(
             f"tool {name} purpose must be a string in the model's "
-            f"proposal: {raw}")
+            f"proposal: {_proposal_desc(raw)}")
     call_id = data.get("id")
     call_id = call_id.strip() if isinstance(call_id, str) and call_id.strip() \
         else f"call_{index + 1}"  # upstream synthesizes "call_<uuid8>"

@@ -207,3 +207,28 @@ packaging: Ubuntu 24.04 deb (pinned container build, ADR-0004), pipx
   carries the file:line evidence.
 - **Briefs**: every feature's request brief and its STATUS line live in
   [requests/](../requests/) (`just validate-requests`).
+
+### Install routes vs fresh-VM evidence (honesty check)
+
+What is verified **where**: the daily-driver Pop!_OS X11 desktop plus
+the automated tiers above. The paid-launch QA gate (#14) — one
+fresh-VM install per route per distro — lives in
+[quality/install-matrix/](quality/install-matrix/README.md) and, as of
+2026-11-23, **every cell is PENDING**: no install route has fresh-VM
+evidence yet. Consequences for the claims in the README and
+[guides/install.md](guides/install.md):
+
+| Advertised | Daily-driver evidence | Fresh-VM matrix |
+|---|---|---|
+| One-shot installer, user-space (incl. Fedora/pipx note) | yes (built and used here; upgrade/rollback rehearsed — [quality/upgrade/](quality/upgrade/)) | **PENDING — unverified** |
+| One-shot `--system` | partial | **PENDING — unverified** |
+| Official .deb + signed apt repo | built/signed in releases | **PENDING — unverified** |
+| pipx / pip | used during development | **PENDING — unverified** |
+| AUR package | packaged, not install-tested here | **PENDING — unverified** |
+| Flatpak (Flathub) | manifest + sandbox tested | **PENDING — unverified** |
+| Wayland (badge: "Linux · X11 · Wayland") | guide + unit/display-tier probes, real-session use limited | no Wayland fresh-VM cell |
+
+Treat cross-distro route claims (Fedora, Arch, AUR, Flatpak) as
+**best-effort until the matrix fills**: the honest per-distro promise
+is what [guides/install.md](guides/install.md) states per route plus
+this table, not a blanket "works everywhere".
