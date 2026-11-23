@@ -66,6 +66,16 @@ not reproduced here.
   profile shows as Custom, and Discard drops the queued pointer clear
   together with the edit that queued it.
 
+- **`man sayit-ermano` works** — the v0.9.0 deb smoke test (clean
+  ubuntu:24.04 install) found every surface present except a man page.
+  `docs/man/sayit-ermano.1` (classic roff: SYNOPSIS, SUBCOMMANDS with
+  every command's important flags, FILES from the XDG paths,
+  DIAGNOSTICS via `doctor` + journalctl, BUGS → the issue tracker)
+  ships gz'd in `/usr/share/man/man1/` from the deb build and in both
+  Flatpak manifest variants' install set; a unit test pins the page's
+  SUBCOMMANDS section against the CLI's own `--help` output so it
+  cannot drift silently.
+
 ## [v0.9.0] — productization: i18n, Flathub, Paddle funnel, local AI, license keys, apt updates (2026-11-22)
 
 - **i18n: translate the model-catalog notes** — the per-model subtitle
