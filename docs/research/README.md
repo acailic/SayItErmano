@@ -10,6 +10,14 @@ The newest entries:
   entity type, the integration map onto the v0.9.0 license-key
   webhook, and the Paddle-primary/Polar-fallback recommendation with
   its top three risks (monetization plan question 4).
+- [2026-11-22 interview kit + channel plan](2026-11-22-interview-kit.md) —
+  monetization plan question 1 (R1b): screening, 15 questions mapped to
+  the cost model's inputs, consent text, results template, and where to
+  find interviewees. A kit, not evidence — not yet run.
+- [2026-11-22 competitor landscape refresh](2026-11-22-competitor-landscape-refresh.md) —
+  the COMPARISON.md matrix re-verified at official sources with an
+  advertised-vs-tested split, plus the "gaps we own" ledger (monetization
+  plan question 1). Upstream FluidVoice now has a Linux early beta.
 - [2026-11-22 rights & redistribution inventory](2026-11-22-rights-and-redistribution-inventory.md) —
   what the project may sell under its rights: tree inventory by origin,
   dependency + model-weight licensing sweep (incl. the AGPL
