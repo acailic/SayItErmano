@@ -15,7 +15,8 @@ the app itself.
 - [guides/quickstart.md](guides/quickstart.md) — the first-use path:
   `sayit-ermano setup` grounds the model pick in your hardware,
   downloads with progress, audits insertion and ends with a verified
-  test take.
+  test take; plus where corrections live (History inline edit, custom
+  dictionary, vocabulary hotwords, per-app prompts).
 - [guides/license.md](guides/license.md) — license keys: import, status,
   what they do and do not restrict ([PRICING](PRICING.md)).
 - [research/2026-11-21-network-egress-audit.md](research/2026-11-21-network-egress-audit.md) —

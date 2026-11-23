@@ -78,3 +78,27 @@ but insertion blocked on Wayland? See the
 The GTK app's first-run onboarding (opened automatically on a fresh
 data dir) runs the same verification over the daemon socket; the CLI
 flow here is the same funnel, offline-friendly and scriptable.
+
+## When the text is wrong: corrections
+
+Four features turn a mis-heard take into a better next one. None of
+them is new machinery — this is where each one lives.
+
+| You want to… | Go to | What it does |
+| --- | --- | --- |
+| fix the take you just dictated | **History** — tray menu → **History** (or `sayit-ermano app`): the pencil on a row edits the text, the paste icon re-inserts it at the cursor | repairs this entry; re-dictating is not needed |
+| stop the same word coming out wrong | **Settings → Dictation → Custom dictionary** | "miro board" → "Miro board": phrases replaced on insert, hand-written |
+| have the recognizer *hear* your names better | **Settings → Models → Vocabulary boosting** | hotwords bias the decoder before transcription (faster-whisper and openai-whisper; keep to about 20 words — long lists over-bias the decoder) |
+| dictate differently into one app | **Settings → AI → Per-app prompts** | extra polish instructions for a matching app (needs AI polish on) |
+
+The dictionary also learns from you: when you correct the same word in
+History twice, the pair shows up as a **Suggested words** row on the
+Dictation page (Settings → Dictation, below the dictionary) — and the
+tray menu grows a **Dictionary suggestions (N)…** item that takes you
+there. Nothing is added until you press **Accept**.
+
+Which one do I want? The dictionary rewrites text *after* transcription;
+hotwords bias the decoder *before*; per-app prompts change the AI
+polish. A full survey of these surfaces (with click counts and what
+each page hides) is in
+[docs/research/2026-11-23-correction-discoverability.md](../research/2026-11-23-correction-discoverability.md).
