@@ -68,9 +68,10 @@ finish-args:
 modules:
   # Desktop integration as reviewable data sources: desktop file
   # (app-id name so flatpak exports it), appstream metainfo
-  # (GPL-3.0-or-later, keywords, OARS), hicolor icons. The local
-  # sources are placed at their in-repo paths (`dest:`), so the
-  # build-commands are the same as the Flathub variant's git checkout.
+  # (GPL-3.0-or-later, keywords, OARS), hicolor icons, and the man
+  # page (offline help, docs/man/). The local sources are placed at
+  # their in-repo paths (`dest:`), so the build-commands are the same
+  # as the Flathub variant's git checkout.
   # The start/stop sounds are NOT installed here: they ship as Python
   # package data (fluidvoice/assets/sfx, [tool.setuptools.package-data] in
   # pyproject.toml) through the sayitermano module's pip install.
@@ -81,6 +82,7 @@ modules:
     build-commands:
       - install -Dm644 -t $FLATPAK_DEST/share/applications packaging/flatpak/io.github.acailic.SayItErmano.desktop
       - install -Dm644 -t $FLATPAK_DEST/share/metainfo packaging/flatpak/io.github.acailic.SayItErmano.metainfo.xml
+      - install -Dm644 docs/man/sayit-ermano.1 $FLATPAK_DEST/share/man/man1/sayit-ermano.1
       - install -Dm644 packaging/icons/hicolor/16x16/apps/sayit-ermano.png $FLATPAK_DEST/share/icons/hicolor/16x16/apps/sayit-ermano.png
       - install -Dm644 packaging/icons/hicolor/32x32/apps/sayit-ermano.png $FLATPAK_DEST/share/icons/hicolor/32x32/apps/sayit-ermano.png
       - install -Dm644 packaging/icons/hicolor/48x48/apps/sayit-ermano.png $FLATPAK_DEST/share/icons/hicolor/48x48/apps/sayit-ermano.png
@@ -98,6 +100,11 @@ modules:
         path: flatpak/io.github.acailic.SayItErmano.metainfo.xml
         dest: packaging/flatpak
         sha256: 2ea017b29410ae0b7daf40d1491c9a4478822db741abaf2732b5bba44d0ae918
+      # the man page (offline help, from docs/man/ in the checkout)
+      - type: file
+        path: ../docs/man/sayit-ermano.1
+        dest: docs/man
+        sha256: b170f2e1321b5fec83f3b34a8402f0f46c4f0c61a4062250de4a946a65b4ccc0
       - type: dir
         path: icons
         dest: packaging/icons

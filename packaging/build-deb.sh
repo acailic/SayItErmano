@@ -159,6 +159,13 @@ for svg in "$REPO"/fluidvoice/assets/icons/symbolic/actions/*.svg; do
         "$STAGE/usr/share/icons/hicolor/symbolic/actions/$(basename "$svg")"
 done
 
+# 3b. Man page (the offline help path when no GUI runs) --------------------
+# Debian convention: /usr/share/man/man1, gzip-compressed (what
+# dh_installman would do: gzip -9n keeps the timestamp out of the deb).
+mkdir -p "$STAGE/usr/share/man/man1"
+gzip -9nc docs/man/sayit-ermano.1 \
+    > "$STAGE/usr/share/man/man1/sayit-ermano.1.gz"
+
 # 4. systemd user unit (optional alternative to XDG autostart) -------------
 mkdir -p "$STAGE/usr/lib/systemd/user"
 cat > "$STAGE/usr/lib/systemd/user/sayit-ermano.service" <<UNIT

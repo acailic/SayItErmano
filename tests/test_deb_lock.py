@@ -23,6 +23,7 @@ import hashlib
 import importlib.util
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -239,6 +240,75 @@ class TestBuildDebContract:
                   "update-constraints.sh").read_text()
         assert "locklib.py" in script and "--wheels-dir" in script
         assert "m pip hash" not in script  # only the E3 history comment remains
+
+
+class TestManPage:
+    """sayit-ermano(1) — the v0.9.0 deb smoke test (clean ubuntu:24.04
+    install) found every surface present except a man page. The page
+    under docs/man/ is the offline help path, so its SUBCOMMANDS section
+    is pinned against argparse's own --help output (it cannot drift
+    silently), and the deb is pinned to ship it gz'd, the way
+    dh_installman would."""
+
+    MAN = REPO / "docs" / "man" / "sayit-ermano.1"
+    REQUIRED_SECTIONS = ("NAME", "SYNOPSIS", "DESCRIPTION", "OPTIONS",
+                         "SUBCOMMANDS", "FILES", "DIAGNOSTICS", "BUGS")
+    HAS_GROFF = shutil.which("groff") is not None
+
+    def test_man_page_exists_with_the_classic_sections(self):
+        assert self.MAN.is_file(), "docs/man/sayit-ermano.1 is missing"
+        text = self.MAN.read_text(encoding="utf-8")
+        # leading `.\"` comments are fine; the first request/control line
+        # must be the .TH header
+        first = next(ln for ln in text.splitlines()
+                     if ln.strip() and not ln.startswith('.\\"'))
+        assert first.startswith(".TH "), first
+        for section in self.REQUIRED_SECTIONS:
+            assert f".SH {section}" in text, f"section {section} missing"
+
+    def test_man_page_covers_every_cli_subcommand(self):
+        r"""Parse `python -m fluidvoice --help` and require every
+        subcommand of the {a,b,...} positional to appear in the man
+        page's SUBCOMMANDS section (roff `\-` escapes normalized)."""
+        env = {**os.environ, "PYTHONPATH": str(REPO)}
+        result = subprocess.run(
+            [sys.executable, "-m", "fluidvoice", "--help"],
+            cwd=REPO, capture_output=True, text=True, timeout=120, env=env)
+        assert result.returncode == 0, result.stderr
+        brace_set = re.search(r"\{([a-z][a-z,\-]*)}", result.stdout)
+        assert brace_set, "no subcommand set in --help output"
+        subcommands = brace_set.group(1).split(",")
+        assert len(subcommands) >= 7  # sanity: the CLI is not a stub
+        text = self.MAN.read_text(encoding="utf-8")
+        sub = text.replace("\\-", "-")  # roff minus escaping
+        subcommands_section = sub[sub.index(".SH SUBCOMMANDS"):
+                                  sub.index(".SH FILES")]
+        missing = [c for c in subcommands if c not in subcommands_section]
+        assert not missing, \
+            f"man page SUBCOMMANDS section lacks: {missing} — update docs/man"
+
+    @pytest.mark.skipif(
+        not shutil.which("groff"), reason="groff unavailable on this host")
+    def test_man_page_renders_without_roff_warnings(self):
+        """`man ./docs/man/sayit-ermano.1` must render cleanly — groff
+        -man -ww promotes every warning to stderr."""
+        result = subprocess.run(
+            ["groff", "-man", "-ww", "-Kutf8", str(self.MAN)],
+            capture_output=True, text=True, timeout=120)
+        assert result.returncode == 0, result.stderr
+        warnings = [ln for ln in result.stderr.splitlines()
+                    if "warning" in ln.lower()]
+        assert not warnings, warnings
+
+    def test_build_deb_ships_the_man_page_gzipped(self):
+        """The deb file list (the install lines of build-deb.sh) must
+        carry the gz'd man page under /usr/share/man/man1."""
+        script = (REPO / "packaging" / "build-deb.sh").read_text("utf-8")
+        assert "docs/man/sayit-ermano.1" in script, \
+            "build-deb.sh no longer installs the man page"
+        assert "/usr/share/man/man1/sayit-ermano.1.gz" in script, \
+            "the man page must ship gzip-compressed (dh_installman shape)"
+        assert "gzip -9n" in script  # -n: no timestamp in the deb
 
 
 class TestCommittedLock:

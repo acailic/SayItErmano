@@ -66,7 +66,8 @@ finish-args:
 modules:
   # Desktop integration: desktop file (app-id name so flatpak exports
   # it), appstream metainfo (GPL-3.0-or-later, keywords, OARS), hicolor
-  # icons — installed from the app's git checkout at the release tag
+  # icons, and the man page (offline help, docs/man/ in the checkout) —
+  # installed from the app's git checkout at the release tag
   # ("metadata must be integrated in the upstream project" — it is).
   # The start/stop sounds are NOT installed here: they ship as Python
   # package data (fluidvoice/assets/sfx) through the sayitermano
@@ -78,6 +79,7 @@ modules:
     build-commands:
       - install -Dm644 -t $FLATPAK_DEST/share/applications packaging/flatpak/io.github.acailic.SayItErmano.desktop
       - install -Dm644 -t $FLATPAK_DEST/share/metainfo packaging/flatpak/io.github.acailic.SayItErmano.metainfo.xml
+      - install -Dm644 docs/man/sayit-ermano.1 $FLATPAK_DEST/share/man/man1/sayit-ermano.1
       - install -Dm644 packaging/icons/hicolor/16x16/apps/sayit-ermano.png $FLATPAK_DEST/share/icons/hicolor/16x16/apps/sayit-ermano.png
       - install -Dm644 packaging/icons/hicolor/32x32/apps/sayit-ermano.png $FLATPAK_DEST/share/icons/hicolor/32x32/apps/sayit-ermano.png
       - install -Dm644 packaging/icons/hicolor/48x48/apps/sayit-ermano.png $FLATPAK_DEST/share/icons/hicolor/48x48/apps/sayit-ermano.png

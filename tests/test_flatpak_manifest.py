@@ -299,6 +299,37 @@ def test_ci_variant_data_sources_are_the_local_files(variant, modules):
     assert by_path["../LICENSE"].get("dest") is None  # checkout root, as in git
 
 
+# -- man page (offline help; the v0.9.0 deb smoke-test finding) -------------
+#
+# Both variants install the same page (docs/man/sayit-ermano.1, pinned
+# in test_deb_lock.py against the CLI's own --help output) into the
+# sandbox man dir — the Flathub variant from the release-tag checkout,
+# the CI variant from a sha256-pinned local source placed at the same
+# in-repo path.
+
+MAN_PAGE = "docs/man/sayit-ermano.1"
+MAN_INSTALL = f"install -Dm644 {MAN_PAGE} {DEST}/share/man/man1/sayit-ermano.1"
+
+
+def test_both_variants_install_the_man_page(variant, modules):
+    assert MAN_INSTALL in _commands(modules["sayitermano-data"]), (
+        f"{variant}: the man page (offline help) is not in the install set")
+    assert (REPO / MAN_PAGE).is_file()
+
+
+def test_ci_variant_pins_the_man_page_source(variant, modules):
+    if variant != CI:
+        pytest.skip("local-source contract of the CI variant only")
+    by_path = {s["path"]: s
+               for s in modules["sayitermano-data"]["sources"]}
+    man = by_path["../docs/man/sayit-ermano.1"]
+    # lands at its in-repo path so the build-command matches the
+    # Flathub variant's git checkout; sha256 pinned like every local
+    # file source (test_every_pinned_local_source_exists_and_matches_...)
+    assert man["type"] == "file" and "sha256" in man
+    assert man["dest"] == "docs/man"
+
+
 def test_flathub_variant_has_no_local_sources(variant, modules):
     if variant != FLATHUB:
         pytest.skip("Flathub PR shape: remote sources only")

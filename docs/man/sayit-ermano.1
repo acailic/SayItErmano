@@ -1,0 +1,183 @@
+.\" SayItErmano manual page — sayit-ermano(1).
+.\" Written from the REAL CLI: `sayit-ermano --help` and every
+.\" subcommand's `--help` (tests/test_deb_lock.py pins the subcommand
+.\" coverage against the argparse parser, so this page cannot drift
+.\" silently). File locations come from fluidvoice/paths.py.
+.\"
+.\" Rendering check: groff -man -ww -Kutf8 docs/man/sayit-ermano.1
+.TH SAYIT\-ERMANO 1 "2026-11-23" "SayItErmano 0.9.0" "User Commands"
+.SH NAME
+sayit\-ermano \- local voice dictation with AI polish
+.SH SYNOPSIS
+.B sayit\-ermano
+.RI [ OPTIONS ]
+.I COMMAND
+.RI [ ARGUMENTS ]
+.sp
+.B sayit\-ermano \-\-version
+.SH DESCRIPTION
+SayItErmano is a community Linux port of FluidVoice: press a global
+hotkey anywhere, speak, and the transcription is typed into the focused
+application. Recognition runs on-device with Whisper (faster-whisper
+int8, CUDA when available); an optional AI polish pass via any
+OpenAI\-compatible endpoint cleans up filler and punctuation before
+insertion. Spoken punctuation commands are supported.
+.PP
+The daemon
+.RB ( sayit\-ermano\  daemon )
+owns the hotkey, the microphone and the model; a native GTK app
+.RB ( sayit\-ermano\  app )
+provides History and Settings windows. Everything runs locally; the
+network is used only for the first-run model download, the optional AI
+polish endpoint and the release update check.
+.SH OPTIONS
+.TP
+.B \-h, \-\-help
+show the help message and exit
+.TP
+.B \-\-version
+show the program version and exit
+.SH SUBCOMMANDS
+.TP
+.BI daemon " [\-\-no\-hotkey] [\-\-no\-sounds] [\-\-config FILE]"
+run the dictation daemon in the foreground.
+.B \-\-no\-hotkey
+skips the X11 global hotkey (bind
+.B "sayit\-ermano toggle"
+instead),
+.B \-\-no\-sounds
+disables the start/stop sounds.
+.TP
+.BI toggle " [\-\-json]"
+start or stop a recording.
+.TP
+.BI cancel " [\-\-json]"
+cancel the running recording without transcribing it.
+.TP
+.BI status " [\-\-json]"
+show the daemon status.
+.TP
+.BI paste\-last " [\-\-json]"
+re\-type the most recent transcription.
+.TP
+.BI language " [\-\-json]"
+cycle the dictation language (the
+.I general.language_cycle
+config list).
+.TP
+.BI transcribe " [\-\-no\-process] [\-\-ai] [\-\-json] [\-\-out PATH] [\-\-config FILE] " FILE
+one\-shot transcription of an audio file
+(wav/flac/mp3/opus/oga/ogg/m4a/aac/wma/aiff/webm).
+.B \-\-no\-process
+skips filler/punctuation post\-processing,
+.B \-\-ai
+also runs AI polish,
+.B \-\-json
+prints structured JSON, and
+.B \-\-out
+writes the result to a file instead of stdout.
+.TP
+.BI history " [\-n N] [\-\-export PATH.zip] [\-\-scrub\-tests] [\-\-yes]"
+show the
+.I N
+most recent transcriptions.
+.B \-\-export
+writes history plus retained audio to a zip;
+.B \-\-scrub\-tests
+removes test\-suite fingerprint rows (dry\-run by default,
+.B \-\-yes
+applies after writing a backup).
+.TP
+.BI config " [path|init|print]"
+show the config file path (default), write a starter config
+.RB ( init ),
+or print the active configuration
+.RB ( print ).
+.TP
+.B settings
+open the native Settings window (alias of
+.BR "app \-\-open settings" ).
+.TP
+.BI app " [\-\-open WINDOW] [\-\-onboard]"
+open the native GTK app. WINDOW is one of
+.IR history (default),
+.IR settings ,
+.IR general ,
+.IR dictation ,
+.IR models ,
+.IR ai ,
+.IR wayland ,
+.IR about ;
+.B \-\-onboard
+runs the first\-run onboarding flow.
+.TP
+.B doctor
+environment check: audio, display server, models, config \[em] run this
+first when something does not work.
+.TP
+.BI setup " [\-\-language LANG] [\-\-model NAME] [\-y] [\-\-config FILE]"
+guided first\-use setup: hardware\-grounded model recommendation,
+download with progress, insertion check, verified test take.
+.B \-y
+accepts every default.
+.TP
+.B mcp
+run the MCP server on stdio for MCP\-capable agents (forwards to the
+running daemon).
+.TP
+.BI eval\-run " SUBCOMMAND ..."
+local evaluation harness
+.RI ( run / check / fixtures / soak );
+flags are passed through.
+.TP
+.BI update " [\-\-dismiss] [\-\-json]"
+check for a newer release and print the upgrade command for this
+install (nothing is executed).
+.B \-\-dismiss
+stops the update notification for the current release.
+.TP
+.BI license " [KEY]"
+import a license key from your purchase email, or show the current
+license status when KEY is omitted.
+.SH FILES
+All locations honor the XDG environment variables; the defaults below
+assume they are unset. A pre\-rename
+.I fluidvoice
+directory is taken over (renamed) once on first run.
+.TP
+.I ~/.config/sayit\-ermano/config.toml
+user configuration (created by
+.BR "config init" ;
+override with
+.B SAYITERMANO_CONFIG
+or
+.BR \-\-config ).
+.TP
+.I ~/.local/share/sayit\-ermano/history.jsonl
+transcription history (one JSON row per take).
+.TP
+.I ~/.local/share/sayit\-ermano/audio/
+retained per\-take audio (when retention is enabled).
+.TP
+.I ~/.cache/sayit\-ermano/models/
+downloaded speech models.
+.TP
+.I $XDG_RUNTIME_DIR/sayit\-ermano.sock
+control socket the CLI talks to (override with
+.BR SAYITERMANO_SOCKET ).
+.SH DIAGNOSTICS
+Run
+.B sayit\-ermano doctor
+for an end\-to\-end environment check. The daemon logs to stderr; under
+the systemd user unit read them with
+.BR "journalctl \-\-user \-u sayit\-ermano.service" ,
+otherwise they land in the session's stderr (e.g. the XDG autostart
+log).
+.SH BUGS
+Report bugs at
+.UR https://github.com/acailic/SayItErmano/issues
+the issue tracker
+.UE .
+.SH SEE ALSO
+Project documentation ships with the source repository and the release
+page (README, CHANGELOG, docs/).
