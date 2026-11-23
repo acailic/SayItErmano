@@ -63,7 +63,7 @@ Usage:
                                             vendored wheel
   paid_policy.py filter-lock --lock F       paid dependency lock on stdout
   paid_policy.py agpl-offer --dest D        write the offer into D
-  paid_policy.py flatpak [--manifest F]    paid manifest on stdout
+  paid_policy.py flatpak [--manifest F]     paid manifest on stdout
 """
 from __future__ import annotations
 
