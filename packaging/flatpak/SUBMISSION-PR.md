@@ -107,10 +107,12 @@ them from the metainfo. Same raw `linux` URLs the metainfo pins:>
 ### Monetisation disclosure
 
 <In your own words — reviewers hit the paywall, disclose it first.>
-License keys exist as an optional purchase (AI-polish conveniences;
-see [PRICING](../../docs/PRICING.md)); core dictation is fully
-usable unpaid. A reviewer test key is available on request
-<reviewer-key-plan>.
+License keys exist as a one-time optional purchase (the store build's
+update channel + priority support; offline Ed25519 key — see
+[PRICING](../../docs/PRICING.md)); core dictation is fully usable
+unpaid — identical code, no crippled features, and the audio never
+leaves the machine in either tier. A reviewer test key is available
+on request <reviewer-key-plan>.
 
 ### Verification
 
