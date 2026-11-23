@@ -73,6 +73,32 @@ fi
 STAGE="$(mktemp -d)/pkg"
 trap 'rm -rf "$(dirname "$STAGE")"' EXIT
 
+# 0b. Paid-artifact policy hooks (ADR-0008): PAID_ARTIFACT=1 engages the
+# one-switch AGPL remediation; the OPERATOR picks the option via
+# PAID_ARTIFACT_OPTION (default A). Free builds never set the switch and
+# are unaffected. Option A writes the AGPL wheel's Corresponding-Source
+# offer (sources + license + pinned-sdist notice) into the deb's docs;
+# option B filters the portal extra OUT of the paid dependency lock — a
+# verified no-op today (the deb's closure never carried the AGPL wheel),
+# and a hard guarantee it never does without this switch being seen.
+PAID_CONSTRAINTS="$CONSTRAINTS"
+if [ "${PAID_ARTIFACT:-0}" = "1" ]; then
+    PAID_OPTION="$(python3 "$REPO/packaging/paid_policy.py" option)"
+    echo ">> PAID_ARTIFACT=1: ADR-0008 option $PAID_OPTION"
+    case "$PAID_OPTION" in
+        A)
+            python3 "$REPO/packaging/paid_policy.py" agpl-offer \
+                --dest "$STAGE/usr/share/doc/$NAME/global-shortcut-portal"
+            ;;
+        B)
+            PAID_CONSTRAINTS="$(dirname "$STAGE")/paid-constraints.txt"
+            python3 "$REPO/packaging/paid_policy.py" filter-lock \
+                --lock "$CONSTRAINTS" > "$PAID_CONSTRAINTS"
+            echo ">> paid dependency lock: $PAID_CONSTRAINTS"
+            ;;
+    esac
+fi
+
 # 1. Application payload: bundled venv + package ---------------------------
 mkdir -p "$STAGE/opt/$NAME"
 python3 -m venv --system-site-packages "$STAGE/opt/$NAME/venv"
@@ -89,13 +115,13 @@ PIP="$STAGE/opt/$NAME/venv/bin/pip"
 # is reachable ONLY through the explicit DEB_ALLOW_PIN_ONLY=1 dev flag
 # above (Q3): publishing cannot accept it.
 if [ "$HASHED" = 1 ]; then
-    echo ">> hash-locked install: every downloaded wheel verified against $CONSTRAINTS"
-    "$PIP" install -q --no-cache-dir --require-hashes -r "$CONSTRAINTS"
+    echo ">> hash-locked install: every downloaded wheel verified against $PAID_CONSTRAINTS"
+    "$PIP" install -q --no-cache-dir --require-hashes -r "$PAID_CONSTRAINTS"
     "$PIP" install -q --no-cache-dir --no-deps .
 else
     echo ">> DEV MODE (DEB_ALLOW_PIN_ONLY=1): pin-locked only - versions exact," >&2
     echo ">> wheel artifacts NOT verified. Never ship a deb built this way." >&2
-    "$PIP" install -q --no-cache-dir -c "$CONSTRAINTS" .
+    "$PIP" install -q --no-cache-dir -c "$PAID_CONSTRAINTS" .
 fi
 rm -rf "$STAGE/opt/$NAME/venv/share"  # docs/man from wheels
 
