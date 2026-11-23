@@ -338,3 +338,62 @@ class TestMainWindowSections:
         win._stats = None
         win._draw_activity(win.chart, ctx, 320, 160)
         assert ctx.calls == []
+
+
+class TestCorrectionCrossLinks:
+    """Survey 2026-11-23 (excellence bet 3): the four correction surfaces
+    (history edits / dictionary suggestions / vocabulary hints / per-app
+    prompt profiles) live on three different settings pages with no
+    signposts. Each correction-adjacent group now carries a cross-link
+    row whose chevron navigates to the sibling page — a wrong door has a
+    pointer to the right one, in one click."""
+
+    #: page name -> {link row title: target page name}
+    EXPECTED = {
+        "history": {"Suggested words": "dictation"},
+        "dictation": {"Vocabulary boosting": "models",
+                      "Prompt profiles": "ai"},
+        "models": {"Custom dictionary": "dictation"},
+        "ai": {"Shortcut prompt profiles": "dictation"},
+    }
+
+    def _page(self, settings_win, name):
+        for page in settings_win._iter_pages():
+            if page.get_name() == name:
+                return page
+        return None
+
+    def _chevron(self, row) -> Gtk.Button:
+        btns = _walk(row, Gtk.Button)
+        assert btns, f"link row '{row.get_title()}' has no chevron button"
+        return btns[0]
+
+    def test_link_rows_on_the_right_pages(self, settings_win) -> None:
+        for page_name, wanted in self.EXPECTED.items():
+            page = self._page(settings_win, page_name)
+            assert page is not None, page_name
+            titles = {r.get_title() for r in _walk(page, Adw.ActionRow)}
+            for title in wanted:
+                assert title in titles, f"{page_name}: no '{title}' link row"
+
+    def test_chevron_navigates_to_the_target_page(self, settings_win) -> None:
+        for page_name, wanted in self.EXPECTED.items():
+            page = self._page(settings_win, page_name)
+            for row in _walk(page, Adw.ActionRow):
+                target = wanted.get(row.get_title())
+                if target is None:
+                    continue
+                self._chevron(row).click()
+                visible = settings_win._page_stack.get_visible_child_name()
+                assert visible == target, (
+                    f"'{row.get_title()}' on {page_name} went to {visible}, "
+                    f"wanted {target}")
+                # back for the next iteration so failures report their link
+                settings_win._show_page(page_name)
+
+    def test_row_body_activation_navigates(self, settings_win) -> None:
+        row = next(r for r in _walk(self._page(settings_win, "history"),
+                                    Adw.ActionRow)
+                   if r.get_title() == "Suggested words")
+        row.emit("activate")
+        assert settings_win._page_stack.get_visible_child_name() == "dictation"

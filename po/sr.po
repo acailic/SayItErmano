@@ -24,7 +24,7 @@ msgstr " ({n} улаза)"
 msgid " — daemon offline, saving to file"
 msgstr " — daemon није покренут, чува се у датотеку"
 
-#: fluidvoice/gtkui/settings_window.py:505
+#: fluidvoice/gtkui/settings_window.py:517
 msgid " — restart daemon for: {keys}"
 msgstr " — поново покрените daemon za: {keys}"
 
@@ -32,7 +32,7 @@ msgstr " — поново покрените daemon za: {keys}"
 msgid " — {key} or click to dictate"
 msgstr " — {key} или кликните да диктирате"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:595
+#: fluidvoice/gtkui/settings_pages/dictation.py:599
 msgid "\"literal comma\" → ,"
 msgstr "\"дословно зарез\" → ,"
 
@@ -41,7 +41,7 @@ msgstr "\"дословно зарез\" → ,"
 msgid "(none)"
 msgstr "(ништа)"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:653
+#: fluidvoice/gtkui/settings_pages/ai.py:657
 msgid "(pick a model)"
 msgstr "(изаберите модел)"
 
@@ -57,11 +57,11 @@ msgstr "(тишина — ништа није транскрибовано)"
 msgid "0 = keep the model loaded (fastest first word); higher frees RAM/VRAM after inactivity — the next dictation pays the model load time"
 msgstr "0 = модел остаје учитан (најбржа прва реч); већа вредност ослобађа RAM/VRAM после мировања — следеће диктирање плати време учитавања модела"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:414
+#: fluidvoice/gtkui/settings_pages/dictation.py:418
 msgid "0 = off; stops a muted/wrong mic fast"
 msgstr "0 = искључено; брзо зауставља утишан/погрешан микрофон"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:539
+#: fluidvoice/gtkui/settings_pages/dictation.py:543
 msgid "0 keeps the old behavior (hotkey stops every take)"
 msgstr "0 задржава старо понашање (пречица зауставља сваки снимак)"
 
@@ -104,7 +104,7 @@ msgstr "AI дотерано"
 msgid "AI profile"
 msgstr "AI профил"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:559
+#: fluidvoice/gtkui/settings_pages/ai.py:563
 msgid "AI profile: {name}"
 msgstr "AI profil: {name}"
 
@@ -112,7 +112,7 @@ msgstr "AI profil: {name}"
 msgid "API key"
 msgstr "API кључ"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:613
+#: fluidvoice/gtkui/settings_pages/ai.py:617
 msgid "API key env var"
 msgstr "Променљива окружења за API кључ"
 
@@ -129,7 +129,7 @@ msgstr "О програму"
 msgid "About SayItErmano"
 msgstr "О програму SayItErmano"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:809
+#: fluidvoice/gtkui/settings_pages/ai.py:813
 msgid "Accept"
 msgstr "Прихвати"
 
@@ -144,15 +144,15 @@ msgstr "Активан"
 msgid "Activity"
 msgstr "Активност"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:619
+#: fluidvoice/gtkui/settings_pages/ai.py:623
 msgid "Add"
 msgstr "Додај"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:644
+#: fluidvoice/gtkui/settings_pages/ai.py:648
 msgid "Add from template"
 msgstr "Додај из шаблона"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:376
+#: fluidvoice/gtkui/settings_pages/dictation.py:380
 msgid "Add language"
 msgstr "Додај језик"
 
@@ -160,7 +160,7 @@ msgstr "Додај језик"
 msgid "Add one to save preset prompts"
 msgstr "Додајте један да чувате унапред подешене упите"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:441
+#: fluidvoice/gtkui/settings_pages/dictation.py:445
 msgid "Add pattern"
 msgstr "Додај образац"
 
@@ -169,23 +169,23 @@ msgstr "Додај образац"
 msgid "Add profile"
 msgstr "Додај профил"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:205
+#: fluidvoice/gtkui/settings_pages/ai.py:209
 msgid "Add rule"
 msgstr "Додај правило"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:662
+#: fluidvoice/gtkui/settings_pages/dictation.py:666
 msgid "Add word"
 msgstr "Додај реч"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:636
+#: fluidvoice/gtkui/settings_pages/ai.py:640
 msgid "Added profile “{name}”"
 msgstr "Додат профил „{name}“"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:665
+#: fluidvoice/gtkui/settings_pages/ai.py:669
 msgid "Added profile “{name}” from template"
 msgstr "Додат профил „{name}“ из шаблона"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:836
+#: fluidvoice/gtkui/settings_pages/ai.py:840
 msgid "Added to dictionary"
 msgstr "Додато у речник"
 
@@ -210,7 +210,7 @@ msgstr "Било која OpenAI-компатибилна тачка — Ollama,
 msgid "App hints"
 msgstr "Савети за апликације"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:735
+#: fluidvoice/gtkui/settings_pages/ai.py:739
 msgid "App patterns (comma-separated)"
 msgstr "Обрасци апликација (раздвојени запетама)"
 
@@ -223,7 +223,7 @@ msgstr "Буџет за звук (GB)"
 msgid "Auto (system default)"
 msgstr "Аутоматски (системско подразумевано)"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:388
+#: fluidvoice/gtkui/settings_pages/dictation.py:392
 msgid "Auto follows the system default"
 msgstr "Аутоматски прати системско подразумевано"
 
@@ -240,7 +240,7 @@ msgstr "Просек по диктирању"
 msgid "Backend"
 msgstr "Бацкенд"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:611
+#: fluidvoice/gtkui/settings_pages/ai.py:615
 msgid "Base URL"
 msgstr "Основни URL"
 
@@ -248,8 +248,8 @@ msgstr "Основни URL"
 msgid "Base URL — http://localhost:11434/v1"
 msgstr "Основни URL — http://localhost:11434/v1"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:169
-#: fluidvoice/gtkui/settings_pages/ai.py:177
+#: fluidvoice/gtkui/settings_pages/ai.py:173
+#: fluidvoice/gtkui/settings_pages/ai.py:181
 msgid "Base prompt"
 msgstr "Основни упит"
 
@@ -265,7 +265,7 @@ msgstr "Повежите пречицу за диктирање кроз пор�
 msgid "Bind your hotkey"
 msgstr "Повежите вашу пречицу"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:475
+#: fluidvoice/gtkui/settings_pages/dictation.py:479
 msgid "Bottom offset (px)"
 msgstr "Одмак од дна (px)"
 
@@ -273,24 +273,24 @@ msgstr "Одмак од дна (px)"
 msgid "Browse history"
 msgstr "Прегледај историју"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:179
+#: fluidvoice/gtkui/settings_pages/ai.py:183
 msgid "Built-in template"
 msgstr "Уграђени шаблон"
 
-#: fluidvoice/gtkui/settings_pages/models.py:889
+#: fluidvoice/gtkui/settings_pages/models.py:893
 msgid "Cached models under ~/.cache/sayit-ermano/models (deletion needs the daemon)"
 msgstr "Кеширани модели у ~/.cache/sayit-ermano/models (за брисање је потребан daemon)"
 
-#: fluidvoice/gtkui/main_window.py:836
-#: fluidvoice/gtkui/main_window.py:853
+#: fluidvoice/gtkui/main_window.py:839
+#: fluidvoice/gtkui/main_window.py:856
 #: fluidvoice/gtkui/main_window.py:227
-#: fluidvoice/gtkui/settings_pages/ai.py:404
-#: fluidvoice/gtkui/settings_pages/ai.py:467
-#: fluidvoice/gtkui/settings_pages/ai.py:618
-#: fluidvoice/gtkui/settings_pages/ai.py:705
-#: fluidvoice/gtkui/settings_pages/history.py:73
+#: fluidvoice/gtkui/settings_pages/ai.py:408
+#: fluidvoice/gtkui/settings_pages/ai.py:471
+#: fluidvoice/gtkui/settings_pages/ai.py:622
+#: fluidvoice/gtkui/settings_pages/ai.py:709
+#: fluidvoice/gtkui/settings_pages/history.py:77
 #: fluidvoice/gtkui/settings_pages/models.py:294
-#: fluidvoice/gtkui/settings_window.py:531
+#: fluidvoice/gtkui/settings_window.py:543
 msgid "Cancel"
 msgstr "Откажи"
 
@@ -302,7 +302,7 @@ msgstr "Откажи диктирање (Esc)"
 msgid "Cancel key — discards a take"
 msgstr "Тастер за отказивање — одбацује снимак"
 
-#: fluidvoice/gtkui/settings_window.py:529
+#: fluidvoice/gtkui/settings_window.py:541
 msgid "Changes that were not saved will be lost."
 msgstr "Измене које нису сачуване биће izgubljene."
 
@@ -318,13 +318,13 @@ msgstr "Провери надоградње одмах"
 msgid "Checks GitHub once a day for a newer release and notifies you — `sayit-ermano update` prints the upgrade command; disable with `updates.check = false` in the config."
 msgstr "Проверава на GitHub-у једном дневно има ли новије верзије и обавештава вас — `sayit-ermano update` исписује наредбу за надоградњу; искључите са `updates.check = false` у konfiguraciji."
 
-#: fluidvoice/gtkui/main_window.py:854
-#: fluidvoice/gtkui/settings_pages/history.py:74
+#: fluidvoice/gtkui/main_window.py:857
+#: fluidvoice/gtkui/settings_pages/history.py:78
 msgid "Clear All"
 msgstr "Обриши све"
 
 #: fluidvoice/gtkui/main_window.py:410
-#: fluidvoice/gtkui/main_window.py:981
+#: fluidvoice/gtkui/main_window.py:984
 msgid "Clear All…"
 msgstr "Обриши све…"
 
@@ -332,8 +332,8 @@ msgstr "Обриши све…"
 msgid "Clear all history"
 msgstr "Обриши сву историју"
 
-#: fluidvoice/gtkui/main_window.py:850
-#: fluidvoice/gtkui/settings_pages/history.py:69
+#: fluidvoice/gtkui/main_window.py:853
+#: fluidvoice/gtkui/settings_pages/history.py:73
 msgid "Clear all history?"
 msgstr "Обрисати сву историју?"
 
@@ -345,7 +345,7 @@ msgstr "Обриши…"
 msgid "Clipboard"
 msgstr "Остава"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:670
+#: fluidvoice/gtkui/settings_pages/ai.py:674
 msgid "Close"
 msgstr "Затвори"
 
@@ -365,7 +365,7 @@ msgstr "Тастер за наредбе (опционо, захтева AI)"
 msgid "Command mode unavailable: {reason}"
 msgstr "Режим наредби није dostupan: {reason}"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:725
+#: fluidvoice/gtkui/settings_pages/dictation.py:733
 msgid "Command timeout (s)"
 msgstr "Временско ограничење наредбе (с)"
 
@@ -374,7 +374,7 @@ msgid "Command to bind"
 msgstr "Наредба за повезивање"
 
 #: fluidvoice/gtkui/main_window.py:486
-#: fluidvoice/gtkui/settings_pages/dictation.py:712
+#: fluidvoice/gtkui/settings_pages/dictation.py:720
 msgid "Commands"
 msgstr "Наредбе"
 
@@ -382,7 +382,7 @@ msgstr "Наредбе"
 msgid "Compute"
 msgstr "Рачунање"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:518
+#: fluidvoice/gtkui/settings_pages/dictation.py:522
 msgid "Confidence gate"
 msgstr "Филтер поузданости"
 
@@ -390,7 +390,7 @@ msgstr "Филтер поузданости"
 msgid "Config file"
 msgstr "Конфигурациона датотека"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:734
+#: fluidvoice/gtkui/settings_pages/dictation.py:742
 msgid "Confirmation timeout (s)"
 msgstr "Временско ограничење потврде (с)"
 
@@ -402,7 +402,7 @@ msgstr "Контролни сокет"
 msgid "Copied"
 msgstr "Копирано"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:645
+#: fluidvoice/gtkui/settings_pages/ai.py:649
 msgid "Copied into your profiles - edit freely afterwards."
 msgstr "Копирано у ваше профиле — слободно измените kasnije."
 
@@ -430,15 +430,15 @@ msgstr "Копирај текст"
 msgid "Copy transcriptions to clipboard"
 msgstr "Копирај транскрипције у оставу"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:673
+#: fluidvoice/gtkui/settings_pages/dictation.py:681
 msgid "Corrections noticed in your history edits — accept to teach the dictionary"
 msgstr "Исправке примећене у вашим изменама историје — прихватите да научите речник"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:830
+#: fluidvoice/gtkui/settings_pages/ai.py:834
 msgid "Could not add the word (save failed)"
 msgstr "Реч није додата (чување није успело)"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:833
+#: fluidvoice/gtkui/settings_pages/ai.py:837
 msgid "Could not add the word (save rejected)"
 msgstr "Реч није додата (чување је одбијено)"
 
@@ -450,7 +450,7 @@ msgstr "Није могуће otvoriti: {error}"
 msgid "Could not set autostart: {detail} — create the login entry manually with your desktop's autostart settings"
 msgstr "Није могуће поставити аутоматско покретање: {detail} — направите ставку за пријављивање ручно у поставкама аутоматског покретања радне површине"
 
-#: fluidvoice/gtkui/main_window.py:973
+#: fluidvoice/gtkui/main_window.py:976
 msgid "Could not toggle (daemon needed): {error}"
 msgstr "Промена стања није успела (потребан daemon): {error}"
 
@@ -460,15 +460,16 @@ msgstr "Промена стања није успела (потребан daemon
 msgid "Current default model"
 msgstr "Тренутно подразумевани модел"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:560
+#: fluidvoice/gtkui/settings_pages/ai.py:564
 msgid "Custom"
 msgstr "Прилагођено"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:507
+#: fluidvoice/gtkui/settings_pages/ai.py:511
 msgid "Custom (hand-set endpoint)"
 msgstr "Прилагођено (ручно подешена тачка)"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:658
+#: fluidvoice/gtkui/settings_pages/dictation.py:662
+#: fluidvoice/gtkui/settings_pages/models.py:873
 msgid "Custom dictionary"
 msgstr "Лични речник"
 
@@ -480,15 +481,15 @@ msgstr "Тастер за кружење језика (опционо) — пр�
 msgid "Daemon not running — history works, dictation does not"
 msgstr "Daemon није покренут — историја ради, диктирање не"
 
-#: fluidvoice/gtkui/settings_window.py:357
+#: fluidvoice/gtkui/settings_window.py:369
 msgid "Daemon offline — file-only mode; changes apply on next daemon start"
 msgstr "Daemon није покренут — режим само-датотеке; измене се примењују при следећем покретању даемона"
 
-#: fluidvoice/gtkui/main_window.py:837
-#: fluidvoice/gtkui/settings_pages/ai.py:468
-#: fluidvoice/gtkui/settings_pages/ai.py:706
-#: fluidvoice/gtkui/settings_pages/ai.py:367
-#: fluidvoice/gtkui/settings_pages/ai.py:521
+#: fluidvoice/gtkui/main_window.py:840
+#: fluidvoice/gtkui/settings_pages/ai.py:472
+#: fluidvoice/gtkui/settings_pages/ai.py:710
+#: fluidvoice/gtkui/settings_pages/ai.py:371
+#: fluidvoice/gtkui/settings_pages/ai.py:525
 #: fluidvoice/gtkui/settings_pages/models.py:295
 #: fluidvoice/gtkui/settings_pages/models.py:274
 msgid "Delete"
@@ -502,12 +503,12 @@ msgstr "Обриши запис"
 msgid "Delete every entry and retained audio"
 msgstr "Обриши сваки запис и задржани звук"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:463
-#: fluidvoice/gtkui/settings_pages/ai.py:701
+#: fluidvoice/gtkui/settings_pages/ai.py:467
+#: fluidvoice/gtkui/settings_pages/ai.py:705
 msgid "Delete profile “{name}”?"
 msgstr "Обрисати профил „{name}“?"
 
-#: fluidvoice/gtkui/main_window.py:832
+#: fluidvoice/gtkui/main_window.py:835
 msgid "Delete this entry?"
 msgstr "Обрисати овај запис?"
 
@@ -515,8 +516,8 @@ msgstr "Обрисати овај запис?"
 msgid "Delete {name}?"
 msgstr "Обрисати {name}?"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:478
-#: fluidvoice/gtkui/settings_pages/ai.py:723
+#: fluidvoice/gtkui/settings_pages/ai.py:482
+#: fluidvoice/gtkui/settings_pages/ai.py:727
 msgid "Deleted profile “{name}”"
 msgstr "Обрисан профил „{name}“"
 
@@ -561,24 +562,24 @@ msgstr "Диктирања"
 msgid "Direct ggml models for the whisper.cpp backend"
 msgstr "Директни ggml модели за whisper.cpp бацкенд"
 
-#: fluidvoice/gtkui/settings_window.py:532
+#: fluidvoice/gtkui/settings_window.py:544
 #: fluidvoice/gtkui/settings_window.py:239
 msgid "Discard"
 msgstr "Одбаци"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:422
+#: fluidvoice/gtkui/settings_pages/dictation.py:426
 msgid "Discard obviously-silent recordings ≤ 4 s"
 msgstr "Одбаци очигледно тихе снимке ≤ 4 с"
 
-#: fluidvoice/gtkui/settings_window.py:528
+#: fluidvoice/gtkui/settings_window.py:540
 msgid "Discard unsaved changes?"
 msgstr "Одбацити несачуване измене?"
 
-#: fluidvoice/gtkui/settings_pages/models.py:888
+#: fluidvoice/gtkui/settings_pages/models.py:892
 msgid "Disk usage"
 msgstr "Заузеће диска"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:812
+#: fluidvoice/gtkui/settings_pages/ai.py:816
 msgid "Dismiss"
 msgstr "Одбаци"
 
@@ -594,9 +595,9 @@ msgid "Edit text"
 msgstr "Измени текст"
 
 #: fluidvoice/gtkui/settings_pages/ai.py:49
-#: fluidvoice/gtkui/settings_pages/dictation.py:455
-#: fluidvoice/gtkui/settings_pages/dictation.py:607
-#: fluidvoice/gtkui/settings_pages/dictation.py:628
+#: fluidvoice/gtkui/settings_pages/dictation.py:459
+#: fluidvoice/gtkui/settings_pages/dictation.py:611
+#: fluidvoice/gtkui/settings_pages/dictation.py:632
 msgid "Enabled"
 msgstr "Омогућено"
 
@@ -604,8 +605,8 @@ msgstr "Омогућено"
 msgid "Engine options"
 msgstr "Опције мотора"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:419
-#: fluidvoice/gtkui/settings_pages/ai.py:627
+#: fluidvoice/gtkui/settings_pages/ai.py:423
+#: fluidvoice/gtkui/settings_pages/ai.py:631
 msgid "Enter a profile name first"
 msgstr "Прво унесите назив профила"
 
@@ -617,12 +618,12 @@ msgstr "Евдев притисни-и-говори"
 msgid "Every dictation also lands in the clipboard"
 msgstr "Свака диктатура завршава и у остави"
 
-#: fluidvoice/gtkui/main_window.py:851
-#: fluidvoice/gtkui/settings_pages/history.py:70
+#: fluidvoice/gtkui/main_window.py:854
+#: fluidvoice/gtkui/settings_pages/history.py:74
 msgid "Every saved transcription and any retained audio will be deleted. This cannot be undone."
 msgstr "Свака сачувана транскрипција и сав задржани звук биће obrisani. Ово се не може opozvati."
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:580
+#: fluidvoice/gtkui/settings_pages/dictation.py:584
 msgid "Example"
 msgstr "Пример"
 
@@ -634,23 +635,23 @@ msgstr "Извези као текст…"
 msgid "Export as ZIP…"
 msgstr "Извези као ZIP…"
 
-#: fluidvoice/gtkui/main_window.py:870
+#: fluidvoice/gtkui/main_window.py:873
 msgid "Export history"
 msgstr "Извези историју"
 
-#: fluidvoice/gtkui/main_window.py:916
+#: fluidvoice/gtkui/main_window.py:919
 msgid "Export history as text"
 msgstr "Извези историју као текст"
 
-#: fluidvoice/gtkui/main_window.py:898
-#: fluidvoice/gtkui/main_window.py:943
+#: fluidvoice/gtkui/main_window.py:901
+#: fluidvoice/gtkui/main_window.py:946
 msgid "Exported {n} entry"
 msgid_plural "Exported {n} entries"
 msgstr[0] "Извезен {n} запис"
 msgstr[1] "Извезена {n} записа"
 msgstr[2] "Извезено {n} записа"
 
-#: fluidvoice/gtkui/main_window.py:892
+#: fluidvoice/gtkui/main_window.py:895
 msgid "Exporting…"
 msgstr "Извозим…"
 
@@ -658,23 +659,23 @@ msgstr "Извозим…"
 msgid "Extra dictation shortcut {n} (optional)"
 msgstr "Додатна пречица за диктирање {n} (опционо)"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:349
+#: fluidvoice/gtkui/settings_pages/dictation.py:353
 msgid "Extra modifiers"
 msgstr "Додатни модификатори"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:563
+#: fluidvoice/gtkui/settings_pages/dictation.py:567
 msgid "Extra phrases that trigger formatting actions (on top of the built-ins; still needs the prefix)"
 msgstr "Додатне фразе које покрећу радње форматирања (поред уграђених; и даље захтева префикс)"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:202
+#: fluidvoice/gtkui/settings_pages/ai.py:206
 msgid "Extra polish instructions when dictating into a matching app (first match wins, * = everywhere)"
 msgstr "Додатна упутства за дотеривање при диктирању у поклапајућу апликацију (важи прво поклапање, * = свуда)"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:557
+#: fluidvoice/gtkui/settings_pages/dictation.py:561
 msgid "Filler words (comma-separated)"
 msgstr "Речице пуњења (раздвојене запетама)"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:491
+#: fluidvoice/gtkui/settings_pages/dictation.py:495
 msgid "First partial after (s)"
 msgstr "Први делимични резултат после (с)"
 
@@ -698,11 +699,11 @@ msgstr "Из шаблона"
 msgid "GPU (CUDA)"
 msgstr "GPU (CUDA)"
 
-#: fluidvoice/gtkui/main_window.py:1029
+#: fluidvoice/gtkui/main_window.py:1032
 msgid "GPU no"
 msgstr "GPU не"
 
-#: fluidvoice/gtkui/main_window.py:1028
+#: fluidvoice/gtkui/main_window.py:1031
 msgid "GPU yes"
 msgstr "GPU да"
 
@@ -722,11 +723,11 @@ msgstr "Пречица преко ГлобалСхортцутс портала"
 msgid "History"
 msgstr "Историја"
 
-#: fluidvoice/gtkui/main_window.py:971
+#: fluidvoice/gtkui/main_window.py:974
 msgid "History paused — new dictations are not saved"
 msgstr "Историја је паузирана — нове диктатуре се не чувају"
 
-#: fluidvoice/gtkui/main_window.py:970
+#: fluidvoice/gtkui/main_window.py:973
 msgid "History saving resumed"
 msgstr "Чување историје је настављено"
 
@@ -761,7 +762,7 @@ msgstr "Пречице"
 msgid "Hotwords (comma-separated)"
 msgstr "Кључне речи (раздвојене запетама)"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:527
+#: fluidvoice/gtkui/settings_pages/dictation.py:531
 msgid "Hover action chips"
 msgstr "Искачуће радње при преласку миша"
 
@@ -769,7 +770,7 @@ msgstr "Искачуће радње при преласку миша"
 msgid "How to update"
 msgstr "Како надоградити"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:685
+#: fluidvoice/gtkui/settings_pages/dictation.py:693
 msgid "How typed text reaches your apps"
 msgstr "Како укуцани текст долази до ваших апликација"
 
@@ -785,7 +786,7 @@ msgstr "Гашење сервера при неактивности (секун�
 msgid "Incomplete dictionary word skipped (needs triggers and a replacement)"
 msgstr "Непотпуна реч из речника је прескочена (потребни су окидачи и замена)"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:781
+#: fluidvoice/gtkui/settings_pages/ai.py:785
 msgid "Incomplete per-app rule skipped (needs apps and instructions)"
 msgstr "Непотпуно правило по апликацији је прескочено (потребне су апликације и упутства)"
 
@@ -793,7 +794,7 @@ msgstr "Непотпуно правило по апликацији је пре�
 msgid "Insert at cursor"
 msgstr "Уметни на позицију курзора"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:182
+#: fluidvoice/gtkui/settings_pages/ai.py:186
 msgid "Insert built-in"
 msgstr "Уметни уграђени"
 
@@ -805,7 +806,7 @@ msgstr "Уметање није uspelo: {error}"
 msgid "Inserted at cursor"
 msgstr "Уметнуто на позицију курзора"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:684
+#: fluidvoice/gtkui/settings_pages/dictation.py:692
 #: fluidvoice/gtkui/settings_pages/wayland.py:32
 msgid "Insertion"
 msgstr "Уметање"
@@ -814,7 +815,7 @@ msgstr "Уметање"
 msgid "Insertion and push-to-talk"
 msgstr "Уметање и притисни-и-говори"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:745
+#: fluidvoice/gtkui/settings_pages/ai.py:749
 #: fluidvoice/gtkui/settings_pages/common.py:157
 msgid "Instructions"
 msgstr "Упутства"
@@ -831,7 +832,7 @@ msgstr "Није успело"
 msgid "Keep audio"
 msgstr "Задржи звук"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:636
+#: fluidvoice/gtkui/settings_pages/dictation.py:640
 msgid "Key"
 msgstr "Тастер"
 
@@ -839,7 +840,7 @@ msgstr "Тастер"
 msgid "Language"
 msgstr "Језик"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:372
+#: fluidvoice/gtkui/settings_pages/dictation.py:376
 msgid "Language whitelist — e.g. sl, en"
 msgstr "Листа дозвољених језика — нпр. sl, en"
 
@@ -848,7 +849,7 @@ msgstr "Листа дозвољених језика — нпр. sl, en"
 msgid "Language: {lang}"
 msgstr "Jezik: {lang}"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:367
+#: fluidvoice/gtkui/settings_pages/dictation.py:371
 msgid "Languages"
 msgstr "Језици"
 
@@ -866,7 +867,7 @@ msgstr "Хајде да поправимо — већина првих неус�
 msgid "License"
 msgstr "Лиценца"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:452
+#: fluidvoice/gtkui/settings_pages/dictation.py:456
 #: fluidvoice/gtkui/settings_pages/wayland.py:34
 msgid "Live preview"
 msgstr "Живи преглед"
@@ -891,7 +892,7 @@ msgstr "Локално дотеривање ће користити {name}"
 msgid "Local-polish chat model for the bundled llama.cpp server — qwen3-4b-class, works offline. Enable it in Settings → AI → Local polish"
 msgstr "Модел за разговор за локално дотеривање за приложени llama.cpp сервер — класа qwen3-4b, ради без интернета. Омогућите га у Поставке → AI → Локално дотеривање"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:611
+#: fluidvoice/gtkui/settings_pages/dictation.py:615
 msgid "Lowercase first letter"
 msgstr "Прво слово мало"
 
@@ -899,11 +900,11 @@ msgstr "Прво слово мало"
 msgid "Manual entry, or start from a built-in template"
 msgstr "Ручни унос, или почните од уграђеног шаблона"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:716
+#: fluidvoice/gtkui/settings_pages/dictation.py:724
 msgid "Max agent turns"
 msgstr "Највише корака агента"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:406
+#: fluidvoice/gtkui/settings_pages/dictation.py:410
 msgid "Max duration (s)"
 msgstr "Највеће трајање (с)"
 
@@ -921,15 +922,15 @@ msgstr "Мени"
 
 #: fluidvoice/daemon.py:324
 #: fluidvoice/gtkui/onboarding.py:128
-#: fluidvoice/gtkui/settings_pages/dictation.py:388
+#: fluidvoice/gtkui/settings_pages/dictation.py:392
 msgid "Microphone"
 msgstr "Микрофон"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:386
+#: fluidvoice/gtkui/settings_pages/dictation.py:390
 msgid "Microphone and recording"
 msgstr "Микрофон и снимање"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:436
+#: fluidvoice/gtkui/settings_pages/dictation.py:440
 msgid "Microphone priority"
 msgstr "Приоритет микрофона"
 
@@ -943,12 +944,12 @@ msgid "Minutes dictated"
 msgstr "Минута диктирано"
 
 #: fluidvoice/gtkui/settings_pages/dictation.py:276
-#: fluidvoice/gtkui/settings_pages/dictation.py:460
-#: fluidvoice/gtkui/settings_pages/dictation.py:691
+#: fluidvoice/gtkui/settings_pages/dictation.py:464
+#: fluidvoice/gtkui/settings_pages/dictation.py:699
 msgid "Mode"
 msgstr "Режим"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:612
+#: fluidvoice/gtkui/settings_pages/ai.py:616
 #: fluidvoice/gtkui/settings_pages/models.py:739
 msgid "Model"
 msgstr "Модел"
@@ -1009,7 +1010,7 @@ msgstr "NVIDIA Parakeet TDT 0.6B v3 — вишејезични (25 европс�
 msgid "NVIDIA Parakeet TDT via ONNX Runtime — explicit backend"
 msgstr "NVIDIA Parakeet TDT кроз ONNX Рунтиме — експлицитни бацкенд"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:610
+#: fluidvoice/gtkui/settings_pages/ai.py:614
 msgid "Name (e.g. GLM)"
 msgstr "Назив (нпр. GLM)"
 
@@ -1021,24 +1022,24 @@ msgstr "Именоване унапред подешене тачке — изб
 msgid "Named presets of the base prompt — selecting one loads its text into the editor"
 msgstr "Именовани унапред подешени основни упит — избор једног учитава његов текст у уређивач"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:568
+#: fluidvoice/gtkui/settings_pages/dictation.py:572
 msgid "New line"
 msgstr "Нова линија"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:569
+#: fluidvoice/gtkui/settings_pages/dictation.py:573
 msgid "New paragraph"
 msgstr "Нови пасус"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:426
+#: fluidvoice/gtkui/settings_pages/ai.py:430
 msgid "New profile name"
 msgstr "Нови назив профила"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:604
+#: fluidvoice/gtkui/settings_pages/ai.py:608
 msgid "New provider profile"
 msgstr "Нови профил провајдера"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:734
-#: fluidvoice/gtkui/settings_pages/ai.py:754
+#: fluidvoice/gtkui/settings_pages/ai.py:738
+#: fluidvoice/gtkui/settings_pages/ai.py:758
 msgid "New rule"
 msgstr "Ново правило"
 
@@ -1047,7 +1048,7 @@ msgstr "Ново правило"
 msgid "New word"
 msgstr "Нова реч"
 
-#: fluidvoice/gtkui/settings_window.py:509
+#: fluidvoice/gtkui/settings_window.py:521
 msgid "No changes"
 msgstr "Нема измена"
 
@@ -1071,11 +1072,11 @@ msgstr "Глобално хватање тастера не постоји на 
 msgid "No profiles yet"
 msgstr "Још нема профила"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:411
+#: fluidvoice/gtkui/settings_pages/dictation.py:415
 msgid "No-audio timeout (s)"
 msgstr "Временско ограничење без звука (с)"
 
-#: fluidvoice/gtkui/settings_window.py:499
+#: fluidvoice/gtkui/settings_window.py:511
 msgid "Not fully applied: {detail}"
 msgstr "Није у потпуности primenjeno: {detail}"
 
@@ -1088,7 +1089,7 @@ msgstr "Нема шта да се копира"
 msgid "Notifications"
 msgstr "Обавештења"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:405
+#: fluidvoice/gtkui/settings_pages/ai.py:409
 msgid "OK"
 msgstr "У реду"
 
@@ -1128,7 +1129,7 @@ msgstr "Отварање поставки пречица"
 msgid "Open…"
 msgstr "Отвори…"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:437
+#: fluidvoice/gtkui/settings_pages/dictation.py:441
 msgid "Ordered name patterns (e.g. bluez for a Bluetooth headset). When the chosen microphone disappears, the first available match is used."
 msgstr "Уређени обрасци назива (нпр. bluez за Блуетоотх слушалице). Када изабрани микрофон нестане, користи се прво доступно poklapanje."
 
@@ -1136,7 +1137,7 @@ msgstr "Уређени обрасци назива (нпр. bluez за Блуе�
 msgid "Output"
 msgstr "Излаз"
 
-#: fluidvoice/gtkui/settings_pages/models.py:879
+#: fluidvoice/gtkui/settings_pages/models.py:883
 msgid "Overrides general.language per model - empty = inherit, auto = always detect"
 msgstr "Замењује general.language по моделу - празно = наслеђује, auto = увек препознаје"
 
@@ -1152,7 +1153,7 @@ msgstr "Parakeet (ONNX)"
 msgid "Paste last: {detail}"
 msgstr "Налепи poslednje: {detail}"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:700
+#: fluidvoice/gtkui/settings_pages/dictation.py:708
 msgid "Paste threshold (chars)"
 msgstr "Праг за налепљивање (знакова)"
 
@@ -1164,32 +1165,32 @@ msgstr "Тастер за налепљивање последњег (опцио�
 msgid "Pattern"
 msgstr "Образац"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:430
+#: fluidvoice/gtkui/settings_pages/dictation.py:434
 msgid "Pause MPRIS players while dictating"
 msgstr "Паузирај MPRIS плејере током диктирања"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:429
+#: fluidvoice/gtkui/settings_pages/dictation.py:433
 msgid "Pause media"
 msgstr "Паузирај медије"
 
 #: fluidvoice/gtkui/main_window.py:409
-#: fluidvoice/gtkui/main_window.py:979
+#: fluidvoice/gtkui/main_window.py:982
 msgid "Pause saving"
 msgstr "Паузирај чување"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:201
+#: fluidvoice/gtkui/settings_pages/ai.py:205
 msgid "Per-app prompts"
 msgstr "Упити по апликацији"
 
-#: fluidvoice/gtkui/settings_pages/models.py:878
+#: fluidvoice/gtkui/settings_pages/models.py:882
 msgid "Per-model language"
 msgstr "Језик по моделу"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:630
+#: fluidvoice/gtkui/settings_pages/dictation.py:634
 msgid "Phrase"
 msgstr "Фраза"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:659
+#: fluidvoice/gtkui/settings_pages/dictation.py:663
 msgid "Phrases replaced on insert — \"miro board\" → \"Miro board\""
 msgstr "Фразе замењене при уметању — \"миро боард\" → \"Миро боард\""
 
@@ -1198,7 +1199,7 @@ msgstr "Фразе замењене при уметању — \"миро боа�
 msgid "Press a key…"
 msgstr "Притисните тастер…"
 
-#: fluidvoice/gtkui/settings_window.py:548
+#: fluidvoice/gtkui/settings_window.py:560
 msgid "Press the key to use (Esc cancels)"
 msgstr "Притисните тастер за коришћење (Esc откажује)"
 
@@ -1211,16 +1212,17 @@ msgstr "Притисните вашу пречицу и говорите — т�
 msgid "Processing…"
 msgstr "Обрађујем…"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:371
-#: fluidvoice/gtkui/settings_pages/ai.py:525
+#: fluidvoice/gtkui/settings_pages/ai.py:375
+#: fluidvoice/gtkui/settings_pages/ai.py:529
 msgid "Profile actions"
 msgstr "Радње профила"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:565
+#: fluidvoice/gtkui/settings_pages/ai.py:569
 msgid "Profile switch failed: {error}"
 msgstr "Промена профила није uspela: {error}"
 
 #: fluidvoice/gtkui/settings_pages/ai.py:145
+#: fluidvoice/gtkui/settings_pages/dictation.py:349
 msgid "Prompt profiles"
 msgstr "Профили упита"
 
@@ -1232,7 +1234,7 @@ msgstr "Предложи поновно покретање (потврдите �
 msgid "Provider profiles"
 msgstr "Профили провајдера"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:643
+#: fluidvoice/gtkui/settings_pages/dictation.py:647
 msgid "Quiet countdown (s)"
 msgstr "Тихо одбројавање (с)"
 
@@ -1268,7 +1270,7 @@ msgstr "Спремно за снимање"
 msgid "Record 3 seconds"
 msgstr "Сними 3 секунде"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:403
+#: fluidvoice/gtkui/settings_pages/dictation.py:407
 msgid "Recorder"
 msgstr "Снимач"
 
@@ -1280,7 +1282,7 @@ msgstr "Снимам…"
 msgid "Recording… click to stop"
 msgstr "Снимање… кликните за заустављање"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:393
+#: fluidvoice/gtkui/settings_pages/dictation.py:397
 msgid "Refresh list"
 msgstr "Освежи листу"
 
@@ -1288,8 +1290,8 @@ msgstr "Освежи листу"
 msgid "Refusal guard"
 msgstr "Заштита од одбијања"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:562
-#: fluidvoice/gtkui/settings_window.py:496
+#: fluidvoice/gtkui/settings_pages/ai.py:566
+#: fluidvoice/gtkui/settings_window.py:508
 msgid "Rejected (bad values): {keys}"
 msgstr "Одбијено (лоше вредности): {keys}"
 
@@ -1303,7 +1305,7 @@ msgstr "Odbijeno: {keys}"
 msgid "Remote (OpenAI-compatible)"
 msgstr "Удаљено (OpenAI-компатибилно)"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:553
+#: fluidvoice/gtkui/settings_pages/dictation.py:557
 msgid "Remove filler words"
 msgstr "Уклони речице пуњења"
 
@@ -1319,34 +1321,34 @@ msgstr "Уклони овај образац"
 msgid "Remove this word"
 msgstr "Уклони ову реч"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:617
+#: fluidvoice/gtkui/settings_pages/dictation.py:621
 msgid "Remove trailing period"
 msgstr "Уклони завршну тачку"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:702
+#: fluidvoice/gtkui/settings_pages/ai.py:706
 msgid "Removed from the profile store. Settings and the tray menu update immediately."
 msgstr "Уклоњено из складишта profila. Поставке и мени системске траке се одмах ажурирају."
 
-#: fluidvoice/gtkui/main_window.py:847
-#: fluidvoice/gtkui/settings_pages/history.py:63
+#: fluidvoice/gtkui/main_window.py:850
+#: fluidvoice/gtkui/settings_pages/history.py:67
 msgid "Removed {n} entry"
 msgid_plural "Removed {n} entries"
 msgstr[0] "Уклоњен {n} запис"
 msgstr[1] "Уклоњена {n} записа"
 msgstr[2] "Уклоњено {n} записа"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:453
-#: fluidvoice/gtkui/settings_pages/ai.py:684
+#: fluidvoice/gtkui/settings_pages/ai.py:457
+#: fluidvoice/gtkui/settings_pages/ai.py:688
 msgid "Rename “{name}” to"
 msgstr "Преименуј „{name}“ у"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:693
-#: fluidvoice/gtkui/settings_pages/ai.py:450
+#: fluidvoice/gtkui/settings_pages/ai.py:697
+#: fluidvoice/gtkui/settings_pages/ai.py:454
 msgid "Renamed to “{name}”"
 msgstr "Преименовано у „{name}“"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:366
-#: fluidvoice/gtkui/settings_pages/ai.py:520
+#: fluidvoice/gtkui/settings_pages/ai.py:370
+#: fluidvoice/gtkui/settings_pages/ai.py:524
 msgid "Rename…"
 msgstr "Преименуј…"
 
@@ -1354,7 +1356,7 @@ msgstr "Преименуј…"
 msgid "Replacement"
 msgstr "Замена"
 
-#: fluidvoice/gtkui/main_window.py:979
+#: fluidvoice/gtkui/main_window.py:982
 msgid "Resume saving"
 msgstr "Настави чување"
 
@@ -1371,16 +1373,16 @@ msgid "Runs the daemon in the background when you log in"
 msgstr "Покреће daemon у позадини када се пријавите"
 
 #: fluidvoice/gtkui/main_window.py:228
-#: fluidvoice/gtkui/settings_pages/ai.py:192
+#: fluidvoice/gtkui/settings_pages/ai.py:196
 #: fluidvoice/gtkui/settings_window.py:242
 msgid "Save"
 msgstr "Сачувај"
 
-#: fluidvoice/gtkui/main_window.py:823
+#: fluidvoice/gtkui/main_window.py:826
 msgid "Save failed"
 msgstr "Чување није успело"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:189
+#: fluidvoice/gtkui/settings_pages/ai.py:193
 msgid "Save to profile"
 msgstr "Сачувај у профил"
 
@@ -1388,35 +1390,35 @@ msgstr "Сачувај у профил"
 msgid "Save transcriptions"
 msgstr "Чувај транскрипције"
 
-#: fluidvoice/gtkui/main_window.py:821
-msgid "Saved"
-msgstr "Сачувано"
-
-#: fluidvoice/gtkui/settings_pages/ai.py:436
-#: fluidvoice/gtkui/settings_pages/ai.py:424
+#: fluidvoice/gtkui/settings_pages/ai.py:440
+#: fluidvoice/gtkui/settings_pages/ai.py:428
 msgid "Saved profile “{name}”"
 msgstr "Сачуван профил „{name}“"
 
-#: fluidvoice/gtkui/settings_window.py:503
+#: fluidvoice/gtkui/settings_window.py:515
 msgid "Saved {n} change"
 msgid_plural "Saved {n} changes"
 msgstr[0] "Сачувана {n} измена"
 msgstr[1] "Сачуване {n} измене"
 msgstr[2] "Сачувано {n} измена"
 
+#: fluidvoice/gtkui/main_window.py:823
+msgid "Saved — edits teach the dictionary (Settings → Dictation)"
+msgstr "Сачувано — измене уче речник (Поставке → Диктирање)"
+
 #: fluidvoice/gtkui/main_window.py:371
 msgid "Search transcripts, commands, apps…"
 msgstr "Тражи транскрипте, наредбе, апликације…"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:603
+#: fluidvoice/gtkui/settings_pages/dictation.py:607
 msgid "Search-field formatting (GAAV)"
 msgstr "Форматирање за поља претраге (GAAV)"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:509
+#: fluidvoice/gtkui/settings_pages/dictation.py:513
 msgid "Segment window (s)"
 msgstr "Прозор сегмента (с)"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:431
+#: fluidvoice/gtkui/settings_pages/ai.py:435
 msgid "Select a profile first"
 msgstr "Прво изаберите профил"
 
@@ -1450,6 +1452,10 @@ msgstr "Поставке"
 msgid "Settings…"
 msgstr "Поставке…"
 
+#: fluidvoice/gtkui/settings_pages/ai.py:165
+msgid "Shortcut prompt profiles"
+msgstr "Профили упита за пречице"
+
 #: fluidvoice/gtkui/settings_pages/wayland.py:60
 msgid "Shortcut settings"
 msgstr "Поставке пречица"
@@ -1458,11 +1464,11 @@ msgstr "Поставке пречица"
 msgid "Shortcut {n} prompt profile"
 msgstr "Профил упита за пречицу {n}"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:468
+#: fluidvoice/gtkui/settings_pages/dictation.py:472
 msgid "Size"
 msgstr "Величина"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:421
+#: fluidvoice/gtkui/settings_pages/dictation.py:425
 msgid "Skip silent takes"
 msgstr "Прескочи тихе снимке"
 
@@ -1471,7 +1477,7 @@ msgstr "Прескочи тихе снимке"
 msgid "Sounds"
 msgstr "Звукови"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:571
+#: fluidvoice/gtkui/settings_pages/dictation.py:575
 msgid "Space"
 msgstr "Размак"
 
@@ -1483,19 +1489,19 @@ msgstr "Мотор препознавања говора"
 msgid "Speech models"
 msgstr "Модели препознавања говора"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:562
+#: fluidvoice/gtkui/settings_pages/dictation.py:566
 msgid "Spoken formatting triggers"
 msgstr "Говорни окидачи форматирања"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:594
+#: fluidvoice/gtkui/settings_pages/dictation.py:598
 msgid "Spoken punctuation"
 msgstr "Говорна интерпункција"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:623
+#: fluidvoice/gtkui/settings_pages/dictation.py:627
 msgid "Spoken send"
 msgstr "Говорно слање"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:600
+#: fluidvoice/gtkui/settings_pages/dictation.py:604
 msgid "Spoken-command prefix"
 msgstr "Префикс говорних наредби"
 
@@ -1507,7 +1513,7 @@ msgstr "Почни да диктираш"
 msgid "Start dictation at login"
 msgstr "Покрени диктирање при пријављивању"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:180
+#: fluidvoice/gtkui/settings_pages/ai.py:184
 msgid "Start editing from the shipped dictation prompt"
 msgstr "Почните уређивање од испорученог упита за диктирање"
 
@@ -1535,7 +1541,7 @@ msgstr "Стање"
 msgid "Stop"
 msgstr "Заустави"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:536
+#: fluidvoice/gtkui/settings_pages/dictation.py:540
 msgid "Stop after silence (s)"
 msgstr "Заустави после тишине (с)"
 
@@ -1551,15 +1557,16 @@ msgstr "Заустави чекање"
 msgid "Store the recording with each entry"
 msgstr "Чува снимак уз сваки запис"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:605
+#: fluidvoice/gtkui/settings_pages/ai.py:609
 msgid "Stored beside the config; only the env-var NAME is kept - never the key itself."
 msgstr "Чува се уз конфигурацију; чува се само NAZIV променљиве окружења - никад сам кључ."
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:500
+#: fluidvoice/gtkui/settings_pages/dictation.py:504
 msgid "Streaming (segmented)"
 msgstr "Струјање (сегментирано)"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:672
+#: fluidvoice/gtkui/settings_pages/dictation.py:680
+#: fluidvoice/gtkui/settings_pages/history.py:56
 msgid "Suggested words"
 msgstr "Предложене речи"
 
@@ -1579,7 +1586,7 @@ msgstr "Пребацујем на {name}…"
 msgid "System default"
 msgstr "Системско подразумевано"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:570
+#: fluidvoice/gtkui/settings_pages/dictation.py:574
 msgid "Tab"
 msgstr "Tab"
 
@@ -1599,7 +1606,7 @@ msgstr "Тестирај везу"
 msgid "Text after AI polish"
 msgstr "Текст након AI дотеривања"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:548
+#: fluidvoice/gtkui/settings_pages/dictation.py:552
 msgid "Text polish"
 msgstr "Дотеривање текста"
 
@@ -1607,23 +1614,23 @@ msgstr "Дотеривање текста"
 msgid "That's the whole loop — press the key whenever you want to dictate. Every take is saved in History if you ever need it again."
 msgstr "То је цео круг — притисните тастер кад год желите да diktirate. Сваки снимак се чува у историји ако вам икад затреба ponovo."
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:368
+#: fluidvoice/gtkui/settings_pages/dictation.py:372
 msgid "The cycle-language hotkey steps this list — e.g. auto, en, sl (runtime state; never persisted; empty = cycle key off)"
 msgstr "Пречица за кружење језика прелази кроз ову листу — нпр. auto, en, sl (стање у раду; никад се не чува; празно = тастер искључен)"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:453
+#: fluidvoice/gtkui/settings_pages/dictation.py:457
 msgid "The pill overlay with partial text while recording"
 msgstr "Балончић са делимичним текстом током снимања"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:464
+#: fluidvoice/gtkui/settings_pages/ai.py:468
 msgid "The preset is removed from disk. The prompt saved in your config is not touched."
 msgstr "Унапред подешена поставка се уклања са diska. Упит сачуван у вашој конфигурацији се не dira."
 
-#: fluidvoice/gtkui/settings_pages/ai.py:170
+#: fluidvoice/gtkui/settings_pages/ai.py:174
 msgid "The system prompt AI polish starts from (empty = the built-in dictation prompt)"
 msgstr "Системски упит од кога AI дотеривање полази (празно = уграђени упит за диктирање)"
 
-#: fluidvoice/gtkui/main_window.py:833
+#: fluidvoice/gtkui/main_window.py:836
 msgid "The transcription"
 msgstr "Транскрипција"
 
@@ -1652,7 +1659,7 @@ msgstr "Данас"
 msgid "Toggle dictation"
 msgstr "Укључи/искључи диктирање"
 
-#: fluidvoice/gtkui/settings_pages/models.py:892
+#: fluidvoice/gtkui/settings_pages/models.py:896
 msgid "Total"
 msgstr "Укупно"
 
@@ -1676,7 +1683,7 @@ msgstr "Окидачи (раздвојени запетама)"
 msgid "Typing backend"
 msgstr "Бацкенд за куцање"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:695
+#: fluidvoice/gtkui/settings_pages/dictation.py:703
 msgid "Typing delay (ms)"
 msgstr "Пауза куцања (мс)"
 
@@ -1692,7 +1699,7 @@ msgstr "Несачуване измене"
 msgid "Update"
 msgstr "Надоградња"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:482
+#: fluidvoice/gtkui/settings_pages/dictation.py:486
 msgid "Update interval (s)"
 msgstr "Интервал ажурирања (с)"
 
@@ -1711,6 +1718,7 @@ msgstr "Користи"
 msgid "Version"
 msgstr "Верзија"
 
+#: fluidvoice/gtkui/settings_pages/dictation.py:672
 #: fluidvoice/gtkui/settings_pages/models.py:865
 msgid "Vocabulary boosting"
 msgstr "Појачавање речника"
@@ -1719,7 +1727,7 @@ msgstr "Појачавање речника"
 msgid "Voice command runs land here — re-run any of them (always confirmed) or copy the command line."
 msgstr "Покретања гласовних наредби завршавају овде — поново покрените било коју (увек уз потврду) или копирајте командну liniju."
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:713
+#: fluidvoice/gtkui/settings_pages/dictation.py:721
 msgid "Voice → terminal agent. Every command needs confirmation."
 msgstr "Глас → терминалски agent. Свака наредба захтева potvrdu."
 
@@ -1773,7 +1781,7 @@ msgstr "Речи"
 msgid "Words the decoder is biased toward (ADD, not replace) — fed as faster-whisper hotwords / whisper initial-prompt; changing them reloads the engine"
 msgstr "Речи ка којима декодер нагиње (DODAJE, не замењује) — шаљу се као faster-whisper hotwords / whisper initial-prompt; промена поново учитава мотор"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:719
+#: fluidvoice/gtkui/settings_pages/dictation.py:727
 msgid "Working directory (empty = home)"
 msgstr "Радни директоријум (празно = почетни)"
 
@@ -1781,7 +1789,7 @@ msgstr "Радни директоријум (празно = почетни)"
 msgid "Works offline — a bundled llama.cpp server is spawned only while polishing, your text never leaves this machine"
 msgstr "Ради без интернета — приложени llama.cpp сервер се покреће само током дотеривања, ваш текст никад не напушта овај рачунар"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:190
+#: fluidvoice/gtkui/settings_pages/ai.py:194
 msgid "Write the editor contents into the selected profile"
 msgstr "Упиши садржај уређивача у изабрани профил"
 
@@ -1789,13 +1797,13 @@ msgstr "Упиши садржај уређивача у изабрани про�
 msgid "Yesterday"
 msgstr "Јуче"
 
-#: fluidvoice/gtkui/main_window.py:871
-#: fluidvoice/gtkui/main_window.py:917
+#: fluidvoice/gtkui/main_window.py:874
+#: fluidvoice/gtkui/main_window.py:920
 msgid "_Cancel"
 msgstr "_Откажи"
 
-#: fluidvoice/gtkui/main_window.py:871
-#: fluidvoice/gtkui/main_window.py:917
+#: fluidvoice/gtkui/main_window.py:874
+#: fluidvoice/gtkui/main_window.py:920
 msgid "_Export"
 msgstr "_Izvezi"
 
@@ -1803,7 +1811,7 @@ msgstr "_Izvezi"
 msgid "a reply that reads as a model refusal (\"I'm sorry, I can't assist…\") is never typed — the raw transcript is used instead"
 msgstr "одговор који звучи као одбијање модела (\"Извините, не могу да помогнем…\") се никад не куца — користи се сирови транскрипт"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:624
+#: fluidvoice/gtkui/settings_pages/dictation.py:628
 msgid "a trailing phrase strips and presses Enter"
 msgstr "завршна фраза се скида и притисне Enter"
 
@@ -1827,7 +1835,7 @@ msgstr "aktivno: удаљено ({model} @ {host})"
 msgid "active: {model}"
 msgstr "aktivno: {model}"
 
-#: fluidvoice/gtkui/main_window.py:834
+#: fluidvoice/gtkui/main_window.py:837
 msgid "and its audio"
 msgstr "и његов звук"
 
@@ -1839,7 +1847,7 @@ msgstr "auto (препознај)"
 msgid "auto probes at runtime: eis (RemoteDesktop portal, GNOME/Plasma) → wtype (virtual-keyboard protocol, wlroots/Hyprland) → ydotool (uinput)"
 msgstr "аутоматски се испитује у току rada: еис (РемотеДесктоп портал, GNOME/Plasma) → wtype (протокол виртуелне тастатуре, wlroots/Hyprland) → ydotool (уинпут)"
 
-#: fluidvoice/gtkui/main_window.py:1026
+#: fluidvoice/gtkui/main_window.py:1029
 msgid "backend {name}"
 msgstr "бацкенд {name}"
 
@@ -1862,6 +1870,10 @@ msgstr "највећа тачност"
 #: fluidvoice/model_catalog.py:150
 msgid "best accuracy (no .en upstream)"
 msgstr "највећа тачност (без .en upstream)"
+
+#: fluidvoice/gtkui/settings_pages/ai.py:166
+msgid "bind presets to extra shortcuts — Dictation page"
+msgstr "повежите унапред подешене профиле са додатним пречицама — страница Диктирање"
 
 #: fluidvoice/gtkui/onboarding.py:413
 msgid "cancelled — nothing was half-written; the model download (if any) continues in the background"
@@ -1891,7 +1903,7 @@ msgstr[2] "наредби"
 msgid "configured but off — enable in Settings"
 msgstr "подешено али искључено — укључите у поставкама"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:501
+#: fluidvoice/gtkui/settings_pages/dictation.py:505
 msgid "constant-cost windows instead of whole-take re-decode; all backends"
 msgstr "прозори сталне цене уместо поновног декодирања целог снимка; сви бекендови"
 
@@ -1899,7 +1911,7 @@ msgstr "прозори сталне цене уместо поновног де�
 msgid "daemon not running - start it to delete models"
 msgstr "daemon није покренут - покрените га за брисање модела"
 
-#: fluidvoice/gtkui/main_window.py:1001
+#: fluidvoice/gtkui/main_window.py:1004
 msgid "daemon offline"
 msgstr "daemon није покренут"
 
@@ -1944,6 +1956,10 @@ msgstr "преузимам… {done}"
 msgid "downloading… {done} / {total}"
 msgstr "преузимам… {done} / {total}"
 
+#: fluidvoice/gtkui/settings_pages/history.py:57
+msgid "edits in History suggest dictionary fixes — Dictation page"
+msgstr "измене у Историји предлажу исправке речника — страница Диктирање"
+
 #: fluidvoice/gtkui/settings_pages/models.py:264
 msgid "empty"
 msgstr "празно"
@@ -1967,12 +1983,12 @@ msgstr "грешка: {error}"
 msgid "every dictation is saved in History - copy or re-insert text from there any time"
 msgstr "свако диктирање се чува у историји - копирајте или поново уметните текст отад увек"
 
-#: fluidvoice/gtkui/main_window.py:906
-#: fluidvoice/gtkui/main_window.py:946
+#: fluidvoice/gtkui/main_window.py:909
+#: fluidvoice/gtkui/main_window.py:949
 msgid "export failed: {error}"
 msgstr "извоз није uspeo: {error}"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:320
+#: fluidvoice/gtkui/settings_pages/ai.py:324
 #: fluidvoice/gtkui/settings_pages/models.py:153
 msgid "failed"
 msgstr "није успело"
@@ -2009,11 +2025,11 @@ msgstr "прва upotreba: преузимам модел {name}{size} — јед
 msgid "full report: sayit-ermano doctor"
 msgstr "потпун извештај: sayit-ermano doctor"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:350
+#: fluidvoice/gtkui/settings_pages/dictation.py:354
 msgid "held in addition to the dictation key"
 msgstr "држи се поред тастера за диктирање"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:519
+#: fluidvoice/gtkui/settings_pages/dictation.py:523
 msgid "hide preview words the model scored shaky (wrong-word suppression on hard audio)"
 msgstr "сакриј речи прегледа које је модел оценио несигурно (сузбијање погрешних речи на тешком звуку)"
 
@@ -2021,11 +2037,11 @@ msgstr "сакриј речи прегледа које је модел оцен
 msgid "high"
 msgstr "високо"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:528
+#: fluidvoice/gtkui/settings_pages/dictation.py:532
 msgid "hover the pill while recording for copy/paste/cancel buttons (X11)"
 msgstr "пређите мишем преко балончића током снимања за дугмад копирај/налепи/откажи (X11)"
 
-#: fluidvoice/gtkui/main_window.py:1019
+#: fluidvoice/gtkui/main_window.py:1022
 msgid "idle"
 msgstr "мировање"
 
@@ -2061,7 +2077,7 @@ msgstr "jez.: {lang}"
 msgid "latest unknown (offline or GitHub unreachable)"
 msgstr "најновије непознато (ван мреже или GitHub недоступан)"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:289
+#: fluidvoice/gtkui/settings_pages/ai.py:293
 msgid "llama-server binary not found — install an llama.cpp package or set ai.local_server_binary"
 msgstr "llama-server извршна датотека није нађена — инсталирајте llama.cpp пакет или подесите ai.local_server_binary"
 
@@ -2069,7 +2085,7 @@ msgstr "llama-server извршна датотека није нађена — �
 msgid "llama-server path override"
 msgstr "Путања до llama-сервера (заобилази претрагу)"
 
-#: fluidvoice/gtkui/main_window.py:1037
+#: fluidvoice/gtkui/main_window.py:1040
 #: fluidvoice/gtkui/settings_pages/models.py:82
 msgid "loading {model}…"
 msgstr "учитавам {model}…"
@@ -2078,11 +2094,11 @@ msgstr "учитавам {model}…"
 msgid "low"
 msgstr "ниско"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:604
+#: fluidvoice/gtkui/settings_pages/dictation.py:608
 msgid "lowercase first letter, drop the final period"
 msgstr "прво слово мало, без завршне тачке"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:469
+#: fluidvoice/gtkui/settings_pages/dictation.py:473
 msgid "macOS size presets"
 msgstr "macOS величине"
 
@@ -2090,16 +2106,16 @@ msgstr "macOS величине"
 msgid "mixed"
 msgstr "мешано"
 
-#: fluidvoice/gtkui/main_window.py:1043
+#: fluidvoice/gtkui/main_window.py:1046
 #: fluidvoice/gtkui/settings_pages/models.py:165
 msgid "model error: {error}"
 msgstr "грешка modela: {error}"
 
-#: fluidvoice/gtkui/main_window.py:1031
+#: fluidvoice/gtkui/main_window.py:1034
 msgid "model {name}"
 msgstr "модел {name}"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:284
+#: fluidvoice/gtkui/settings_pages/ai.py:288
 msgid "model {name} not downloaded — Settings → Models → AI polish model"
 msgstr "модел {name} није преузет — Поставке → Модели → AI модел за дотеривање"
 
@@ -2123,19 +2139,19 @@ msgstr "снимач није нађен - sudo apt install pipewire-аудио-
 msgid "none found — connect one and check your sound settings"
 msgstr "ниједан није нађен — повежите један и проверите звучне поставке"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:461
+#: fluidvoice/gtkui/settings_pages/dictation.py:465
 msgid "notifications only"
 msgstr "само обавештења"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:581
+#: fluidvoice/gtkui/settings_pages/dictation.py:585
 msgid "nova vrstica, naslednja vrstica — then say “literal nova vrstica” to start a new line"
 msgstr "нова врстица, наследња врстица — а затим изговорите „литерал нова врстица“ да почнете нову линију"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:280
+#: fluidvoice/gtkui/settings_pages/ai.py:284
 msgid "off (zero footprint — no server, no port)"
 msgstr "искључено (нула заузећа — нема сервера, нема порта)"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:318
+#: fluidvoice/gtkui/settings_pages/ai.py:322
 msgid "ok: {reply}"
 msgstr "у redu: {reply}"
 
@@ -2152,13 +2168,17 @@ msgstr "опционо — додајте OpenAI-компатибилну тач
 msgid "per-request; retry once on transient network errors"
 msgstr "по захтеву; један покушај поново при пролазним мрежним грешкама"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:646
+#: fluidvoice/gtkui/settings_pages/dictation.py:650
 msgid "phrase + 0.5 s quiet finishes the take by itself (speak to cancel); 0 = off"
 msgstr "фраза + 0,5 с тишине сам завршава снимак (говорите да откажете); 0 = искључено"
 
 #: fluidvoice/gtkui/settings_pages/dictation.py:341
 msgid "polishes takes started by this shortcut"
 msgstr "дотерује снимке покренуте овом пречицом"
+
+#: fluidvoice/gtkui/settings_pages/dictation.py:350
+msgid "presets a shortcut can use — AI page"
+msgstr "унапред подешени профили које пречица може да користи — страница AI"
 
 #: fluidvoice/gtkui/onboarding.py:422
 msgid "press the shortcut you bound in your desktop settings to the toggle script (the on-screen `{key}` grab only exists on X11) — or run `sayit-ermano toggle` in a terminal"
@@ -2168,20 +2188,20 @@ msgstr "притисните пречицу коју сте повезали у 
 msgid "press {key}"
 msgstr "притисните {key}"
 
-#: fluidvoice/gtkui/main_window.py:1018
+#: fluidvoice/gtkui/main_window.py:1021
 msgid "processing…"
 msgstr "обрађујем…"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:487
-#: fluidvoice/gtkui/settings_pages/ai.py:598
+#: fluidvoice/gtkui/settings_pages/ai.py:491
+#: fluidvoice/gtkui/settings_pages/ai.py:602
 msgid "profile operation failed"
 msgstr "радња над профилом није успела"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:303
+#: fluidvoice/gtkui/settings_pages/ai.py:307
 msgid "ready — the server spawns on the next dictation"
 msgstr "спремно — сервер се покреће при следећој диктацији"
 
-#: fluidvoice/gtkui/main_window.py:1011
+#: fluidvoice/gtkui/main_window.py:1014
 msgid "recording"
 msgstr "снимање"
 
@@ -2193,31 +2213,35 @@ msgstr "снимам… говорите сада"
 msgid "remote STT endpoint — recordings go to the configured URL"
 msgstr "удаљена STT тачка — снимци иду на подешени URL"
 
-#: fluidvoice/gtkui/main_window.py:1054
+#: fluidvoice/gtkui/settings_pages/models.py:874
+msgid "replace phrases on insert — Dictation page"
+msgstr "замењује фразе при уносу — страница Диктирање"
+
+#: fluidvoice/gtkui/main_window.py:1057
 msgid "run 'sayit-ermano update' for the upgrade command"
 msgstr "покрените 'sayit-ermano update' за наредбу надоградње"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:300
+#: fluidvoice/gtkui/settings_pages/ai.py:304
 msgid "running (127.0.0.1:{port}) — stops after {idle} s idle"
 msgstr "ради (127.0.0.1:{port}) — зауставља се после {idle} s мировања"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:805
+#: fluidvoice/gtkui/settings_pages/ai.py:809
 msgid "seen {n}×"
 msgstr "виђено {n}×"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:265
+#: fluidvoice/gtkui/settings_pages/ai.py:269
 msgid "still running?"
 msgstr "још ради?"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:262
+#: fluidvoice/gtkui/settings_pages/ai.py:266
 msgid "stop failed"
 msgstr "заустављање није успело"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:258
+#: fluidvoice/gtkui/settings_pages/ai.py:262
 msgid "stop failed: {err}"
 msgstr "заустављање није успело: {err}"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:264
+#: fluidvoice/gtkui/settings_pages/ai.py:268
 msgid "stopped"
 msgstr "заустављено"
 
@@ -2225,7 +2249,11 @@ msgstr "заустављено"
 msgid "tap to start/stop · hold = push-to-talk · both: quick tap toggles, holding talks · modifier-only keys need toggle"
 msgstr "додирните за почетак/крај · држање = притисни-и-говори · oboje: брзи додир пребацује, држањем се говори · само-модификаторски тастери захтевају пребацивање"
 
-#: fluidvoice/gtkui/settings_pages/ai.py:307
+#: fluidvoice/gtkui/settings_pages/dictation.py:673
+msgid "teach the recognizer names — Models page"
+msgstr "научите препознавач именима — страница Модели"
+
+#: fluidvoice/gtkui/settings_pages/ai.py:311
 msgid "testing…"
 msgstr "тестирам…"
 
@@ -2261,7 +2289,7 @@ msgstr "модел препознавања говора се још преуз�
 msgid "today: {stats}"
 msgstr "danas: {stats}"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:554
+#: fluidvoice/gtkui/settings_pages/dictation.py:558
 msgid "um, uh, hmm… before punctuation"
 msgstr "хм, е, ово… пре интерпункције"
 
@@ -2277,7 +2305,7 @@ msgstr "избачен (мировање — поново се учитава п
 msgid "up to date"
 msgstr "ажурно"
 
-#: fluidvoice/gtkui/main_window.py:1050
+#: fluidvoice/gtkui/main_window.py:1053
 msgid "update available: v{version}"
 msgstr "доступна nadogradnja: v{version}"
 
@@ -2301,7 +2329,7 @@ msgstr "whisper.cpp GGUF"
 msgid "whisper.cpp model — name like ggml-base.bin, or a path"
 msgstr "whisper.cpp модел — назив попут ggml-base.bin, или путања"
 
-#: fluidvoice/gtkui/main_window.py:835
+#: fluidvoice/gtkui/main_window.py:838
 msgid "will be removed."
 msgstr "ће бити uklonjeno."
 
@@ -2309,7 +2337,7 @@ msgstr "ће бити uklonjeno."
 msgid "yes"
 msgstr "да"
 
-#: fluidvoice/gtkui/settings_pages/dictation.py:574
+#: fluidvoice/gtkui/settings_pages/dictation.py:578
 msgid "{action} — extra trigger phrases"
 msgstr "{action} — додатне окидачке фразе"
 
@@ -2336,7 +2364,7 @@ msgstr "{name} — још није преузет{size}; прво диктира
 msgid "{name} — ready"
 msgstr "{name} — спремно"
 
-#: fluidvoice/gtkui/main_window.py:901
+#: fluidvoice/gtkui/main_window.py:904
 msgid "{n} audio file skipped"
 msgid_plural "{n} audio files skipped"
 msgstr[0] "прескочена {n} звучна датотека"

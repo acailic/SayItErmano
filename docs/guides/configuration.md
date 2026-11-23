@@ -19,6 +19,11 @@ mode = "toggle"         # or "hold" (push-to-talk), "both"
 name = "small"          # tiny/base/small/medium/large-v3/large-v3-turbo
 ```
 
+Fixing misrecognitions? The correction-loop keys
+(`history`, `processing.dictionary`, `model.hotwords`, per-app prompts)
+are surveyed with their settings-page paths in the
+[quickstart's correction-loop section](quickstart.md#fixing-mistakes-the-correction-loop).
+
 ## All settings
 
 Defaults are the built-in defaults (`config init` starts from these).

@@ -347,6 +347,18 @@ class SettingsWindow(
         row.add_suffix(switch)
         return row
 
+    def _link_row(self, title: str, subtitle: str, page: str) -> Adw.ActionRow:
+        """Cross-link to another settings page (discoverability signposts
+        between related groups, survey 2026-11-23): the row body or the
+        chevron navigates — one click, no settings rewrite."""
+        row = Adw.ActionRow(title=title, subtitle=subtitle)
+        row.connect("activate", lambda *_: self._show_page(page))
+        btn = Gtk.Button(icon_name="go-next-symbolic", css_classes=["flat"])
+        btn.set_valign(Gtk.Align.CENTER)
+        btn.connect("clicked", lambda *_: self._show_page(page))
+        row.add_suffix(btn)
+        return row
+
     def _load(self) -> None:
         self._loading = True
         self.cfg, self._from_daemon = self.c.get_config()

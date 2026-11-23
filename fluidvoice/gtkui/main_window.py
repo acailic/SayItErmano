@@ -818,7 +818,10 @@ class HistoryWindow(Adw.ApplicationWindow):
             saved = False
         if saved:
             row.entry["text"] = new_text
-            self._toast(_("Saved"))
+            # discoverability (survey 2026-11-23): the edit is the signal
+            # the dictionary learner feeds on — say where it pays off
+            self._toast(_("Saved — edits teach the dictionary "
+                          "(Settings → Dictation)"))
         else:
             self._toast(_("Save failed"))
         return bool(saved)

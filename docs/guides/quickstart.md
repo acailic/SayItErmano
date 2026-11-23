@@ -66,6 +66,39 @@ hint (rate-limit, network, retry guidance). Everything else working
 but insertion blocked on Wayland? See the
 [Wayland guide](wayland.md) for the full capability matrix.
 
+## Fixing mistakes: the correction loop
+
+Dictation that mishears you should get cheaper to fix and rarer over
+time. Four surfaces do that job — know where they live and the loop
+closes itself:
+
+- **History** — every take lands there even when insertion fails. Edit
+  a transcript inline and the diff between what the recognizer heard
+  and your correction becomes the dictionary-learner's signal
+  (tray → **History**, or the app's main window). Retention controls:
+  Settings → History.
+- **Dictionary suggestions** — corrections seen twice become
+  suggestions you can accept or dismiss:
+  Settings → **Dictation** → *Suggested words* (bottom of the page).
+  Hand-curated replacements live in the *Custom dictionary* group
+  right above it.
+- **Vocabulary boosting** — names and jargon the recognizer should
+  BIAS toward (add, not replace): Settings → **Models** →
+  *Vocabulary boosting*. Changing them reloads the speech engine.
+- **Per-app prompt profiles** — named presets of the AI-polish prompt,
+  bound either to an app (Settings → **AI** → *Per-app prompts*) or to
+  one of the extra dictation shortcuts
+  (Settings → **Dictation** → *Hotkeys*).
+
+The settings pages cross-link these groups (the → chevrons), so a
+wrong door has a signpost to the right one. Config keys for all four:
+[`history`](configuration.md#history),
+[`processing.dictionary`](configuration.md#processing),
+[`model.hotwords`](configuration.md#model) and
+[`ai.per_app_prompts`](configuration.md#ai) /
+[`profiles.rules`](configuration.md#profiles) — see the
+[configuration reference](configuration.md).
+
 ## After setup
 
 - Dictate with your hotkey, or `sayit-ermano toggle`.

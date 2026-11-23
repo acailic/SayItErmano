@@ -104,12 +104,13 @@ There is no "fixing mistakes" narrative anywhere in `docs/`.
 
 1. **Settings cross-link rows.** The four controls live 3+ clicks and
    two page-switches apart with zero signposts; `_show_page()` — the
-   programmatic page navigator — already exists and is used by nothing
+   programmatic page navigator — already existed unused by any UI
    (`fluidvoice/gtkui/settings_window.py:228-233`). Add a
    "related setting" link row to each correction-adjacent group:
    History page → Suggested words (Dictation); Custom dictionary →
    Vocabulary boosting (Models) and back; Hotkeys' shortcut-profile
-   combos → Prompt profiles (AI). Gain: every wrong door now has a
+   combos → Prompt profiles (AI); Prompt profiles → the shortcut
+   bindings (Dictation). Gain: every wrong door now has a
    signpost to the right one. Effort: one small row factory + 5 rows.
 2. **Teach-at-the-correction-moment toast.** The History edit toast is
    just "Saved" (`fluidvoice/gtkui/main_window.py:821`); the user is at

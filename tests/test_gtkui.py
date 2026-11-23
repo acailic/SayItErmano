@@ -1441,6 +1441,26 @@ class TestHistoryScience:
         assert "edited words" in self._labels(w)
         assert row.editor is None
 
+    def test_edit_toast_points_at_the_dictionary_loop(
+            self, hist_win, loop, monkeypatch):
+        """Discoverability (survey 2026-11-23): the edit-success toast is
+        the one moment the dictionary learner feeds — it must name where
+        the payoff lives, not just 'Saved'."""
+        entries = [{"ts": 1234.5, "text": "original words"}]
+        w = hist_win
+        c = reset_history(w, loop, entries)
+        toasts: list[str] = []
+        monkeypatch.setattr(w, "_toast", lambda text: toasts.append(text))
+        row = self._first_entry_row(w)
+        row._start_edit(None)
+        view = row.editor.get_first_child()
+        view.get_buffer().set_text("edited words")
+        row._end_edit(True, view)
+        assert c.updated == [(1234.5, "edited words")]
+        assert len(toasts) == 1
+        assert "dictionary" in toasts[0].lower()
+        assert "Dictation" in toasts[0]
+
     def test_edit_cancel_keeps_text(self, hist_win, loop):
         w = hist_win
         c = reset_history(w, loop, [{"ts": 99.0, "text": "keep me"}])

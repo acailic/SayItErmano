@@ -52,6 +52,10 @@ class HistoryPageMixin:
         )
         browse.add_suffix(b_btn)
         grp.add(browse)
+        grp.add(self._link_row(
+            _("Suggested words"),
+            _("edits in History suggest dictionary fixes — Dictation page"),
+            "dictation"))
         page.add(grp)
         page.add(self._save_group())
         self._add_page(page)

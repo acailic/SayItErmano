@@ -345,6 +345,10 @@ class DictationPageMixin:
             hk.add(combo)
             extra_pairs.append((key_row, combo))
         self._rows[("hotkey", "extra_shortcuts")] = _ExtraShortcutsProxy(extra_pairs)
+        hk.add(self._link_row(
+            _("Prompt profiles"),
+            _("presets a shortcut can use — AI page"),
+            "ai"))
         mods = Adw.ActionRow(
             title=_("Extra modifiers"),
             subtitle=_("held in addition to the dictation key")
@@ -664,6 +668,10 @@ class DictationPageMixin:
         add_w_btn.connect("clicked", lambda *_: self._add_dict_word({}))
         add_w.add_suffix(add_w_btn)
         self.dict_group.add(add_w)
+        self.dict_group.add(self._link_row(
+            _("Vocabulary boosting"),
+            _("teach the recognizer names — Models page"),
+            "models"))
         page.add(self.dict_group)
 
         # auto-learned suggestions (dict_learn), below the hand-curated

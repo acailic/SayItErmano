@@ -161,6 +161,10 @@ class AIPageMixin:
         add_prof_row.add_suffix(add_prof_btn)
         self._profile_add_row = add_prof_row
         self.prof_grp.add(add_prof_row)
+        self.prof_grp.add(self._link_row(
+            _("Shortcut prompt profiles"),
+            _("bind presets to extra shortcuts — Dictation page"),
+            "dictation"))
         page.add(self.prof_grp)
 
         # custom base prompt editor (empty = the built-in dictation prompt;

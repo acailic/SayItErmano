@@ -13,6 +13,21 @@ not reproduced here.
 
 ## [Unreleased]
 
+- **Correction discoverability (excellence bet 3)** — the four
+  correction surfaces (history edits, dictionary suggestions,
+  vocabulary boosting, per-app prompt profiles) exist but were 3+
+  clicks and two page-switches apart with no signposts. Survey with
+  click counts and file:line citations:
+  `docs/research/2026-11-23-correction-discoverability.md`. Three
+  fixes, no system redesign: settings groups now cross-link their
+  sibling page (History → Suggested words, Custom dictionary ⇄
+  Vocabulary boosting, Hotkeys → Prompt profiles, Prompt profiles →
+  shortcut bindings — one chevron click via the existing page
+  navigator); the History edit toast says where corrections pay off
+  ("Saved — edits teach the dictionary (Settings → Dictation)")
+  instead of a bare "Saved"; and the quickstart gains a
+  "Fixing mistakes: the correction loop" section linking all four
+  with their settings paths.
 - **First-use setup with a verified test take (`sayit-ermano setup`)** —
   the product-excellence bet 1 path: hardware-grounded model
   recommendation (GPU/VRAM/CPU/RAM cited in every why-line, defaulting
