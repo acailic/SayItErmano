@@ -39,6 +39,17 @@ Verified against
 medium complexity). A 4th showing the pill's language cycling is a
 good stretch shot if it composes cleanly.
 
+## Capture state
+
+- `02-settings-models.png` and `03-history.png`: captured 2026-11-23
+  headlessly via `scripts/capture_flathub_shots.sh` (sandbox HOME with
+  seeded fixture history, symlinked local model, Xvfb; English UI,
+  960x680 / 900x680). Re-run that script whenever the Models or History
+  UI visibly changes.
+- `01-dictation-pill.png`: still a live-desktop owner capture — the pill
+  needs a real recording (waveform + streaming partials). Capture with the
+  system screenshot tool in window mode mid-dictation.
+
 ## Process
 
 1. Prepare real content (dictate a few real sentences — no lorem
