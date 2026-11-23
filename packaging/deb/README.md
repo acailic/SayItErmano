@@ -21,6 +21,28 @@ stock Ubuntu; it is a recommendation, not a dependency, because the
 feature is opt-in (`ai.local_polish`) and any llama.cpp build — or
 `ai.local_server_binary` pointing at one — works.
 
+## Paid builds (ADR-0008) — the `PAID_ARTIFACT` switch
+
+The deb's closure never includes the AGPL-3.0-only
+`global-shortcut-portal` wheel, so free and paid debs carry the same
+dependency set either way. Paid builds additionally engage the
+remediation machinery of
+[ADR-0008](../../docs/adr/ADR-0008-paid-artifact-agpl-policy.md):
+
+```bash
+PAID_ARTIFACT=1 PAID_ARTIFACT_OPTION=A packaging/build-deb.sh
+# option A (default): the AGPL wheel's Corresponding-Source offer
+# (sources + license + pinned-sdist notice) lands in
+# /usr/share/doc/sayit-ermano/global-shortcut-portal/
+PAID_ARTIFACT=1 PAID_ARTIFACT_OPTION=B packaging/build-deb.sh
+# option B: the paid dependency lock is filtered so the AGPL pin can
+# never enter (verified no-op today; a standing guard)
+```
+
+Unset (every free/release build): the script behaves exactly as before.
+Implementation: [`packaging/paid_policy.py`](../paid_policy.py); the
+Flatpak rehearsal commands and the option analysis live in the ADR.
+
 ## Why the build environment is pinned
 
 The deb's runtime is a venv bundled under `/opt/sayit-ermano/venv` whose
