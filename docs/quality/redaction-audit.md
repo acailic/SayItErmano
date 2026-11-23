@@ -1,6 +1,8 @@
 # Diagnostics redaction audit (excellence bet 5)
 
-Last audited: 2026-11-23 · scope: every path that turns app state into
+Last audited: 2026-11-23 (follow-up pass: rows 20-21, command-mode
+parse errors and remote-STT error bodies, missed by the first pass) ·
+scope: every path that turns app state into
 human-readable diagnostics — the `doctor` CLI, daemon log lines (stderr →
 journal), desktop-notification/error toasts, crash/exception text, and
 crash-adjacent artifacts (subprocess logs). No support bundle exists
@@ -35,7 +37,7 @@ one-time warning per process. Regression contracts:
 | 8 | Daemon log, take bookkeeping — `daemon.py` | lengths only: `copied last transcript (N chars)` (daemon.py:375), `pasted last transcription (N chars)` (daemon.py:1432), `rewrite mode (context: N chars)` (daemon.py:1209) | N/A (verified) | N/A |
 | 9 | Insertion-context log — `pipeline.py` `_read_insertion_context` | provider name, accessible role, staleness flag with an explicit "lengths/flags only, never text" invariant (pipeline.py:453-456) | N/A (verified) | N/A |
 | 10 | Recording/capture log — `capture.py` | app hint, device names, watchdog state; no transcript (the transcript does not exist yet at capture time) | N/A (verified) | N/A |
-| 11 | Error toasts — `ui.notify` callers | fixed strings or exception text without content: `Transcription failed: {e}`, `Could not type text: {e}` (pipeline.py); the one content-bearing case was the Rewrite toast via row 6 | N/A after row 6 | covered by row 6 |
+| 11 | Error toasts — `ui.notify` callers | fixed strings or exception text without content: `Transcription failed: {e}`, `Could not type text: {e}` (pipeline.py); the content-bearing exception classes were rows 6, 20 and 21 | N/A after rows 6, 20, 21 | covered by rows 6, 20, 21 |
 | 12 | Crash/exception text (daemon) | tracebacks of startup/shutdown paths (e.g. `cli.py:167-181` daemon start); exceptions carry paths/reasons, not transcripts. A corrupted config crashes at startup with a `TOMLDecodeError` *location* only — see `docs/guides/recovery.md` | N/A (verified) | N/A |
 | 13 | whisper.cpp stderr — `backends/whisper_cpp.py` | subprocess runs with `-nt -np` (whisper_cpp.py:71): no transcript on stdout/stderr; on failure `stderr[:500]` (whisper_cpp.py:76) is whisper.cpp's own error text | N/A (verified — flags suppress decoding output) | N/A |
 | 14 | Managed llama-server log — `local_llm.py` | `~/.cache/sayit-ermano/llama-server.log` (local_llm.py:176-183) holds llama.cpp startup/diagnostic lines; prompts are not logged at default verbosity. `_log_tail` (local_llm.py:237-244, 3 lines) is folded into `LocalPolishError` only when the child fails **during startup**, before any dictation reached it | LOW — residual: a future llama.cpp default could change; log is user-local (0600-ish cache dir) and rotated at 1 MiB | N/A (documented); revisit if llama.cpp changes |
@@ -44,6 +46,8 @@ one-time warning per process. Regression contracts:
 | 17 | MCP server (`sayit-ermano mcp`) | serves history/transcripts to the connected local agent | N/A **by design** — explicit user opt-in (docs/guides/scripting-and-mcp.md), local stdio | N/A |
 | 18 | Overlay pill / streaming preview | live transcript on screen while dictating | N/A **by design** — ephemeral on-screen UI, never logged (preview partials are guarded from the final-decode log paths) | N/A |
 | 19 | Support bundle | does not exist | N/A | if one is ever added, it must reuse `redact.describe` from day one |
+| 20 | Command-mode parse errors — `command.py` `CommandError` raise sites | `could not parse the model's proposal: <full model reply>` and 7 sibling messages embedding the **whole proposal unbounded** (command.py:252-300 pre-fix). The proposal is model output derived from the dictated instruction and can quote it; the errors surface as `command mode failed: {e}` in the daemon log **and** the `Command mode failed` desktop notification (command_coord.py:96-97, 115-116, 264-265, 301-302) | HIGH — unbounded dictated-content echo into journal + toast | FIXED: `_proposal_desc()` descriptor at every raise site (command.py:234-241, 263-315); the offending tool *name* survives capped at 40 chars (command.py:293-295); content only behind the opt-in |
+| 21 | Remote STT error bodies — `backends/remote_stt.py` | malformed-JSON failures embedded `raw[:300]!r` of the response body — for a near-miss JSON the body **is** the transcript in the wrong shape; HTTP failures embedded the provider error body, which can echo request content (same class as row 6) | MEDIUM — indirect, provider-dependent; surfaces via `Transcription failed: {e}` (log + toast) | FIXED: both bodies become descriptors, host + HTTP code kept (remote_stt.py:131-153); content only behind the opt-in |
 
 ## What a user should know
 

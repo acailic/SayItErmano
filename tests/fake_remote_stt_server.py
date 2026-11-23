@@ -30,6 +30,12 @@ RESPONSES = {
     }).encode()),
     "missing_text": (200, b"{}"),
     "bad_json": (200, b"<html>not json</html>"),
+    # near-miss JSON whose body IS the transcript (redaction-audit tests)
+    "bad_json_transcript": (200, b'{"text": "the launch code is hunter2'
+                                     b' forget i said this"'),
+    # 400-style validation error echoing request content back
+    "http400_echo": (400, b'{"error": "invalid request echoing the launch '
+                          b'code is hunter2 forget i said this"}'),
     "http500": (500, b"upstream exploded"),
     "http401": (401, b"unauthorized"),
 }

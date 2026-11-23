@@ -96,7 +96,7 @@ sidecar `history.jsonl.lock`, unique temp files, fsync + atomic rename
   that fail JSON parsing (history.py:283-295; same for `tail`,
   history.py:297-313).
 - The store caps itself at 5000 entries, keeping the newest
-  (`MAX_ENTRIES`, history.py:33).
+  (`MAX_ENTRIES`, history.py:35).
 
 So a "corrupted" history usually means a few lost rows, not a lost
 file. To repair:

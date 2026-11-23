@@ -339,6 +339,86 @@ class TestTranscriptsStayOutOfDiagnostics:
             client.chat("x")
         assert self.SECRET in str(exc.value)
 
+    # -- command-mode parse errors (CommandError -> daemon log AND the
+    #    'Command mode failed' desktop notification via command_coord) --
+
+    def test_command_parse_error_redacted_by_default(self):
+        from fluidvoice import command as command_mod
+        garbage = f"Sure! I heard: {self.SECRET} — running rm -rf /tmp/x"
+        with pytest.raises(command_mod.CommandError) as ei:
+            command_mod.parse_reply(garbage)
+        assert self.SECRET not in str(ei.value)
+        assert "hunter2" not in str(ei.value)
+        assert re.search(r"proposal \(\d+ chars, sha256:[0-9a-f]{8}\)",
+                         str(ei.value))
+
+    def test_command_parse_error_content_with_opt_in(self, monkeypatch):
+        from fluidvoice import command as command_mod
+        monkeypatch.setenv("SAYITERMANO_LOG_TRANSCRIPTS", "1")
+        monkeypatch.setattr(redact, "_warned", True)  # warning covered above
+        garbage = f"Sure! I heard: {self.SECRET} — running rm -rf /tmp/x"
+        with pytest.raises(command_mod.CommandError) as ei:
+            command_mod.parse_reply(garbage)
+        assert self.SECRET in str(ei.value)
+
+    def test_command_unknown_tool_error_names_tool_not_proposal(self):
+        from fluidvoice import command as command_mod
+        raw = json.dumps({"tool_calls": [
+            {"name": "delete_files",
+             "arguments": {"command": f"echo {self.SECRET}"}}]})
+        with pytest.raises(command_mod.CommandError) as ei:
+            command_mod.parse_reply(raw)
+        assert "delete_files" in str(ei.value)   # the tool name survives
+        assert self.SECRET not in str(ei.value)  # the proposal does not
+        assert re.search(r"proposal \(\d+ chars, sha256:[0-9a-f]{8}\)",
+                         str(ei.value))
+
+    # -- remote STT error bodies (RemoteSttError -> 'Transcription
+    #    failed' log + toast): a near-miss JSON body is usually the
+    #    transcript itself in the wrong shape --
+
+    def _remote_backend(self, url):
+        cfg = copy.deepcopy(DEFAULTS)
+        cfg["model"]["remote_url"] = url
+        cfg["model"]["remote_timeout_s"] = 5
+        return backends.RemoteSttBackend(cfg)
+
+    def test_remote_stt_malformed_json_body_redacted_by_default(
+            self, tmp_path):
+        from tests.fake_remote_stt_server import FakeRemoteSttServer
+        wav = make_wav(tmp_path / "a.wav")
+        with FakeRemoteSttServer(mode="bad_json_transcript") as srv:
+            be = self._remote_backend(srv.url)
+            with pytest.raises(Exception) as ei:
+                be.transcribe(wav)
+        assert self.SECRET not in str(ei.value)
+        assert "malformed JSON" in str(ei.value)
+        assert re.search(r"sha256:[0-9a-f]{8}", str(ei.value))
+
+    def test_remote_stt_http_error_body_redacted_by_default(
+            self, tmp_path):
+        from tests.fake_remote_stt_server import FakeRemoteSttServer
+        wav = make_wav(tmp_path / "a.wav")
+        with FakeRemoteSttServer(mode="http400_echo") as srv:
+            be = self._remote_backend(srv.url)
+            with pytest.raises(Exception) as ei:
+                be.transcribe(wav)
+        assert "HTTP 400" in str(ei.value)      # the code survives
+        assert self.SECRET not in str(ei.value)  # the body does not
+        assert re.search(r"sha256:[0-9a-f]{8}", str(ei.value))
+
+    def test_remote_stt_http_error_body_content_with_opt_in(
+            self, tmp_path, monkeypatch):
+        from tests.fake_remote_stt_server import FakeRemoteSttServer
+        monkeypatch.setenv("SAYITERMANO_LOG_TRANSCRIPTS", "1")
+        monkeypatch.setattr(redact, "_warned", True)
+        wav = make_wav(tmp_path / "a.wav")
+        with FakeRemoteSttServer(mode="http400_echo") as srv:
+            be = self._remote_backend(srv.url)
+            with pytest.raises(Exception) as ei:
+                be.transcribe(wav)
+        assert self.SECRET in str(ei.value)
+
     # -- the descriptor primitive itself -----------------------------------
 
     def test_describe_shape_is_length_and_hash_only(self):

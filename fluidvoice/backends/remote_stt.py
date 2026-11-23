@@ -6,8 +6,9 @@ already ends with ``/audio/transcriptions``). Response is the plain
 OpenAI JSON ``{"text": ...}``; ``verbose_json`` segments are concatenated
 when ``text`` is absent. stdlib urllib only - no new dependency, the
 retry table mirrors fluidvoice/ai/client.py (2 attempts total, retry only
-transport errors and 429/5xx, 0.2s backoff, ≤300-char body excerpts in
-error messages - never the API key).
+transport errors and 429/5xx, 0.2s backoff, body text in error messages
+is a content-free redact.describe descriptor - never the body content,
+never the API key).
 
 Nothing leaves the machine unless model.remote_url is set; an empty URL
 means this backend never constructs.
@@ -21,6 +22,7 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
 
+from .. import redact
 from . import effective_language
 from .base import BackendCapabilities, Transcript, TranscriptSegment
 
@@ -128,9 +130,12 @@ class RemoteSttBackend:
                 try:
                     return json.loads(raw)
                 except ValueError:  # malformed JSON never retries
+                    # a near-miss body is usually the transcript itself
+                    # in the wrong shape — descriptor only unless the
+                    # diagnostics opt-in is set (redaction audit)
                     raise RemoteSttError(
                         f"remote STT {host}: malformed JSON response "
-                        f"({raw[:300]!r})")
+                        f"({redact.describe('body', raw, preview_chars=300)})")
             except RemoteSttError:
                 raise
             except urllib.error.HTTPError as e:
@@ -139,8 +144,13 @@ class RemoteSttBackend:
                     detail = e.read().decode(errors="replace")[:300]
                 except Exception:  # noqa: S110 — best-effort path; caller must proceed
                     pass
-                last_err = RemoteSttError(f"remote STT {host}: "
-                                          f"HTTP {e.code}: {detail}")
+                # same rationale as ai/client.py: a 400-style validation
+                # body can echo the request (the audio/transcript) back
+                from ..redact import describe
+                last_err = RemoteSttError(
+                    f"remote STT {host}: HTTP {e.code}: "
+                    + (describe("body", detail, preview_chars=300)
+                       if detail else "empty body"))
                 if e.code not in _RETRYABLE_HTTP:
                     raise last_err  # config errors won't fix themselves
             except Exception as e:  # noqa: BLE001 - transport errors retry

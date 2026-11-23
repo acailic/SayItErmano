@@ -6,6 +6,7 @@ live here too, importing the daemon-test fixtures like test_extra_formats.
 from __future__ import annotations
 
 import json
+import re
 import time
 
 import pytest
@@ -127,7 +128,10 @@ class TestParseReply:
         with pytest.raises(cm.CommandError) as ei:
             cm.parse_reply(raw)
         assert "delete_files" in str(ei.value)
-        assert "rm x" in str(ei.value)  # raw text embedded
+        # redaction audit: the proposal is a descriptor, never raw text
+        assert "rm x" not in str(ei.value)
+        assert "proposal (" in str(ei.value)
+        assert re.search(r"sha256:[0-9a-f]{8}", str(ei.value))
 
     def test_missing_command_raises(self):
         raw = json.dumps({"tool_calls": [
@@ -195,7 +199,10 @@ class TestParseReply:
     def test_garbage_raises_with_raw_text(self):
         with pytest.raises(cm.CommandError) as ei:
             cm.parse_reply("I will just run ls for you")
-        assert "I will just run ls for you" in str(ei.value)
+        # redaction audit: content-free descriptor, not the model text
+        assert "I will just run ls" not in str(ei.value)
+        assert "proposal (" in str(ei.value)
+        assert re.search(r"sha256:[0-9a-f]{8}", str(ei.value))
 
     def test_fenced_done_reply(self):
         r = cm.parse_reply('```json\n' + done_reply("done ok") + '\n```')
@@ -532,7 +539,9 @@ class TestSessionLoop:
         client, s = self._session(cfg, ["I will just run ls for you"])
         with pytest.raises(cm.CommandError) as ei:
             s.start("list files")
-        assert "I will just run ls for you" in str(ei.value)
+        # redaction audit: the model reply is a descriptor, never content
+        assert "I will just run ls" not in str(ei.value)
+        assert "proposal (" in str(ei.value)
         assert s.executed == []
         assert s.finished
 
