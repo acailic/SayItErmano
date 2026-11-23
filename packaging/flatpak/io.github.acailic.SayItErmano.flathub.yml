@@ -92,7 +92,7 @@ modules:
       - type: git
         url: https://github.com/acailic/SayItErmano.git
         tag: v0.9.1
-        commit: f16a4813c4a6f34b57a2ebaa02d45cfb5bfaad07
+        commit: 1a7e4509bc862ddcf6e7f204d3bf0299515bc23a
 
   # The app itself: pure-Python wheel built from the release tag with
   # the SDK's own setuptools (the Flathub build sandbox has no network,
@@ -112,7 +112,7 @@ modules:
       - type: git
         url: https://github.com/acailic/SayItErmano.git
         tag: v0.9.1
-        commit: f16a4813c4a6f34b57a2ebaa02d45cfb5bfaad07
+        commit: 1a7e4509bc862ddcf6e7f204d3bf0299515bc23a
 
   # Pure-Python runtime dependencies as remote PyPI wheels, each
   # content-pinned by sha256 (the build sandbox has no network).
