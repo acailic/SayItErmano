@@ -138,6 +138,15 @@ Still owner-only after section 0's engineering: the engine slice
 
 ## 2. The submission PR (human-only)
 
+The title/body worksheet and the step-by-step mechanics live in
+[`packaging/flatpak/SUBMISSION-PR.md`](../../packaging/flatpak/SUBMISSION-PR.md);
+the exact manifest bytes the PR must reproduce are staged on this
+repo's `flathub-submission` branch (top-level
+`io.github.acailic.SayItErmano.yml`, alone — byte-parity with the
+Flathub-shaped reference and the nothing-else tree shape are pinned
+by `tests/test_flathub_submission_branch.py`). Both are worksheets,
+not PR copy (policy note at the top).
+
 Fork → branch → PR mechanics (per the
 [submission guide](https://docs.flathub.org/docs/for-app-authors/submission)):
 
