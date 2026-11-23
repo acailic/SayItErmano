@@ -99,12 +99,12 @@ modules:
       - type: file
         path: flatpak/io.github.acailic.SayItErmano.metainfo.xml
         dest: packaging/flatpak
-        sha256: 2ea017b29410ae0b7daf40d1491c9a4478822db741abaf2732b5bba44d0ae918
+        sha256: a20ec5fc475474f9c91816ebb5ae025e370af33932ed94a3ab3b642955f375d5
       # the man page (offline help, from docs/man/ in the checkout)
       - type: file
         path: ../docs/man/sayit-ermano.1
         dest: docs/man
-        sha256: b170f2e1321b5fec83f3b34a8402f0f46c4f0c61a4062250de4a946a65b4ccc0
+        sha256: 924acd1419c12f362290b7f657082df76f2b24b3951eede03436063e8be1efb4
       - type: dir
         path: icons
         dest: packaging/icons
@@ -132,7 +132,7 @@ modules:
       # Flathub variant carries it — there the linter requires it).
       - type: git
         url: https://github.com/acailic/SayItErmano.git
-        tag: v0.9.0
+        tag: v0.9.1
 
   # Pure-Python runtime dependencies as vendored wheels (the build
   # sandbox has no network). --no-index: pip resolves the closure from
