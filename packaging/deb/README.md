@@ -27,21 +27,32 @@ The deb's closure never includes the AGPL-3.0-only
 `global-shortcut-portal` wheel, so free and paid debs carry the same
 dependency set either way. Paid builds additionally engage the
 remediation machinery of
-[ADR-0008](../../docs/adr/ADR-0008-paid-artifact-agpl-policy.md):
+[ADR-0008](../../docs/adr/ADR-0008-paid-artifact-agpl-policy.md) — and
+**fail closed**: the option is the operator's decision *recorded in the
+ADR* (its `Paid-artifact decision` marker line), never a code default.
+While that marker reads `OPERATOR`, every command below stops before
+any payload exists and prints the reason:
 
 ```bash
+PAID_ARTIFACT=1 packaging/build-deb.sh
+# REFUSED while ADR-0008 is undecided: "no artifact built (ADR-0008)".
+# Once the marker names an option, this one variable builds it:
+#   A — the AGPL wheel's Corresponding-Source offer lands in
+#       /usr/share/doc/sayit-ermano/global-shortcut-portal/
+#       (sources, license, the sha256-pinned sdist itself, notice)
+#   B — the paid dependency lock is filtered so the AGPL pin can never
+#       enter (verified no-op today; a standing guard)
 PAID_ARTIFACT=1 PAID_ARTIFACT_OPTION=A packaging/build-deb.sh
-# option A (default): the AGPL wheel's Corresponding-Source offer
-# (sources + license + pinned-sdist notice) lands in
-# /usr/share/doc/sayit-ermano/global-shortcut-portal/
-PAID_ARTIFACT=1 PAID_ARTIFACT_OPTION=B packaging/build-deb.sh
-# option B: the paid dependency lock is filtered so the AGPL pin can
-# never enter (verified no-op today; a standing guard)
+# optional cross-check: must agree with the recorded decision
+python3 packaging/paid_policy.py verify
+# offline: the vendored sdist is the pinned Corresponding Source of the
+# vendored wheel (any paid A build runs the same check before shipping it)
 ```
 
 Unset (every free/release build): the script behaves exactly as before.
-Implementation: [`packaging/paid_policy.py`](../paid_policy.py); the
-Flatpak rehearsal commands and the option analysis live in the ADR.
+A `PAID_ARTIFACT` value other than `1`/`0` is an error, never a silent
+free build. Implementation: [`packaging/paid_policy.py`](../paid_policy.py);
+the Flatpak rehearsal commands and the option analysis live in the ADR.
 
 ## Why the build environment is pinned
 
